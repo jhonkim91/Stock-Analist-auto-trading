@@ -250,6 +250,12 @@ article,
   margin-top: 12px;
 }
 
+.sourceList {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 details {
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -298,6 +304,10 @@ pre {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.compactTable {
+  margin-top: 12px;
 }
 
 table {

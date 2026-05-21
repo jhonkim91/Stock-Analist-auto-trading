@@ -120,6 +120,7 @@ export default function ScreenerPage() {
         </div>
         <nav className="nav">
           <Link href="/dashboard">Dashboard</Link>
+          <Link href="/data">Data</Link>
           <Link href="/reports">Reports</Link>
           <Link href="/backtest">Backtest</Link>
           <Link href="/portfolio">Portfolio</Link>

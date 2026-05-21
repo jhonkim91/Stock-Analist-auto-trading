@@ -53,6 +53,10 @@ class BrokerPreviewRequest(BaseModel):
     strategy_tag: str | None = None
 
 
+class ImportConfirmRequest(BaseModel):
+    run_id: str
+
+
 class GenericResponse(BaseModel):
     ok: bool
     detail: str

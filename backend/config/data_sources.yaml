@@ -1,0 +1,28 @@
+sources:
+  - source_id: "sample_krx"
+    provider_type: "sample"
+    enabled: true
+    market: "KRX"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "warn_and_create_on_confirm"
+    max_rows: 10000
+  - source_id: "csv_krx"
+    provider_type: "csv"
+    enabled: true
+    market: "KRX"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "warn_and_create_on_confirm"
+    max_rows: 10000
+  - source_id: "external_placeholder_disabled"
+    provider_type: "external"
+    enabled: false
+    market: "KRX"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "reject"
+    max_rows: 10000

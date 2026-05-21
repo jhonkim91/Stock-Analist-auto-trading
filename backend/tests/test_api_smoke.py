@@ -132,3 +132,13 @@ def test_cors_allows_local_frontend_origin(client):
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3001"
+
+    smoke_response = client.options(
+        "/api/data/sources",
+        headers={
+            "Origin": "http://127.0.0.1:3010",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert smoke_response.status_code == 200
+    assert smoke_response.headers["access-control-allow-origin"] == "http://127.0.0.1:3010"

@@ -20,7 +20,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 def get_settings() -> dict[str, Any]:
     """YAML 설정을 병합하고 환경 변수 override를 적용한다."""
     settings: dict[str, Any] = {}
-    for name in ("app", "strategies", "risk", "backtest"):
+    for name in ("app", "strategies", "risk", "backtest", "data_sources"):
         settings[name] = _load_yaml(CONFIG_DIR / f"{name}.yaml")
 
     database_url = os.getenv("DATABASE_URL")

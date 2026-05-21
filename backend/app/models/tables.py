@@ -46,6 +46,99 @@ class DailyOhlcv(Base):
     venue: Mapped[str] = mapped_column(String(32), default="KRX")
 
 
+class DataSource(Base):
+    __tablename__ = "data_sources"
+
+    source_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider_type: Mapped[str] = mapped_column(String(32), index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    market: Mapped[str] = mapped_column(String(32), default="KRX")
+    venue: Mapped[str] = mapped_column(String(32), default="KRX")
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Seoul")
+    zero_volume_policy: Mapped[str] = mapped_column(String(64), default="warn")
+    unknown_symbol_policy: Mapped[str] = mapped_column(String(64), default="warn_and_create_on_confirm")
+    max_rows: Mapped[int] = mapped_column(Integer, default=10000)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class ImportRun(Base):
+    __tablename__ = "import_runs"
+
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(64), index=True)
+    provider_type: Mapped[str] = mapped_column(String(32), index=True)
+    original_filename: Mapped[str] = mapped_column(String(255))
+    file_hash: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    can_confirm: Mapped[bool] = mapped_column(Boolean, default=False)
+    total_rows: Mapped[int] = mapped_column(Integer, default=0)
+    valid_rows: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    warning_count: Mapped[int] = mapped_column(Integer, default=0)
+    info_count: Mapped[int] = mapped_column(Integer, default=0)
+    inserted_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    staged_rows_json: Mapped[str] = mapped_column(Text, default="[]")
+    preview_rows_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class DataQualityCheck(Base):
+    __tablename__ = "data_quality_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(64), index=True)
+    row_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    symbol: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    field: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    check_code: Mapped[str] = mapped_column(String(64), index=True)
+    severity: Mapped[str] = mapped_column(String(16), index=True)
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class ExternalSymbolMapping(Base):
+    __tablename__ = "external_symbol_mapping"
+    __table_args__ = (UniqueConstraint("source_id", "external_symbol", name="uq_external_symbol_source"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_id: Mapped[str] = mapped_column(String(64), index=True)
+    external_symbol: Mapped[str] = mapped_column(String(64), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    market: Mapped[str] = mapped_column(String(32), default="KRX")
+    venue: Mapped[str] = mapped_column(String(32), default="KRX")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class CorporateAction(Base):
+    __tablename__ = "corporate_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    action_date: Mapped[date] = mapped_column(Date, index=True)
+    action_type: Mapped[str] = mapped_column(String(32), index=True)
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class TradingCalendar(Base):
+    __tablename__ = "trading_calendar"
+    __table_args__ = (UniqueConstraint("market", "calendar_date", name="uq_trading_calendar_market_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    market: Mapped[str] = mapped_column(String(32), index=True)
+    calendar_date: Mapped[date] = mapped_column(Date, index=True)
+    is_open: Mapped[bool] = mapped_column(Boolean, default=True)
+    source_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
 class IndexOhlcv(Base):
     __tablename__ = "index_ohlcv"
     __table_args__ = (UniqueConstraint("trade_date", "symbol", name="uq_index_symbol_date"),)

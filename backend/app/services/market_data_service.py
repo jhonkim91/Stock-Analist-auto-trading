@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from io import BytesIO
 
 import numpy as np
 import pandas as pd
@@ -22,6 +21,7 @@ from backend.app.models.tables import (
     SymbolMaster,
 )
 from backend.app.repositories.market_repository import MarketRepository
+from backend.app.services.market_data_import_service import MarketDataImportService
 
 
 class MarketDataService:
@@ -92,125 +92,7 @@ class MarketDataService:
 
     def import_daily_ohlcv_csv(self, content: bytes) -> dict[str, int]:
         """CSV를 daily_ohlcv에 검증 후 upsert한다."""
-        df = pd.read_csv(BytesIO(content))
-        required = {"trade_date", "symbol", "open", "high", "low", "close", "volume"}
-        missing = sorted(required - set(df.columns))
-        if missing:
-            raise ValueError(f"CSV 필수 컬럼 누락: {', '.join(missing)}")
-
-        parsed_rows: list[dict[str, object]] = []
-        errors: list[str] = []
-        for index, row in enumerate(df.to_dict("records"), start=2):
-            try:
-                trade_date = pd.Timestamp(row["trade_date"]).date()
-            except Exception:  # noqa: BLE001
-                errors.append(f"{index}행 trade_date 파싱 실패")
-                continue
-
-            symbol = str(row["symbol"]).strip()
-            if not symbol:
-                errors.append(f"{index}행 symbol 비어 있음")
-                continue
-
-            try:
-                open_price = float(row["open"])
-                high_price = float(row["high"])
-                low_price = float(row["low"])
-                close_price = float(row["close"])
-                volume = int(row["volume"])
-                adj_close = float(row["adj_close"]) if "adj_close" in row and pd.notna(row["adj_close"]) else close_price
-                turnover_value = (
-                    float(row["turnover_value"])
-                    if "turnover_value" in row and pd.notna(row["turnover_value"])
-                    else close_price * volume
-                )
-            except Exception:  # noqa: BLE001
-                errors.append(f"{index}행 숫자 변환 실패")
-                continue
-
-            row_errors: list[str] = []
-            if min(open_price, high_price, low_price, close_price, adj_close, volume) < 0:
-                row_errors.append("가격 또는 거래량 음수")
-            if high_price < low_price:
-                row_errors.append("high가 low보다 작음")
-            if row_errors:
-                errors.append(f"{index}행 {'/'.join(row_errors)}")
-                continue
-
-            market = str(row["market"]).strip() if "market" in row and pd.notna(row["market"]) else "KRX"
-            provider = str(row["provider"]).strip() if "provider" in row and pd.notna(row["provider"]) else "csv"
-            parsed_rows.append(
-                {
-                    "trade_date": trade_date,
-                    "symbol": symbol,
-                    "open": open_price,
-                    "high": high_price,
-                    "low": low_price,
-                    "close": close_price,
-                    "adj_close": adj_close,
-                    "volume": volume,
-                    "turnover_value": turnover_value,
-                    "market": market or "KRX",
-                    "provider": provider or "csv",
-                }
-            )
-
-        if errors:
-            raise ValueError(f"CSV import 검증 실패: {'; '.join(errors)}")
-
-        inserted_count = 0
-        updated_count = 0
-        pending_symbols: set[str] = set()
-        for row in parsed_rows:
-            symbol = str(row["symbol"])
-            symbol_row = self.db.get(SymbolMaster, symbol)
-            if symbol_row is None and symbol not in pending_symbols:
-                self.db.add(
-                    SymbolMaster(
-                        symbol=symbol,
-                        name=symbol,
-                        asset_type="stock",
-                        currency="KRW",
-                        market=str(row["market"]),
-                        exchange="KRX",
-                        sector="Unknown",
-                        industry="",
-                        is_active=True,
-                    )
-                )
-                pending_symbols.add(symbol)
-
-            existing = self.db.scalar(
-                select(DailyOhlcv)
-                .where(DailyOhlcv.trade_date == row["trade_date"], DailyOhlcv.symbol == symbol)
-                .limit(1)
-            )
-            payload = {
-                "open": float(row["open"]),
-                "high": float(row["high"]),
-                "low": float(row["low"]),
-                "close": float(row["close"]),
-                "adj_close": float(row["adj_close"]),
-                "volume": int(row["volume"]),
-                "turnover_value": float(row["turnover_value"]),
-                "venue": str(row["market"]),
-            }
-            if existing:
-                for key, value in payload.items():
-                    setattr(existing, key, value)
-                updated_count += 1
-            else:
-                self.db.add(DailyOhlcv(trade_date=row["trade_date"], symbol=symbol, **payload))
-                inserted_count += 1
-        self.db.commit()
-        return {
-            "inserted_count": inserted_count,
-            "updated_count": updated_count,
-            "skipped_count": 0,
-            "error_count": 0,
-            "inserted": inserted_count,
-            "updated": updated_count,
-        }
+        return MarketDataImportService(self.db).legacy_direct_import_csv(content)
 
     def status(self) -> dict[str, object]:
         """MVP 데이터 파이프라인의 현재 row count와 최신 기준일을 반환한다."""

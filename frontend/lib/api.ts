@@ -135,6 +135,70 @@ export type ImportResult = {
   error_count: number;
 };
 
+export type DataSourceConfig = {
+  source_id: string;
+  provider_type: string;
+  enabled: boolean;
+  market: string;
+  venue: string;
+  timezone: string;
+  zero_volume_policy: string;
+  unknown_symbol_policy: string;
+  max_rows: number;
+};
+
+export type DataPreviewRow = {
+  row_number: number;
+  trade_date: string;
+  symbol: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  adj_close: number;
+  volume: number;
+  turnover_value: number;
+  market: string;
+  venue: string;
+  provider: string;
+  quality_flags: string[];
+};
+
+export type ImportRun = {
+  run_id: string;
+  source_id: string;
+  provider_type: string;
+  original_filename: string;
+  file_hash: string;
+  status: string;
+  can_confirm: boolean;
+  total_rows: number;
+  valid_rows: number;
+  error_count: number;
+  warning_count: number;
+  info_count: number;
+  inserted_count: number;
+  updated_count: number;
+  skipped_count: number;
+  created_at: string;
+  confirmed_at: string | null;
+  preview_rows: DataPreviewRow[];
+  staged_rows?: DataPreviewRow[];
+};
+
+export type DataQualityCheck = {
+  id: number;
+  run_id: string;
+  row_number: number | null;
+  symbol: string | null;
+  trade_date: string | null;
+  field: string | null;
+  check_code: string;
+  severity: "error" | "warning" | "info";
+  message: string;
+  created_at: string;
+};
+
 export type SettingsPayload = Record<string, unknown>;
 
 export type ActionResponse = Record<string, unknown>;
