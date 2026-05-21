@@ -2,47 +2,82 @@
 
 주식 분석과 자동매매 보조 흐름을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 checkpoint는 `MVP v0.3 Phase 3A data quality`입니다. 실제 주문, paper/live broker, 외부 데이터 API 호출, 실시간 websocket, AI 예측 모델은 구현하지 않습니다.
+현재 checkpoint는 `MVP v0.4 Phase 3B provider-neutral external data`입니다. 실제 주문, paper/live broker, KIS 실제 API 호출, 실시간 websocket, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
 
-## Phase 3A 기능
+## Phase 3B 기능
 
-- deterministic sample seed 유지
-- legacy direct CSV import endpoint 유지
-- 새 CSV preview/confirm import flow 추가
-- DataProvider 계층 추가
-  - `SampleDataProvider`
-  - `CsvDataProvider`
-  - `ExternalDataProvider` placeholder disabled
-- 데이터 품질 검증 기록
-  - `import_runs`
-  - `data_quality_checks`
-- 데이터 소스 설정
-  - `backend/config/data_sources.yaml`
-  - `sample_krx`
-  - `csv_krx`
-  - `external_placeholder_disabled`
-- `/data` 화면 추가
-  - Data Sources
-  - CSV Validation Preview
-  - Import History
-  - Data Quality
+- Phase 3A CSV validate/confirm flow 유지
+- provider-neutral external daily OHLCV preview/confirm flow 추가
+- `BaseExternalDataProvider` 기반 provider 구조 추가
+  - `MockExternalDailyProvider`: 테스트/fixture 전용, 네트워크 호출 없음
+  - `YFinanceDailyProvider`: 첫 external market data provider 구현체
+  - `KisOpenApiProvider`: disabled placeholder, 실제 구현 없음
+- `external_yfinance` source 추가
+  - `provider_type: external_market_data`
+  - `provider_name: yfinance`
+  - `network_enabled: false`
+  - `manual_preview_only: true`
+- `kis_openapi` source placeholder 추가
+  - `enabled: false`
+  - `network_enabled: false`
+  - `paper_trading_enabled: false`
+  - `live_trading_enabled: false`
+  - `websocket_enabled: false`
+  - secret/account/token 필드 없음
+- `/data` 화면에 External Daily OHLCV Preview panel 추가
 
-## Data Import Flow
+## Import Flow
 
-Frontend는 legacy direct import를 사용하지 않고 아래 flow만 사용합니다.
+CSV flow:
 
 1. `POST /api/data/validate-csv`
 2. `POST /api/data/import-csv-confirmed`
 
-`validate-csv`는 market data table을 변경하지 않습니다. 허용되는 write는 `import_runs +1`, `data_quality_checks +N`뿐입니다.
+External flow:
 
-`confirm`은 `run_id`만 받으며 파일을 다시 받지 않습니다. `import_runs.staged_rows_json`을 transaction으로 `daily_ohlcv`에 반영합니다.
+1. `POST /api/data/external/preview-daily-ohlcv`
+2. `POST /api/data/external/confirm-import`
 
-```json
-{
-  "run_id": "imp-..."
-}
-```
+Preview 단계는 market data table을 직접 변경하지 않습니다. 허용되는 write는 `import_runs +1`, `data_quality_checks +N`뿐입니다.
+
+Confirm은 `run_id`만 받으며 파일 또는 provider를 다시 조회하지 않습니다. `import_runs.staged_rows_json`을 transaction으로 `daily_ohlcv`에 반영합니다.
+
+## External Provider 정책
+
+`yfinance`는 production-grade 데이터 provider가 아닙니다. 자동매매용 최종 신뢰 데이터 소스로 사용하지 않고, provider-neutral 구조 검증과 manual preview/prototype 용도로만 사용합니다.
+
+Phase 3B 기본 정책:
+
+- 테스트와 browser smoke에서는 실제 네트워크 호출을 하지 않습니다.
+- `network_enabled=false`가 기본값입니다.
+- mock provider와 fixture 기반 테스트를 우선합니다.
+- API key, secret, token, account 정보는 저장하지 않습니다.
+- provider별 symbol mapping은 `external_symbol_mapping`을 반드시 거칩니다.
+
+Symbol mapping 예:
+
+| provider | internal_symbol | provider_symbol |
+|---|---|---|
+| yfinance | `005930` | `005930.KS` |
+| kis | `005930` | `005930` |
+
+매핑이 없으면 `SYMBOL_MAPPING_FAILED` quality check를 생성하고 `daily_ohlcv`에는 쓰지 않습니다.
+
+## KIS 향후 확장 정책
+
+KIS 확장은 별도 Phase로 진행합니다.
+
+- Phase 3C: KIS read-only foundation
+- Phase 3D: KIS paper trading adapter
+- Phase 3E: KIS live trading gate
+- Phase 3F: KIS websocket/체결통보
+
+KIS는 data provider와 broker adapter를 분리합니다.
+
+- `KisMarketDataProvider`
+- `KisBrokerAdapter`
+
+Phase 3B에서는 둘 다 구현하지 않습니다. `KisOpenApiProvider`는 disabled placeholder 또는 문서 수준만 허용합니다.
 
 ## CSV 제한
 
@@ -52,31 +87,7 @@ Frontend는 legacy direct import를 사용하지 않고 아래 flow만 사용합
 | preview rows | 100 |
 | 파일 크기 | 10MB 이하 |
 
-Phase 3A에서는 `staged_rows_json`을 SQLite 호환 `Text` JSON으로 저장합니다. 대용량 파일은 Phase 3B 이후 staging table 분리를 검토합니다.
-
-## CSV 컬럼
-
-필수 컬럼:
-
-| 컬럼 | 설명 |
-|---|---|
-| `symbol` | 종목 코드 |
-| `trade_date` | 거래일 |
-| `open` | 시가 |
-| `high` | 고가 |
-| `low` | 저가 |
-| `close` | 종가 |
-| `volume` | 거래량 |
-
-선택 컬럼:
-
-| 컬럼 | 기본 처리 |
-|---|---|
-| `adj_close` | 누락 시 `close` 사용, warning 기록 |
-| `turnover_value` | 누락 시 `close * volume` 사용, warning 기록 |
-| `market` | 누락 시 source config market 또는 `KRX` |
-| `venue` | 누락 시 source config venue 또는 `KRX` |
-| `provider` | 누락 시 source config provider_type |
+Phase 3B에서도 `staged_rows_json`을 SQLite 호환 `Text` JSON으로 저장합니다. 대용량 import는 이후 staging table 분리를 검토합니다.
 
 ## Data Quality Checks
 
@@ -97,6 +108,13 @@ Phase 3A에서는 `staged_rows_json`을 SQLite 호환 `Text` JSON으로 저장�
 - provider mismatch
 - weekend date
 - calendar unknown date info
+- `SYMBOL_MAPPING_FAILED`
+- `PROVIDER_ROW_COUNT_MISMATCH`
+- `PROVIDER_RESPONSE_SCHEMA_MISMATCH`
+- `PROVIDER_TIMEOUT`
+- `PROVIDER_PARTIAL_RESPONSE`
+- `RATE_LIMIT_EXCEEDED`
+- `STALE_DATA`
 
 ## 주요 API
 
@@ -104,13 +122,18 @@ Phase 3A에서는 `staged_rows_json`을 SQLite 호환 `Text` JSON으로 저장�
 |---|---|---|
 | `GET` | `/api/data/status` | 데이터 row count와 최신 기준일 |
 | `GET` | `/api/data/sources` | data source 목록 |
-| `GET` | `/api/data/import-runs` | import history |
+| `GET` | `/api/data/import-runs` | 전체 import history |
 | `GET` | `/api/data/import-runs/{run_id}` | import run 상세 |
 | `POST` | `/api/data/validate-csv` | CSV validation preview |
-| `POST` | `/api/data/import-csv-confirmed` | validated run confirm |
+| `POST` | `/api/data/import-csv-confirmed` | validated CSV run confirm |
 | `GET` | `/api/data/quality` | quality checks 필터 조회 |
 | `GET` | `/api/data/quality/{run_id}` | run별 quality checks |
 | `POST` | `/api/data/import/daily-ohlcv` | legacy direct import |
+| `GET` | `/api/data/external/providers` | external-capable provider source 목록 |
+| `POST` | `/api/data/external/preview-daily-ohlcv` | external daily OHLCV preview |
+| `POST` | `/api/data/external/confirm-import` | external run confirm |
+| `GET` | `/api/data/external/fetch-runs` | external fetch run 목록 |
+| `GET` | `/api/data/external/fetch-runs/{run_id}` | external fetch run 상세 |
 
 ## 실행
 
@@ -148,12 +171,17 @@ npm.cmd audit --audit-level=moderate
 
 ## 안전 제약
 
-- 외부 API 호출 없음
+- KIS 실제 API 호출 없음
+- KIS app key/app secret 저장 없음
+- KIS 계좌번호 저장 없음
+- KIS 주문 API 구현 없음
 - API key/secret/token/password 저장 없음
 - 실제 주문 없음
 - 주문 row 생성 없음
 - paper/live broker 없음
 - 실시간 websocket 없음
+- 자동매매 스케줄러 없음
 - AI 예측 모델 없음
+- yfinance 전용 DB/API/UI 하드코딩 없음
 - Mock Broker는 preview-only
-- Phase 3A 후에도 `orders_count == 0`
+- Phase 3B 후에도 `orders_count == 0`

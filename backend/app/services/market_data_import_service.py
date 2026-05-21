@@ -12,7 +12,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_config
-from backend.app.models.tables import DailyOhlcv, DataQualityCheck, ImportRun, SymbolMaster, TradingCalendar
+from backend.app.models.tables import DailyOhlcv, DataQualityCheck, ExternalSymbolMapping, ImportRun, SymbolMaster, TradingCalendar
+from backend.app.services.data_providers import (
+    ExternalDailyRequest,
+    ExternalProviderError,
+    ExternalProviderPartialResponseError,
+    ExternalProviderRateLimitError,
+    ExternalProviderTimeoutError,
+    build_external_daily_provider,
+)
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 DEFAULT_MAX_ROWS = 10000
@@ -21,6 +29,7 @@ CONFIRMABLE_STATUSES = {"validated"}
 TERMINAL_STATUSES = {"confirmed"}
 STATUS_CANDIDATES = {"validated", "confirmed", "failed", "rejected", "expired"}
 SEVERITIES = {"error", "warning", "info"}
+EXTERNAL_PROVIDER_TYPES = {"external", "external_market_data", "broker_data"}
 
 
 class ImportRunNotFoundError(ValueError):
@@ -64,6 +73,10 @@ class DataSourceService:
                 return source
         raise ValueError(f"존재하지 않는 source_id입니다: {source_id}")
 
+    def list_external_sources(self) -> list[dict[str, object]]:
+        """external provider 후보 source를 enabled 여부와 무관하게 반환한다."""
+        return [source for source in self.list_sources() if str(source["provider_type"]) in EXTERNAL_PROVIDER_TYPES]
+
     @staticmethod
     def _normalize_source(source: object) -> dict[str, object]:
         if not isinstance(source, dict):
@@ -75,7 +88,16 @@ class DataSourceService:
         return {
             "source_id": source_id,
             "provider_type": provider_type,
+            "provider_name": str(source.get("provider_name") or provider_type).strip() or provider_type,
             "enabled": bool(source.get("enabled", False)),
+            "network_enabled": bool(source.get("network_enabled", False)),
+            "manual_preview_only": bool(source.get("manual_preview_only", False)),
+            "requires_api_key": bool(source.get("requires_api_key", False)),
+            "read_only_enabled": bool(source.get("read_only_enabled", False)),
+            "paper_trading_enabled": bool(source.get("paper_trading_enabled", False)),
+            "live_trading_enabled": bool(source.get("live_trading_enabled", False)),
+            "websocket_enabled": bool(source.get("websocket_enabled", False)),
+            "supported_markets": list(source.get("supported_markets") or []),
             "market": str(source.get("market") or "KRX").strip() or "KRX",
             "venue": str(source.get("venue") or "KRX").strip() or "KRX",
             "timezone": str(source.get("timezone") or "Asia/Seoul").strip() or "Asia/Seoul",
@@ -83,6 +105,9 @@ class DataSourceService:
             "unknown_symbol_policy": str(source.get("unknown_symbol_policy") or "warn_and_create_on_confirm").strip()
             or "warn_and_create_on_confirm",
             "max_rows": int(source.get("max_rows") or DEFAULT_MAX_ROWS),
+            "max_date_range_days": int(source.get("max_date_range_days") or 0),
+            "timeout_seconds": int(source.get("timeout_seconds") or 0),
+            "retry_count": int(source.get("retry_count") or 0),
         }
 
 
@@ -94,6 +119,195 @@ class MarketDataImportService:
     def list_sources(self) -> list[dict[str, object]]:
         """설정된 data source 목록을 반환한다."""
         return self.source_service.list_sources()
+
+    def list_external_providers(self) -> list[dict[str, object]]:
+        """provider-neutral external data source 목록을 반환한다."""
+        return self.source_service.list_external_sources()
+
+    def preview_external_daily_ohlcv(
+        self,
+        *,
+        source_id: str,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, object]:
+        """외부 daily OHLCV를 fetch/normalize/validate하고 preview run만 기록한다."""
+        source = self.source_service.get_source(source_id)
+        if str(source["provider_type"]) not in EXTERNAL_PROVIDER_TYPES:
+            raise ValueError("external preview에는 external provider source만 사용할 수 있습니다.")
+        internal_symbol = symbol.strip()
+        if not internal_symbol:
+            raise ValueError("symbol 값이 필요합니다.")
+        if start_date > end_date:
+            raise ValueError("start_date는 end_date보다 늦을 수 없습니다.")
+
+        metadata = self._external_metadata(
+            source=source,
+            internal_symbol=internal_symbol,
+            provider_symbol=None,
+            start_date=start_date,
+            end_date=end_date,
+            raw_row_count=0,
+            normalized_row_count=0,
+            raw_hash="",
+            fetch_started_at=None,
+            fetch_finished_at=None,
+        )
+        max_date_range_days = int(source.get("max_date_range_days") or 0)
+        if max_date_range_days and (end_date - start_date).days > max_date_range_days:
+            issue = self._issue(
+                None,
+                internal_symbol,
+                None,
+                "date_range",
+                "DATE_RANGE_TOO_LARGE",
+                "error",
+                f"외부 fetch date range는 {max_date_range_days}일 이하여야 합니다.",
+            )
+            return self._create_validation_run(
+                run_id=f"ext-{uuid4().hex[:12]}",
+                source=source,
+                original_filename="external-daily-ohlcv",
+                file_hash=hashlib.sha256(b"date-range-error").hexdigest(),
+                total_rows=0,
+                staged_rows=[],
+                issues=[issue],
+                provider_metadata=metadata,
+            )
+
+        mapping = self.db.scalar(
+            select(ExternalSymbolMapping).where(
+                ExternalSymbolMapping.source_id == source_id,
+                ExternalSymbolMapping.symbol == internal_symbol,
+            )
+        )
+        if mapping is None:
+            metadata["raw_hash"] = hashlib.sha256(f"{source_id}:{internal_symbol}:missing-mapping".encode()).hexdigest()
+            issue = self._issue(
+                None,
+                internal_symbol,
+                None,
+                "symbol",
+                "SYMBOL_MAPPING_FAILED",
+                "error",
+                "external_symbol_mapping에 provider symbol 매핑이 없습니다.",
+            )
+            return self._create_validation_run(
+                run_id=f"ext-{uuid4().hex[:12]}",
+                source=source,
+                original_filename="external-daily-ohlcv",
+                file_hash=str(metadata["raw_hash"]),
+                total_rows=0,
+                staged_rows=[],
+                issues=[issue],
+                provider_metadata=metadata,
+            )
+
+        provider_symbol = mapping.external_symbol
+        fetch_started_at = datetime.now(UTC)
+        request = ExternalDailyRequest(
+            source_id=source_id,
+            provider_name=str(source.get("provider_name") or ""),
+            provider_symbol=provider_symbol,
+            internal_symbol=internal_symbol,
+            start_date=start_date,
+            end_date=end_date,
+            source=source,
+        )
+        provider = build_external_daily_provider(source)
+        issues: list[QualityIssue] = []
+        raw_rows: list[dict[str, object]] = []
+        normalized = pd.DataFrame()
+        try:
+            rate_limit = provider.check_rate_limit(request)
+            if not rate_limit.allowed:
+                raise ExternalProviderRateLimitError(rate_limit.reason or "provider rate limit을 초과했습니다.")
+            raw = provider.fetch_daily_ohlcv(request)
+            raw_rows = raw.rows
+            for raw_issue in provider.validate_raw_response(raw, request):
+                issues.append(self._external_issue(raw_issue, internal_symbol))
+            if not any(issue.severity == "error" for issue in issues):
+                normalized = provider.normalize_ohlcv(raw, request)
+        except ExternalProviderTimeoutError as exc:
+            issues.append(self._issue(None, internal_symbol, None, "provider", "PROVIDER_TIMEOUT", "error", str(exc)))
+        except ExternalProviderPartialResponseError as exc:
+            issues.append(self._issue(None, internal_symbol, None, "provider", "PROVIDER_PARTIAL_RESPONSE", "error", str(exc)))
+        except ExternalProviderRateLimitError as exc:
+            issues.append(self._issue(None, internal_symbol, None, "provider", "RATE_LIMIT_EXCEEDED", "error", str(exc)))
+        except ExternalProviderError as exc:
+            issues.append(self._issue(None, internal_symbol, None, "provider", "PROVIDER_RESPONSE_SCHEMA_MISMATCH", "error", str(exc)))
+
+        fetch_finished_at = datetime.now(UTC)
+        raw_hash = hashlib.sha256(json.dumps(raw_rows, ensure_ascii=False, default=str).encode()).hexdigest()
+        metadata = self._external_metadata(
+            source=source,
+            internal_symbol=internal_symbol,
+            provider_symbol=provider_symbol,
+            start_date=start_date,
+            end_date=end_date,
+            raw_row_count=len(raw_rows),
+            normalized_row_count=int(len(normalized)),
+            raw_hash=raw_hash,
+            fetch_started_at=fetch_started_at,
+            fetch_finished_at=fetch_finished_at,
+        )
+        if raw_rows and len(raw_rows) != int(len(normalized)) and not any(issue.severity == "error" for issue in issues):
+            issues.append(
+                self._issue(
+                    None,
+                    internal_symbol,
+                    None,
+                    "provider_response",
+                    "PROVIDER_ROW_COUNT_MISMATCH",
+                    "warning",
+                    "provider raw row 수와 normalized row 수가 다릅니다.",
+                )
+            )
+        if not normalized.empty and not any(issue.severity == "error" for issue in issues):
+            latest_normalized_date = pd.to_datetime(normalized["trade_date"]).max().date()
+            if latest_normalized_date < end_date:
+                issues.append(
+                    self._issue(
+                        None,
+                        internal_symbol,
+                        latest_normalized_date,
+                        "trade_date",
+                        "STALE_DATA",
+                        "warning",
+                        "provider 최신 normalized date가 요청 end_date보다 오래되었습니다.",
+                    )
+                )
+
+        staged_rows: list[dict[str, object]] = []
+        total_rows = int(metadata["raw_row_count"])
+        if not any(issue.severity == "error" for issue in issues):
+            max_rows = int(source.get("max_rows") or DEFAULT_MAX_ROWS)
+            if len(normalized) > max_rows:
+                issues.append(
+                    self._issue(
+                        None,
+                        internal_symbol,
+                        None,
+                        "provider_response",
+                        "MISSING_REQUIRED_VALUE",
+                        "error",
+                        f"external normalized row 수는 {max_rows:,}개 이하여야 합니다.",
+                    )
+                )
+            else:
+                staged_rows = self._validate_frame(normalized, source, issues, enforce_source_match=True)
+
+        return self._create_validation_run(
+            run_id=f"ext-{uuid4().hex[:12]}",
+            source=source,
+            original_filename="external-daily-ohlcv",
+            file_hash=raw_hash,
+            total_rows=total_rows,
+            staged_rows=staged_rows,
+            issues=issues,
+            provider_metadata=metadata,
+        )
 
     def validate_csv(
         self,
@@ -160,32 +374,16 @@ class MarketDataImportService:
             else:
                 staged_rows.extend(self._validate_frame(df, source, issues, enforce_source_match))
 
-        counts = self._issue_counts(issues)
-        can_confirm = counts["error_count"] == 0
-        status = "validated" if can_confirm else "failed"
-        run = ImportRun(
+        return self._create_validation_run(
             run_id=run_id,
-            source_id=str(source["source_id"]),
-            provider_type=str(source["provider_type"]),
+            source=source,
             original_filename=original_filename,
             file_hash=file_hash,
-            status=status,
-            can_confirm=can_confirm,
             total_rows=total_rows,
-            valid_rows=len(staged_rows),
-            error_count=counts["error_count"],
-            warning_count=counts["warning_count"],
-            info_count=counts["info_count"],
-            inserted_count=0,
-            updated_count=0,
-            skipped_count=0,
-            staged_rows_json=json.dumps(staged_rows, ensure_ascii=False, default=str),
-            preview_rows_json=json.dumps(staged_rows[:PREVIEW_ROW_LIMIT], ensure_ascii=False, default=str),
+            staged_rows=staged_rows,
+            issues=issues,
+            provider_metadata={},
         )
-        self.db.add(run)
-        self.db.add_all([self._issue_to_model(run_id, issue) for issue in issues])
-        self.db.commit()
-        return self.get_import_run(run_id)
 
     def legacy_direct_import_csv(self, content: bytes, original_filename: str = "legacy_daily_ohlcv.csv") -> dict[str, int]:
         """기존 direct import endpoint 호환을 위해 validate 후 즉시 confirm한다."""
@@ -292,9 +490,21 @@ class MarketDataImportService:
             raise
         return self.get_import_run(run_id)
 
-    def list_import_runs(self, limit: int = 20) -> list[dict[str, object]]:
+    def confirm_external_import(self, run_id: str) -> dict[str, object]:
+        """external provider preview run만 confirm하도록 제한한다."""
+        run = self.db.get(ImportRun, run_id)
+        if run is None:
+            raise ImportRunNotFoundError("import run을 찾을 수 없습니다.")
+        if run.provider_type not in EXTERNAL_PROVIDER_TYPES:
+            raise ImportRunBadRequestError("external import run만 confirm할 수 있습니다.")
+        return self.confirm_import(run_id)
+
+    def list_import_runs(self, limit: int = 20, provider_types: set[str] | None = None) -> list[dict[str, object]]:
         """최근 import run 목록을 반환한다."""
-        rows = list(self.db.scalars(select(ImportRun).order_by(ImportRun.created_at.desc()).limit(limit)).all())
+        stmt = select(ImportRun)
+        if provider_types:
+            stmt = stmt.where(ImportRun.provider_type.in_(provider_types))
+        rows = list(self.db.scalars(stmt.order_by(ImportRun.created_at.desc()).limit(limit)).all())
         return [self._serialize_run(row, include_rows=False) for row in rows]
 
     def get_import_run(self, run_id: str) -> dict[str, object]:
@@ -318,6 +528,88 @@ class MarketDataImportService:
             stmt = stmt.where(DataQualityCheck.severity == severity)
         rows = list(self.db.scalars(stmt.order_by(DataQualityCheck.id).limit(limit)).all())
         return [self._serialize_check(row) for row in rows]
+
+    def _create_validation_run(
+        self,
+        *,
+        run_id: str,
+        source: dict[str, object],
+        original_filename: str,
+        file_hash: str,
+        total_rows: int,
+        staged_rows: list[dict[str, object]],
+        issues: list[QualityIssue],
+        provider_metadata: dict[str, object],
+    ) -> dict[str, object]:
+        counts = self._issue_counts(issues)
+        can_confirm = counts["error_count"] == 0
+        status = "validated" if can_confirm else "failed"
+        run = ImportRun(
+            run_id=run_id,
+            source_id=str(source["source_id"]),
+            provider_type=str(source["provider_type"]),
+            original_filename=original_filename,
+            file_hash=file_hash,
+            status=status,
+            can_confirm=can_confirm,
+            total_rows=total_rows,
+            valid_rows=len(staged_rows),
+            error_count=counts["error_count"],
+            warning_count=counts["warning_count"],
+            info_count=counts["info_count"],
+            inserted_count=0,
+            updated_count=0,
+            skipped_count=0,
+            staged_rows_json=json.dumps(staged_rows, ensure_ascii=False, default=str),
+            preview_rows_json=json.dumps(staged_rows[:PREVIEW_ROW_LIMIT], ensure_ascii=False, default=str),
+            source_config_snapshot_json=json.dumps(source, ensure_ascii=False, default=str),
+            provider_metadata_json=json.dumps(provider_metadata, ensure_ascii=False, default=str),
+        )
+        self.db.add(run)
+        self.db.add_all([self._issue_to_model(run_id, issue) for issue in issues])
+        self.db.commit()
+        return self.get_import_run(run_id)
+
+    @staticmethod
+    def _external_metadata(
+        *,
+        source: dict[str, object],
+        internal_symbol: str,
+        provider_symbol: str | None,
+        start_date: date,
+        end_date: date,
+        raw_row_count: int,
+        normalized_row_count: int,
+        raw_hash: str,
+        fetch_started_at: datetime | None,
+        fetch_finished_at: datetime | None,
+    ) -> dict[str, object]:
+        return {
+            "provider_name": source.get("provider_name"),
+            "source_id": source.get("source_id"),
+            "provider_symbol": provider_symbol,
+            "internal_symbol": internal_symbol,
+            "raw_row_count": raw_row_count,
+            "normalized_row_count": normalized_row_count,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "timezone": source.get("timezone"),
+            "raw_hash": raw_hash,
+            "network_enabled": bool(source.get("network_enabled")),
+            "fetch_started_at": fetch_started_at.isoformat() if fetch_started_at else None,
+            "fetch_finished_at": fetch_finished_at.isoformat() if fetch_finished_at else None,
+        }
+
+    def _external_issue(self, raw_issue: dict[str, object], symbol: str) -> QualityIssue:
+        return self._issue(
+            None,
+            symbol,
+            None,
+            str(raw_issue.get("field") or "provider_response"),
+            str(raw_issue.get("check_code") or "PROVIDER_RESPONSE_SCHEMA_MISMATCH"),
+            str(raw_issue.get("severity") or "error"),
+            str(raw_issue.get("message") or "provider 응답 검증 실패"),
+        )
 
     def _validate_frame(
         self,
@@ -582,6 +874,8 @@ class MarketDataImportService:
             "created_at": run.created_at,
             "confirmed_at": run.confirmed_at,
             "preview_rows": json.loads(run.preview_rows_json or "[]"),
+            "source_config_snapshot": json.loads(run.source_config_snapshot_json or "{}"),
+            "provider_metadata": json.loads(run.provider_metadata_json or "{}"),
         }
         if include_rows:
             payload["staged_rows"] = json.loads(run.staged_rows_json or "[]")

@@ -4,7 +4,7 @@
 
 검증 시각: 2026-05-21
 
-Checkpoint: `MVP v0.3 Phase 3A data quality`
+Checkpoint: `MVP v0.4 Phase 3B provider-neutral external data`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -15,88 +15,83 @@ Checkpoint: `MVP v0.3 Phase 3A data quality`
 | Frontend npm audit | 통과 | `npm.cmd audit --audit-level=moderate` |
 | Browser smoke | 통과 | Microsoft Edge + Playwright fallback, backend `8010`, frontend `3010` |
 
-## Phase 3A API
+## Phase 3B API
+
+| Method | Path | 검증 |
+|---|---|---|
+| `GET` | `/api/data/external/providers` | pytest + browser |
+| `POST` | `/api/data/external/preview-daily-ohlcv` | pytest + browser |
+| `POST` | `/api/data/external/confirm-import` | pytest + browser |
+| `GET` | `/api/data/external/fetch-runs` | pytest + browser |
+| `GET` | `/api/data/external/fetch-runs/{run_id}` | pytest |
+
+기존 Phase 3A API도 회귀 검증했습니다.
 
 | Method | Path | 검증 |
 |---|---|---|
 | `GET` | `/api/data/sources` | pytest + browser |
 | `GET` | `/api/data/import-runs` | pytest + browser |
 | `GET` | `/api/data/import-runs/{run_id}` | pytest + browser |
-| `POST` | `/api/data/validate-csv` | pytest + browser |
-| `POST` | `/api/data/import-csv-confirmed` | pytest + browser |
+| `POST` | `/api/data/validate-csv` | pytest |
+| `POST` | `/api/data/import-csv-confirmed` | pytest |
 | `GET` | `/api/data/quality` | pytest + browser |
 | `GET` | `/api/data/quality/{run_id}` | pytest + browser |
 | `POST` | `/api/data/import/daily-ohlcv` | legacy 호환 pytest |
 
-## 새 DB 테이블
+## Provider-Neutral 검증
 
-- `data_sources`
-- `import_runs`
-- `data_quality_checks`
-- `external_symbol_mapping`
-- `corporate_actions`
-- `trading_calendar`
+- `external_yfinance`는 `provider_type=external_market_data`, `provider_name=yfinance`로 동작합니다.
+- `network_enabled=false`에서 실제 yfinance network fetch가 호출되지 않음을 monkeypatch 테스트로 검증했습니다.
+- `kis_openapi`는 disabled placeholder이며 fetch 요청이 400으로 차단됩니다.
+- KIS placeholder에는 `app_key`, `app_secret`, `token`, `password`, `account_no`, `hts_id`, `access_token`, `refresh_token` 필드가 없습니다.
+- Settings 응답에도 KIS secret 값이 노출되지 않습니다.
+- `external_symbol_mapping` 매핑이 없으면 `SYMBOL_MAPPING_FAILED`를 기록하고 `daily_ohlcv`에는 쓰지 않습니다.
 
-`corporate_actions`와 `trading_calendar`는 Phase 3A placeholder입니다. 수정주가 적용과 실제 휴장일 완전성 처리는 Phase 3B 이후 검토합니다.
+## Preview/Confirm 불변식
 
-## Validate 불변식
-
-`POST /api/data/validate-csv` 전후 아래 market data table count 불변을 pytest로 검증했습니다.
+External preview 전후 아래 market data table count 불변을 pytest로 검증했습니다.
 
 - `symbol_master`
 - `daily_ohlcv`
-- `index_ohlcv`
-- `sector_ohlcv`
-- `fundamentals_pti`
 - `indicator_snapshot`
 - `screen_results`
 - `reports`
 - `backtest_runs`
 - `orders`
 
-허용된 변화는 아래뿐입니다.
+Preview 단계 허용 변화:
 
 | 테이블 | 결과 |
 |---|---|
-| `import_runs` | validate마다 `+1` |
+| `import_runs` | external preview마다 `+1` |
 | `data_quality_checks` | 검증 결과에 따라 `+N` |
 
-Confirm 전에는 `daily_ohlcv`와 `symbol_master`가 변경되지 않으며, confirm 후에만 insert/update가 발생함을 검증했습니다.
-
-## Confirm 결과
-
-검증 항목:
-
-- 정상 run confirm 성공
-- confirm 성공 후 `inserted_count`, `updated_count`, `skipped_count` 확정
-- `can_confirm=false` run confirm 실패
-- 이미 `confirmed`인 run 재confirm `409`
-- 존재하지 않는 `run_id` confirm `404`
-- confirm은 파일 재업로드 없이 `import_runs.staged_rows_json` 사용
-- legacy direct import endpoint 호환 유지
+Confirm 후에만 `daily_ohlcv` insert/update가 발생합니다. Browser smoke에서 `external_yfinance` preview 후 confirm 결과 `daily_ohlcv +3`, `symbol_master +1`, `orders_count == 0`을 확인했습니다.
 
 ## Data Quality 테스트
 
-pytest로 검증한 check:
+Phase 3A taxonomy 회귀:
 
 - 정상 CSV validation
 - 필수 컬럼 누락
-- `high < low`
-- `high < open` 또는 `high < close`
-- `low > open` 또는 `low > close`
-- 음수 가격
-- 음수 volume
-- zero volume warning
-- 결측치
-- 날짜 parse 실패
+- 가격/거래량 숫자 검증
 - batch duplicate
-- unknown symbol warning
 - provider mismatch error
 - adjusted close missing warning
-- turnover value missing warning
 - weekend date error
+- confirm 재시도 `409`
 
-고정 check_code taxonomy와 severity `error/warning/info`를 사용합니다.
+Phase 3B 추가 검증:
+
+- provider-neutral API가 `source_id`로 동작
+- `external_yfinance` preview
+- `kis_openapi` disabled 차단
+- `SYMBOL_MAPPING_FAILED`
+- `network_enabled=false` network 차단
+- mock provider fixture 기반 preview
+- external confirm 후 insert/update
+- external confirm 재시도 `409`
+- CSV run을 external confirm으로 confirm하려 하면 `400`
 
 ## Browser Smoke
 
@@ -104,38 +99,25 @@ Browser 플러그인의 Node 실행 도구가 노출되지 않아 Python Playwri
 
 | Route | H1 |
 |---|---|
-| `/` | Dashboard |
-| `/dashboard` | Dashboard |
 | `/data` | Data Quality |
-| `/screener` | Screener |
-| `/reports` | Reports |
-| `/backtest` | Backtest |
-| `/portfolio` | Portfolio / Risk |
-| `/settings` | Settings |
 
 추가 확인:
 
-- `/data` source 선택: `csv_krx`
-- 정상 CSV validate 성공
-- 실패 CSV validate 실패 상태 표시
-- validation summary 표시
-- preview rows 표시
-- quality checks table 표시
-- `can_confirm=false`일 때 Confirm 비활성화
-- `can_confirm=true`일 때 Confirm 활성화
-- Confirm 후 Import History 반영
-- Import Run 상세 표시
-- Dashboard에서 legacy direct CSV import 대신 `/data` flow 안내 표시
-- Dashboard flow: seed -> indicators -> screener -> report -> backtest -> mock preview
-- browser smoke 후 `orders_count == 0`
+- External Daily OHLCV Preview panel 표시
+- `external_yfinance` provider-neutral source 표시
+- `kis_openapi` disabled placeholder 표시
+- Fetch Preview 후 `can_confirm=true`
+- Confirm External Import 후 Import History에 `provider=yfinance`, `status=confirmed` 표시
+- API request failure 없음
+- Browser smoke 후 `orders_count == 0`
 
 ## 명령 결과
 
 ### Backend pytest
 
 ```text
-collected 37 items
-37 passed in 119.24s
+collected 43 items
+43 passed in 105.02s
 ```
 
 ### Frontend lint
@@ -172,8 +154,8 @@ Browser smoke 기준 backend `http://127.0.0.1:8010`:
 
 | table/status | count |
 |---|---:|
-| symbol_master | 15 |
-| daily_ohlcv | 4,800 |
+| symbol_master | 16 |
+| daily_ohlcv | 4,803 |
 | index_ohlcv | 320 |
 | sector_ohlcv | 2,880 |
 | fundamentals_pti | 30 |
@@ -182,25 +164,28 @@ Browser smoke 기준 backend `http://127.0.0.1:8010`:
 | reports | 1 |
 | backtest_runs | 3 |
 | orders | 0 |
-| data_sources | 0 |
-| import_runs | 15 |
-| data_quality_checks | 74 |
+| import_runs | 20 |
+| data_quality_checks | 104 |
+| external_symbol_mapping | 32 |
 
 | field | value |
 |---|---|
-| latest_trade_date | 2026-05-20 |
+| latest_trade_date | 2026-05-21 |
 | latest_indicator_date | 2026-05-20 |
 | latest_screen_date | 2026-05-20 |
 
 ## 제외 범위
 
-- 외부 API 호출
-- 실제 주문, 주문 취소, 체결
-- 주문 row 생성
+- KIS 실제 API 호출
+- KIS app key/app secret 저장
+- KIS 계좌번호 저장
+- KIS 주문 API 구현
 - paper/live broker
+- 실제 주문
+- 주문 row 생성
 - 실시간 websocket
+- 자동매매 스케줄러
 - AI 예측 모델
-- 수정주가 실제 적용
-- 실제 거래소 휴장일 완전성 처리
-
-대용량 CSV는 Phase 3B 이후 staging table 분리를 검토합니다.
+- yfinance production-grade 데이터 보장
+- 수정주가 완전 처리
+- 거래정지/상장폐지 완전 처리

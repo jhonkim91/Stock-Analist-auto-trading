@@ -138,13 +138,25 @@ export type ImportResult = {
 export type DataSourceConfig = {
   source_id: string;
   provider_type: string;
+  provider_name: string;
   enabled: boolean;
+  network_enabled: boolean;
+  manual_preview_only: boolean;
+  requires_api_key: boolean;
+  read_only_enabled: boolean;
+  paper_trading_enabled: boolean;
+  live_trading_enabled: boolean;
+  websocket_enabled: boolean;
+  supported_markets: string[];
   market: string;
   venue: string;
   timezone: string;
   zero_volume_policy: string;
   unknown_symbol_policy: string;
   max_rows: number;
+  max_date_range_days: number;
+  timeout_seconds: number;
+  retry_count: number;
 };
 
 export type DataPreviewRow = {
@@ -184,6 +196,22 @@ export type ImportRun = {
   confirmed_at: string | null;
   preview_rows: DataPreviewRow[];
   staged_rows?: DataPreviewRow[];
+  source_config_snapshot: Record<string, unknown>;
+  provider_metadata: {
+    provider_name?: string;
+    source_id?: string;
+    provider_symbol?: string | null;
+    internal_symbol?: string;
+    raw_row_count?: number;
+    normalized_row_count?: number;
+    start_date?: string;
+    end_date?: string;
+    timezone?: string;
+    raw_hash?: string;
+    network_enabled?: boolean;
+    fetch_started_at?: string | null;
+    fetch_finished_at?: string | null;
+  };
 };
 
 export type DataQualityCheck = {

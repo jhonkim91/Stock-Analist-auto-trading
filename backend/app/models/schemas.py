@@ -57,6 +57,13 @@ class ImportConfirmRequest(BaseModel):
     run_id: str
 
 
+class ExternalPreviewDailyOhlcvRequest(BaseModel):
+    source_id: str
+    symbol: str
+    start_date: date
+    end_date: date
+
+
 class GenericResponse(BaseModel):
     ok: bool
     detail: str
