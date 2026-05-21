@@ -331,6 +331,7 @@ export default function DataPage() {
           <Link href="/reports">Reports</Link>
           <Link href="/backtest">Backtest</Link>
           <Link href="/portfolio">Portfolio</Link>
+          <Link href="/paper">Paper</Link>
           <Link href="/settings">Settings</Link>
         </nav>
         <StatusPill status={status} text={message} />

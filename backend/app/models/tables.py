@@ -295,3 +295,72 @@ class Order(Base):
     price: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="preview_only")
     idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+
+
+class PaperOrder(Base):
+    __tablename__ = "paper_orders"
+
+    paper_order_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_ts: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_ts: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    side: Mapped[str] = mapped_column(String(8))
+    qty: Mapped[int] = mapped_column(Integer)
+    filled_qty: Mapped[int] = mapped_column(Integer, default=0)
+    remaining_qty: Mapped[int] = mapped_column(Integer, default=0)
+    order_type: Mapped[str] = mapped_column(String(16), default="limit")
+    limit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stop_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="preview_only")
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    request_hash: Mapped[str] = mapped_column(String(64), default="")
+    strategy_tag: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    risk_gate_json: Mapped[str] = mapped_column(Text, default="{}")
+    live_order_created: Mapped[bool] = mapped_column(Boolean, default=False)
+    broker_order_created: Mapped[bool] = mapped_column(Boolean, default=False)
+    network_call_performed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class PaperFill(Base):
+    __tablename__ = "paper_fills"
+
+    paper_fill_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    paper_order_id: Mapped[str] = mapped_column(String(64), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    side: Mapped[str] = mapped_column(String(8))
+    qty: Mapped[int] = mapped_column(Integer)
+    price: Mapped[float] = mapped_column(Float)
+    fill_ts: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    fill_source: Mapped[str] = mapped_column(String(32), default="local_simulator")
+    simulator_version: Mapped[str] = mapped_column(String(32), default="phase_3e1_skeleton")
+    commission: Mapped[float] = mapped_column(Float, default=0.0)
+    slippage_bps: Mapped[float] = mapped_column(Float, default=0.0)
+    live_order_created: Mapped[bool] = mapped_column(Boolean, default=False)
+    broker_order_created: Mapped[bool] = mapped_column(Boolean, default=False)
+    network_call_performed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class PaperPosition(Base):
+    __tablename__ = "paper_positions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    strategy_tag: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    qty: Mapped[int] = mapped_column(Integer, default=0)
+    avg_price: Mapped[float] = mapped_column(Float, default=0.0)
+    realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
+    last_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PaperAuditEvent(Base):
+    __tablename__ = "paper_audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    paper_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    decision: Mapped[str] = mapped_column(String(16), default="deny")
+    reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

@@ -76,6 +76,7 @@ export default function ReportsPage() {
           <Link href="/screener">Screener</Link>
           <Link href="/backtest">Backtest</Link>
           <Link href="/portfolio">Portfolio</Link>
+          <Link href="/paper">Paper</Link>
           <Link href="/settings">Settings</Link>
         </nav>
         <span className={`status ${status}`}>{message}</span>

@@ -50,6 +50,7 @@ export default function SettingsPage() {
           <Link href="/reports">Reports</Link>
           <Link href="/backtest">Backtest</Link>
           <Link href="/portfolio">Portfolio</Link>
+          <Link href="/paper">Paper</Link>
         </nav>
         <span className={`status ${status}`}>{message}</span>
       </header>

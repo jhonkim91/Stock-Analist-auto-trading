@@ -1,0 +1,22 @@
+paper:
+  mode: "safety_scaffold"
+  enabled: false
+  can_create: false
+  can_simulate_fills: false
+  preview_only: true
+  kill_switch_enabled: true
+  network_enabled: false
+  live_order_enabled: false
+  broker_order_enabled: false
+risk_gate:
+  allow_buy_preview: true
+  allow_sell_preview: true
+  allow_short_sell: false
+  max_order_qty: 1000000
+  max_order_notional: 100000000
+audit:
+  persistence_enabled: false
+  sanitize_enabled: true
+simulator:
+  enabled: false
+  auto_fill_on_create: false

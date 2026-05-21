@@ -47,6 +47,7 @@ export default function PortfolioPage() {
           <Link href="/screener">Screener</Link>
           <Link href="/reports">Reports</Link>
           <Link href="/backtest">Backtest</Link>
+          <Link href="/paper">Paper</Link>
           <Link href="/settings">Settings</Link>
         </nav>
         <span className={`status ${status}`}>{message}</span>
