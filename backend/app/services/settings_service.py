@@ -7,7 +7,22 @@ import yaml
 
 from backend.app.core.paths import CONFIG_DIR
 
-SENSITIVE_KEY_PARTS = ("secret", "token", "password", "api_key")
+SENSITIVE_KEY_PARTS = (
+    "secret",
+    "token",
+    "password",
+    "api_key",
+    "app_key",
+    "appkey",
+    "app_secret",
+    "appsecret",
+    "authorization",
+    "account",
+    "account_no",
+    "cano",
+    "hts_id",
+    "approval_key",
+)
 
 
 class SettingsService:

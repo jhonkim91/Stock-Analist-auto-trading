@@ -229,6 +229,19 @@ export type DataQualityCheck = {
   created_at: string;
 };
 
+export type KisStatus = {
+  source_id: string;
+  enabled: boolean;
+  network_enabled: boolean;
+  read_only_enabled: boolean;
+  app_key_configured: boolean;
+  app_secret_configured: boolean;
+  token_cache_enabled: boolean;
+  broker_enabled: boolean;
+  websocket_enabled: boolean;
+  disabled_reason: string;
+};
+
 export type SettingsPayload = Record<string, unknown>;
 
 export type ActionResponse = Record<string, unknown>;

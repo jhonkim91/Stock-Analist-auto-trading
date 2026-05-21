@@ -51,8 +51,27 @@ sources:
     max_date_range_days: 730
     timeout_seconds: 10
     retry_count: 0
+  - source_id: "kis_market_data"
+    provider_type: "external_market_data"
+    provider_name: "kis"
+    enabled: false
+    network_enabled: false
+    read_only_enabled: false
+    manual_preview_only: true
+    requires_api_key: true
+    supported_markets:
+      - "KR"
+    market: "KR"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "reject"
+    max_rows: 100
+    max_date_range_days: 100
+    timeout_seconds: 10
+    retry_count: 0
   - source_id: "kis_openapi"
-    provider_type: "broker_data"
+    provider_type: "broker_placeholder"
     provider_name: "kis"
     enabled: false
     network_enabled: false

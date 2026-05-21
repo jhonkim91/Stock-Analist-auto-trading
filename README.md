@@ -2,29 +2,47 @@
 
 주식 분석과 자동매매 보조 흐름을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 checkpoint는 `MVP v0.4 Phase 3B provider-neutral external data`입니다. 실제 주문, paper/live broker, KIS 실제 API 호출, 실시간 websocket, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
+현재 checkpoint는 `MVP v0.5 Phase 3C KIS read-only foundation`입니다. 실제 주문, paper/live broker, KIS 실제 API 호출, 실시간 websocket, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
 
-## Phase 3B 기능
+## Phase 3C 기능
 
 - Phase 3A CSV validate/confirm flow 유지
-- provider-neutral external daily OHLCV preview/confirm flow 추가
+- Phase 3B provider-neutral external daily OHLCV preview/confirm flow 유지
+- KIS read-only market data foundation 추가
+  - `kis_market_data`: KIS market data 전용 source, 기본 disabled
+  - `KisMarketDataProvider`: 실제 KIS 호출 금지 skeleton
+  - `MockKisMarketDataProvider`: KIS 기간별시세 형태 fixture provider
+  - `/api/kis/status`, `/api/kis/config`, `/api/kis/config/validate`
+- KIS broker boundary 명확화
+  - `kis_openapi`: Phase 3D 이후 broker adapter placeholder
+  - Phase 3C에서는 broker DI/route/order/account/balance/fill/websocket 구현 없음
 - `BaseExternalDataProvider` 기반 provider 구조 추가
   - `MockExternalDailyProvider`: 테스트/fixture 전용, 네트워크 호출 없음
   - `YFinanceDailyProvider`: 첫 external market data provider 구현체
-  - `KisOpenApiProvider`: disabled placeholder, 실제 구현 없음
+  - `MockKisMarketDataProvider`: KIS read-only fixture 전용, 네트워크 호출 없음
 - `external_yfinance` source 추가
   - `provider_type: external_market_data`
   - `provider_name: yfinance`
   - `network_enabled: false`
   - `manual_preview_only: true`
-- `kis_openapi` source placeholder 추가
+- `kis_market_data` source 추가
+  - `provider_type: external_market_data`
+  - `provider_name: kis`
+  - `enabled: false`
+  - `network_enabled: false`
+  - `read_only_enabled: false`
+  - `manual_preview_only: true`
+  - secret/account/token 필드 없음
+- `kis_openapi` broker placeholder 유지
+  - `provider_type: broker_placeholder`
   - `enabled: false`
   - `network_enabled: false`
   - `paper_trading_enabled: false`
   - `live_trading_enabled: false`
   - `websocket_enabled: false`
-  - secret/account/token 필드 없음
+  - secret/account/token/order 구현 없음
 - `/data` 화면에 External Daily OHLCV Preview panel 추가
+- `/data` 화면에 KIS read-only status panel 추가
 
 ## Import Flow
 
@@ -65,19 +83,37 @@ Symbol mapping 예:
 
 ## KIS 향후 확장 정책
 
-KIS 확장은 별도 Phase로 진행합니다.
+KIS 확장은 단계별로 분리합니다.
 
-- Phase 3C: KIS read-only foundation
+- Phase 3C: KIS read-only foundation, 현재 checkpoint
 - Phase 3D: KIS paper trading adapter
 - Phase 3E: KIS live trading gate
 - Phase 3F: KIS websocket/체결통보
 
 KIS는 data provider와 broker adapter를 분리합니다.
 
-- `KisMarketDataProvider`
-- `KisBrokerAdapter`
+- `KisMarketDataProvider`: read-only market data, 현재가/기간별시세/종목 기본정보 후보
+- `KisBrokerAdapter`: 주문/잔고/체결/계좌, Phase 3D 이후
 
-Phase 3B에서는 둘 다 구현하지 않습니다. `KisOpenApiProvider`는 disabled placeholder 또는 문서 수준만 허용합니다.
+Phase 3C에서는 `KisMarketDataProvider` skeleton과 `MockKisMarketDataProvider` fixture만 구현합니다. `KisBrokerAdapter`는 DI와 route에 연결하지 않습니다.
+
+KIS read-only API 후보는 fixture/schema/normalization 설계에만 사용합니다.
+
+| 후보 | 용도 |
+|---|---|
+| `/uapi/domestic-stock/v1/quotations/inquire-price`, TR `FHKST01010100` | 국내주식 현재가 후보 |
+| `/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice`, TR `FHKST03010100` | Phase 3C primary daily_ohlcv fixture |
+| `/uapi/domestic-stock/v1/quotations/inquire-daily-price`, TR `FHKST01010400` | 일자별 시세 후보 |
+| `/uapi/domestic-stock/v1/quotations/search-stock-info` | 종목 기본정보 후보 |
+| 업종/지수 API | 문서 후보, Phase 3C import 연결 없음 |
+
+## Secret 정책
+
+- 실제 KIS app key/app secret/account/token은 저장하지 않습니다.
+- `.env.example`에는 placeholder만 둡니다.
+- `/api/kis/status`와 `/api/kis/config`는 configured boolean만 반환하며 secret 값을 반환하지 않습니다.
+- `/api/kis/config/validate`는 환경변수 존재와 형식만 확인하고 KIS network call, 토큰 발급, token cache 생성을 하지 않습니다.
+- Settings API와 logs에는 secret 값을 출력하지 않습니다.
 
 ## CSV 제한
 
@@ -135,6 +171,9 @@ Phase 3B에서도 `staged_rows_json`을 SQLite 호환 `Text` JSON으로 저장�
 | `POST` | `/api/data/external/confirm-import` | external run confirm |
 | `GET` | `/api/data/external/fetch-runs` | external fetch run 목록 |
 | `GET` | `/api/data/external/fetch-runs/{run_id}` | external fetch run 상세 |
+| `GET` | `/api/kis/status` | KIS read-only status |
+| `GET` | `/api/kis/config` | KIS redacted config |
+| `POST` | `/api/kis/config/validate` | KIS env configured boolean 검증 |
 
 ## 실행
 
@@ -176,6 +215,7 @@ npm.cmd audit --audit-level=moderate
 - KIS app key/app secret 저장 없음
 - KIS 계좌번호 저장 없음
 - KIS 주문 API 구현 없음
+- KIS token cache 생성 없음
 - API key/secret/token/password 저장 없음
 - 실제 주문 없음
 - 주문 row 생성 없음

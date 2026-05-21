@@ -84,14 +84,17 @@ def test_external_providers_are_provider_neutral_and_kis_has_no_secret_fields(cl
     assert by_id["external_yfinance"]["provider_name"] == "yfinance"
     assert by_id["external_yfinance"]["network_enabled"] is False
     assert by_id["external_yfinance"]["unknown_symbol_policy"] == "warn_and_create_on_confirm"
-    assert by_id["kis_openapi"]["provider_name"] == "kis"
-    assert by_id["kis_openapi"]["enabled"] is False
-    assert by_id["kis_openapi"]["unknown_symbol_policy"] == "reject"
-    assert by_id["kis_openapi"]["paper_trading_enabled"] is False
-    assert by_id["kis_openapi"]["live_trading_enabled"] is False
-    assert by_id["kis_openapi"]["websocket_enabled"] is False
+    assert by_id["kis_market_data"]["provider_name"] == "kis"
+    assert by_id["kis_market_data"]["provider_type"] == "external_market_data"
+    assert by_id["kis_market_data"]["enabled"] is False
+    assert by_id["kis_market_data"]["network_enabled"] is False
+    assert by_id["kis_market_data"]["read_only_enabled"] is False
+    assert by_id["kis_market_data"]["unknown_symbol_policy"] == "reject"
+    assert by_id["kis_market_data"]["paper_trading_enabled"] is False
+    assert by_id["kis_market_data"]["live_trading_enabled"] is False
+    assert by_id["kis_market_data"]["websocket_enabled"] is False
     forbidden = {"app_key", "app_secret", "token", "password", "account_no", "hts_id", "access_token", "refresh_token"}
-    assert forbidden.isdisjoint(by_id["kis_openapi"])
+    assert forbidden.isdisjoint(by_id["kis_market_data"])
 
     settings = client.get("/api/settings")
     assert settings.status_code == 200
@@ -128,10 +131,10 @@ def test_yfinance_source_preview_uses_mapping_and_does_not_write_market_tables(c
     assert "UNKNOWN_SYMBOL" in _quality_codes(payload["run_id"])
 
 
-def test_kis_openapi_source_is_disabled_for_phase3b(client):
+def test_kis_market_data_source_is_disabled_for_phase3c(client):
     client.post("/api/data/seed")
 
-    response = _preview_external(client, symbol="KR001", source_id="kis_openapi")
+    response = _preview_external(client, symbol="KR001", source_id="kis_market_data")
 
     assert response.status_code == 400
     assert "비활성화된 data source" in response.json()["detail"]

@@ -4,12 +4,9 @@
 
 검증 시각: 2026-05-21
 
-Checkpoint: `MVP v0.4 Phase 3B provider-neutral external data`
+Checkpoint: `MVP v0.5 Phase 3C KIS read-only foundation`
 
-PR #2 `Phase 3B: Provider-neutral external data preview flow`는 merge 완료됐습니다.
-
-- Merge commit: `754a139c24b3e3742f2060a9589d96d21a75d2b9`
-- Local main: `origin/main` 기준 최신화 완료
+작업 브랜치: `phase-3c-kis-readonly-foundation`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -18,95 +15,47 @@ PR #2 `Phase 3B: Provider-neutral external data preview flow`는 merge 완료됐
 | Frontend typecheck | 통과 | `npm.cmd exec tsc -- --noEmit` |
 | Frontend production build | 통과 | `npm.cmd run build` |
 | Frontend npm audit | 통과 | `npm.cmd audit --audit-level=moderate` |
-| Browser smoke | 통과 | Browser Node 실행 도구 미노출로 Playwright fallback, backend `8002`, frontend `3010` |
+| Browser/API smoke | 통과 | backend `8002`, frontend `3010`, Playwright headless + API assertions |
 
-## Phase 3B API
-
-| Method | Path | 검증 |
-|---|---|---|
-| `GET` | `/api/data/external/providers` | pytest + browser |
-| `POST` | `/api/data/external/preview-daily-ohlcv` | pytest + browser |
-| `POST` | `/api/data/external/confirm-import` | pytest + browser |
-| `GET` | `/api/data/external/fetch-runs` | pytest + browser |
-| `GET` | `/api/data/external/fetch-runs/{run_id}` | pytest |
-
-기존 Phase 3A API도 회귀 검증했습니다.
+## Phase 3C API
 
 | Method | Path | 검증 |
 |---|---|---|
-| `GET` | `/api/data/sources` | pytest + browser |
-| `GET` | `/api/data/import-runs` | pytest + browser |
-| `GET` | `/api/data/import-runs/{run_id}` | pytest + browser |
-| `POST` | `/api/data/validate-csv` | pytest |
-| `POST` | `/api/data/import-csv-confirmed` | pytest |
-| `GET` | `/api/data/quality` | pytest + browser |
-| `GET` | `/api/data/quality/{run_id}` | pytest + browser |
-| `POST` | `/api/data/import/daily-ohlcv` | legacy 호환 pytest |
+| `GET` | `/api/kis/status` | pytest + browser |
+| `GET` | `/api/kis/config` | pytest |
+| `POST` | `/api/kis/config/validate` | pytest |
+| `POST` | `/api/data/external/preview-daily-ohlcv` with `source_id=kis_market_data` | disabled 차단 pytest, mock fixture preview pytest |
+| `POST` | `/api/data/external/confirm-import` | KIS mock fixture confirm pytest |
 
-## Provider-Neutral 검증
+기존 Phase 3A/3B API 회귀도 pytest와 browser smoke에서 함께 확인했다.
 
-- `external_yfinance`는 `provider_type=external_market_data`, `provider_name=yfinance`로 동작합니다.
-- `external_yfinance`는 `unknown_symbol_policy=warn_and_create_on_confirm`입니다.
-- `external_yfinance`는 `network_enabled=false`에서 `provider_metadata.provider_mode=mock`, `provider_metadata.data_origin=deterministic_mock`을 기록합니다.
-- `network_enabled=false`에서 실제 yfinance network fetch가 호출되지 않음을 monkeypatch 테스트와 browser smoke로 검증했습니다.
-- `kis_openapi`는 disabled placeholder이며 fetch 요청이 400으로 차단됩니다.
-- `kis_openapi`는 `unknown_symbol_policy=reject`를 유지합니다.
-- `kis_openapi`는 `paper_trading_enabled=false`, `live_trading_enabled=false`, `websocket_enabled=false`를 유지합니다.
-- KIS placeholder에는 `app_key`, `app_secret`, `token`, `password`, `account_no`, `hts_id`, `access_token`, `refresh_token` 필드가 없습니다.
-- Settings 응답에도 KIS secret 값이 노출되지 않습니다.
-- `external_symbol_mapping` 매핑이 없으면 `SYMBOL_MAPPING_FAILED`를 기록하고 `daily_ohlcv`에는 쓰지 않습니다.
+## KIS Read-only Foundation
 
-## Preview/Confirm 불변식
+- `kis_market_data`는 `provider_type=external_market_data`, `provider_name=kis`인 read-only market data source다.
+- 기본값은 `enabled=false`, `network_enabled=false`, `read_only_enabled=false`, `manual_preview_only=true`다.
+- `kis_openapi`는 `broker_placeholder`로 유지되며 Phase 3D 이후 broker adapter용 placeholder다.
+- `KisMarketDataProvider`는 Phase 3C에서 실제 KIS network call을 수행하지 않는 skeleton이다.
+- `MockKisMarketDataProvider`는 KIS `inquire-daily-itemchartprice` 형태 fixture를 생성하고 표준 `daily_ohlcv` row로 normalize한다.
+- `KisBrokerAdapter`는 DI와 route에 연결하지 않았다.
 
-External preview 전후 아래 market data table count 불변을 pytest로 검증했습니다.
+## Secret / Redaction 검증
 
-- `symbol_master`
-- `daily_ohlcv`
-- `indicator_snapshot`
-- `screen_results`
-- `reports`
-- `backtest_runs`
-- `orders`
+- `kis_market_data` source에 `app_key`, `app_secret`, `token`, `access_token`, `refresh_token`, `approval_key`, `account`, `account_no`, `cano`, `hts_id`, `password`, `authorization` 필드가 없다.
+- `/api/kis/status`, `/api/kis/config`, `/api/kis/config/validate`, `/api/settings` 응답에 sentinel secret 값이 노출되지 않음을 pytest와 browser/API smoke로 확인했다.
+- `app_key_configured`, `app_secret_configured`는 boolean만 반환한다.
+- token cache 파일은 생성하지 않았다.
+- Git 추적 파일에 sentinel secret 값이 없음을 pytest로 확인했다.
 
-Preview 단계 허용 변화:
+## Data Quality / Preview-Confirm 검증
 
-| 테이블 | 결과 |
-|---|---|
-| `import_runs` | external preview마다 `+1` |
-| `data_quality_checks` | 검증 결과에 따라 `+N` |
-
-Confirm 후에만 `daily_ohlcv` insert/update가 발생합니다. Post-merge browser smoke에서 `external_yfinance` preview 후 Confirm External Import가 동작했고, 최종 `orders_count == 0`을 확인했습니다.
-
-## Data Quality 테스트
-
-Phase 3A taxonomy 회귀:
-
-- 정상 CSV validation
-- 필수 컬럼 누락
-- 가격/거래량 숫자 검증
-- batch duplicate
-- provider mismatch error
-- adjusted close missing warning
-- weekend date error
-- confirm 재시도 `409`
-
-Phase 3B 추가 검증:
-
-- provider-neutral API가 `source_id`로 동작
-- `external_yfinance` preview
-- `kis_openapi` disabled 차단
-- `SYMBOL_MAPPING_FAILED`
-- `PROVIDER_ROW_COUNT_MISMATCH`
-- `DATE_RANGE_TOO_LARGE`
-- `network_enabled=false` network 차단
-- mock provider fixture 기반 preview
-- external confirm 후 insert/update
-- external confirm 재시도 `409`
-- CSV run을 external confirm으로 confirm하려 하면 `400`
+- `kis_market_data` disabled 상태에서 external preview 요청은 `400`으로 차단된다.
+- KIS mock fixture preview는 `import_runs`와 `data_quality_checks`만 기록한다.
+- preview 후 `symbol_master`, `daily_ohlcv`, `indicator_snapshot`, `screen_results`, `reports`, `backtest_runs`, `orders` count가 바뀌지 않음을 pytest로 확인했다.
+- confirm 후에만 `daily_ohlcv` upsert가 발생한다.
+- KIS mock preview/confirm 후에도 `orders_count == 0`을 유지한다.
+- 기존 `external_yfinance` mock preview와 CSV validate/confirm 회귀 테스트가 통과했다.
 
 ## Browser Smoke
-
-Browser 플러그인의 Node 실행 도구가 노출되지 않아 Playwright fallback으로 Chromium headless smoke를 수행했습니다.
 
 | Route | H1 |
 |---|---|
@@ -121,24 +70,23 @@ Browser 플러그인의 Node 실행 도구가 노출되지 않아 Playwright fal
 
 추가 확인:
 
-- External Daily OHLCV Preview panel 표시
-- `network_enabled=false` mock/fixture 안내 문구 표시
-- `external_yfinance` provider-neutral source 표시
-- `kis_openapi` disabled placeholder 표시
-- Fetch Preview 후 `can_confirm=true`
-- provider metadata에 `provider_mode=mock`, `data_origin=deterministic_mock` 표시
-- Confirm External Import 후 Import History에 `provider=yfinance`, `status=confirmed` 표시
-- console error 없음
-- API request failure 없음
-- Browser smoke 후 `orders_count == 0`
+- `/data`에 `KIS Read-only Status` panel 표시
+- `kis_market_data`, `app_key_configured`, `app_secret_configured`, `token_cache_enabled`, `Phase 3C read-only foundation only` 표시
+- `/api/kis/status`, `/api/kis/config`, `/api/kis/config/validate`, `/api/settings` sentinel secret 미노출
+- `source_id=kis_market_data` external preview는 disabled 상태에서 HTTP 400으로 차단
+- token cache 파일 없음
+- UI smoke 전후 `orders_count == 0`
+- console error 0
+- request failure 0
+- API HTTP error 0
 
 ## 명령 결과
 
 ### Backend pytest
 
 ```text
-collected 43 items
-43 passed in 99.48s
+collected 50 items
+50 passed in 286.25s
 ```
 
 ### Frontend lint
@@ -175,38 +123,33 @@ Browser smoke 기준 backend `http://127.0.0.1:8002`:
 
 | table/status | count |
 |---|---:|
-| symbol_master | 16 |
-| daily_ohlcv | 4,803 |
+| symbol_master | 15 |
+| daily_ohlcv | 4,800 |
 | index_ohlcv | 320 |
 | sector_ohlcv | 2,880 |
 | fundamentals_pti | 30 |
 | indicator_snapshot | 4,800 |
 | screen_results | 45 |
 | reports | 1 |
-| backtest_runs | 3 |
+| backtest_runs | 7 |
 | orders | 0 |
-| import_runs | 24 |
-| data_quality_checks | 128 |
-| external_symbol_mapping | 32 |
 
 | field | value |
 |---|---|
-| latest_trade_date | 2026-05-21 |
+| latest_trade_date | 2026-05-20 |
 | latest_indicator_date | 2026-05-20 |
 | latest_screen_date | 2026-05-20 |
 
 ## 제외 범위
 
 - KIS 실제 API 호출
-- KIS app key/app secret 저장
-- KIS 계좌번호 저장
-- KIS 주문 API 구현
+- KIS app key/app secret/account/token 저장
+- token cache 생성
+- KIS 주문 API
+- KIS broker route
 - paper/live broker
-- 실제 주문
+- 실제 주문 또는 모의 주문
 - 주문 row 생성
+- 계좌/잔고/체결 조회
 - 실시간 websocket
 - 자동매매 스케줄러
-- AI 예측 모델
-- yfinance production-grade 데이터 보장
-- 수정주가 완전 처리
-- 거래정지/상장폐지 완전 처리

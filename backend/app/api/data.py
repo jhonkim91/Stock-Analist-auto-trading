@@ -75,7 +75,7 @@ def external_fetch_runs(
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> list[dict[str, object]]:
-    return MarketDataImportService(db).list_import_runs(limit=limit, provider_types={"external", "external_market_data", "broker_data"})
+    return MarketDataImportService(db).list_import_runs(limit=limit, provider_types={"external", "external_market_data"})
 
 
 @router.get("/external/fetch-runs/{run_id}")
@@ -84,7 +84,7 @@ def external_fetch_run_detail(run_id: str, db: Session = Depends(get_db)) -> dic
         run = MarketDataImportService(db).get_import_run(run_id)
     except ImportRunNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if run["provider_type"] not in {"external", "external_market_data", "broker_data"}:
+    if run["provider_type"] not in {"external", "external_market_data"}:
         raise HTTPException(status_code=404, detail="external fetch run을 찾을 수 없습니다.")
     return run
 

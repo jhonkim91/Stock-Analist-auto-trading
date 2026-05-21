@@ -232,29 +232,104 @@ class YFinanceDailyProvider(MockExternalDailyProvider):
         )
 
 
-class KisOpenApiProvider:
+class MockKisMarketDataProvider:
     provider_name = "kis"
 
     def check_rate_limit(self, request: ExternalDailyRequest) -> ProviderRateLimitState:
-        """Phase 3B에서는 KIS 호출을 허용하지 않는다."""
-        return ProviderRateLimitState(allowed=False, reason="KIS provider는 Phase 3B에서 disabled placeholder입니다.")
+        """KIS fixture provider는 네트워크 없이 항상 rate limit을 통과시킨다."""
+        return ProviderRateLimitState(allowed=True)
 
     def fetch_daily_ohlcv(self, request: ExternalDailyRequest) -> RawProviderResponse:
-        """KIS 실제 API 호출은 Phase 3C 이후 별도 read-only provider에서 구현한다."""
-        raise ExternalProviderError("KIS 실제 API 호출은 Phase 3B에서 금지되어 있습니다.")
+        """KIS 기간별시세 응답 형태의 deterministic fixture row를 만든다."""
+        dates = pd.bdate_range(start=request.start_date, end=request.end_date)
+        rows: list[dict[str, object]] = []
+        seed = sum(ord(char) for char in request.internal_symbol)
+        base = 50000 + seed
+        for offset, trade_date in enumerate(dates):
+            close = base + offset * 110
+            volume = 120000 + offset * 1200
+            rows.append(
+                {
+                    "stck_bsop_date": trade_date.strftime("%Y%m%d"),
+                    "stck_oprc": str(close - 50),
+                    "stck_hgpr": str(close + 150),
+                    "stck_lwpr": str(close - 180),
+                    "stck_clpr": str(close),
+                    "acml_vol": str(volume),
+                    "acml_tr_pbmn": str(close * volume),
+                }
+            )
+        return RawProviderResponse(
+            provider_name=self.provider_name,
+            provider_symbol=request.provider_symbol,
+            rows=rows,
+            fetched_at=datetime.now(UTC),
+        )
 
     def validate_raw_response(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> list[dict[str, object]]:
-        return []
+        """KIS 기간별시세 fixture의 필수 필드 존재 여부를 검증한다."""
+        if not raw.rows:
+            return [
+                {
+                    "field": "provider_response",
+                    "check_code": "PROVIDER_PARTIAL_RESPONSE",
+                    "severity": "error",
+                    "message": "KIS provider 응답 row가 비어 있습니다.",
+                }
+            ]
+        required = {"stck_bsop_date", "stck_oprc", "stck_hgpr", "stck_lwpr", "stck_clpr", "acml_vol"}
+        missing = sorted(required - set(raw.rows[0]))
+        if not missing:
+            return []
+        return [
+            {
+                "field": "provider_response",
+                "check_code": "PROVIDER_RESPONSE_SCHEMA_MISMATCH",
+                "severity": "error",
+                "message": f"KIS provider 응답 필수 필드 누락: {', '.join(missing)}",
+            }
+        ]
 
     def normalize_ohlcv(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> pd.DataFrame:
-        return pd.DataFrame()
+        """KIS 기간별시세 raw row를 표준 daily OHLCV DataFrame으로 변환한다."""
+        rows: list[dict[str, object]] = []
+        source = request.source
+        for row in raw.rows:
+            close = float(row["stck_clpr"])
+            volume = int(float(row["acml_vol"]))
+            turnover_value = row.get("acml_tr_pbmn")
+            rows.append(
+                {
+                    "trade_date": pd.Timestamp(str(row["stck_bsop_date"])).date().isoformat(),
+                    "symbol": request.internal_symbol,
+                    "open": float(row["stck_oprc"]),
+                    "high": float(row["stck_hgpr"]),
+                    "low": float(row["stck_lwpr"]),
+                    "close": close,
+                    "adj_close": close,
+                    "volume": volume,
+                    "turnover_value": float(turnover_value) if turnover_value is not None else close * volume,
+                    "market": str(source.get("market") or "KR"),
+                    "venue": str(source.get("venue") or "KRX"),
+                    "provider": str(source.get("provider_type") or "external_market_data"),
+                }
+            )
+        return pd.DataFrame(rows)
+
+
+class KisMarketDataProvider(MockKisMarketDataProvider):
+    def fetch_daily_ohlcv(self, request: ExternalDailyRequest) -> RawProviderResponse:
+        """Phase 3C에서는 실제 KIS 네트워크 호출을 수행하지 않는다."""
+        raise ExternalProviderError("Phase 3C에서는 KIS 실제 API 호출을 금지합니다.")
 
 
 def build_external_daily_provider(source: dict[str, object]) -> BaseExternalDataProvider:
     """source 설정에 맞는 provider-neutral daily provider 구현체를 반환한다."""
     provider_name = str(source.get("provider_name") or "").strip().lower()
+    if provider_name == "kis" and bool(source.get("network_enabled")):
+        return KisMarketDataProvider()
     if provider_name == "kis":
-        return KisOpenApiProvider()
+        return MockKisMarketDataProvider()
     if provider_name == "yfinance" and bool(source.get("network_enabled")):
         return YFinanceDailyProvider()
     if provider_name == "yfinance":
