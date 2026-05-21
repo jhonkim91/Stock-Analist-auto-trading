@@ -15,6 +15,7 @@
 - [x] pytest 전용 `backend/data/test_app.db` 분리
 - [x] npm audit 0 vulnerabilities
 - [x] `AGENTS.md` 프로젝트 운영 지침 확장
+- [x] GitHub 초기 publish 완료: `jhonkim91/Stock-Analist-auto-trading`
 
 ## 주의 사항
 
@@ -41,6 +42,7 @@
 - 2026-05-21 `npm.cmd exec tsc -- --noEmit`: 통과
 - 2026-05-21 post-restore browser smoke: `/dashboard`, `/reports`, `/backtest` 통과
 - 2026-05-21 `rg -n "Repo Layout|Backend 실행 방법|Frontend 실행 방법|Test / Lint / Build|Coding Conventions|절대 하지 말아야 할 것|완료 기준|검증 방법" AGENTS.md`: AGENTS 필수 섹션 확인 통과
+- 2026-05-21 `git push -u origin main`: GitHub 초기 업로드 통과, 초기 커밋 `7365dcb`
 
 ## 최신 DB count
 
@@ -64,6 +66,7 @@
 - Tests: `backend/tests/test_api_smoke.py`, `backend/tests/conftest.py`
 - Frontend: `frontend/app/dashboard/DashboardClient.tsx`, `frontend/package.json`, `frontend/package-lock.json`, `frontend/.env.local.example`, `frontend/.env.local`
 - Docs/config: `AGENTS.md`, `.gitignore`, `README.md`, `docs/VALIDATION.md`, `Memory.md`
+- Git: local `main` tracks `origin/main` at `https://github.com/jhonkim91/Stock-Analist-auto-trading.git`
 
 ## 다음 작업
 
