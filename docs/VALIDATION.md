@@ -4,13 +4,11 @@
 
 검증 시각: 2026-05-21
 
-Checkpoint: `MVP v0.5 Phase 3C KIS read-only foundation`
+Checkpoint: `MVP v0.6 Phase 3D broker safety scaffold`
 
 기준 브랜치: `main`
 
-PR: `#3 Phase 3C: Add KIS read-only foundation` merged
-
-Merge commit: `b696ce28603d0c7329e1f36f8bcb8b48db617710`
+현재 HEAD: `c697587aa25f0507ccbfafb0b068a4bd88bd0355`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -19,79 +17,94 @@ Merge commit: `b696ce28603d0c7329e1f36f8bcb8b48db617710`
 | Frontend typecheck | 통과 | `npm.cmd exec tsc -- --noEmit` |
 | Frontend production build | 통과 | `npm.cmd run build` |
 | Frontend npm audit | 통과 | `npm.cmd audit --audit-level=moderate` |
-| Browser/API smoke | 통과 | backend `8002`, frontend `3010`, Playwright headless route smoke + API assertions |
+| API smoke | 통과 | FastAPI `TestClient` endpoint/status assertion |
 
-## Phase 3C API
+## Phase 3D Broker Safety Scaffold
 
-| Method | Path | 검증 |
+- Phase 3D는 broker safety scaffold only다.
+- 실주문, paper order, live order, cancel, fill, websocket 연결은 구현하지 않았다.
+- `backend/config/broker.yaml`은 disabled/fail-closed 기본값만 담는다.
+- `/api/settings`는 `broker.yaml` 원문과 broker summary를 모두 반환하지 않는다.
+- broker 안전 상태 요약은 `/api/broker/status`에서만 반환한다.
+- audit DB persistence는 비활성이다.
+- `TokenLifecycleService`는 status-only이며 token 발급, refresh, cache, DB 저장, in-memory manager를 구현하지 않았다.
+- sell preview는 기존 long position 청산 검토 전용이며, 포지션 없음/수량 초과/short sell은 deny한다.
+
+## API Contract
+
+| Method | Path | Phase 3D 결과 |
 |---|---|---|
-| `GET` | `/api/kis/status` | pytest + browser |
-| `GET` | `/api/kis/config` | pytest |
-| `POST` | `/api/kis/config/validate` | pytest |
-| `POST` | `/api/data/external/preview-daily-ohlcv` with `source_id=kis_market_data` | disabled 차단 pytest, mock fixture preview pytest |
-| `POST` | `/api/data/external/confirm-import` | KIS mock fixture confirm pytest |
+| `GET` | `/api/broker/status` | safety scaffold 상태 요약 |
+| `POST` | `/api/broker/orders/preview` | dry-run preview only |
+| `GET/POST` | `/api/kis/orders/*` | 404 유지 |
+| `GET/POST` | `/api/kis/broker/*` | 404 유지 |
+| `GET/POST` | `/api/kis/websocket/*` | 404 유지 |
 
-기존 Phase 3A/3B API 회귀도 pytest와 browser smoke에서 함께 확인했다.
+`/api/broker/status` sample:
 
-## KIS Read-only Foundation
+```json
+{
+  "mode": "safety_scaffold",
+  "broker_mode": "disabled",
+  "can_submit": false,
+  "preview_only": true,
+  "paper_trading_enabled": false,
+  "live_trading_enabled": false,
+  "token_issued": false,
+  "network_call_performed": false,
+  "adapter_selected": true,
+  "adapter_name": "kis_openapi",
+  "adapter_capability_checked": true,
+  "adapter_order_call_performed": false,
+  "adapter_network_call_performed": false,
+  "audit_persistence_enabled": false
+}
+```
 
-- `kis_market_data`는 `provider_type=external_market_data`, `provider_name=kis`인 read-only market data source다.
-- 기본값은 `enabled=false`, `network_enabled=false`, `read_only_enabled=false`, `manual_preview_only=true`다.
-- `kis_openapi`는 `broker_placeholder`로 유지되며 Phase 3D 이후 broker adapter용 placeholder다.
-- `KisMarketDataProvider`는 Phase 3C에서 실제 KIS network call을 수행하지 않는 skeleton이다.
-- `MockKisMarketDataProvider`는 KIS `inquire-daily-itemchartprice` 형태 fixture를 생성하고 표준 `daily_ohlcv` row로 normalize한다.
-- `KisBrokerAdapter`는 DI와 route에 연결하지 않았다.
+`/api/broker/orders/preview` sample:
 
-## Secret / Redaction 검증
-
-- `kis_market_data` source에 `app_key`, `app_secret`, `token`, `access_token`, `refresh_token`, `approval_key`, `account`, `account_no`, `cano`, `hts_id`, `password`, `authorization` 필드가 없다.
-- `/api/kis/status`, `/api/kis/config`, `/api/kis/config/validate`, `/api/settings` 응답에 sentinel secret 값이 노출되지 않음을 pytest와 browser/API smoke로 확인했다.
-- `app_key_configured`, `app_secret_configured`는 boolean만 반환한다.
-- token cache 파일은 생성하지 않았다.
-- Git 추적 파일에 sentinel secret 값이 없음을 pytest로 확인했다.
-
-## Data Quality / Preview-Confirm 검증
-
-- `kis_market_data` disabled 상태에서 external preview 요청은 `400`으로 차단된다.
-- KIS mock fixture preview는 `import_runs`와 `data_quality_checks`만 기록한다.
-- preview 후 `symbol_master`, `daily_ohlcv`, `indicator_snapshot`, `screen_results`, `reports`, `backtest_runs`, `orders` count가 바뀌지 않음을 pytest로 확인했다.
-- confirm 후에만 `daily_ohlcv` upsert가 발생한다.
-- KIS mock preview/confirm 후에도 `orders_count == 0`을 유지한다.
-- 기존 `external_yfinance` mock preview와 CSV validate/confirm 회귀 테스트가 통과했다.
-
-## Browser Smoke
-
-| Route | H1 |
-|---|---|
-| `/` | Dashboard |
-| `/dashboard` | Dashboard |
-| `/data` | Data Quality |
-| `/screener` | Screener |
-| `/reports` | Reports |
-| `/backtest` | Backtest |
-| `/portfolio` | Portfolio / Risk |
-| `/settings` | Settings |
-
-추가 확인:
-
-- `/data`에 `KIS Read-only Status` panel 표시
-- `kis_market_data`, `app_key_configured`, `app_secret_configured`, `token_cache_enabled`, `Phase 3C read-only foundation only` 표시
-- `/api/kis/status`, `/api/kis/config`, `/api/kis/config/validate`, `/api/settings` sentinel secret 미노출
-- `source_id=kis_market_data` external preview는 disabled 상태에서 HTTP 400으로 차단
-- token cache 파일 없음
-- UI smoke 전후 `orders_count == 0`
-- route smoke console error 0
-- request failure 0
-- unexpected API HTTP error 0
-- disabled KIS preview는 API smoke에서 expected HTTP 400으로 별도 확인
+```json
+{
+  "mode": "safety_scaffold",
+  "broker_mode": "disabled",
+  "can_submit": false,
+  "preview_only": true,
+  "order_created": false,
+  "token_issued": false,
+  "token_cache_enabled": false,
+  "network_call_performed": false,
+  "adapter_selected": true,
+  "adapter_name": "kis_openapi",
+  "adapter_capability_checked": true,
+  "adapter_order_call_performed": false,
+  "adapter_network_call_performed": false,
+  "risk_gate": {
+    "decision": "deny",
+    "passed": false,
+    "reason_codes": [
+      "BROKER_DISABLED",
+      "BROKER_SUBMIT_DISABLED",
+      "BROKER_NETWORK_DISABLED",
+      "PAPER_TRADING_DISABLED",
+      "LIVE_TRADING_DISABLED",
+      "KILL_SWITCH_ACTIVE",
+      "TOKEN_DISABLED",
+      "BROKER_SOURCE_DISABLED",
+      "BROKER_SOURCE_NETWORK_DISABLED",
+      "BROKER_SOURCE_PAPER_DISABLED",
+      "BROKER_SOURCE_LIVE_DISABLED"
+    ]
+  }
+}
+```
 
 ## 명령 결과
 
 ### Backend pytest
 
 ```text
-collected 50 items
-50 passed in 261.06s
+collected 56 items
+56 passed in 261.75s
 ```
 
 ### Frontend lint
@@ -122,9 +135,27 @@ Route (app): /, /dashboard, /data, /screener, /reports, /backtest, /portfolio, /
 found 0 vulnerabilities
 ```
 
-## 최종 DB 상태
+## API Smoke
 
-Browser smoke 기준 backend `http://127.0.0.1:8002`:
+FastAPI `TestClient` 기준:
+
+| Check | Result |
+|---|---|
+| `/health` | 200 |
+| `/api/data/status` | 200 |
+| `/api/data/sources` | 200 |
+| `/api/broker/status` | 200 |
+| `/api/broker/orders/preview` | 200 |
+| `/api/kis/status` | 200 |
+| `/api/kis/orders` | 404 |
+| `/api/kis/orders/preview` | 404 |
+| `/api/kis/broker/status` | 404 |
+| `/api/kis/websocket/status` | 404 |
+| sentinel secret exposure | false |
+| token cache `.cache/kis/token.json` | 없음 |
+| orders_count after preview | 0 |
+
+## 최종 DB 상태
 
 | table/status | count |
 |---|---:|
@@ -149,12 +180,10 @@ Browser smoke 기준 backend `http://127.0.0.1:8002`:
 
 - KIS 실제 API 호출
 - KIS app key/app secret/account/token 저장
-- token cache 생성
-- KIS 주문 API
-- KIS broker route
+- token 발급, refresh, cache, DB 저장, in-memory token manager
+- KIS 주문 API, cancel, fill, websocket
+- KIS broker/order/websocket route 등록
 - paper/live broker
-- 실제 주문 또는 모의 주문
-- 주문 row 생성
-- 계좌/잔고/체결 조회
-- 실시간 websocket
+- 실제 주문 또는 모의 주문 row 생성
+- audit DB persistence
 - 자동매매 스케줄러
