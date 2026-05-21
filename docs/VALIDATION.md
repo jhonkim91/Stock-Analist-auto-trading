@@ -6,6 +6,11 @@
 
 Checkpoint: `MVP v0.4 Phase 3B provider-neutral external data`
 
+PR #2 `Phase 3B: Provider-neutral external data preview flow`는 merge 완료됐습니다.
+
+- Merge commit: `754a139c24b3e3742f2060a9589d96d21a75d2b9`
+- Local main: `origin/main` 기준 최신화 완료
+
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
 | Backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests` |
@@ -13,7 +18,7 @@ Checkpoint: `MVP v0.4 Phase 3B provider-neutral external data`
 | Frontend typecheck | 통과 | `npm.cmd exec tsc -- --noEmit` |
 | Frontend production build | 통과 | `npm.cmd run build` |
 | Frontend npm audit | 통과 | `npm.cmd audit --audit-level=moderate` |
-| Browser smoke | 통과 | Browser Node 실행 도구 미노출로 Node Playwright fallback, backend `8002`, frontend `3010` |
+| Browser smoke | 통과 | Browser Node 실행 도구 미노출로 Playwright fallback, backend `8002`, frontend `3010` |
 
 ## Phase 3B API
 
@@ -43,9 +48,10 @@ Checkpoint: `MVP v0.4 Phase 3B provider-neutral external data`
 - `external_yfinance`는 `provider_type=external_market_data`, `provider_name=yfinance`로 동작합니다.
 - `external_yfinance`는 `unknown_symbol_policy=warn_and_create_on_confirm`입니다.
 - `external_yfinance`는 `network_enabled=false`에서 `provider_metadata.provider_mode=mock`, `provider_metadata.data_origin=deterministic_mock`을 기록합니다.
-- `network_enabled=false`에서 실제 yfinance network fetch가 호출되지 않음을 monkeypatch 테스트로 검증했습니다.
+- `network_enabled=false`에서 실제 yfinance network fetch가 호출되지 않음을 monkeypatch 테스트와 browser smoke로 검증했습니다.
 - `kis_openapi`는 disabled placeholder이며 fetch 요청이 400으로 차단됩니다.
 - `kis_openapi`는 `unknown_symbol_policy=reject`를 유지합니다.
+- `kis_openapi`는 `paper_trading_enabled=false`, `live_trading_enabled=false`, `websocket_enabled=false`를 유지합니다.
 - KIS placeholder에는 `app_key`, `app_secret`, `token`, `password`, `account_no`, `hts_id`, `access_token`, `refresh_token` 필드가 없습니다.
 - Settings 응답에도 KIS secret 값이 노출되지 않습니다.
 - `external_symbol_mapping` 매핑이 없으면 `SYMBOL_MAPPING_FAILED`를 기록하고 `daily_ohlcv`에는 쓰지 않습니다.
@@ -69,7 +75,7 @@ Preview 단계 허용 변화:
 | `import_runs` | external preview마다 `+1` |
 | `data_quality_checks` | 검증 결과에 따라 `+N` |
 
-Confirm 후에만 `daily_ohlcv` insert/update가 발생합니다. Browser smoke에서 `external_yfinance` preview 후 confirm 결과 `daily_ohlcv +3`, `symbol_master +1`, `orders_count == 0`을 확인했습니다.
+Confirm 후에만 `daily_ohlcv` insert/update가 발생합니다. Post-merge browser smoke에서 `external_yfinance` preview 후 Confirm External Import가 동작했고, 최종 `orders_count == 0`을 확인했습니다.
 
 ## Data Quality 테스트
 
@@ -100,11 +106,18 @@ Phase 3B 추가 검증:
 
 ## Browser Smoke
 
-Browser 플러그인의 Node 실행 도구가 노출되지 않아 Node Playwright fallback으로 Chromium headless smoke를 수행했습니다.
+Browser 플러그인의 Node 실행 도구가 노출되지 않아 Playwright fallback으로 Chromium headless smoke를 수행했습니다.
 
 | Route | H1 |
 |---|---|
+| `/` | Dashboard |
+| `/dashboard` | Dashboard |
 | `/data` | Data Quality |
+| `/screener` | Screener |
+| `/reports` | Reports |
+| `/backtest` | Backtest |
+| `/portfolio` | Portfolio / Risk |
+| `/settings` | Settings |
 
 추가 확인:
 
@@ -115,6 +128,7 @@ Browser 플러그인의 Node 실행 도구가 노출되지 않아 Node Playwrigh
 - Fetch Preview 후 `can_confirm=true`
 - provider metadata에 `provider_mode=mock`, `data_origin=deterministic_mock` 표시
 - Confirm External Import 후 Import History에 `provider=yfinance`, `status=confirmed` 표시
+- console error 없음
 - API request failure 없음
 - Browser smoke 후 `orders_count == 0`
 
@@ -124,7 +138,7 @@ Browser 플러그인의 Node 실행 도구가 노출되지 않아 Node Playwrigh
 
 ```text
 collected 43 items
-43 passed in 101.54s
+43 passed in 99.48s
 ```
 
 ### Frontend lint
@@ -171,8 +185,8 @@ Browser smoke 기준 backend `http://127.0.0.1:8002`:
 | reports | 1 |
 | backtest_runs | 3 |
 | orders | 0 |
-| import_runs | 23 |
-| data_quality_checks | 122 |
+| import_runs | 24 |
+| data_quality_checks | 128 |
 | external_symbol_mapping | 32 |
 
 | field | value |

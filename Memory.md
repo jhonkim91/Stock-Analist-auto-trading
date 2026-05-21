@@ -8,7 +8,8 @@
 - [x] Phase 3A 데이터 품질/preview-confirm CSV import 구현
 - [x] Phase 3A PR #1 merge 완료
 - [x] Phase 3B provider-neutral external daily OHLCV flow 구현
-- [x] 작업 브랜치: `phase-3b-external-data-provider`
+- [x] Phase 3B PR #2 merge 완료: `754a139c24b3e3742f2060a9589d96d21a75d2b9`
+- [x] 현재 브랜치: `main`
 
 ## 현재 프로젝트 상태
 
@@ -33,14 +34,15 @@
 
 ## 최신 검증 결과
 
-- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 43 passed in 101.54s
+- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 43 passed in 99.48s
 - 2026-05-21 `npm.cmd run lint`: 통과
 - 2026-05-21 `npm.cmd exec tsc -- --noEmit`: 통과
 - 2026-05-21 `npm.cmd run build`: Next.js 16.2.6 production build 통과, `/data` 포함
 - 2026-05-21 `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities
-- 2026-05-21 Browser smoke: `/data` external preview/confirm 통과, API request failure 없음
+- 2026-05-21 Browser smoke: `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/settings` 통과
+- 2026-05-21 Browser smoke: `/data` external preview/confirm 통과, console error와 request failure 없음
 - 2026-05-21 Browser smoke: mock/fixture 안내 문구, provider metadata `provider_mode=mock`, `data_origin=deterministic_mock`, Import History confirmed 표시 통과
-- 2026-05-21 Phase 3B 후 `orders_count == 0`
+- 2026-05-21 Phase 3B post-merge 후 `orders_count == 0`
 
 ## 최신 DB count
 
@@ -53,8 +55,8 @@
 - screen_results: 45
 - reports: 1
 - backtest_runs: 3
-- import_runs: 23
-- data_quality_checks: 122
+- import_runs: 24
+- data_quality_checks: 128
 - external_symbol_mapping: 32
 - orders_count: 0
 - latest_trade_date: 2026-05-21
@@ -84,6 +86,5 @@
 
 ## 다음 작업
 
-- Phase 3B PR 생성 전 `git diff` 확인과 필요 시 브라우저 smoke 재실행.
-- Phase 3C에서만 KIS read-only foundation을 별도 설계한다.
+- Phase 3C는 사용자 별도 승인 후 계획모드에서만 KIS read-only foundation을 설계한다.
 - KIS 확장 시 `KisMarketDataProvider`와 `KisBrokerAdapter`를 분리하고, broker/order/websocket은 Phase 3D 이후로 유지한다.
