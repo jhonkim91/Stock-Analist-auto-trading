@@ -31,7 +31,7 @@
 
 ## 최신 검증 결과
 
-- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 37 passed in 115.85s
+- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 37 passed in 119.24s
 - 2026-05-21 `npm.cmd run lint`: 통과
 - 2026-05-21 `npm.cmd exec tsc -- --noEmit`: 통과
 - 2026-05-21 `npm.cmd run build`: Next.js 16.2.6 production build 통과, `/data` 포함
@@ -51,9 +51,9 @@
 - indicator_snapshot: 4,800
 - screen_results: 45
 - reports: 1
-- backtest_runs: 2
-- import_runs: 11
-- data_quality_checks: 56
+- backtest_runs: 3
+- import_runs: 15
+- data_quality_checks: 74
 - orders_count: 0
 - latest_trade_date: 2026-05-20
 - latest_indicator_date: 2026-05-20

@@ -135,7 +135,7 @@ Browser 플러그인의 Node 실행 도구가 노출되지 않아 Python Playwri
 
 ```text
 collected 37 items
-37 passed in 115.85s
+37 passed in 119.24s
 ```
 
 ### Frontend lint
@@ -180,11 +180,11 @@ Browser smoke 기준 backend `http://127.0.0.1:8010`:
 | indicator_snapshot | 4,800 |
 | screen_results | 45 |
 | reports | 1 |
-| backtest_runs | 2 |
+| backtest_runs | 3 |
 | orders | 0 |
 | data_sources | 0 |
-| import_runs | 11 |
-| data_quality_checks | 56 |
+| import_runs | 15 |
+| data_quality_checks | 74 |
 
 | field | value |
 |---|---|
