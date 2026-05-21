@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.api import backtest, broker, data, indicators, instruments, kis, market, portfolio, reports, screener, settings
+from backend.app.api import backtest, broker, data, indicators, instruments, kis, market, paper, portfolio, reports, screener, settings
 from backend.app.core.database import init_db
 from backend.app.core.paths import ensure_runtime_dirs
 
@@ -42,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(backtest.router)
     app.include_router(portfolio.router)
     app.include_router(broker.router)
+    app.include_router(paper.router)
     app.include_router(kis.router)
     app.include_router(settings.router)
     return app

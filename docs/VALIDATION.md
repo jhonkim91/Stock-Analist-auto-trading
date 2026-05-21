@@ -2,22 +2,42 @@
 
 ## 최신 검증 결과
 
-검증 시각: 2026-05-21
+검증 시각: 2026-05-22
 
-Checkpoint: `MVP v0.6 Phase 3D broker safety scaffold`
+Checkpoint: `MVP v0.7 Phase 3E-1 paper preview safety scaffold`
 
 기준 브랜치: `main`
 
-현재 HEAD: `2d5a146c8b89c355397eec458fd7343412e92c6e`
+Status: Completed
+
+PR: #4
+
+Merge commit: `2d5a146c8b89c355397eec458fd7343412e92c6e`
+
+Post-merge docs commit: `127527ecec905227b15b5654dc3615f21fd244ec`
+
+현재 HEAD: `8e503332c23875bd82754ffd29314b65e1235089`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
-| Backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests` |
+| Backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests`: 60 passed |
 | Frontend lint | 통과 | `npm.cmd run lint` |
 | Frontend typecheck | 통과 | `npm.cmd exec tsc -- --noEmit` |
 | Frontend production build | 통과 | `npm.cmd run build` |
 | Frontend npm audit | 통과 | `npm.cmd audit --audit-level=moderate` |
 | API smoke | 통과 | FastAPI `TestClient` endpoint/status assertion |
+| Browser route smoke | 통과 | `/dashboard` -> `/paper` nav, `/paper` desktop/mobile, preview deny |
+| KIS execution routes | 통과 | `/api/kis/orders*`, `/api/kis/broker*`, `/api/kis/websocket*` 404 유지 |
+| Broker/Paper safety assertions | 통과 | `orders_count == 0`, `paper_* == 0`, token/cache/network/adapter order call 미수행, sensitive value 미노출 |
+
+## Phase 3E-1 Paper Preview Safety Scaffold
+
+- `/api/paper/status`는 disabled/fail-closed 상태만 반환한다.
+- `/api/paper/orders/preview`는 DB write 없이 deny preview만 반환한다.
+- `POST /api/paper/orders`, `POST /api/paper/fill-simulator/run`, cancel API는 등록하지 않았다.
+- paper fill 생성과 paper position 변경은 구현하지 않았다.
+- `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` row는 disabled smoke 후에도 0이다.
+- KIS execution routes는 계속 404다.
 
 ## Phase 3D Broker Safety Scaffold
 
@@ -103,8 +123,8 @@ Checkpoint: `MVP v0.6 Phase 3D broker safety scaffold`
 ### Backend pytest
 
 ```text
-collected 56 items
-56 passed in 109.59s
+collected 60 items
+60 passed in 120.89s
 ```
 
 ### Frontend lint
@@ -126,7 +146,7 @@ npm.cmd exec tsc -- --noEmit
 ```text
 Next.js 16.2.6 (Turbopack)
 Compiled successfully
-Route (app): /, /dashboard, /data, /screener, /reports, /backtest, /portfolio, /settings
+Route (app): /, /dashboard, /data, /paper, /screener, /reports, /backtest, /portfolio, /settings
 ```
 
 ### Frontend audit
@@ -146,6 +166,8 @@ FastAPI `TestClient` 기준:
 | `/api/data/sources` | 200 |
 | `/api/broker/status` | 200 |
 | `/api/broker/orders/preview` | 200 |
+| `/api/paper/status` | 200 |
+| `/api/paper/orders/preview` | 200 |
 | `/api/kis/status` | 200 |
 | `/api/kis/orders` | 404 |
 | `/api/kis/orders/preview` | 404 |
@@ -154,6 +176,15 @@ FastAPI `TestClient` 기준:
 | sentinel secret exposure | false |
 | token cache `.cache/kis/token.json` | 없음 |
 | orders_count after preview | 0 |
+| paper_orders after preview | 0 |
+| paper_fills after preview | 0 |
+| paper_positions after preview | 0 |
+| paper_audit_events after preview | 0 |
+| token_issued | false |
+| network_call_performed | false |
+| adapter_order_call_performed | false |
+| adapter_network_call_performed | false |
+| audit DB persistence | disabled |
 
 ## 최종 DB 상태
 
@@ -169,6 +200,10 @@ FastAPI `TestClient` 기준:
 | reports | 1 |
 | backtest_runs | 7 |
 | orders | 0 |
+| paper_orders | 0 |
+| paper_fills | 0 |
+| paper_positions | 0 |
+| paper_audit_events | 0 |
 
 | field | value |
 |---|---|
@@ -183,7 +218,7 @@ FastAPI `TestClient` 기준:
 - token 발급, refresh, cache, DB 저장, in-memory token manager
 - KIS 주문 API, cancel, fill, websocket
 - KIS broker/order/websocket route 등록
-- paper/live broker
+- paper order create, fill, position 변경, live broker
 - 실제 주문 또는 모의 주문 row 생성
 - audit DB persistence
 - 자동매매 스케줄러

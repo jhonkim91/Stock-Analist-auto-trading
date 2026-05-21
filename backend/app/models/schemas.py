@@ -53,6 +53,15 @@ class BrokerPreviewRequest(BaseModel):
     strategy_tag: str | None = None
 
 
+class PaperOrderPreviewRequest(BaseModel):
+    symbol: str
+    side: str = "buy"
+    qty: int
+    limit_price: float | None = None
+    stop_price: float | None = None
+    strategy_tag: str | None = None
+
+
 class ImportConfirmRequest(BaseModel):
     run_id: str
 

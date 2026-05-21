@@ -121,6 +121,72 @@ export type BrokerStatus = {
   reason: string;
 };
 
+export type PaperRiskGate = {
+  decision: "deny" | string;
+  passed: boolean;
+  reason_codes: string[];
+};
+
+export type PaperKillSwitch = {
+  blocking: boolean;
+  reason_codes: string[];
+};
+
+export type PaperCounts = {
+  paper_orders_count: number;
+  paper_fills_count: number;
+  paper_positions_count: number;
+  paper_audit_events_count: number;
+  orders_count: number;
+};
+
+export type PaperStatus = {
+  mode: string;
+  enabled: boolean;
+  configured_enabled: boolean;
+  can_create: boolean;
+  can_simulate_fills: boolean;
+  preview_only: boolean;
+  paper_order_supported: boolean;
+  fill_simulator_supported: boolean;
+  cancel_supported: boolean;
+  paper_order_created: boolean;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  fill_created: boolean;
+  position_changed: boolean;
+  token_issued: boolean;
+  token_cache_enabled: boolean;
+  network_call_performed: boolean;
+  adapter_order_call_performed: boolean;
+  adapter_network_call_performed: boolean;
+  audit_persistence_enabled: boolean;
+  paper_tables_write_enabled: boolean;
+  reason: string;
+  kill_switch: PaperKillSwitch;
+  risk_gate: PaperRiskGate;
+  counts: PaperCounts;
+};
+
+export type PaperPreviewRequest = {
+  symbol: string;
+  side: "buy" | "sell";
+  qty: number;
+  limit_price?: number | null;
+  stop_price?: number | null;
+  strategy_tag?: string | null;
+};
+
+export type PaperPreviewResponse = PaperStatus & {
+  preview_id: string;
+  symbol: string;
+  side: string;
+  qty: number;
+  limit_price: number | null;
+  stop_price: number | null;
+  strategy_tag: string | null;
+};
+
 export type PortfolioRisk = {
   account_equity: number;
   risk_per_trade: number;

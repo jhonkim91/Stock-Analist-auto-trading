@@ -128,6 +128,37 @@ def test_full_backend_api_smoke_flow_asserts_core_fields(client):
         after_orders = db.scalar(select(func.count()).select_from(Order))
     assert after_orders == before_orders
 
+    paper_status = client.get("/api/paper/status")
+    assert paper_status.status_code == 200
+    paper_status_payload = paper_status.json()
+    assert paper_status_payload["enabled"] is False
+    assert paper_status_payload["can_create"] is False
+    assert paper_status_payload["can_simulate_fills"] is False
+    assert paper_status_payload["preview_only"] is True
+    assert paper_status_payload["paper_order_supported"] is False
+    assert paper_status_payload["live_order_created"] is False
+    assert paper_status_payload["broker_order_created"] is False
+    assert paper_status_payload["token_issued"] is False
+    assert paper_status_payload["network_call_performed"] is False
+    assert paper_status_payload["adapter_order_call_performed"] is False
+    assert paper_status_payload["adapter_network_call_performed"] is False
+    assert paper_status_payload["risk_gate"]["decision"] == "deny"
+
+    paper_preview = client.post("/api/paper/orders/preview", json={"symbol": "KR009", "side": "buy", "qty": 10})
+    assert paper_preview.status_code == 200
+    paper_preview_payload = paper_preview.json()
+    assert paper_preview_payload["paper_order_created"] is False
+    assert paper_preview_payload["live_order_created"] is False
+    assert paper_preview_payload["broker_order_created"] is False
+    assert paper_preview_payload["token_issued"] is False
+    assert paper_preview_payload["network_call_performed"] is False
+    assert paper_preview_payload["adapter_order_call_performed"] is False
+    assert paper_preview_payload["adapter_network_call_performed"] is False
+    assert paper_preview_payload["risk_gate"]["decision"] == "deny"
+    with SessionLocal() as db:
+        final_orders = db.scalar(select(func.count()).select_from(Order))
+    assert final_orders == before_orders
+
 
 def test_cors_allows_local_frontend_origin(client):
     response = client.options(

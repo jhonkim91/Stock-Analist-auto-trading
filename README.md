@@ -2,9 +2,43 @@
 
 주식 분석과 자동매매 보조 흐름을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 checkpoint는 `MVP v0.6 Phase 3D broker safety scaffold`입니다. 실제 주문, paper/live broker, cancel, fill, websocket 연결, KIS 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
+현재 checkpoint는 `MVP v0.7 Phase 3E-1 paper preview safety scaffold`입니다. 실제 주문, paper order create, paper fill/position 변경, live broker, cancel, fill, websocket 연결, KIS 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
 
 PR #3 `Phase 3C: Add KIS read-only foundation`과 PR #4 `Phase 3D: KIS broker safety scaffold`는 `main`에 merge 완료됐습니다. Phase 3D merge commit은 `2d5a146c8b89c355397eec458fd7343412e92c6e`입니다.
+
+## Phase 3D 최종 기록
+
+| 항목 | 값 |
+|---|---|
+| Status | Completed |
+| PR | #4 |
+| Merge commit | `2d5a146c8b89c355397eec458fd7343412e92c6e` |
+| Post-merge docs commit | `127527ecec905227b15b5654dc3615f21fd244ec` |
+| Current HEAD | `8e503332c23875bd82754ffd29314b65e1235089` |
+
+최종 검증 결과는 backend pytest 56 passed, frontend lint/typecheck/build/audit 통과, API smoke 통과, browser route smoke 통과입니다. KIS execution routes는 404를 유지했고, `orders_count == 0`, `token_issued == false`, token cache 미생성, 외부 network call 미수행, adapter order/network call 미수행, audit DB persistence 비활성, sensitive value 미노출을 확인했습니다.
+
+## Phase 3E-1 기록
+
+Phase 3E-1은 paper preview safety scaffold까지만 구현했습니다.
+
+- `backend/config/paper.yaml`: disabled/fail-closed 기본값
+- `/api/paper/status`: paper control plane disabled 상태 요약
+- `/api/paper/orders/preview`: DB write 없는 deny preview
+- `PaperTradingService`, `LocalPaperSimulator` skeleton
+- `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` 모델 정의
+- frontend `/paper`: status와 preview deny 표시
+
+이번 Phase에서 구현하지 않은 범위:
+
+- `POST /api/paper/orders`
+- `POST /api/paper/fill-simulator/run`
+- paper order create DB write
+- paper fill 생성 또는 paper position 변경
+- cancel API
+- KIS 주문, KIS paper API, KIS network call, token 발급/refresh/cache/DB 저장
+
+최신 검증 결과는 backend pytest 60 passed, frontend lint/typecheck/build/audit 통과, `/paper` browser smoke 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, token/cache/network/adapter call 미수행을 확인했습니다.
 
 ## Phase 3D 기능
 
@@ -89,8 +123,9 @@ KIS는 data provider와 broker adapter를 분리합니다.
 단계:
 
 - Phase 3C: KIS read-only foundation
-- Phase 3D: broker safety scaffold only, 현재 checkpoint
-- Phase 3E 후보: paper trading adapter 설계, 별도 승인 필요
+- Phase 3D: broker safety scaffold only
+- Phase 3E-1: paper preview safety scaffold only, 현재 checkpoint
+- Phase 3E-2 후보: paper order create/fill simulator 설계와 구현, 별도 승인 필요
 - Phase 3F 후보: live trading gate 설계, 별도 승인 필요
 - Phase 3G 후보: websocket/체결통보 설계, 별도 승인 필요
 
@@ -128,6 +163,8 @@ KIS read-only API 후보는 fixture/schema/normalization 설계에만 사용합�
 | `POST` | `/api/kis/config/validate` | KIS env configured boolean 검증 |
 | `GET` | `/api/broker/status` | Phase 3D broker safety status |
 | `POST` | `/api/broker/orders/preview` | Phase 3D dry-run preview only |
+| `GET` | `/api/paper/status` | Phase 3E-1 paper disabled safety status |
+| `POST` | `/api/paper/orders/preview` | Phase 3E-1 paper deny preview only |
 
 ## 실행
 
@@ -172,7 +209,7 @@ npm.cmd audit --audit-level=moderate
 - KIS 주문 API 구현 없음
 - KIS broker/order/websocket route 등록 없음
 - 실제 주문 없음
-- paper/live broker 없음
+- paper order create, fill, position 변경, live broker 없음
 - cancel/fill/websocket 연결 없음
 - 주문 row 생성 없음
 - audit DB persistence 없음
