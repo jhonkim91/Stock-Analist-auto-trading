@@ -1,85 +1,67 @@
 # Stock Analyst Auto Trading
 
-상위권 트레이더형 주식 분석 및 자동매매 보조 시스템 MVP입니다.
+주식 분석과 자동매매 보조 흐름을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 checkpoint 명칭은 `MVP v0.2 checkpoint`입니다. 실제 주문, 외부 API 연동, live broker, paper broker 체결은 구현하지 않습니다.
+현재 checkpoint는 `MVP v0.3 Phase 3A data quality`입니다. 실제 주문, paper/live broker, 외부 데이터 API 호출, 실시간 websocket, AI 예측 모델은 구현하지 않습니다.
 
-## Phase 2 현재 기능
+## Phase 3A 기능
 
-- FastAPI 백엔드 상태 및 데이터 row count 조회
-- deterministic 한국장 샘플 데이터 seed
-- CSV import 기반 `daily_ohlcv` upsert
-- 지표 재계산, 스크리너 실행, 일간 Markdown 리포트 생성
-- `trend_breakout`, `vcp_breakout`, `canslim_lite` 조건검색 결과 조회
-- Screener 필터: `strategy_name`, `passed`, `grade`, `symbol/name` 검색
-- Screener 정렬: `total_score`, `reward_risk_ratio`
-- Reports 목록, Markdown preview/raw/download
-- Backtest run 목록, metrics 카드, 전략 비교 table
-- Portfolio mock/synthetic risk summary
-- `backend/config/*.yaml` read-only Settings 화면
-- Mock Broker preview-only 주문 검토
+- deterministic sample seed 유지
+- legacy direct CSV import endpoint 유지
+- 새 CSV preview/confirm import flow 추가
+- DataProvider 계층 추가
+  - `SampleDataProvider`
+  - `CsvDataProvider`
+  - `ExternalDataProvider` placeholder disabled
+- 데이터 품질 검증 기록
+  - `import_runs`
+  - `data_quality_checks`
+- 데이터 소스 설정
+  - `backend/config/data_sources.yaml`
+  - `sample_krx`
+  - `csv_krx`
+  - `external_placeholder_disabled`
+- `/data` 화면 추가
+  - Data Sources
+  - CSV Validation Preview
+  - Import History
+  - Data Quality
 
-## Backend 실행
+## Data Import Flow
 
-```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+Frontend는 legacy direct import를 사용하지 않고 아래 flow만 사용합니다.
+
+1. `POST /api/data/validate-csv`
+2. `POST /api/data/import-csv-confirmed`
+
+`validate-csv`는 market data table을 변경하지 않습니다. 허용되는 write는 `import_runs +1`, `data_quality_checks +N`뿐입니다.
+
+`confirm`은 `run_id`만 받으며 파일을 다시 받지 않습니다. `import_runs.staged_rows_json`을 transaction으로 `daily_ohlcv`에 반영합니다.
+
+```json
+{
+  "run_id": "imp-..."
+}
 ```
 
-포트 `8000`이 이미 사용 중이면 `8001`로 실행합니다.
+## CSV 제한
 
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8001
-```
+| 항목 | 제한 |
+|---|---:|
+| 최대 row 수 | 10,000 |
+| preview rows | 100 |
+| 파일 크기 | 10MB 이하 |
 
-## Frontend 실행
+Phase 3A에서는 `staged_rows_json`을 SQLite 호환 `Text` JSON으로 저장합니다. 대용량 파일은 Phase 3B 이후 staging table 분리를 검토합니다.
 
-```powershell
-cd frontend
-npm.cmd install
-npm.cmd run build
-npm.cmd run start -- --hostname 127.0.0.1 --port 3000
-```
-
-포트 `3000`이 이미 사용 중이면 `3001`로 실행합니다.
-
-```powershell
-npm.cmd run build
-npm.cmd run start -- --hostname 127.0.0.1 --port 3001
-```
-
-## NEXT_PUBLIC_API_BASE_URL
-
-기본 API 주소는 `http://localhost:8000`입니다.
-
-백엔드를 `8001`에서 실행할 때는 `frontend/.env.local`에 다음 값을 넣고 다시 build/start 합니다. Next.js의 `NEXT_PUBLIC_*` 값은 production build에 포함되므로 변경 후 `npm.cmd run build`가 필요합니다.
-
-```powershell
-cd frontend
-Copy-Item .env.local.example .env.local
-notepad .env.local
-```
-
-```env
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001
-```
-
-현재 QA 기준 주소는 다음과 같습니다.
-
-| 구분 | URL |
-|---|---|
-| Backend | `http://127.0.0.1:8001` |
-| Frontend | `http://127.0.0.1:3001` |
-
-## CSV Import
+## CSV 컬럼
 
 필수 컬럼:
 
 | 컬럼 | 설명 |
 |---|---|
 | `symbol` | 종목 코드 |
-| `trade_date` | 거래일, 날짜 파싱 가능 형식 |
+| `trade_date` | 거래일 |
 | `open` | 시가 |
 | `high` | 고가 |
 | `low` | 저가 |
@@ -88,26 +70,68 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001
 
 선택 컬럼:
 
-| 컬럼 | 기본값 |
+| 컬럼 | 기본 처리 |
 |---|---|
-| `turnover_value` | `close * volume` |
-| `market` | `KRX` |
-| `provider` | `csv` |
-| `adj_close` | `close` |
+| `adj_close` | 누락 시 `close` 사용, warning 기록 |
+| `turnover_value` | 누락 시 `close * volume` 사용, warning 기록 |
+| `market` | 누락 시 source config market 또는 `KRX` |
+| `venue` | 누락 시 source config venue 또는 `KRX` |
+| `provider` | 누락 시 source config provider_type |
 
-검증 규칙:
+## Data Quality Checks
 
-- 필수 컬럼 누락 시 import 실패
-- `high < low`이면 import 실패
-- 가격 또는 거래량이 음수이면 import 실패
-- 동일 `symbol + trade_date`는 insert가 아니라 update 처리
+대표 검증:
 
-## Mock Broker 주의사항
+- 필수 컬럼 및 필수값
+- 날짜 parse
+- 숫자 parse
+- 음수/0 이하 가격
+- 음수 volume
+- zero volume warning
+- `high >= low`
+- `high >= max(open, close)`
+- `low <= min(open, close)`
+- batch duplicate
+- database duplicate
+- unknown symbol warning
+- provider mismatch
+- weekend date
+- calendar unknown date info
 
-- `Preview Mock Order`는 검토용 preview만 생성합니다.
-- `orders` row를 생성하지 않습니다.
-- `orders_count == 0`은 Phase 2 QA 기준입니다.
-- 실제 주문, 주문 취소, 체결, 계좌 자금 이동 기능은 없습니다.
+## 주요 API
+
+| Method | Path | 설명 |
+|---|---|---|
+| `GET` | `/api/data/status` | 데이터 row count와 최신 기준일 |
+| `GET` | `/api/data/sources` | data source 목록 |
+| `GET` | `/api/data/import-runs` | import history |
+| `GET` | `/api/data/import-runs/{run_id}` | import run 상세 |
+| `POST` | `/api/data/validate-csv` | CSV validation preview |
+| `POST` | `/api/data/import-csv-confirmed` | validated run confirm |
+| `GET` | `/api/data/quality` | quality checks 필터 조회 |
+| `GET` | `/api/data/quality/{run_id}` | run별 quality checks |
+| `POST` | `/api/data/import/daily-ohlcv` | legacy direct import |
+
+## 실행
+
+Backend:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm.cmd install
+npm.cmd run build
+npm.cmd run start -- --hostname 127.0.0.1 --port 3000
+```
+
+포트 충돌 시 backend `8001`, frontend `3001`을 사용합니다. backend 포트를 바꾸면 `frontend/.env.local`의 `NEXT_PUBLIC_API_BASE_URL`을 맞춘 뒤 다시 build해야 합니다.
 
 ## 검증
 
@@ -115,9 +139,21 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001
 .\.venv\Scripts\python.exe -m pytest backend/tests
 cd frontend
 npm.cmd run lint
+npm.cmd exec tsc -- --noEmit
 npm.cmd run build
 npm.cmd audit --audit-level=moderate
-npm.cmd exec tsc -- --noEmit
 ```
 
 상세 검증 결과는 `docs/VALIDATION.md`를 확인합니다.
+
+## 안전 제약
+
+- 외부 API 호출 없음
+- API key/secret/token/password 저장 없음
+- 실제 주문 없음
+- 주문 row 생성 없음
+- paper/live broker 없음
+- 실시간 websocket 없음
+- AI 예측 모델 없음
+- Mock Broker는 preview-only
+- Phase 3A 후에도 `orders_count == 0`

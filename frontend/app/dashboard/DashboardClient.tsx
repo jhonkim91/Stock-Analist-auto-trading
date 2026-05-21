@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   callApi,
@@ -12,7 +12,6 @@ import {
   type BacktestRun,
   type BrokerStatus,
   type DataStatus,
-  type ImportResult,
   type MarketRegime,
   type ReportItem,
   type ScreenerResult,
@@ -73,9 +72,6 @@ export default function DashboardClient() {
     backtest: idleState("대기"),
     preview: idleState("대기")
   });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [importState, setImportState] = useState<AsyncState<ImportResult>>(idleState("CSV 파일을 선택하세요"));
-
   const screenerSummary = useMemo(() => summarizeResults(screenerResults.data ?? []), [screenerResults.data]);
   const latestReportItem = latestReport.data?.[0];
   const latestBacktestRun = latestBacktest.data?.[0];
@@ -132,27 +128,6 @@ export default function DashboardClient() {
     }
   }
 
-  async function importCsv() {
-    if (!selectedFile) {
-      setImportState({ status: "error", message: "CSV 파일을 먼저 선택하세요" });
-      return;
-    }
-    setImportState(loadingState("CSV import 실행 중"));
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    try {
-      const data = await callApi<ImportResult>("/api/data/import/daily-ohlcv", { method: "POST", body: formData });
-      setImportState({ status: "ok", message: "CSV import 성공", data });
-      await loadOverview(false);
-    } catch (error) {
-      setImportState({ status: "error", message: error instanceof Error ? error.message : "CSV import 실패" });
-    }
-  }
-
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    setSelectedFile(event.target.files?.[0] ?? null);
-  }
-
   return (
     <main className="shell">
       <header className="topbar">
@@ -162,6 +137,7 @@ export default function DashboardClient() {
         </div>
         <nav className="nav">
           <Link href="/dashboard">Dashboard</Link>
+          <Link href="/data">Data</Link>
           <Link href="/screener">Screener</Link>
           <Link href="/reports">Reports</Link>
           <Link href="/backtest">Backtest</Link>
@@ -280,45 +256,19 @@ export default function DashboardClient() {
       <section className="panel">
         <div className="sectionHeader">
           <div>
-            <h2>CSV Import</h2>
-            <p className="muted">필수 컬럼: symbol, trade_date, open, high, low, close, volume</p>
-            <p className="muted">선택 컬럼: turnover_value, market, provider, adj_close</p>
+            <h2>CSV Import / Data Quality</h2>
+            <p className="muted">Phase 3A부터 CSV import는 validation preview와 confirm 단계를 거친다.</p>
+            <p className="muted">validate 단계는 market data를 변경하지 않고 import_runs와 data_quality_checks만 기록한다.</p>
           </div>
-          <a
-            className="textLink"
-            href={`data:text/csv;charset=utf-8,${encodeURIComponent(
-              "symbol,trade_date,open,high,low,close,volume\nSAMPLE,2026-05-20,100,110,95,105,10000\n"
-            )}`}
-            download="sample_daily_ohlcv.csv"
-          >
-            sample CSV 다운로드
-          </a>
+          <Link className="textLink" href="/data">
+            Data Quality 화면으로 이동
+          </Link>
         </div>
-        <div className="formRow">
-          <input type="file" accept=".csv,text/csv" onChange={handleFileChange} />
-          <button type="button" onClick={importCsv}>
-            Import CSV
-          </button>
+        <div className="toolbar compactToolbar">
+          <Link className="textLink" href="/data">
+            CSV Validate / Confirm
+          </Link>
         </div>
-        <StatusPill status={importState.status} text={importState.message} />
-        {importState.data ? (
-          <div className="metricGrid">
-            <Metric label="inserted_count" value={formatNumber(importState.data.inserted_count)} />
-            <Metric label="updated_count" value={formatNumber(importState.data.updated_count)} />
-            <Metric label="skipped_count" value={formatNumber(importState.data.skipped_count)} />
-            <Metric label="error_count" value={formatNumber(importState.data.error_count)} />
-          </div>
-        ) : null}
-        {importState.status === "ok" ? (
-          <div className="toolbar compactToolbar">
-            <button type="button" onClick={() => runAction("indicators", "/api/indicators/recompute", {})}>
-              Recompute Indicators
-            </button>
-            <button type="button" onClick={() => runAction("screener", "/api/screener/run", {})}>
-              Run Screener
-            </button>
-          </div>
-        ) : null}
       </section>
 
       <section className="grid">

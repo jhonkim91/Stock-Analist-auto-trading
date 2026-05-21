@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { callApi, type ApiStatus, type SettingsPayload } from "../../lib/api";
 
-const sections = ["strategies", "risk", "backtest", "app"] as const;
+const sections = ["strategies", "risk", "backtest", "app", "data_sources"] as const;
 
 export default function SettingsPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
@@ -45,6 +45,7 @@ export default function SettingsPage() {
         </div>
         <nav className="nav">
           <Link href="/dashboard">Dashboard</Link>
+          <Link href="/data">Data</Link>
           <Link href="/screener">Screener</Link>
           <Link href="/reports">Reports</Link>
           <Link href="/backtest">Backtest</Link>
