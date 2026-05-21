@@ -83,8 +83,10 @@ def test_external_providers_are_provider_neutral_and_kis_has_no_secret_fields(cl
     by_id = {provider["source_id"]: provider for provider in providers}
     assert by_id["external_yfinance"]["provider_name"] == "yfinance"
     assert by_id["external_yfinance"]["network_enabled"] is False
+    assert by_id["external_yfinance"]["unknown_symbol_policy"] == "warn_and_create_on_confirm"
     assert by_id["kis_openapi"]["provider_name"] == "kis"
     assert by_id["kis_openapi"]["enabled"] is False
+    assert by_id["kis_openapi"]["unknown_symbol_policy"] == "reject"
     assert by_id["kis_openapi"]["paper_trading_enabled"] is False
     assert by_id["kis_openapi"]["live_trading_enabled"] is False
     assert by_id["kis_openapi"]["websocket_enabled"] is False
@@ -120,6 +122,8 @@ def test_yfinance_source_preview_uses_mapping_and_does_not_write_market_tables(c
     assert payload["provider_metadata"]["provider_symbol"] == "005930.KS"
     assert payload["provider_metadata"]["internal_symbol"] == "005930"
     assert payload["provider_metadata"]["network_enabled"] is False
+    assert payload["provider_metadata"]["provider_mode"] == "mock"
+    assert payload["provider_metadata"]["data_origin"] == "deterministic_mock"
     assert _market_counts() == before
     assert "UNKNOWN_SYMBOL" in _quality_codes(payload["run_id"])
 
@@ -168,6 +172,8 @@ def test_external_confirm_only_then_updates_daily_ohlcv_and_keeps_orders_zero(cl
     assert payload["status"] == "confirmed"
     assert payload["inserted_count"] == 3
     assert payload["updated_count"] == 0
+    assert payload["provider_metadata"]["provider_mode"] == "mock"
+    assert payload["provider_metadata"]["data_origin"] == "deterministic_mock"
     after = _market_counts()
     assert after["daily_ohlcv"] == before["daily_ohlcv"] + 3
     assert after["symbol_master"] == before["symbol_master"] + 1

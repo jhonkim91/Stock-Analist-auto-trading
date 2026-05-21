@@ -46,7 +46,7 @@ sources:
     venue: "KRX"
     timezone: "Asia/Seoul"
     zero_volume_policy: "warn"
-    unknown_symbol_policy: "reject"
+    unknown_symbol_policy: "warn_and_create_on_confirm"
     max_rows: 1000
     max_date_range_days: 730
     timeout_seconds: 10

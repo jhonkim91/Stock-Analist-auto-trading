@@ -16,7 +16,9 @@
 - Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/settings`.
 - Data Quality: `/data`에서 CSV validate/confirm과 External Daily OHLCV fetch preview/confirm을 모두 확인 가능.
 - External provider: `external_yfinance`는 `provider_name=yfinance`, `network_enabled=false`, `manual_preview_only=true`.
+- External provider policy: `external_yfinance`는 `unknown_symbol_policy=warn_and_create_on_confirm`, mock metadata `provider_mode=mock`, `data_origin=deterministic_mock`.
 - KIS placeholder: `kis_openapi`는 disabled이며 secret/account/token/order/websocket 필드와 구현이 없다.
+- KIS placeholder policy: `kis_openapi`는 `unknown_symbol_policy=reject`를 유지한다.
 - Settings: `backend/config/*.yaml` read-only 표시, 민감 키 redaction 유지, `data_sources.yaml` 포함.
 - Frontend security: `postcss@8.5.15` override로 `npm audit` 0 vulnerabilities.
 
@@ -31,13 +33,13 @@
 
 ## 최신 검증 결과
 
-- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 43 passed in 105.02s
+- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 43 passed in 101.54s
 - 2026-05-21 `npm.cmd run lint`: 통과
 - 2026-05-21 `npm.cmd exec tsc -- --noEmit`: 통과
 - 2026-05-21 `npm.cmd run build`: Next.js 16.2.6 production build 통과, `/data` 포함
 - 2026-05-21 `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities
 - 2026-05-21 Browser smoke: `/data` external preview/confirm 통과, API request failure 없음
-- 2026-05-21 Browser smoke: `external_yfinance`, provider metadata, Import History confirmed 표시 통과
+- 2026-05-21 Browser smoke: mock/fixture 안내 문구, provider metadata `provider_mode=mock`, `data_origin=deterministic_mock`, Import History confirmed 표시 통과
 - 2026-05-21 Phase 3B 후 `orders_count == 0`
 
 ## 최신 DB count
@@ -51,8 +53,8 @@
 - screen_results: 45
 - reports: 1
 - backtest_runs: 3
-- import_runs: 20
-- data_quality_checks: 104
+- import_runs: 23
+- data_quality_checks: 122
 - external_symbol_mapping: 32
 - orders_count: 0
 - latest_trade_date: 2026-05-21

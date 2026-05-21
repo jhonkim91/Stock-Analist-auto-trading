@@ -200,6 +200,8 @@ export type ImportRun = {
   provider_metadata: {
     provider_name?: string;
     source_id?: string;
+    provider_mode?: "mock" | "network" | string;
+    data_origin?: string;
     provider_symbol?: string | null;
     internal_symbol?: string;
     raw_row_count?: number;

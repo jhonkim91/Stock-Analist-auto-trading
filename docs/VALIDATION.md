@@ -13,7 +13,7 @@ Checkpoint: `MVP v0.4 Phase 3B provider-neutral external data`
 | Frontend typecheck | 통과 | `npm.cmd exec tsc -- --noEmit` |
 | Frontend production build | 통과 | `npm.cmd run build` |
 | Frontend npm audit | 통과 | `npm.cmd audit --audit-level=moderate` |
-| Browser smoke | 통과 | Microsoft Edge + Playwright fallback, backend `8010`, frontend `3010` |
+| Browser smoke | 통과 | Browser Node 실행 도구 미노출로 Node Playwright fallback, backend `8002`, frontend `3010` |
 
 ## Phase 3B API
 
@@ -41,8 +41,11 @@ Checkpoint: `MVP v0.4 Phase 3B provider-neutral external data`
 ## Provider-Neutral 검증
 
 - `external_yfinance`는 `provider_type=external_market_data`, `provider_name=yfinance`로 동작합니다.
+- `external_yfinance`는 `unknown_symbol_policy=warn_and_create_on_confirm`입니다.
+- `external_yfinance`는 `network_enabled=false`에서 `provider_metadata.provider_mode=mock`, `provider_metadata.data_origin=deterministic_mock`을 기록합니다.
 - `network_enabled=false`에서 실제 yfinance network fetch가 호출되지 않음을 monkeypatch 테스트로 검증했습니다.
 - `kis_openapi`는 disabled placeholder이며 fetch 요청이 400으로 차단됩니다.
+- `kis_openapi`는 `unknown_symbol_policy=reject`를 유지합니다.
 - KIS placeholder에는 `app_key`, `app_secret`, `token`, `password`, `account_no`, `hts_id`, `access_token`, `refresh_token` 필드가 없습니다.
 - Settings 응답에도 KIS secret 값이 노출되지 않습니다.
 - `external_symbol_mapping` 매핑이 없으면 `SYMBOL_MAPPING_FAILED`를 기록하고 `daily_ohlcv`에는 쓰지 않습니다.
@@ -87,6 +90,8 @@ Phase 3B 추가 검증:
 - `external_yfinance` preview
 - `kis_openapi` disabled 차단
 - `SYMBOL_MAPPING_FAILED`
+- `PROVIDER_ROW_COUNT_MISMATCH`
+- `DATE_RANGE_TOO_LARGE`
 - `network_enabled=false` network 차단
 - mock provider fixture 기반 preview
 - external confirm 후 insert/update
@@ -95,7 +100,7 @@ Phase 3B 추가 검증:
 
 ## Browser Smoke
 
-Browser 플러그인의 Node 실행 도구가 노출되지 않아 Python Playwright fallback으로 Microsoft Edge headless smoke를 수행했습니다.
+Browser 플러그인의 Node 실행 도구가 노출되지 않아 Node Playwright fallback으로 Chromium headless smoke를 수행했습니다.
 
 | Route | H1 |
 |---|---|
@@ -104,9 +109,11 @@ Browser 플러그인의 Node 실행 도구가 노출되지 않아 Python Playwri
 추가 확인:
 
 - External Daily OHLCV Preview panel 표시
+- `network_enabled=false` mock/fixture 안내 문구 표시
 - `external_yfinance` provider-neutral source 표시
 - `kis_openapi` disabled placeholder 표시
 - Fetch Preview 후 `can_confirm=true`
+- provider metadata에 `provider_mode=mock`, `data_origin=deterministic_mock` 표시
 - Confirm External Import 후 Import History에 `provider=yfinance`, `status=confirmed` 표시
 - API request failure 없음
 - Browser smoke 후 `orders_count == 0`
@@ -117,7 +124,7 @@ Browser 플러그인의 Node 실행 도구가 노출되지 않아 Python Playwri
 
 ```text
 collected 43 items
-43 passed in 105.02s
+43 passed in 101.54s
 ```
 
 ### Frontend lint
@@ -150,7 +157,7 @@ found 0 vulnerabilities
 
 ## 최종 DB 상태
 
-Browser smoke 기준 backend `http://127.0.0.1:8010`:
+Browser smoke 기준 backend `http://127.0.0.1:8002`:
 
 | table/status | count |
 |---|---:|
@@ -164,8 +171,8 @@ Browser smoke 기준 backend `http://127.0.0.1:8010`:
 | reports | 1 |
 | backtest_runs | 3 |
 | orders | 0 |
-| import_runs | 20 |
-| data_quality_checks | 104 |
+| import_runs | 23 |
+| data_quality_checks | 122 |
 | external_symbol_mapping | 32 |
 
 | field | value |

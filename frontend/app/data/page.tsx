@@ -309,6 +309,9 @@ export default function DataPage() {
 
   const summaryRun = confirmRun ?? externalRun ?? validationRun ?? selectedRun;
   const providerMetadata = summaryRun?.provider_metadata ?? {};
+  const selectedExternalProvider = externalProviders.find((source) => source.source_id === selectedExternalSource);
+  const showExternalMockNotice =
+    selectedExternalProvider?.provider_name === "yfinance" && selectedExternalProvider.network_enabled === false;
 
   return (
     <main className="shell">
@@ -366,6 +369,9 @@ export default function DataPage() {
           <div>
             <h2>External Daily OHLCV Preview</h2>
             <p className="muted">provider-neutral flow이며 preview 단계에서는 market data table을 변경하지 않는다.</p>
+            {showExternalMockNotice ? (
+              <p className="muted">network_enabled=false 상태이므로 현재 preview는 실제 yfinance 호출이 아니라 mock/fixture 데이터입니다.</p>
+            ) : null}
           </div>
           <StatusPill status={externalStatus} text={externalMessage} />
         </div>

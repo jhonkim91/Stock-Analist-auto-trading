@@ -584,9 +584,12 @@ class MarketDataImportService:
         fetch_started_at: datetime | None,
         fetch_finished_at: datetime | None,
     ) -> dict[str, object]:
+        network_enabled = bool(source.get("network_enabled"))
         return {
             "provider_name": source.get("provider_name"),
             "source_id": source.get("source_id"),
+            "provider_mode": "network" if network_enabled else "mock",
+            "data_origin": str(source.get("provider_name") or "provider") if network_enabled else "deterministic_mock",
             "provider_symbol": provider_symbol,
             "internal_symbol": internal_symbol,
             "raw_row_count": raw_row_count,
@@ -595,7 +598,7 @@ class MarketDataImportService:
             "end_date": end_date.isoformat(),
             "timezone": source.get("timezone"),
             "raw_hash": raw_hash,
-            "network_enabled": bool(source.get("network_enabled")),
+            "network_enabled": network_enabled,
             "fetch_started_at": fetch_started_at.isoformat() if fetch_started_at else None,
             "fetch_finished_at": fetch_finished_at.isoformat() if fetch_finished_at else None,
         }
