@@ -12,6 +12,7 @@
 - [x] Phase 3C KIS read-only foundation 구현
 - [x] Phase 3C PR #3 merge 완료: `b696ce28603d0c7329e1f36f8bcb8b48db617710`
 - [x] Phase 3D broker safety scaffold 구현
+- [x] Phase 3D PR #4 merge 완료: `2d5a146c8b89c355397eec458fd7343412e92c6e`
 - [x] 현재 브랜치: `main`
 
 ## 현재 프로젝트 상태
@@ -38,7 +39,7 @@
 
 ## 최신 검증 결과
 
-- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 56 passed in 261.75s
+- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 56 passed in 109.59s
 - 2026-05-21 `npm.cmd run lint`: 통과
 - 2026-05-21 `npm.cmd exec tsc -- --noEmit`: 통과
 - 2026-05-21 `npm.cmd run build`: Next.js 16.2.6 production build 통과

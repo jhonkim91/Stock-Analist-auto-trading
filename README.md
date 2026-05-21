@@ -4,7 +4,7 @@
 
 현재 checkpoint는 `MVP v0.6 Phase 3D broker safety scaffold`입니다. 실제 주문, paper/live broker, cancel, fill, websocket 연결, KIS 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
 
-PR #3 `Phase 3C: Add KIS read-only foundation`은 `main`에 merge 완료됐습니다. Phase 3D는 로컬 구현 상태이며 commit/push/PR은 별도 요청 전까지 수행하지 않습니다.
+PR #3 `Phase 3C: Add KIS read-only foundation`과 PR #4 `Phase 3D: KIS broker safety scaffold`는 `main`에 merge 완료됐습니다. Phase 3D merge commit은 `2d5a146c8b89c355397eec458fd7343412e92c6e`입니다.
 
 ## Phase 3D 기능
 

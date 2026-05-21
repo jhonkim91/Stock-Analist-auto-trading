@@ -8,7 +8,7 @@ Checkpoint: `MVP v0.6 Phase 3D broker safety scaffold`
 
 기준 브랜치: `main`
 
-현재 HEAD: `c697587aa25f0507ccbfafb0b068a4bd88bd0355`
+현재 HEAD: `2d5a146c8b89c355397eec458fd7343412e92c6e`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -104,7 +104,7 @@ Checkpoint: `MVP v0.6 Phase 3D broker safety scaffold`
 
 ```text
 collected 56 items
-56 passed in 261.75s
+56 passed in 109.59s
 ```
 
 ### Frontend lint
