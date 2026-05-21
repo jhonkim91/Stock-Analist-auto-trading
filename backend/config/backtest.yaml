@@ -1,0 +1,8 @@
+execution:
+  mode: "next_open"
+  same_bar_stop_first: true
+  commission_bps: 2.0
+  slippage_bps: 5.0
+  max_holding_days: 30
+metrics:
+  annual_trading_days: 252

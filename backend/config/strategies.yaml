@@ -1,0 +1,18 @@
+common:
+  min_turnover_value: 1000000000
+  target_reward_risk: 2.5
+  max_rejected_close: 3
+trend_breakout:
+  rs_percentile_min: 80
+  high_52w_threshold: 0.85
+  volume_surge_multiple: 1.5
+vcp_breakout:
+  rs_percentile_min: 75
+  volume_surge_multiple: 1.5
+  volume_dry_up_ratio: 0.8
+  atr_contract_window: 60
+canslim_lite:
+  quarterly_eps_growth_min: 0.25
+  sales_growth_min: 0.20
+  rs_percentile_min: 80
+  required_market_regime: "bull"

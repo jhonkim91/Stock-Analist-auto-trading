@@ -1,0 +1,9 @@
+app:
+  name: "Stock Analyst Auto Trading"
+  version: "0.1.0"
+  default_market: "KR"
+database:
+  url: "sqlite:///./backend/data/app.db"
+sample:
+  business_days: 320
+  base_index: "KOSPI_SAMPLE"

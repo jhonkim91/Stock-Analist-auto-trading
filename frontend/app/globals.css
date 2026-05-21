@@ -1,0 +1,423 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --text: #17202a;
+  --muted: #667085;
+  --line: #d7dde4;
+  --accent: #146c5f;
+  --accent-2: #8a4b12;
+  --danger: #b42318;
+  --warning: #a15c07;
+  --ok-bg: #e7f5ef;
+  --bad-bg: #fde8e4;
+  --soft: #eef2f5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+button {
+  min-height: 40px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+button.secondary {
+  border-color: var(--accent-2);
+  background: var(--accent-2);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+input,
+select {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--text);
+  padding: 0 10px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.shell {
+  width: min(1280px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 28px 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 18px;
+}
+
+.nav,
+.toolbar,
+.formRow,
+.filters,
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.nav a,
+.textLink {
+  color: var(--accent);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+h1 {
+  font-size: 30px;
+}
+
+h2 {
+  font-size: 18px;
+}
+
+h3 {
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.status,
+.state {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.status.ok,
+.state.ok {
+  color: var(--accent);
+}
+
+.status.error,
+.state.error {
+  color: var(--danger);
+}
+
+.status.loading,
+.state.loading {
+  color: var(--warning);
+}
+
+.toolbar {
+  padding: 18px 0;
+}
+
+.compactToolbar {
+  padding: 12px 0 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.wideLeft {
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  align-items: start;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.compactCards {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+article,
+.panel,
+.detailPanel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.panel {
+  margin-top: 16px;
+}
+
+.sectionHeader {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.metric {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fafbfc;
+  padding: 10px;
+}
+
+.metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.metric strong {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.bigNumber {
+  margin: 12px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.strongLine {
+  margin: 12px 0;
+  font-weight: 800;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.actionList {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+details {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #ffffff;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+pre {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #101820;
+  color: #d8e2ee;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.compactPre {
+  min-height: 120px;
+  max-height: 260px;
+}
+
+.tinyPre {
+  max-height: 280px;
+  white-space: pre-wrap;
+}
+
+.markdownPreview {
+  min-height: 520px;
+  max-height: 720px;
+  white-space: pre-wrap;
+}
+
+.rawMarkdown {
+  white-space: pre;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.miniTable {
+  min-width: 0;
+  margin-top: 12px;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+}
+
+th {
+  background: var(--soft);
+  color: #334155;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+tr[role="button"] {
+  cursor: pointer;
+}
+
+.selectedRow td {
+  background: #eaf4f2;
+}
+
+.summaryCell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: #344054;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 9px;
+}
+
+.badge.pass,
+.badge.gradeA,
+.badge.gradeB {
+  background: var(--ok-bg);
+  color: var(--accent);
+}
+
+.badge.fail,
+.badge.gradeD {
+  background: var(--bad-bg);
+  color: var(--danger);
+}
+
+.badge.gradeC {
+  background: #fff4df;
+  color: var(--warning);
+}
+
+.plainList {
+  margin: 12px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 980px) {
+  .topbar,
+  .grid,
+  .wideLeft,
+  .cardGrid,
+  .compactCards {
+    display: block;
+  }
+
+  .status {
+    display: inline-block;
+    margin-top: 12px;
+  }
+
+  article,
+  .panel,
+  .detailPanel,
+  .tableWrap {
+    margin-top: 16px;
+  }
+}
+
+@media (max-width: 620px) {
+  .shell {
+    width: min(100vw - 20px, 1280px);
+    padding: 18px 0;
+  }
+
+  .metricGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .filters,
+  .formRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  button,
+  input,
+  select {
+    width: 100%;
+  }
+}

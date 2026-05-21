@@ -1,0 +1,8 @@
+portfolio:
+  equity: 100000000
+  risk_fraction: 0.01
+  max_position_fraction: 0.2
+risk:
+  atr_stop_multiple: 2.0
+  hard_stop_pct: 0.08
+  target_reward_risk: 2.5

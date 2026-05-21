@@ -1,0 +1,252 @@
+from __future__ import annotations
+
+import json
+from datetime import date
+from uuid import uuid4
+
+import pandas as pd
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from backend.app.core.config import get_config
+from backend.app.models.tables import BacktestRun, IndicatorSnapshot
+from backend.app.repositories.backtest_repository import BacktestRepository
+from backend.app.repositories.market_repository import MarketRepository
+from backend.app.services.risk_service import RiskService
+from backend.app.services.scoring_service import ScoringService
+from backend.app.strategies.canslim_lite import CanslimLiteStrategy
+from backend.app.strategies.trend_breakout import TrendBreakoutStrategy
+from backend.app.strategies.vcp_breakout import VcpBreakoutStrategy
+from backend.app.utils.hashing import stable_hash
+
+
+class BacktestService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.repo = MarketRepository(db)
+        self.backtest_repo = BacktestRepository(db)
+        self.risk_service = RiskService()
+        self.scoring_service = ScoringService()
+        self.strategy_config = get_config("strategies")
+        self.backtest_config = get_config("backtest")
+        self.strategies = {
+            "trend_breakout": TrendBreakoutStrategy(self.strategy_config["trend_breakout"]),
+            "vcp_breakout": VcpBreakoutStrategy(self.strategy_config["vcp_breakout"]),
+            "canslim_lite": CanslimLiteStrategy(self.strategy_config["canslim_lite"]),
+        }
+
+    def run(
+        self,
+        strategy_name: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        initial_equity: float | None = None,
+    ) -> dict[str, object]:
+        """종가 신호 후 다음 거래일 시가 체결 가정으로 기본 백테스트를 수행한다."""
+        if strategy_name not in self.strategies:
+            raise ValueError(f"지원하지 않는 전략입니다: {strategy_name}")
+        equity = float(initial_equity or get_config("risk")["portfolio"]["equity"])
+        indicators = self._load_indicators(start_date, end_date)
+        if not indicators:
+            raise ValueError("indicator_snapshot 데이터가 없습니다.")
+        daily = self.repo.daily_df(start_date, end_date)
+        price_by_symbol = {
+            symbol: group.sort_values("trade_date").reset_index(drop=True) for symbol, group in daily.groupby("symbol")
+        }
+        dates = sorted({row.trade_date for row in indicators})
+        rows_by_date: dict[date, list[IndicatorSnapshot]] = {}
+        for row in indicators:
+            rows_by_date.setdefault(row.trade_date, []).append(row)
+
+        trades: list[dict[str, object]] = []
+        equity_curve = [{"date": dates[0], "equity": equity}]
+        exposure_days = 0
+        total_days = max((dates[-1] - dates[0]).days, 1)
+
+        for signal_date in dates:
+            candidates = []
+            market_regime = self._market_regime_on(signal_date)
+            for indicator in rows_by_date.get(signal_date, []):
+                fundamentals = self.repo.fundamentals_asof(indicator.symbol, signal_date)
+                strategy_result = self.strategies[strategy_name].evaluate(indicator, fundamentals, market_regime)
+                risk = self.risk_service.calculate(indicator, equity)
+                liquidity_ok = indicator.turnover_value >= float(self.strategy_config["common"]["min_turnover_value"])
+                rr_ok = risk.reward_risk_ratio >= float(self.strategy_config["common"]["target_reward_risk"])
+                if strategy_result.passed and liquidity_ok and rr_ok and risk.position_size > 0:
+                    candidates.append((self.scoring_service.score(indicator, fundamentals, risk.rr_score), indicator, risk))
+            if not candidates:
+                continue
+            _, indicator, risk = sorted(candidates, key=lambda item: item[0], reverse=True)[0]
+            trade = self._simulate_trade(indicator.symbol, signal_date, risk, price_by_symbol)
+            if trade is None:
+                continue
+            equity += float(trade["pnl"])
+            exposure_days += int(trade["holding_days"])
+            equity_curve.append({"date": trade["exit_date"], "equity": equity})
+            trades.append(trade)
+
+        metrics = self._metrics(trades, equity_curve, equity, initial_equity or get_config("risk")["portfolio"]["equity"], exposure_days, total_days)
+        run_id = f"bt-{uuid4().hex[:12]}"
+        config_hash = stable_hash({"strategy": strategy_name, "backtest": self.backtest_config, "risk": get_config("risk")})
+        self.backtest_repo.save(
+            BacktestRun(
+                run_id=run_id,
+                strategy_name=strategy_name,
+                config_hash=config_hash,
+                start_date=start_date,
+                end_date=end_date,
+                metrics_json=json.dumps(metrics, ensure_ascii=False, default=str),
+            )
+        )
+        return {"run_id": run_id, "strategy_name": strategy_name, "metrics": metrics, "trades": trades[:20]}
+
+    def list_runs(self, limit: int = 20) -> list[dict[str, object]]:
+        """최근 백테스트 run 목록을 반환한다."""
+        runs = list(self.db.scalars(select(BacktestRun).order_by(BacktestRun.created_at.desc()).limit(limit)).all())
+        return [self._serialize_run(run) for run in runs]
+
+    def get_run(self, run_id: str) -> dict[str, object]:
+        """단일 백테스트 run 상세를 반환한다."""
+        run = self.db.get(BacktestRun, run_id)
+        if run is None:
+            raise ValueError("백테스트 run을 찾을 수 없습니다.")
+        return self._serialize_run(run)
+
+    @staticmethod
+    def _serialize_run(run: BacktestRun) -> dict[str, object]:
+        metrics = json.loads(run.metrics_json)
+        return {
+            "run_id": run.run_id,
+            "strategy_name": run.strategy_name,
+            "config_hash": run.config_hash,
+            "start_date": run.start_date,
+            "end_date": run.end_date,
+            "metrics": metrics,
+            "created_at": run.created_at,
+        }
+
+    def _load_indicators(self, start_date: date | None, end_date: date | None) -> list[IndicatorSnapshot]:
+        stmt = select(IndicatorSnapshot)
+        if start_date:
+            stmt = stmt.where(IndicatorSnapshot.trade_date >= start_date)
+        if end_date:
+            stmt = stmt.where(IndicatorSnapshot.trade_date <= end_date)
+        return list(self.db.scalars(stmt.order_by(IndicatorSnapshot.trade_date, IndicatorSnapshot.symbol)).all())
+
+    def _simulate_trade(self, symbol: str, signal_date: date, risk, price_by_symbol: dict[str, pd.DataFrame]) -> dict[str, object] | None:
+        prices = price_by_symbol.get(symbol)
+        if prices is None or prices.empty:
+            return None
+        future = prices[prices["trade_date"] > signal_date].reset_index(drop=True)
+        if future.empty:
+            return None
+        entry_bar = future.iloc[0]
+        bps = (float(self.backtest_config["execution"]["commission_bps"]) + float(self.backtest_config["execution"]["slippage_bps"])) / 10000
+        raw_entry_price = float(entry_bar["open"])
+        entry_price = raw_entry_price * (1 + bps)
+        stop_price = float(risk.stop_price)
+        target_price = entry_price + (entry_price - stop_price) * float(self.strategy_config["common"]["target_reward_risk"])
+        qty = int(risk.position_size)
+        max_holding_days = int(self.backtest_config["execution"]["max_holding_days"])
+
+        for index, bar in future.iloc[:max_holding_days].iterrows():
+            low = float(bar["low"])
+            high = float(bar["high"])
+            close = float(bar["close"])
+            exit_price = None
+            raw_exit_price = None
+            exit_reason = None
+            if low <= stop_price:
+                raw_exit_price = stop_price
+                exit_price = raw_exit_price * (1 - bps)
+                exit_reason = "stop"
+            elif high >= target_price:
+                raw_exit_price = target_price
+                exit_price = raw_exit_price * (1 - bps)
+                exit_reason = "target"
+            elif index == max_holding_days - 1:
+                raw_exit_price = close
+                exit_price = raw_exit_price * (1 - bps)
+                exit_reason = "max_holding"
+            if exit_price is not None:
+                pnl = (exit_price - entry_price) * qty
+                estimated_cost = ((raw_entry_price * bps) + (float(raw_exit_price) * bps)) * qty
+                return {
+                    "symbol": symbol,
+                    "signal_date": signal_date,
+                    "entry_date": entry_bar["trade_date"],
+                    "raw_entry_price": round(raw_entry_price, 4),
+                    "entry_price": round(entry_price, 4),
+                    "exit_date": bar["trade_date"],
+                    "raw_exit_price": round(float(raw_exit_price), 4),
+                    "exit_price": round(exit_price, 4),
+                    "exit_reason": exit_reason,
+                    "qty": qty,
+                    "pnl": round(pnl, 2),
+                    "estimated_cost": round(estimated_cost, 2),
+                    "cost_bps": round(bps * 10000, 4),
+                    "return_pct": round((exit_price / entry_price) - 1, 6),
+                    "holding_days": int(index) + 1,
+                }
+        return None
+
+    def _market_regime_on(self, signal_date: date) -> str:
+        df = self.repo.index_df()
+        df = df[df["trade_date"] <= signal_date].sort_values("trade_date")
+        if len(df) < 200:
+            return "neutral"
+        df["sma50"] = df["close"].rolling(50, min_periods=50).mean()
+        df["sma200"] = df["close"].rolling(200, min_periods=200).mean()
+        weekly = df.set_index(pd.to_datetime(df["trade_date"])).resample("W-FRI").agg({"close": "last"}).dropna()
+        weekly["weekly_sma30"] = weekly["close"].rolling(30, min_periods=30).mean()
+        weekly["weekly_sma30_slope"] = weekly["weekly_sma30"] - weekly["weekly_sma30"].shift(4)
+        latest = df.iloc[-1]
+        weekly_latest = weekly.iloc[-1]
+        bull = (
+            latest["close"] > latest["sma200"]
+            and latest["sma50"] > latest["sma200"]
+            and pd.notna(weekly_latest["weekly_sma30"])
+            and pd.notna(weekly_latest["weekly_sma30_slope"])
+            and weekly_latest["close"] > weekly_latest["weekly_sma30"]
+            and weekly_latest["weekly_sma30_slope"] > 0
+        )
+        bear = latest["close"] < latest["sma200"] and latest["sma50"] < latest["sma200"]
+        return "bull" if bull else ("bear" if bear else "neutral")
+
+    @staticmethod
+    def _metrics(
+        trades: list[dict[str, object]],
+        equity_curve: list[dict[str, object]],
+        final_equity: float,
+        initial_equity: float,
+        exposure_days: int,
+        total_days: int,
+    ) -> dict[str, object]:
+        pnls = [float(trade["pnl"]) for trade in trades]
+        wins = [pnl for pnl in pnls if pnl > 0]
+        losses = [pnl for pnl in pnls if pnl < 0]
+        total_return = final_equity / initial_equity - 1
+        years = max(total_days / 365.25, 1 / 365.25)
+        cagr = (final_equity / initial_equity) ** (1 / years) - 1 if final_equity > 0 else -1
+        equity_values = [float(row["equity"]) for row in equity_curve]
+        peaks = pd.Series(equity_values).cummax()
+        drawdowns = pd.Series(equity_values) / peaks - 1
+        gross_profit = sum(wins)
+        gross_loss = abs(sum(losses))
+        total_estimated_cost = sum(float(trade.get("estimated_cost", 0)) for trade in trades)
+        return {
+            "trade_count": len(trades),
+            "trades": len(trades),
+            "win_rate": round(len(wins) / len(trades), 4) if trades else 0.0,
+            "total_return": round(total_return, 6),
+            "cagr": round(float(cagr), 6),
+            "max_drawdown": round(float(drawdowns.min()), 6) if len(drawdowns) else 0.0,
+            "profit_factor": round(gross_profit / gross_loss, 4) if gross_loss else (None if gross_profit == 0 else 999.0),
+            "expectancy": round(sum(pnls) / len(pnls), 4) if pnls else 0.0,
+            "avg_win": round(sum(wins) / len(wins), 4) if wins else 0.0,
+            "avg_loss": round(sum(losses) / len(losses), 4) if losses else 0.0,
+            "average_holding_days": round(sum(int(trade["holding_days"]) for trade in trades) / len(trades), 4) if trades else 0.0,
+            "exposure": round(exposure_days / total_days, 6),
+            "total_estimated_cost": round(total_estimated_cost, 2),
+            "cost_bps": 7.0,
+        }
