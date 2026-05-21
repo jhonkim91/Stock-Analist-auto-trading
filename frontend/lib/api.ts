@@ -108,8 +108,16 @@ export type BrokerStatus = {
   mode: string;
   broker_mode: string;
   can_submit: boolean;
+  preview_only: boolean;
   live_trading_enabled: boolean;
   paper_trading_enabled: boolean;
+  token_issued: boolean;
+  network_call_performed: boolean;
+  adapter_selected: boolean;
+  adapter_name: string;
+  adapter_capability_checked: boolean;
+  adapter_order_call_performed: boolean;
+  adapter_network_call_performed: boolean;
   reason: string;
 };
 

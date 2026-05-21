@@ -40,6 +40,10 @@ def test_data_status_api_and_broker_preview_keep_orders_empty(client):
     preview = client.post("/api/broker/orders/preview", json={"symbol": "KR009", "side": "buy", "qty": 10})
     assert preview.status_code == 200
     assert preview.json()["preview_only"] is True
+    assert preview.json()["order_created"] is False
+    assert preview.json()["can_submit"] is False
+    assert preview.json()["token_issued"] is False
+    assert preview.json()["network_call_performed"] is False
 
     after = client.get("/api/data/status")
     assert after.status_code == 200

@@ -104,9 +104,13 @@ def test_full_backend_api_smoke_flow_asserts_core_fields(client):
     broker_status = client.get("/api/broker/status")
     assert broker_status.status_code == 200
     broker_payload = broker_status.json()
-    assert broker_payload["mode"] == "mock"
+    assert broker_payload["mode"] in {"disabled", "safety_scaffold"}
     assert broker_payload["live_trading_enabled"] is False
     assert broker_payload["can_submit"] is False
+    assert broker_payload["token_issued"] is False
+    assert broker_payload["network_call_performed"] is False
+    assert broker_payload["adapter_order_call_performed"] is False
+    assert broker_payload["adapter_network_call_performed"] is False
 
     with SessionLocal() as db:
         before_orders = db.scalar(select(func.count()).select_from(Order))
@@ -116,6 +120,10 @@ def test_full_backend_api_smoke_flow_asserts_core_fields(client):
     assert preview_payload["preview_only"] is True
     assert preview_payload["order_created"] is False
     assert preview_payload["can_submit"] is False
+    assert preview_payload["token_issued"] is False
+    assert preview_payload["network_call_performed"] is False
+    assert preview_payload["adapter_order_call_performed"] is False
+    assert preview_payload["adapter_network_call_performed"] is False
     with SessionLocal() as db:
         after_orders = db.scalar(select(func.count()).select_from(Order))
     assert after_orders == before_orders

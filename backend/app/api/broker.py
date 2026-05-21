@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
+from backend.app.core.database import get_db
 from backend.app.models.schemas import BrokerPreviewRequest
 from backend.app.services.broker_service import BrokerService
 
@@ -14,8 +16,8 @@ def broker_status() -> dict[str, object]:
 
 
 @router.post("/orders/preview")
-def preview_order(payload: BrokerPreviewRequest) -> dict[str, object]:
-    return BrokerService().preview_order(
+def preview_order(payload: BrokerPreviewRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    return BrokerService(db).preview_order(
         symbol=payload.symbol,
         side=payload.side,
         qty=payload.qty,

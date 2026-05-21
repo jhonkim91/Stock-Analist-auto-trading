@@ -1,0 +1,23 @@
+broker:
+  mode: "safety_scaffold"
+  broker_mode: "disabled"
+  source_id: "kis_openapi"
+  provider_name: "kis"
+  provider_type: "broker_placeholder"
+  enabled: false
+  network_enabled: false
+  can_submit: false
+  paper_trading_enabled: false
+  live_trading_enabled: false
+  websocket_enabled: false
+  preview_only: true
+  kill_switch_enabled: true
+risk_gate:
+  allow_buy_preview: true
+  allow_sell_preview: true
+  allow_short_sell: false
+  max_order_qty: 1000000
+  max_order_notional: 100000000
+audit:
+  persistence_enabled: false
+  sanitize_enabled: true
