@@ -4,6 +4,8 @@
 
 현재 checkpoint는 `MVP v0.5 Phase 3C KIS read-only foundation`입니다. 실제 주문, paper/live broker, KIS 실제 API 호출, 실시간 websocket, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
 
+PR #3 `Phase 3C: Add KIS read-only foundation`은 `main`에 merge 완료됐습니다. Merge commit은 `b696ce28603d0c7329e1f36f8bcb8b48db617710`입니다.
+
 ## Phase 3C 기능
 
 - Phase 3A CSV validate/confirm flow 유지
@@ -225,4 +227,4 @@ npm.cmd audit --audit-level=moderate
 - AI 예측 모델 없음
 - yfinance 전용 DB/API/UI 하드코딩 없음
 - Mock Broker는 preview-only
-- Phase 3B 후에도 `orders_count == 0`
+- Phase 3C 후에도 `orders_count == 0`

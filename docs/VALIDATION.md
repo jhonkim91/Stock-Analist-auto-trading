@@ -6,7 +6,11 @@
 
 Checkpoint: `MVP v0.5 Phase 3C KIS read-only foundation`
 
-작업 브랜치: `phase-3c-kis-readonly-foundation`
+기준 브랜치: `main`
+
+PR: `#3 Phase 3C: Add KIS read-only foundation` merged
+
+Merge commit: `b696ce28603d0c7329e1f36f8bcb8b48db617710`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -15,7 +19,7 @@ Checkpoint: `MVP v0.5 Phase 3C KIS read-only foundation`
 | Frontend typecheck | 통과 | `npm.cmd exec tsc -- --noEmit` |
 | Frontend production build | 통과 | `npm.cmd run build` |
 | Frontend npm audit | 통과 | `npm.cmd audit --audit-level=moderate` |
-| Browser/API smoke | 통과 | backend `8002`, frontend `3010`, Playwright headless + API assertions |
+| Browser/API smoke | 통과 | backend `8002`, frontend `3010`, Playwright headless route smoke + API assertions |
 
 ## Phase 3C API
 
@@ -76,9 +80,10 @@ Checkpoint: `MVP v0.5 Phase 3C KIS read-only foundation`
 - `source_id=kis_market_data` external preview는 disabled 상태에서 HTTP 400으로 차단
 - token cache 파일 없음
 - UI smoke 전후 `orders_count == 0`
-- console error 0
+- route smoke console error 0
 - request failure 0
-- API HTTP error 0
+- unexpected API HTTP error 0
+- disabled KIS preview는 API smoke에서 expected HTTP 400으로 별도 확인
 
 ## 명령 결과
 
@@ -86,7 +91,7 @@ Checkpoint: `MVP v0.5 Phase 3C KIS read-only foundation`
 
 ```text
 collected 50 items
-50 passed in 286.25s
+50 passed in 261.06s
 ```
 
 ### Frontend lint

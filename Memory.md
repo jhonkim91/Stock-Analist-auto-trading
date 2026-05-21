@@ -10,7 +10,8 @@
 - [x] Phase 3B provider-neutral external daily OHLCV flow 구현
 - [x] Phase 3B PR #2 merge 완료: `754a139c24b3e3742f2060a9589d96d21a75d2b9`
 - [x] Phase 3C KIS read-only foundation 구현
-- [x] 현재 브랜치: `phase-3c-kis-readonly-foundation`
+- [x] Phase 3C PR #3 merge 완료: `b696ce28603d0c7329e1f36f8bcb8b48db617710`
+- [x] 현재 브랜치: `main`
 
 ## 현재 프로젝트 상태
 
@@ -22,6 +23,7 @@
 - KIS broker placeholder: `kis_openapi`는 `provider_type=broker_placeholder`이며 Phase 3D 이후 broker adapter용이다.
 - KIS provider: `KisMarketDataProvider` skeleton은 실제 network call을 금지하고, `MockKisMarketDataProvider`만 fixture preview/confirm 테스트에 사용한다.
 - Settings/KIS API: secret 값은 반환하지 않고 configured boolean만 제공한다.
+- Phase 3C post-merge: KIS secret 저장/노출 없음, KIS broker/order/websocket route 미구현.
 - Frontend security: `postcss@8.5.15` override로 `npm audit` 0 vulnerabilities.
 
 ## Phase 3C 추가 파일/구조
@@ -35,13 +37,13 @@
 
 ## 최신 검증 결과
 
-- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 50 passed in 286.25s
+- 2026-05-21 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 50 passed in 261.06s
 - 2026-05-21 `npm.cmd run lint`: 통과
 - 2026-05-21 `npm.cmd exec tsc -- --noEmit`: 통과
 - 2026-05-21 `npm.cmd run build`: Next.js 16.2.6 production build 통과, `/data` 포함
 - 2026-05-21 `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities
-- 2026-05-21 Browser/API smoke: backend `8002`, frontend `3010`, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/settings` 통과
-- 2026-05-21 Browser/API smoke: `/data` KIS read-only status 표시, sentinel secret 미노출, KIS disabled preview HTTP 400 차단, token cache 없음, console error/request failure/API HTTP error 없음
+- 2026-05-21 Browser/API smoke: backend `8002`, frontend `3010`, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/settings` 통과, route smoke console error/request failure/unexpected HTTP error 없음
+- 2026-05-21 API smoke: `/api/kis/status`, `/api/kis/config`, `/api/kis/config/validate` 정상, KIS disabled preview HTTP 400 차단, KIS order/broker/websocket endpoint 404, sensitive value 노출 0
 - 2026-05-21 Phase 3C 검증 후 `orders_count == 0`
 
 ## 최신 DB count
@@ -84,5 +86,4 @@
 
 ## 다음 작업
 
-- PR 생성 전 현재 브랜치의 변경 범위와 검증 결과를 재확인한다.
-- Phase 3D는 별도 계획모드에서만 KIS broker adapter, token lifecycle, kill switch, order risk gate를 설계한다.
+- Phase 3D는 사용자 별도 승인 후 계획모드에서만 KIS broker adapter, token lifecycle, kill switch, order risk gate를 설계한다.
