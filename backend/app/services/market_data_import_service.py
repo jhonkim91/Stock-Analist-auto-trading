@@ -29,7 +29,7 @@ CONFIRMABLE_STATUSES = {"validated"}
 TERMINAL_STATUSES = {"confirmed"}
 STATUS_CANDIDATES = {"validated", "confirmed", "failed", "rejected", "expired"}
 SEVERITIES = {"error", "warning", "info"}
-EXTERNAL_PROVIDER_TYPES = {"external", "external_market_data", "broker_data"}
+EXTERNAL_PROVIDER_TYPES = {"external", "external_market_data"}
 
 
 class ImportRunNotFoundError(ValueError):
@@ -585,11 +585,15 @@ class MarketDataImportService:
         fetch_finished_at: datetime | None,
     ) -> dict[str, object]:
         network_enabled = bool(source.get("network_enabled"))
+        provider_name = str(source.get("provider_name") or "provider")
+        data_origin = provider_name if network_enabled else "deterministic_mock"
+        if provider_name == "kis" and not network_enabled:
+            data_origin = "deterministic_kis_mock"
         return {
             "provider_name": source.get("provider_name"),
             "source_id": source.get("source_id"),
             "provider_mode": "network" if network_enabled else "mock",
-            "data_origin": str(source.get("provider_name") or "provider") if network_enabled else "deterministic_mock",
+            "data_origin": data_origin,
             "provider_symbol": provider_symbol,
             "internal_symbol": internal_symbol,
             "raw_row_count": raw_row_count,

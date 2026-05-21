@@ -10,7 +10,8 @@ import {
   type DataPreviewRow,
   type DataQualityCheck,
   type DataSourceConfig,
-  type ImportRun
+  type ImportRun,
+  type KisStatus
 } from "../../lib/api";
 
 function StatusPill({ status, text }: { status: ApiStatus; text: string }) {
@@ -117,6 +118,7 @@ export default function DataPage() {
   const [message, setMessage] = useState("조회 중");
   const [sources, setSources] = useState<DataSourceConfig[]>([]);
   const [externalProviders, setExternalProviders] = useState<DataSourceConfig[]>([]);
+  const [kisStatusData, setKisStatusData] = useState<KisStatus | null>(null);
   const [selectedSource, setSelectedSource] = useState("csv_krx");
   const [selectedExternalSource, setSelectedExternalSource] = useState("external_yfinance");
   const [externalSymbol, setExternalSymbol] = useState("005930");
@@ -161,13 +163,15 @@ export default function DataPage() {
       setMessage("조회 중");
     }
     try {
-      const [sourceData, externalData, runData] = await Promise.all([
+      const [sourceData, externalData, kisData, runData] = await Promise.all([
         callApi<DataSourceConfig[]>("/api/data/sources"),
         callApi<DataSourceConfig[]>("/api/data/external/providers"),
+        callApi<KisStatus>("/api/kis/status"),
         loadRuns()
       ]);
       setSources(sourceData);
       setExternalProviders(externalData);
+      setKisStatusData(kisData);
       if (!sourceData.some((source) => source.source_id === selectedSource)) {
         setSelectedSource(sourceData.find((source) => source.enabled && source.provider_type === "csv")?.source_id ?? "csv_krx");
       }
@@ -405,6 +409,32 @@ export default function DataPage() {
             Confirm External Import
           </button>
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="sectionHeader">
+          <div>
+            <h2>KIS Read-only Status</h2>
+            <p className="muted">Phase 3C foundation 상태만 표시하며 API key 입력과 network toggle은 제공하지 않는다.</p>
+          </div>
+          <StatusPill status={kisStatusData ? "ok" : "idle"} text={kisStatusData ? "read-only" : "조회 대기"} />
+        </div>
+        <section className="cardGrid compactCards">
+          <article>
+            <h2>source_id</h2>
+            <p className="bigNumber">{kisStatusData?.source_id ?? "-"}</p>
+          </article>
+          <Metric label="enabled" value={kisStatusData?.enabled ? "true" : "false"} />
+          <Metric label="network_enabled" value={kisStatusData?.network_enabled ? "true" : "false"} />
+          <Metric label="read_only_enabled" value={kisStatusData?.read_only_enabled ? "true" : "false"} />
+          <Metric label="app_key_configured" value={kisStatusData?.app_key_configured ? "true" : "false"} />
+          <Metric label="app_secret_configured" value={kisStatusData?.app_secret_configured ? "true" : "false"} />
+          <Metric label="token_cache_enabled" value={kisStatusData?.token_cache_enabled ? "true" : "false"} />
+          <article>
+            <h2>disabled_reason</h2>
+            <p className="muted">{kisStatusData?.disabled_reason ?? "-"}</p>
+          </article>
+        </section>
       </section>
 
       <section className="cardGrid compactCards">

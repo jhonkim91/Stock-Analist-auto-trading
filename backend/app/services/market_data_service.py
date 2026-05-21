@@ -55,7 +55,9 @@ class MarketDataService:
             ]
         )
         self.db.execute(
-            delete(ExternalSymbolMapping).where(ExternalSymbolMapping.source_id.in_(["external_yfinance", "kis_openapi"]))
+            delete(ExternalSymbolMapping).where(
+                ExternalSymbolMapping.source_id.in_(["external_yfinance", "kis_market_data", "kis_openapi"])
+            )
         )
         self.db.add_all(
             [
@@ -72,7 +74,7 @@ class MarketDataService:
         self.db.add_all(
             [
                 ExternalSymbolMapping(
-                    source_id="kis_openapi",
+                    source_id="kis_market_data",
                     external_symbol=symbol,
                     symbol=symbol,
                     market="KR",
@@ -91,7 +93,7 @@ class MarketDataService:
                     venue="KRX",
                 ),
                 ExternalSymbolMapping(
-                    source_id="kis_openapi",
+                    source_id="kis_market_data",
                     external_symbol="005930",
                     symbol="005930",
                     market="KR",
