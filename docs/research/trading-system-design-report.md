@@ -1,0 +1,530 @@
+# 상위권 트레이더형 주식 분석 및 자동매매 보조 시스템 설계 보고서
+
+> 보관 목적: 초기 개발기획 단계에서 검토한 리서치 아카이브입니다.
+> 이 문서는 투자 추천, 운용 지시, 실거래 가이드가 아니며, 현재 구현/검증 상태의 기준 문서도 아닙니다.
+> Phase 3D 기능 및 검증 상태는 루트 `README.md`, `docs/VALIDATION.md`, `Memory.md`를 기준으로 확인합니다.
+
+## Executive Summary
+
+검증 가능한 자료를 기준으로 보면, 공개적으로 규칙이 문서화된 상위권 트레이더와 체계적 운용자들이 반복해서 사용하는 공통분모는 “비밀 기법”이 아니라 **추세, 모멘텀, 상대강도, 신고가/박스권 돌파, 거래량 확인, 실적 가속, 그리고 엄격한 손실 제한**이다. 학술적으로는 횡단면 모멘텀과 시계열 추세추종이 장기간·다자산에서 반복 검증되었고, 52주 신고가 근접성, 업종 모멘텀, 수익성·투자·퀄리티 팩터, 실적 서프라이즈와 실적 드리프트도 독립적인 설명력을 보여 왔다. 실무적으로 유명한 CAN SLIM, VCP, Darvas Box, Weinstein Stage Analysis, Turtle Trading은 표현만 다를 뿐, 대체로 이 공통요소를 다른 순서와 규칙으로 포장한 체계다. citeturn0search0turn0search1turn0search2turn3search17turn15search0turn15search5turn19search18
+
+프로그램으로 구현할 때 핵심은 “전략 하나를 정답처럼 고르는 것”이 아니라, **시장 국면 필터 → 섹터 강도 → 종목 추세 → 상대강도 → 거래량 증가 → 패턴 확인 → 펀더멘털 개선 → 손익비 검증**의 다층 필터로 후보를 좁히고, 그 위에 포지션 사이징과 손절/트레일링 규칙을 얹는 것이다. 이 구조는 공개 규칙이 뚜렷한 성장주 트레이딩 계열과 퀀트 멀티팩터 계열을 동시에 수용할 수 있고, “강한 종목을 강한 시장에서만 산다”는 교집합을 코드로 옮기기 쉽다. citeturn16search1turn16search2turn2search22turn4search0turn18search2turn17search13
+
+자동매매 보조 시스템의 성패는 신호 자체보다 **백테스트 품질**에 더 크게 좌우된다. 생존자 편향, 룩어헤드 바이어스, 재무데이터 발표시점 오염, 데이터 스누핑, 과최적화가 제거되지 않으면 그럴듯한 수익곡선은 실제로 쉽게 붕괴한다. 따라서 상장폐지 종목 포함, 포인트인타임 재무데이터, 신호 발생 후 다음 바 체결, 슬리피지·수수료·거래대금 제약, 워크포워드 검증, White의 데이터 스누핑 통제, PBO와 Deflated Sharpe Ratio 같은 보수적 검정이 필수다. citeturn6search0turn6search1turn6search4turn6search8turn6search19
+
+한국장과 미국장은 동일 전략을 그대로 복제하기보다 **시장 구조에 맞춰 파라미터를 다르게** 가져가야 한다. 한국은 KRX 정규장과 NXT 연장장이 병존하고, 일일 가격제한폭이 명확하며, 공매도 제도도 최근 재개된 뒤 제도개선이 반영된 상태다. 미국은 NYSE/Nasdaq의 정규장과 프리/애프터마켓이 더 제도화되어 있고, 공매도는 Regulation SHO 하에서 locate/close-out과 Rule 201이 핵심이며, 2026년에는 FINRA가 기존 PDT 규칙을 대체하는 새로운 intraday margin 룰을 채택했다. 또한 한국 공공데이터는 일부 API가 비실시간·영업일 지연이고, 미국은 SIP/CTA 기반으로 통합 시세 구조가 있으나 데이터 소스와 브로커 API 선택지가 더 많다. citeturn22view0turn22view1turn23view3turn23view4turn22view4turn22view2turn22view3turn22view5turn22view6turn22view7turn26view0turn26view3
+
+결론적으로, MVP는 “모든 전략 자동매매”보다 **일봉·주봉 기반 장세판단 + 후보 스크리닝 + 점수화 + 리스크 계산 + 백테스트 + 자동 리포트**를 먼저 완성하는 편이 낫다. 주문 라우팅은 마지막 단계에 붙여도 늦지 않다. 공개적으로 검증된 원칙을 따르면, Codex로 구현할 수 있는 수준의 조건식과 모듈 경계가 분명해지고, 전략을 교체해도 엔진은 재사용 가능해진다. citeturn22view8turn23view1turn23view2turn22view9turn22view10
+
+## 핵심 매매철학 요약
+
+공개된 고수 트레이더 규칙과 학술 근거를 겹쳐 보면, 실전형 시스템이 지켜야 할 철학은 다음 표로 요약된다. 중요한 점은 **예측보다 선별과 대응에 집중**한다는 것이다. 즉, “무조건 오를 종목”을 맞히는 것이 아니라, **상승이 이어질 확률이 상대적으로 높은 구조를 찾고, 틀렸을 때 빨리 작게 잃는 체계**를 만드는 것이 목적이다. citeturn0search0turn0search1turn17search0turn16search2turn16search7turn18search11
+
+| 공통 철학 | 실무 의미 | 코드화 포인트 | 대표 근거 |
+|---|---|---|---|
+| 시장이 먼저다 | 개별 종목보다 시장 방향이 우선이다. 약세장에서는 좋은 패턴도 실패 확률이 높다. | `market_regime in {bull, neutral}`일 때만 롱 스캔 허용 | citeturn14search0turn4search0turn16search30 |
+| 리더만 산다 | 절대 저평가보다 “강한 업종 안의 강한 종목”이 더 중요하다. | 업종 RS, 종목 RS percentile, 52주 신고가 근접도 | citeturn15search0turn0search0turn3search17 |
+| 추세 안의 진입만 노린다 | 신고가 돌파, 박스 돌파, 눌림목은 모두 상위 추세가 있을 때 의미가 크다. | `close > sma_50 > sma_150 > sma_200`, `sma_200_slope > 0` | citeturn14search0turn14search1turn4search0 |
+| 거래량은 확인 수단이다 | 가격 돌파에 거래량/거래대금이 동반되면 신호 신뢰도가 높아진다. | `volume / sma(volume,50)`, `turnover_value`, OBV/CMF | citeturn5search13turn5search26turn3search10 |
+| 실적은 지속성을 높인다 | 가격 모멘텀만보다 실적 개선·수익성·이익 모멘텀이 함께 있을 때 내구성이 좋아진다. | EPS/매출 성장, 추정치 상향, ROE/GPA, 영업이익률 | citeturn19search11turn19search18turn15search2turn15search5 |
+| 손실 제한이 우선이다 | 상위권 트레이더식 규칙은 수익 극대화보다 큰 손실 회피에 더 엄격하다. | `risk_per_trade`, ATR stop, 7~8% hard stop, trailing stop | citeturn16search2turn16search7turn18search11 |
+| 전략은 단일이 아니라 묶음이다 | 추세·모멘텀·품질·가치·실적 팩터를 결합하면 단일 스타일의 약점을 줄일 수 있다. | 멀티팩터 점수, 앙상블 랭킹, 레짐별 가중치 | citeturn17search0turn17search13turn15search5turn15search2 |
+
+실무적으로 보면 CAN SLIM은 **실적과 리더십**을, VCP와 Darvas는 **수축 후 돌파 구조**를, Weinstein은 **장기 추세와 Stage 2 진입**을, Turtle은 **완전 규칙 기반 돌파·손절·피라미딩**을 강조한다. 이름은 다르지만 교집합은 “강한 시장, 강한 섹터, 강한 종목, 좁은 리스크, 빠른 손절”이다. 이 점이 바로 시스템화 가능한 이유다. citeturn16search1turn2search22turn3search10turn4search0turn18search2
+
+## 전략별 비교표 및 구현 가능한 조건식 표
+
+아래 첫 번째 표는 전략의 성격과 장세 적합도를, 두 번째 표는 그대로 코드로 옮길 수 있는 수준의 조건식을 요약한 것이다. 표 안의 수치 기준은 **학술 근거와 공개 실무 규칙을 바탕으로 한 보수적 기본값**이며, 실제 운용에서는 시장·유니버스·체결 현실에 맞춰 조정해야 한다. citeturn0search0turn0search1turn14search0turn16search1turn18search11
+
+| 전략 | 핵심 아이디어 | 잘 작동하는 국면 | 실패 쉬운 국면 | 필요한 데이터와 구현 지표 | 대표 근거 |
+|---|---|---|---|---|---|
+| 추세추종 | 가격이 움직인 방향으로 더 이어질 확률을 활용한다. | 강한 상승·하락 추세, 변동성 확장 국면 | 박스권, 잦은 반전, 짧은 mean reversion | 일봉/주봉 OHLCV, 50/150/200MA, Donchian, ATR, ADX | citeturn0search1turn0search2turn14search0 |
+| 모멘텀 투자 | 최근 수익률 상위 종목이 단기~중기적으로 계속 강한 경향을 이용한다. | 실제 리더가 뚜렷한 강세장 | 급락 직후 리버설, 팩터 급반전 | 3/6/12개월 수익률, 12-1모멘텀, 변동성, 회전율 | citeturn0search0turn5search3 |
+| 상대강도 전략 | 시장/업종 대비 더 강한 종목을 산다. | 업종 주도주가 분명한 장세 | 범시장 동반 급반등, 리더십 순환이 빠른 장세 | 벤치마크 대비 초과수익, RS percentile, Mansfield RS | citeturn0search0turn15search0 |
+| 신고가 돌파 전략 | 52주 신고가 근처는 행동재무학적 앵커링 때문에 추가 추세가 생기기 쉽다. | 강세장 초반~중반, 신고가 추세 확장 | 말기 과열, 가짜 돌파 | 252일 최고가, breakout buffer, volume surge | citeturn3search17turn3search20 |
+| 변동성 축소 후 돌파 | 변동성·거래량이 줄어든 뒤 수급이 한 방향으로 터질 때 추세가 커질 수 있다. | 리더주 재축적 구간, 추세 재개 | 유동성 부족 소형주, 뉴스성 급등주 | ATR/Close, 표준편차 축소, contraction ratio, volume dry-up | citeturn2search22turn5search13 |
+| 거래량 기반 수급 분석 | 가격 움직임의 질을 거래량과 투자주체/회전율로 확인한다. | 기관성 수급이 누적되는 리더주 | 뉴스 spike 후 소멸, 허수성 급증 | 거래량, 거래대금, turnover, OBV, CMF, 투자자별 매매 | citeturn5search13turn5search26turn7search1 |
+| 이동평균선 기반 추세 분석 | 이동평균선 배열과 기울기로 추세의 방향과 건전성을 본다. | 장기 상승/하락 추세 | 횡보장에서 잦은 whipsaw | 10/20/50/150/200MA, slope, distance to MA | citeturn14search0turn14search1 |
+| 박스권 돌파 | 일정 기간 고점/저점 범위를 돌파하는 순간을 진입점으로 삼는다. | 에너지 응축 후 방향성 발생 | 넓은 박스 내 노이즈 반복 | rolling high/low, box width, pivot, volume confirmation | citeturn18search2turn3search10 |
+| 눌림목 매매 | 강한 추세 속 조정 구간에서 유리한 손익비로 재진입한다. | 이미 확인된 상승추세의 첫·둘째 풀백 | 추세 말기, 약세장 역추세 반등 | 10/20/50MA pullback, retracement depth, volume dry-up | citeturn4search0turn16news41 |
+| 스윙 트레이딩 | 며칠~수주 동안 추세의 한 구간만 취한다. 전략이라기보다 실행 프레임이다. | 추세 지속이 있으나 장기 보유는 과한 구간 | 과도한 뉴스 변동성, 장마감 갭 위험 | holding period, setup taxonomy, short MA/ATR exit | citeturn16search21turn16news41 |
+| CAN SLIM | 실적 성장, 신규성, 리더십, 기관수요, 시장방향을 통합한다. | 성장주 주도 강세장 | 침체장, 금리 급변·밸류 전환장 | EPS/매출 성장, RS, 유통주식수, 기관수급, market direction | citeturn16search1turn16search3turn16search23 |
+| VCP | Mark Minervini식으로 변동성 축소 횟수와 폭 감소를 확인 후 돌파를 산다. | 강한 리더주의 재축적 구간 | 패턴만 비슷하고 실적/유동성 약한 종목 | contraction count, pullback 폭 감소, volume dry-up, pivot | citeturn2search22turn16search23 |
+| Darvas Box | 상단 박스 돌파와 거래량 증가를 결합한 신고가 계열 전략이다. | 신고가 주도주 장세 | 박스 재정의가 잦은 횡보장 | box high/low, 52주 고가, breakout volume | citeturn3search10 |
+| Stan Weinstein Stage Analysis | 주봉 기준 Stage 2 진입 종목만 노리는 장기 추세 필터다. | 중기 상승장 초입 | Stage 1/3 혼합 구간, 급락 전환 | 주봉 30W MA, 200D MA, RS vs index, volume on breakout | citeturn4search0turn4search20 |
+| Turtle Trading | 20일/55일 돌파, ATR 기반 손절·피라미딩을 쓰는 순수 규칙형 시스템이다. | 큰 추세가 길게 이어지는 국면 | 잦은 박스권, 변동성 대비 방향성 부족 | Donchian 20/55, ATR(=N), unit add-on, trailing exit | citeturn18search2turn18search11 |
+| 퀀트 멀티팩터 | 단일 전략보다 value·momentum·quality·low risk 등을 결합해 안정화한다. | 스타일 분산이 필요한 대부분의 장세 | 특정 팩터가 전시장적으로 붕괴하는 급변장 | factor z-score, rank blend, sector neutral/weight cap | citeturn17search13turn17search0turn15search5 |
+| 가치·성장·퀄리티·이익모멘텀 | 팩터를 개별 슬리브로 뽑아 조합한다. | 리밸런싱 규율이 지켜질 때 | 한 스타일만 과도하게 쏠릴 때 | B/M, EV/EBIT, profitability, investment, EPS revisions, PEAD | citeturn15search2turn15search5turn19search11turn19search18 |
+
+| 전략 | 매수 조건식 | 매도 조건식 | 손절 및 익절 기준 | 포지션 사이징 | 백테스트 특이사항과 개인투자자 장단점 | 대표 근거 |
+|---|---|---|---|---|---|---|
+| 추세추종 | `close > sma_200 and sma_50 > sma_200 and close > rolling_max_63 * 1.01` | `close < sma_50` 또는 `close < trailing_stop` | 초기손절 `entry - 2*ATR20`; 추적손절 `max(prev, close - 3*ATR20)` | `risk_budget / (entry-stop)` | 장점: 단순·확장성 높음. 단점: 횡보장 whipsaw 많음. | citeturn0search1turn14search0 |
+| 모멘텀 투자 | `rank(ret_252_21) >= 0.9 and vol_63 not top_decile` | 리밸런싱 탈락 또는 RS 급락 | 보통 종가 리밸런싱; 급락 시 ATR stop 병행 | 동일가중보다 변동성 조정 가중 권장 | 장점: 학술 근거 강함. 단점: 모멘텀 크래시 대응 필요. | citeturn0search0turn5search3 |
+| 상대강도 전략 | `rs_percentile >= 80 and industry_rs >= 70 and close > sma_50` | `rs_percentile < 60` 또는 `industry_rs` 악화 | 손절은 1.5~2ATR, 익절은 RS 둔화+기술적 이탈 | 상위 RS 종목 분산, 섹터 편중 제한 | 장점: 주도주 선별력 우수. 단점: 강세장 후반 과열 추종 위험. | citeturn15search0turn16search23 |
+| 신고가 돌파 전략 | `close > rolling_max_252_prev and volume > 1.5*vol_ma50` | 돌파 실패 후 재진입 전 pivot 이탈 | 하드스톱은 pivot 하단 또는 2ATR; 2R~3R에서 부분청산 가능 | 돌파점과 손절폭 기준 고정위험금액 | 장점: 명확함. 단점: 가짜 돌파 필터링이 핵심. | citeturn3search17turn3search10 |
+| 변동성 축소 후 돌파 | `atr20/close < pct30_of_1y and std20 < std60 and breakout` | 돌파 후 3~5일 내 추종 실패, 또는 저점 이탈 | 손절은 pivot low; 추세 지속 시 ATR trailing | 손절폭이 좁아 레버리지 유혹 큼, 위험 상한 엄수 | 장점: 손익비 우수. 단점: 패턴 오판 가능. | citeturn2search22turn5search13 |
+| 거래량 기반 수급 분석 | 단독 진입보다 `price_setup and volume_ratio >= 1.5`를 확인 필터로 사용 | OBV/CMF 약화, 거래대금 급감 | 가격 손절을 우선하고 거래량은 보조판단 | 달러거래대금 기준 최소 유동성 필터 필요 | 장점: 신호 신뢰도 개선. 단점: 단독매매 기준으론 노이즈 큼. | citeturn5search13turn5search26 |
+| 이동평균선 기반 추세 분석 | `close > sma_50 > sma_150 > sma_200 and slope(sma_200)>0` | `close < sma_50` 또는 데드크로스 | 보수적이면 50MA/21EMA, 공격적이면 10DMA 사용 | 변동성 높을수록 비중 축소 | 장점: 구현 쉬움. 단점: 지연 신호. | citeturn14search0turn16news41 |
+| 박스권 돌파 | `close > rolling_max_20_prev and box_width/close < threshold` | 재박스 진입, 저점 재이탈 | stop=`box_low - 0.5*ATR`; 익절은 2.5R 또는 trailing | 손절폭이 짧아 포지션 계산 용이 | 장점: 기계화 쉬움. 단점: 박스 정의에 민감. | citeturn18search2turn3search10 |
+| 눌림목 매매 | `uptrend and low <= ema20*(1+tol) and volume < vol_ma20 and close_reclaims_short_ma` | 20EMA/50SMA 종가 이탈 | stop=`swing_low` 또는 `1.5*ATR`; 익절은 전고 돌파 실패/채널 상단 | 첫 눌림목만 적극, N번째 눌림목 비중 축소 | 장점: 손익비 좋음. 단점: 하락추세 전환과 구분 어려움. | citeturn4search0turn16news41 |
+| 스윙 트레이딩 | 돌파·눌림목·갭업리테스트 중 하나를 setup으로 정의 | hold days 초과, 10DMA 이탈, 이벤트 리스크 접근 | 1~3R 목표 + 이동평균 기반 추적손절 | 포트폴리오 노출시간과 이벤트 캘린더 반영 | 장점: 자본 회전 빠름. 단점: 거래비용·심리 부담 큼. | citeturn16search21turn16news41 |
+| CAN SLIM | `q_eps_growth >= 25% and sales_growth >= 20% and rs >= 80 and breakout and market_uptrend` | 7~8% 손실 규칙, 20~25% 기본 이익실현 | 손절 7~8%; 빠른 20%+ 상승 시 8주 보유 규칙 적용 가능 | 기본은 손절폭 역산; 실적 발표 전후 비중 조절 | 장점: 실적+차트 통합. 단점: 데이터 품질·발표시점 중요. | citeturn16search2turn16search4turn16search14turn16search23 |
+| VCP | `contraction_count >= 2 and pullback_pct decreasing and pivot_breakout and volume_surge` | 박스 복귀, pivot 실패 | 초기손절은 최종 수축 저점 바로 아래 | 손절폭이 매우 짧아 과도한 레버리지 금지 | 장점: 리더주에 강함. 단점: 규칙 표준화가 어려움. | citeturn2search22turn16search23 |
+| Darvas Box | `close > box_high and volume > vol_ma50` | `close < box_low` | stop=`box_low`; 익절은 박스 갱신 기반 | 박스 높이에 비례해 비중 조절 | 장점: 시각적·기계적. 단점: 박스 재정의 노이즈. | citeturn3search10 |
+| Stage Analysis | `weekly_close > sma_30w and sma_30w rising and breakout from stage1 and RS positive` | 30W MA 하향 전환, breakout 실패 | stop=`30W MA` 또는 `stage1 low`; 익절은 stage3 징후/채널 이탈 | 주봉 기준이라 회전율 낮음, 집중 가능 | 장점: 상위 추세 필터 강함. 단점: 신호 지연. | citeturn4search0turn4search20 |
+| Turtle Trading | `close > HH20` 또는 `close > HH55`; 숏은 반대 | system1은 `LL10`, system2는 `LL20`; 숏은 반대 | ATR-based unit sizing, 0.5N마다 피라미딩 | `unit = equity * risk_pct / N` | 장점: 완전 규칙화. 단점: 잦은 손절과 긴 인내 필요. | citeturn18search2turn18search11 |
+| 퀀트 멀티팩터 | `score = 0.3*momentum + 0.25*quality + 0.2*value + 0.15*earnings + 0.1*trend` 상위 랭크 | 리밸런싱 주기 도래, score 하락, 리스크 한도 초과 | 개별 종목 손절보다 포트폴리오 위험관리 비중 큼 | 변동성 목표, 종목/섹터/스타일 cap 설정 | 장점: 단일 전략보다 안정적. 단점: 구현 복잡도 높음. | citeturn17search13turn17search0turn15search5 |
+| 가치·성장·퀄리티·이익모멘텀 | 슬리브별 z-score 후 합산 또는 조건부 가중치 | 슬리브별 alpha 소멸, 레짐 불일치 | value trap 방지 위해 momentum/quality 동시 사용 | 슬리브간 리스크 parity 또는 equal risk | 장점: 설명력 높음. 단점: 데이터 관리 비용 큼. | citeturn15search2turn15search5turn19search11 |
+
+프로그램 관점에서 권장하는 최종 설계는 아래의 **상위권 트레이더형 종목 선별 시스템**이다. 한 번의 조건검색으로 끝내지 말고, 각 단계에서 후보 수를 줄이는 **다층 필터**가 좋다. 이 방식은 CAN SLIM, VCP, Weinstein, Turtle, 모멘텀, 다중 팩터를 하나의 엔진으로 통합하기 가장 쉽다. citeturn16search1turn2search22turn4search0turn18search11turn17search13
+
+| 계층 | 필터 목표 | 권장 기본 규칙 | 구현 메모 |
+|---|---|---|---|
+| 시장 전체 추세 | 역풍 차단 | `index_close > sma_200` and `sma_50 > sma_200`; 보조로 시장 breadth 사용 | 약세면 현금비중 확대 또는 롱 금지 |
+| 업종/섹터 강도 | 리더십 확인 | 섹터 ETF/업종지수의 3M·6M RS 상위 30% | 미국은 ETF, 한국은 업종지수/테마 대체 가능 |
+| 종목 추세 | 종목 구조 확인 | `close > sma_50 > sma_150 > sma_200`; 52주 고점 대비 -15% 이내 | Weinstein/Minervini 공통분모 |
+| 상대강도 | 주도주 선별 | 6M, 12-1M 초과수익 기반 RS percentile ≥ 80 | 업종 내 RS와 시장 대비 RS를 분리 저장 |
+| 거래량 증가 | 수급 확인 | `volume > 1.5 * vol_ma50` and `turnover_value > threshold` | 소형주 허수 신호 방지에 거래대금 필수 |
+| 변동성 축소 또는 돌파 패턴 | 진입 타이밍 | VCP/박스/신고가/Donchian breakout 중 1개 이상 충족 | 패턴 라벨을 bool feature로 저장 |
+| 펀더멘털 또는 실적 개선 | 지속성 강화 | EPS 성장, 매출 성장, revision score, ROE/GPA 중 2개 이상 양호 | 한국은 컨센서스 부족 종목에 대체지표 허용 |
+| 손익비와 리스크 조건 | 실행 가능성 검증 | `expected_reward / initial_risk >= 2.5`; `risk_per_trade <= 1%` | 같은 신호라도 R/R 안 맞으면 탈락 |
+
+실전 기본 점수식은 아래처럼 두는 것이 무난하다.
+`total_score = 0.20*market_ok + 0.10*sector_rs + 0.20*trend_score + 0.15*relative_strength + 0.10*volume_score + 0.10*pattern_score + 0.10*fundamental_score + 0.05*rr_score`
+여기서 `market_ok`는 이진값보다 0/0.5/1의 세 단계 점수가 운영상 더 유용하다. 급락장에서는 동일 전략이어도 **signal quality보다 exposure control**이 더 중요하기 때문이다. citeturn14search0turn15search0turn19search0turn17search13
+
+## 백테스트 설계
+
+백테스트는 “전략 평가”가 아니라 **가정 검증 시스템**으로 봐야 한다. 특히 성장주 돌파·실적 모멘텀 계열은 **재무공시 시점**과 **신호 발생 후 체결 시점**을 잘못 맞추면 성과가 크게 부풀려진다. 따라서 백테스트 엔진은 최소한 OHLCV, corporate actions, delisted universe, point-in-time fundamentals, earnings announcement timestamps, benchmark/sector series를 함께 다뤄야 한다. citeturn19search18turn19search0turn6search7
+
+권장 체결 가정은 보수적으로 두는 것이 안전하다. 일봉 엔진이라면 종가 기준 신호는 **다음 거래일 시가 또는 VWAP 근사치**로 체결하고, 거래대금 상위 종목이 아니면 1회 주문량을 최근 20일 평균 거래대금의 일정 비율 이하로 제한하는 편이 좋다. 미 체결, 부분 체결, 시가 갭, 거래정지, 장외시간 체결 불일치를 모형에 넣지 않으면 특히 한국의 가격제한폭 환경과 미국의 프리/애프터마켓 저유동성 환경을 과소평가하게 된다. Nasdaq도 연장시간 거래는 정규장보다 유동성이 낮고 변동성이 높다고 명시한다. citeturn22view3turn23view4turn22view1
+
+과최적화와 데이터 스누핑 방지를 위해서는 단순 train/test 분할보다 **워크포워드**가 낫다. 예를 들어 5년 학습·1년 검증 창을 굴리면서, 파라미터는 고정된 탐색 그리드 안에서만 선택하고, 최종 후보군에는 White의 Reality Check 또는 유사한 multiple-testing 통제를 적용하는 것이 바람직하다. 추가로 PBO와 Deflated Sharpe Ratio를 함께 보고, 샤프가 높게 나올수록 오히려 룩어헤드·과최적화 가능성을 점검하는 습관이 필요하다. citeturn6search1turn6search8turn6search19turn6search23
+
+| 백테스트 위험 | 실제로 어떻게 왜곡되는가 | 방지 규칙 |
+|---|---|---|
+| 과최적화 | 파라미터를 많이 만질수록 과거에는 좋아 보여도 실거래에서 붕괴한다. | 파라미터 수를 최소화하고, 탐색 범위를 사전 정의하며, PBO/DSR 보고 |
+| 데이터 스누핑 | 같은 데이터에서 규칙을 반복 생성·폐기하면 우연한 승자를 뽑는다. | White RC/SPA, 워크포워드, 보수적 OOS 검증 |
+| 생존자 편향 | 지금 살아남은 종목만 쓰면 과거 성과가 부풀려진다. | 상장폐지·합병·편출 종목 포함 |
+| 룩어헤드 바이어스 | 당시에 몰랐던 재무/지수편입/종가 정보를 미리 쓰게 된다. | 포인트인타임 데이터와 release timestamp 강제 |
+| 체결 환상 | 종가 신호를 같은 종가에 체결하면 현실보다 좋게 나온다. | 다음 바 시가 체결 기본, 슬리피지·부분체결 모델 적용 |
+| 유동성 착시 | 소형주에 큰 금액이 들어가도 같은 가격에 다 체결된다고 가정한다. | ADV 참여율 제한, 스프레드·impact 반영 |
+| 이벤트 누수 | 실적 발표 후 정보가 가격에 반영되기 전으로 가정하면 알파가 과장된다. | announcement date/time 분리, 장전/장후 발표 처리 |
+
+위 위험은 모두 널리 지적된 문제이며, 특히 Bailey 계열 연구는 **좋아 보이는 백테스트가 오히려 미래 성과의 역신호가 될 수 있다**는 점을 강조한다. 투자 연구 파이프라인 자체를 “실험 설계”처럼 관리해야 한다는 뜻이다. citeturn6search0turn6search4turn6search11turn6search23
+
+권장 성과 지표는 다음과 같다. 단일 누적수익률만 보면 안 되고, **손실의 크기와 회복 가능성**을 함께 봐야 한다.
+
+| 지표 | 목적 | 권장 해석 |
+|---|---|---|
+| CAGR | 장기 복리 성과 | 전략 절대수익 확인 |
+| Annualized Volatility | 변동성 | 동일 수익 대비 변동성 낮을수록 우수 |
+| Max Drawdown | 최대 손실폭 | 실전 지속가능성의 핵심 |
+| Calmar Ratio | CAGR / MDD | 추세전략 비교에 유용 |
+| Sharpe Ratio | 총위험 대비 초과수익 | selection bias 보정 전제 필요 |
+| Sortino Ratio | 하방위험 대비 수익 | 비대칭 수익전략에 유용 |
+| Profit Factor | 총이익/총손실 | 승률보다 실전 체감이 좋음 |
+| Expectancy per Trade | 거래당 기대값 | 거래비용 반영 필수 |
+| Win Rate / Avg Win / Avg Loss | 손익구조 파악 | 30% 승률이어도 기대값 양수 가능 |
+| Exposure / Turnover | 자본 사용효율 | 과매매 여부 파악 |
+| Regime-by-Regime Return | 장세 적합도 | 강세·약세·횡보 분해 필수 |
+
+## 자동 리포트 설계
+
+자동 리포트의 목적은 “추천종목 나열”이 아니라, **왜 그 종목이 통과했는지와 어떤 리스크를 감수하는지**를 매일 같은 형식으로 설명하는 것이다. 상위권 트레이더형 시스템은 특히 **매수보다 매수 제외 사유**가 중요하다. 즉, 전일 후보였지만 오늘 탈락한 종목, 실적 발표가 가까워 보류한 종목, 거래량이 부족해 제외된 종목을 함께 보여줘야 운영자가 룰을 신뢰할 수 있다. citeturn16search2turn19search0turn5search13
+
+권장 리포트는 **일간 리포트**와 **주간 리포트**로 나눈다. 일간 리포트는 실행 보조, 주간 리포트는 전략 점검용으로 쓰는 것이 좋다.
+
+일간 리포트 권장 구조는 다음과 같다.
+
+```markdown
+# Daily Market Report
+
+## Market Regime
+- benchmark: KOSPI / S&P500
+- regime: bull / neutral / bear
+- close_vs_200dma:
+- 50dma_vs_200dma:
+- breadth:
+- allowed_gross_exposure:
+
+## Sector Rotation
+| sector | rs_rank | trend_ok | note |
+
+## Triggered Candidates
+| symbol | market | strategy_tag | total_score | entry_zone | stop_price | risk_per_share | rr_est | volume_ratio | earnings_date |
+
+## Rejected But Close
+| symbol | reject_reason | missing_condition | recheck_date |
+
+## Portfolio Risk
+- open_positions:
+- gross_exposure:
+- avg_initial_risk:
+- worst_gap_risk:
+- upcoming_event_risk:
+
+## Orders For Review
+| symbol | side | qty | entry_type | limit_price | stop_price | comment |
+
+## Audit Trail
+- data_timestamp:
+- model_version:
+- backtest_version:
+- report_generated_at:
+```
+
+주간 리포트는 전략 자체를 점검하는 방향이 더 적합하다.
+
+```markdown
+# Weekly Strategy Review
+
+## Performance Summary
+- weekly_return:
+- mtm_return:
+- ytd_return:
+- benchmark_return:
+- alpha_estimate:
+
+## Risk Summary
+- max_drawdown:
+- current_drawdown:
+- turnover:
+- avg_holding_days:
+
+## Hit Rate By Setup
+| setup | trades | win_rate | avg_win | avg_loss | expectancy |
+
+## Regime Diagnostics
+| regime | trades | pnl | avg_hold | comment |
+
+## Factor/Filter Attribution
+| filter | pass_rate | contribution | comment |
+
+## Failed Trades Review
+| symbol | setup | entry_date | exit_date | fail_reason | fix_candidate |
+
+## Parameter Drift Check
+| parameter | current | tested_range | stability_note |
+```
+
+자동 리포트 생성 모듈은 화면 예쁘게 꾸미는 것보다 **재현성**이 더 중요하다. 따라서 원본 데이터 timestamp, 전략 버전, 파라미터 버전, 시그널 생성 시각, 주문 시각을 모두 남겨야 한다. 주문 오류나 과거 리포트 재생성이 불가능하면, 자동매매 연동 이후 원인 분석이 어려워진다. 한국과 미국 모두 브로커·거래소·데이터 소스가 다르므로, 리포트에 **venue와 data source**를 함께 기록하는 습관이 좋다. citeturn22view7turn22view8turn23view1turn22view9turn22view10
+
+## 한국장 미국장 적용 차이
+
+같은 전략이라도 한국장과 미국장은 “좋은 신호”의 의미가 다를 수 있다. 아래 비교표에서 개발 시 반드시 분리해야 할 항목만 추렸다.
+
+| 항목 | 한국 주식시장 | 미국 주식시장 | 개발 시 영향 | 대표 근거 |
+|---|---|---|---|---|
+| 거래시간 | KRX 정규장 09:00~15:30, 시간외 07:30~09:00 / 15:40~18:00. NXT는 프리 08:00~08:50, 메인 09:00:30~15:20, 애프터 15:40~20:00로 12시간 체계가 존재한다. | NYSE/Nasdaq 정규장 09:30~16:00 ET, 프리·애프터마켓은 대체로 04:00~20:00 ET 접근 가능하다. | 한국은 KRX/NXT/시간외를 venue별로 분리 저장해야 하고, 미국은 연장시간 세션의 체결 품질을 별도 취급해야 한다. | citeturn23view3turn22view0turn22view1turn22view2turn22view3 |
+| 가격제한폭 | KRX 현금주식의 일일 가격제한폭은 ±30%다. | 한국식 고정 상하한가 대신 LULD와 규제 정지가 핵심 안전장치다. | 한국은 갭 후 가격제한폭 고착 시 exit 불능 리스크를 모형에 넣어야 한다. 미국은 LULD/halts 이벤트 핸들링이 중요하다. | citeturn23view4turn26view0turn26view1 |
+| 공매도 환경 | FSC는 2025-03-31부터 주식 공매도를 전면 재개했다. | SEC Regulation SHO가 locate, close-out, Rule 201 price test를 요구한다. | 한국은 제도변경 이력과 종목/세션별 제약을 관리해야 하고, 미국은 borrow/locate 비용과 Rule 201 상태가 중요하다. | citeturn22view4turn22view6 |
+| 유동성 | 대형주와 주도 섹터는 충분하지만, 중소형은 가격제한폭·갭 영향이 크다. 또한 NXT와 KRX 분산을 함께 봐야 한다. | 미국은 SIP/CTA 기반 통합 시세 구조와 다수 venue, ETF 생태계로 대형주·ETF 유동성이 일반적으로 더 깊다. | 한국은 거래대금 하한 필터가 더 중요하고, 미국은 장외시간 유동성 저하를 별도 처리해야 한다. | citeturn22view1turn26view0turn22view3 |
+| 데이터 접근성 | KRX Open API는 통계형 데이터 접근을 제공하지만, 공공데이터포털의 KRX 상장종목 API는 비실시간이며 영업일 지연이 있다. 브로커 API는 KIS·키움 중심이다. | 미국은 CTA/SIP 구조와 더불어 Alpaca, IBKR 등 브로커 API 선택지가 많고, 실시간·과거 데이터 접근도 상대적으로 다양하다. | 한국은 공공데이터와 브로커 데이터를 역할 분리해야 하고, 미국은 데이터 비용/품질/라이선스 선택이 중요하다. | citeturn22view7turn26view3turn22view8turn23view1turn23view2turn26view0turn22view9turn22view10turn26view2 |
+| 세금과 수수료 | 국내 상장주식 장내거래는 대다수 소액주주에게 양도소득세가 없지만 증권거래세가 있다. 해외주식은 양도소득세 신고 대상이다. | 보유기간에 따라 단기/장기 자본이득세 체계가 다르다. | 백테스트 세후수익률 모듈을 국가별로 분리해야 한다. 수수료는 브로커별 상이하므로 설정값으로 외부화해야 한다. | citeturn24view0turn24view1turn23view5turn23view6 |
+| API 사용 가능성 | 한국투자 Open API, 키움 Open API+/REST API가 대표적이며 테스트 환경 제공 여부와 인증·IP 제약을 확인해야 한다. | Alpaca, IBKR 등은 문서와 SDK가 풍부하고 자동화 개발 친화적이다. | 한국은 브로커 종속 어댑터가 사실상 필수이고, 미국은 브로커 추상화 계층을 더 쉽게 설계할 수 있다. | citeturn22view8turn23view0turn23view1turn23view2turn22view9turn22view10turn26view2 |
+| 단기매매와 스윙매매 차이 | 가격제한폭과 종목별 유동성 차이 때문에 단기매매는 체결 리스크가 크고, 스윙은 갭 리스크 관리가 핵심이다. | 연장시간 접근성은 좋지만 정규장 외 유동성 저하가 크고, 2026년에는 기존 PDT 규칙 대신 intraday margin 룰이 적용된다. | 한국은 stop이 있어도 실제 체결이 안 될 수 있다는 점을 반영해야 하고, 미국은 계좌 유형·마진 규칙·세금 체계까지 함께 봐야 한다. | citeturn23view4turn22view3turn22view5 |
+
+실무적으로는 한국장에서 **중소형 돌파 전략의 거래대금 필터**를 더 엄격하게 두는 편이 좋고, 미국장에서는 **정규장 신호와 연장시간 체결을 분리**하는 편이 낫다. 같은 52주 신고가라도 한국은 가격제한폭과 당일 들썩임이 구조적으로 다르고, 미국은 정규장 전후 유동성 차이가 커서 signal-to-execution 변형이 더 자주 발생한다. citeturn23view4turn22view1turn22view3
+
+## MVP 개발 로드맵
+
+MVP는 한 번에 자동주문까지 가기보다, **분석 신뢰성 → 백테스트 신뢰성 → 실행 보조 → 주문 연동** 순서로 가야 한다. 이 순서가 바뀌면, 나중에 문제가 생겼을 때 원인을 데이터·전략·체결 중 어디서 찾아야 하는지 구분이 되지 않는다. 특히 한국 공공데이터의 비실시간 특성과 브로커 API 차이, 미국의 venue/market data 구조 차이를 고려하면 더욱 그렇다. citeturn26view3turn22view8turn23view1turn26view0
+
+| 단계 | 목표 | 구현 범위 | 완료 기준 |
+|---|---|---|---|
+| 데이터 기반 MVP | 신뢰 가능한 원천 데이터 확보 | OHLCV, corporate actions, benchmark, sector mapping, fundamentals, earnings calendar 적재 | 동일 종목 재조회 시 동일 값 재현, 조정주가 일관성 확보 |
+| 리서치 MVP | 규칙형 전략 검증 | 추세·모멘텀·신고가·VCP·CAN SLIM 라이트·멀티팩터 백테스트 | 전략별 OOS 결과와 리포트 생성 가능 |
+| 스크리닝 MVP | 실전 후보 추출 | 시장/업종/종목/RS/거래량/패턴/펀더멘털/리스크 8단계 필터 | 매일 후보 리스트와 진입·손절·R/R 계산 자동화 |
+| 운영 MVP | 사용자 워크플로우 고정 | 대시보드, Telegram/Slack/이메일 알림, 감사로그 | 사람이 최종 검토 가능한 주문 제안서 생성 |
+| 실행 MVP | 부분 자동화 | 브로커 주문 어댑터, idempotency key, kill switch, paper/live 분리 | 모의투자에서 일주일 이상 무중단 테스트 |
+| 확장 MVP | 전략 포트폴리오화 | 레짐별 가중치, 팩터 앙상블, 성과 attribution | 월간 리밸런싱과 일간 시그널 공존 운영 |
+
+실무적으로 가장 먼저 만들 것을 한 줄로 정리하면 **“시장 국면 + 후보 스크리너 + 자동 리포트”**다. 이 세 가지가 되면 실제 매매를 하지 않더라도, 규칙의 품질과 운영 난이도를 빨리 확인할 수 있다. 반대로 주문 API부터 붙이면, 전략이 나쁜지 실행이 나쁜지 구분이 안 된다. citeturn6search0turn6search1turn22view8turn23view1
+
+## Codex에게 전달할 개발 명세서 및 참고문헌
+
+아래 명세는 **일봉/주봉 기반 종목 선별 + 리스크 계산 + 백테스트 + 자동 리포트**를 우선하는 구조다. 주문 연동은 별도 어댑터로 붙인다.
+
+**전체 시스템 아키텍처**
+
+```text
+[Market Data Collectors]
+  ├─ KRX/NXT/US OHLCV
+  ├─ Fundamentals / Earnings Calendar
+  ├─ Corporate Actions
+  ├─ Sector / Benchmark Data
+  └─ Broker Account Data
+          ↓
+[Raw Storage]
+  ├─ raw_ohlcv
+  ├─ raw_fundamentals
+  ├─ raw_events
+  └─ raw_orders
+          ↓
+[ETL & Point-in-Time Normalizer]
+  ├─ adjust_splits_dividends
+  ├─ align_release_timestamps
+  ├─ build_symbol_master
+  └─ build_feature_store
+          ↓
+[Feature Engine]
+  ├─ trend_features
+  ├─ momentum_features
+  ├─ volume_features
+  ├─ pattern_features
+  ├─ fundamental_features
+  └─ regime_features
+          ↓
+[Strategy Layer]
+  ├─ screener
+  ├─ scorer
+  ├─ risk_manager
+  └─ portfolio_constructor
+          ↓
+[Backtest Engine] ← [Config Registry]
+          ↓
+[Report Engine]
+  ├─ daily_report
+  ├─ weekly_review
+  └─ audit_log
+          ↓
+[Alert Layer / Execution Adapter]
+  ├─ telegram_slack_email
+  ├─ paper_trading
+  └─ live_broker_adapter
+```
+
+**필요한 Python 라이브러리 후보**
+
+| 목적 | 라이브러리 후보 | 비고 |
+|---|---|---|
+| 데이터 처리 | `pandas`, `numpy`, `pyarrow`, `polars` | MVP는 pandas 중심, 대용량이면 polars/pyarrow 병행 |
+| 수치/통계 | `scipy`, `statsmodels`, `scikit-learn` | 회귀, 표준화, 안정성 점검 |
+| 기술지표 | `TA-Lib` 또는 `pandas-ta` | ATR, ADX, MA, Donchian 계산 |
+| 백테스트 | `vectorbt` 또는 `backtrader` | 전자는 빠른 연구용, 후자는 이벤트 기반 실행 시뮬레이션에 유리 |
+| 시각화/리포트 | `matplotlib`, `plotly`, `jinja2`, `weasyprint` | HTML/PDF 리포트 자동화 |
+| API/서비스 | `requests`, `httpx`, `websockets`, `fastapi`, `pydantic` | 브로커/데이터 연동 |
+| 스케줄링/운영 | `APScheduler`, `tenacity`, `loguru`, `pytest` | 재시도, 로깅, 테스트 |
+| DB | `SQLAlchemy`, `psycopg`, `duckdb` | 연구용 DuckDB + 운영용 PostgreSQL 조합 권장 |
+
+**데이터베이스 구조**
+
+| 테이블 | 핵심 컬럼 | 설명 |
+|---|---|---|
+| `symbol_master` | `symbol`, `market`, `exchange`, `sector`, `industry`, `is_active`, `list_date`, `delist_date` | 종목 마스터 |
+| `daily_ohlcv` | `trade_date`, `symbol`, `open`, `high`, `low`, `close`, `adj_close`, `volume`, `turnover_value`, `venue` | 일봉 시세 |
+| `weekly_ohlcv` | `week_end`, `symbol`, `open`, `high`, `low`, `close`, `volume` | 주봉 캐시 |
+| `corporate_actions` | `ex_date`, `symbol`, `action_type`, `ratio`, `cash_amount` | 분할·배당·권리락 |
+| `fundamentals_pti` | `asof_date`, `effective_date`, `symbol`, `revenue`, `eps`, `op_margin`, `roe`, `gross_profitability` | 포인트인타임 재무 |
+| `earnings_events` | `event_id`, `symbol`, `announce_ts`, `session_flag`, `eps_actual`, `eps_est`, `surprise_pct` | 실적 발표 이벤트 |
+| `indicator_snapshot` | `trade_date`, `symbol`, `trend_score`, `rs_score`, `volume_score`, `pattern_score`, `fund_score` | 계산 결과 캐시 |
+| `screen_results` | `trade_date`, `symbol`, `strategy_tag`, `pass_flags`, `total_score` | 조건검색 결과 |
+| `orders` | `order_id`, `created_ts`, `symbol`, `side`, `qty`, `price`, `status`, `idempotency_key` | 주문 기록 |
+| `fills` | `fill_id`, `order_id`, `fill_ts`, `qty`, `fill_price`, `fee` | 체결 기록 |
+| `positions` | `symbol`, `entry_ts`, `avg_price`, `qty`, `stop_price`, `strategy_tag` | 포지션 상태 |
+| `backtest_runs` | `run_id`, `strategy_name`, `config_hash`, `start_date`, `end_date`, `metrics_json` | 실험 관리 |
+| `reports` | `report_id`, `report_date`, `report_type`, `version`, `path` | 리포트 메타데이터 |
+
+**주요 함수 설계**
+
+```python
+from dataclasses import dataclass
+from typing import Literal, Optional
+import pandas as pd
+
+@dataclass
+class Signal:
+    symbol: str
+    trade_date: pd.Timestamp
+    strategy_tag: str
+    score: float
+    entry_price: float
+    stop_price: float
+    target_price: Optional[float]
+    risk_per_share: float
+
+def fetch_ohlcv(symbol: str, market: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """원천 시세를 조회한다."""
+
+def fetch_fundamentals_pti(symbol: str, asof_date: str) -> pd.DataFrame:
+    """포인트인타임 재무 데이터를 조회한다."""
+
+def adjust_corporate_actions(df: pd.DataFrame, actions: pd.DataFrame) -> pd.DataFrame:
+    """분할/배당 반영 시세를 생성한다."""
+
+def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """MA, ATR, ADX, RS, 신고가, 거래량 지표를 계산한다."""
+
+def detect_market_regime(index_df: pd.DataFrame, breadth_df: pd.DataFrame) -> str:
+    """시장 국면을 bull/neutral/bear로 분류한다."""
+
+def score_sector_strength(sector_df: pd.DataFrame, benchmark_df: pd.DataFrame) -> pd.DataFrame:
+    """업종 상대강도를 계산한다."""
+
+def detect_vcp_pattern(df: pd.DataFrame) -> bool:
+    """VCP 유사 패턴 여부를 판정한다."""
+
+def detect_darvas_box(df: pd.DataFrame) -> tuple[bool, float, float]:
+    """Darvas box 돌파와 박스 범위를 계산한다."""
+
+def build_signal_rows(feature_df: pd.DataFrame, fundamentals_df: pd.DataFrame) -> pd.DataFrame:
+    """전략별 진입 가능 신호를 생성한다."""
+
+def calculate_position_size(
+    equity: float,
+    entry_price: float,
+    stop_price: float,
+    risk_fraction: float
+) -> int:
+    """거래 1회당 허용 손실액으로 수량을 계산한다."""
+    risk_amount = equity * risk_fraction
+    risk_per_share = max(entry_price - stop_price, 1e-9)
+    qty = int(risk_amount // risk_per_share)
+    return max(qty, 0)
+
+def run_backtest(
+    signals_df: pd.DataFrame,
+    price_df: pd.DataFrame,
+    execution_mode: Literal["next_open", "same_close_forbidden"] = "next_open"
+) -> dict:
+    """신호와 시세를 받아 백테스트를 수행한다."""
+
+def generate_daily_report(report_date: str, signals_df: pd.DataFrame, portfolio_df: pd.DataFrame) -> str:
+    """HTML/Markdown 일간 리포트를 생성한다."""
+```
+
+**전략 의사코드**
+
+```python
+# 추세추종
+if close > sma_200 and sma_50 > sma_200 and breakout_63d:
+    buy()
+if close < sma_50 or close < trailing_stop:
+    sell()
+
+# 모멘텀 투자
+if momentum_12_1_rank >= 0.9 and sector_rs_rank >= 0.7:
+    buy()
+if rebalance_day and momentum_12_1_rank < 0.6:
+    sell()
+
+# 상대강도 전략
+if rs_percentile >= 80 and close > sma_50:
+    buy()
+if rs_percentile < 60:
+    sell()
+
+# 신고가 돌파
+if close > high_252_prev and volume_ratio_50 >= 1.5:
+    buy(stop=pivot_low)
+if close < pivot_low:
+    sell()
+
+# 변동성 축소 후 돌파 / VCP
+if contraction_count >= 2 and pullback_sequence_is_shrinking and breakout_pivot and volume_ratio_50 >= 1.5:
+    buy()
+if close < last_contraction_low:
+    sell()
+
+# 거래량 기반 수급 필터
+if price_setup and turnover_value >= min_turnover and volume_ratio_50 >= 1.5:
+    allow_trade = True
+
+# 이동평균선 기반 추세 분석
+if close > sma_50 > sma_150 > sma_200 and sma_200_slope > 0:
+    trend_ok = True
+
+# 박스권 돌파
+if close > box_high and box_width_ratio <= max_box_width:
+    buy(stop=box_low)
+
+# 눌림목 매매
+if trend_ok and low <= ema_20 * 1.01 and volume < vol_ma_20 and close > ema_20:
+    buy(stop=swing_low)
+
+# 스윙 트레이딩
+if setup_tag in {"breakout", "pullback", "gap_retest"} and market_regime != "bear":
+    buy()
+if hold_days > max_hold_days or close < ema_10:
+    sell()
+
+# CAN SLIM 라이트
+if q_eps_growth >= 0.25 and sales_growth >= 0.20 and rs_percentile >= 80 and breakout and market_regime == "bull":
+    buy(stop=entry_price * 0.93)
+if close <= entry_price * 0.92:
+    sell()
+elif close >= entry_price * 1.20:
+    partial_take_profit()
+
+# Darvas Box
+if darvas_breakout and volume_ratio_50 >= 1.5:
+    buy(stop=darvas_low)
+if close < darvas_low:
+    sell()
+
+# Weinstein Stage Analysis
+if weekly_close > ma_30w and ma_30w_slope > 0 and stage2_breakout and rs_vs_index > 0:
+    buy()
+if weekly_close < ma_30w:
+    sell()
+
+# Turtle Trading
+if close > HH20 or close > HH55:
+    buy()
+if close < LL10 or close < LL20:
+    sell()
+if profit_units_reached:
+    pyramid_by_half_N()
+
+# 퀀트 멀티팩터
+total_score = (
+    0.30 * z_momentum +
+    0.25 * z_quality +
+    0.20 * z_value +
+    0.15 * z_earnings_revision +
+    0.10 * z_trend
+)
+if total_score_rank >= 0.9:
+    buy_top_bucket()
+
+# 가치/성장/퀄리티/이익 모멘텀
+factor_score = z_value + z_growth + z_quality + z_earnings_momentum
+if factor_score_rank >= 0.85 and trend_ok:
+    buy()
+```
+
+**백테스트 평가 지표**
+
+```python
+evaluation_metrics = [
+    "cagr",
+    "annualized_volatility",
+    "max_drawdown",
+    "sharpe_ratio",
+    "sortino_ratio",
+    "calmar_ratio",
+    "profit_factor",
+    "expectancy_per_trade",
+    "turnover",
+    "average_holding_days",
+    "exposure",
+    "regime_segment_return",
+    "pbo",
+    "deflated_sharpe_ratio",
+]
+```
+
+**자동매매 연동 시 주의할 리스크**
+
+실주문 연동은 전략 리스크와 별개로 **운영 리스크**가 추가된다. 한국 브로커 API는 인증, 테스트 환경, 사용 등록, IP 제한 같은 운영 전제가 있고, 미국 브로커 API도 계정 유형, 마진 규칙, 주문 가능 시간, 데이터 권한이 다르다. 따라서 주문 모듈은 반드시 `paper/live`를 분리하고, `idempotency_key`, `kill_switch`, `max_position_notional`, `max_daily_loss`, `clock_sync_check`, `heartbeat_monitor`, `broker_reconnect`, `duplicate_order_guard`를 기본 내장해야 한다. 키움 REST API는 허용된 IP에서만 요청을 허용한다고 안내하고, 키움 Open API+는 모의투자 테스트를 권고한다. KIS 또한 테스트베드와 문서/샘플 코드를 제공한다. 미국 브로커 쪽은 Alpaca와 IBKR가 자동화 문서와 시장데이터 접근을 제공하지만, 연장시간·옵션·마진·라이브 계좌 권한 차이를 별도로 두어야 한다. citeturn23view2turn23view1turn22view8turn23view0turn22view9turn22view10turn26view2
+
+**참고문헌 및 출처 링크**
+
+학술 근거의 중심축은 다음 자료들이다. 모멘텀은 Jegadeesh and Titman의 가격 모멘텀 연구와 AQR의 정리 자료, 시계열 추세는 Moskowitz, Ooi, Pedersen 및 AQR의 장기 추세추종 자료, 52주 신고가 효과는 George and Hwang 계열 연구, 업종 모멘텀은 Moskowitz and Grinblatt, 퀄리티는 Asness·Frazzini·Pedersen, 수익성·투자는 Fama and French의 5팩터, 이익 모멘텀과 PEAD는 Chan·Jegadeesh·Lakonishok, Bernard and Thomas, Fink 리뷰가 핵심이다. citeturn0search0turn5search3turn0search1turn0search2turn3search17turn15search0turn15search5turn15search2turn19search11turn19search18turn19search0
+
+공개 규칙형 전략 정의에는 IBD의 CAN SLIM/매도 규칙 자료, TrendSpider의 VCP 설명, TraderLion의 Stage Analysis 설명, Darvas Box 개요, Turtle Trading 규칙 요약 자료를 참고했다. 이들 자료는 “전략 이름”을 해석하는 데 유용하고, 실제 기대수익의 근거는 위 학술 자료와 함께 읽는 편이 안전하다. citeturn16search1turn16search2turn16search23turn2search22turn4search0turn3search10turn18search2turn18search11
+
+시장 구조와 제도 차이는 한국 금융위원회, KRX/NXT, SEC, FINRA, IRS, 공공데이터포털, 각 브로커 개발자 문서를 기준으로 정리했다. 한국은 KRX 정규장·시간외와 NXT 연장장 구조, 가격제한폭 ±30%, 2025년 공매도 재개, 공공데이터의 비실시간 특성이 핵심이며, 미국은 NYSE/Nasdaq 정규장·연장장, Regulation SHO, SIP/CTA, 2026년 intraday margin rule, 자본이득세 체계가 핵심이다. citeturn22view0turn22view1turn23view3turn23view4turn22view4turn22view2turn22view3turn22view5turn22view6turn26view0turn26view1turn23view5turn24view0turn24view1turn26view3turn22view8turn23view1turn23view2turn22view9turn22view10
+
+최종적으로 이 보고서가 제안하는 개발 방향은 명확하다. **전략을 “예언 기계”로 만들지 말고, 공개적으로 검증된 규칙을 조합하는 “선별·점수화·리스크 통제 시스템”으로 만들라.** 그 구조가 가장 재현 가능하고, 가장 디버깅 가능하며, Codex로 구현하기도 가장 쉽다. citeturn6search0turn6search1turn17search13turn22view8turn23view1
