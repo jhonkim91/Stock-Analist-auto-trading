@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.models.schemas import ImportConfirmRequest, SeedResponse
+from backend.app.models.schemas import ExternalPreviewDailyOhlcvRequest, ImportConfirmRequest, SeedResponse
 from backend.app.services.market_data_import_service import (
     ImportRunBadRequestError,
     ImportRunConflictError,
@@ -32,6 +32,61 @@ def data_sources(db: Session = Depends(get_db)) -> list[dict[str, object]]:
         return MarketDataImportService(db).list_sources()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/external/providers")
+def external_providers(db: Session = Depends(get_db)) -> list[dict[str, object]]:
+    try:
+        return MarketDataImportService(db).list_external_providers()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/external/preview-daily-ohlcv")
+def preview_external_daily_ohlcv(
+    payload: ExternalPreviewDailyOhlcvRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        return MarketDataImportService(db).preview_external_daily_ohlcv(
+            source_id=payload.source_id,
+            symbol=payload.symbol,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/external/confirm-import")
+def confirm_external_import(payload: ImportConfirmRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    try:
+        return MarketDataImportService(db).confirm_external_import(payload.run_id)
+    except ImportRunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ImportRunConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ImportRunBadRequestError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/external/fetch-runs")
+def external_fetch_runs(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+    return MarketDataImportService(db).list_import_runs(limit=limit, provider_types={"external", "external_market_data", "broker_data"})
+
+
+@router.get("/external/fetch-runs/{run_id}")
+def external_fetch_run_detail(run_id: str, db: Session = Depends(get_db)) -> dict[str, object]:
+    try:
+        run = MarketDataImportService(db).get_import_run(run_id)
+    except ImportRunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if run["provider_type"] not in {"external", "external_market_data", "broker_data"}:
+        raise HTTPException(status_code=404, detail="external fetch run을 찾을 수 없습니다.")
+    return run
 
 
 @router.get("/import-runs")

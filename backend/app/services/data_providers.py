@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from io import BytesIO
 from typing import Protocol
 
@@ -48,5 +49,214 @@ class ExternalDataProvider:
     provider_type = "external"
 
     def load_daily_ohlcv(self, content: bytes | None = None) -> ProviderBatch:
-        """Phase 3A에서는 외부 API 호출을 지원하지 않는다."""
-        raise RuntimeError("ExternalDataProvider는 Phase 3A에서 비활성화되어 있습니다.")
+        """Phase 3A 호환 placeholder. Phase 3B external flow는 BaseExternalDataProvider를 사용한다."""
+        raise RuntimeError("ExternalDataProvider는 비활성화된 placeholder입니다.")
+
+
+@dataclass(frozen=True)
+class ExternalDailyRequest:
+    source_id: str
+    provider_name: str
+    provider_symbol: str
+    internal_symbol: str
+    start_date: date
+    end_date: date
+    source: dict[str, object]
+
+
+@dataclass(frozen=True)
+class RawProviderResponse:
+    provider_name: str
+    provider_symbol: str
+    rows: list[dict[str, object]]
+    fetched_at: datetime
+
+
+@dataclass(frozen=True)
+class ProviderRateLimitState:
+    allowed: bool
+    reason: str = ""
+
+
+class ExternalProviderError(RuntimeError):
+    """외부 provider fetch/normalize 실패를 quality check로 변환하기 위한 기본 예외."""
+
+
+class ExternalProviderTimeoutError(ExternalProviderError):
+    """provider timeout을 명시적으로 표현한다."""
+
+
+class ExternalProviderPartialResponseError(ExternalProviderError):
+    """provider가 부분 응답만 반환했을 때 사용한다."""
+
+
+class ExternalProviderRateLimitError(ExternalProviderError):
+    """provider rate limit 초과를 표현한다."""
+
+
+class BaseExternalDataProvider(Protocol):
+    provider_name: str
+
+    def check_rate_limit(self, request: ExternalDailyRequest) -> ProviderRateLimitState:
+        """요청 전 rate limit 상태를 점검한다."""
+
+    def fetch_daily_ohlcv(self, request: ExternalDailyRequest) -> RawProviderResponse:
+        """provider 원천 daily OHLCV 응답을 가져온다."""
+
+    def validate_raw_response(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> list[dict[str, object]]:
+        """원천 응답 구조를 provider 중립 check dict 목록으로 검증한다."""
+
+    def normalize_ohlcv(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> pd.DataFrame:
+        """원천 응답을 Phase 3A validate flow가 받는 표준 DataFrame으로 변환한다."""
+
+
+class MockExternalDailyProvider:
+    def __init__(self, provider_name: str = "mock") -> None:
+        self.provider_name = provider_name
+
+    def check_rate_limit(self, request: ExternalDailyRequest) -> ProviderRateLimitState:
+        """테스트 fixture provider는 rate limit을 항상 통과시킨다."""
+        return ProviderRateLimitState(allowed=True)
+
+    def fetch_daily_ohlcv(self, request: ExternalDailyRequest) -> RawProviderResponse:
+        """네트워크 호출 없이 business day 기준 deterministic OHLCV row를 만든다."""
+        dates = pd.bdate_range(start=request.start_date, end=request.end_date)
+        rows: list[dict[str, object]] = []
+        seed = sum(ord(char) for char in request.internal_symbol)
+        base = 40000 + seed
+        for offset, trade_date in enumerate(dates):
+            close = float(base + offset * 125)
+            rows.append(
+                {
+                    "Date": trade_date.date().isoformat(),
+                    "Open": close - 40,
+                    "High": close + 120,
+                    "Low": close - 160,
+                    "Close": close,
+                    "Adj Close": close,
+                    "Volume": 100000 + offset * 1000,
+                }
+            )
+        return RawProviderResponse(
+            provider_name=self.provider_name,
+            provider_symbol=request.provider_symbol,
+            rows=rows,
+            fetched_at=datetime.now(UTC),
+        )
+
+    def validate_raw_response(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> list[dict[str, object]]:
+        """mock 응답의 최소 컬럼 존재 여부를 검증한다."""
+        if not raw.rows:
+            return [
+                {
+                    "field": "provider_response",
+                    "check_code": "PROVIDER_PARTIAL_RESPONSE",
+                    "severity": "error",
+                    "message": "provider 응답 row가 비어 있습니다.",
+                }
+            ]
+        required = {"Date", "Open", "High", "Low", "Close", "Volume"}
+        missing = sorted(required - set(raw.rows[0]))
+        if not missing:
+            return []
+        return [
+            {
+                "field": "provider_response",
+                "check_code": "PROVIDER_RESPONSE_SCHEMA_MISMATCH",
+                "severity": "error",
+                "message": f"provider 응답 필수 필드 누락: {', '.join(missing)}",
+            }
+        ]
+
+    def normalize_ohlcv(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> pd.DataFrame:
+        """mock/yfinance-style row를 표준 daily OHLCV DataFrame으로 변환한다."""
+        rows: list[dict[str, object]] = []
+        source = request.source
+        for row in raw.rows:
+            close = float(row["Close"])
+            adj_close = row.get("Adj Close", close)
+            volume = int(float(row["Volume"]))
+            rows.append(
+                {
+                    "trade_date": row["Date"],
+                    "symbol": request.internal_symbol,
+                    "open": float(row["Open"]),
+                    "high": float(row["High"]),
+                    "low": float(row["Low"]),
+                    "close": close,
+                    "adj_close": float(adj_close),
+                    "volume": volume,
+                    "turnover_value": close * volume,
+                    "market": str(source.get("market") or "KR"),
+                    "venue": str(source.get("venue") or "KRX"),
+                    "provider": str(source.get("provider_type") or "external_market_data"),
+                }
+            )
+        return pd.DataFrame(rows)
+
+
+class YFinanceDailyProvider(MockExternalDailyProvider):
+    def __init__(self) -> None:
+        super().__init__(provider_name="yfinance")
+
+    def fetch_daily_ohlcv(self, request: ExternalDailyRequest) -> RawProviderResponse:
+        """network_enabled=true일 때만 yfinance에서 daily OHLCV를 조회한다."""
+        if not bool(request.source.get("network_enabled")):
+            raise ExternalProviderError("network_enabled=false 상태에서는 yfinance 네트워크 호출을 차단합니다.")
+        try:
+            import yfinance as yf  # type: ignore[import-not-found]
+        except Exception as exc:  # noqa: BLE001
+            raise ExternalProviderError("yfinance 패키지가 설치되어 있지 않습니다.") from exc
+        try:
+            frame = yf.download(
+                request.provider_symbol,
+                start=request.start_date.isoformat(),
+                end=request.end_date.isoformat(),
+                progress=False,
+                auto_adjust=False,
+                threads=False,
+            )
+        except TimeoutError as exc:
+            raise ExternalProviderTimeoutError("yfinance 요청이 timeout되었습니다.") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise ExternalProviderError(f"yfinance 요청 실패: {exc}") from exc
+        if frame is None or frame.empty:
+            raise ExternalProviderPartialResponseError("yfinance 응답 row가 비어 있습니다.")
+        normalized = frame.reset_index()
+        rows = normalized.to_dict("records")
+        return RawProviderResponse(
+            provider_name=self.provider_name,
+            provider_symbol=request.provider_symbol,
+            rows=rows,
+            fetched_at=datetime.now(UTC),
+        )
+
+
+class KisOpenApiProvider:
+    provider_name = "kis"
+
+    def check_rate_limit(self, request: ExternalDailyRequest) -> ProviderRateLimitState:
+        """Phase 3B에서는 KIS 호출을 허용하지 않는다."""
+        return ProviderRateLimitState(allowed=False, reason="KIS provider는 Phase 3B에서 disabled placeholder입니다.")
+
+    def fetch_daily_ohlcv(self, request: ExternalDailyRequest) -> RawProviderResponse:
+        """KIS 실제 API 호출은 Phase 3C 이후 별도 read-only provider에서 구현한다."""
+        raise ExternalProviderError("KIS 실제 API 호출은 Phase 3B에서 금지되어 있습니다.")
+
+    def validate_raw_response(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> list[dict[str, object]]:
+        return []
+
+    def normalize_ohlcv(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> pd.DataFrame:
+        return pd.DataFrame()
+
+
+def build_external_daily_provider(source: dict[str, object]) -> BaseExternalDataProvider:
+    """source 설정에 맞는 provider-neutral daily provider 구현체를 반환한다."""
+    provider_name = str(source.get("provider_name") or "").strip().lower()
+    if provider_name == "kis":
+        return KisOpenApiProvider()
+    if provider_name == "yfinance" and bool(source.get("network_enabled")):
+        return YFinanceDailyProvider()
+    if provider_name == "yfinance":
+        return MockExternalDailyProvider(provider_name="yfinance")
+    return MockExternalDailyProvider(provider_name=provider_name or "mock")

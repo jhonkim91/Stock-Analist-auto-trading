@@ -116,17 +116,28 @@ export default function DataPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [message, setMessage] = useState("조회 중");
   const [sources, setSources] = useState<DataSourceConfig[]>([]);
+  const [externalProviders, setExternalProviders] = useState<DataSourceConfig[]>([]);
   const [selectedSource, setSelectedSource] = useState("csv_krx");
+  const [selectedExternalSource, setSelectedExternalSource] = useState("external_yfinance");
+  const [externalSymbol, setExternalSymbol] = useState("005930");
+  const [externalStartDate, setExternalStartDate] = useState("2026-05-19");
+  const [externalEndDate, setExternalEndDate] = useState("2026-05-21");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [runs, setRuns] = useState<ImportRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<ImportRun | null>(null);
   const [qualityChecks, setQualityChecks] = useState<DataQualityCheck[]>([]);
   const [validationRun, setValidationRun] = useState<ImportRun | null>(null);
+  const [externalRun, setExternalRun] = useState<ImportRun | null>(null);
   const [confirmRun, setConfirmRun] = useState<ImportRun | null>(null);
   const [actionStatus, setActionStatus] = useState<ApiStatus>("idle");
   const [actionMessage, setActionMessage] = useState("CSV 파일을 선택하세요");
+  const [externalStatus, setExternalStatus] = useState<ApiStatus>("idle");
+  const [externalMessage, setExternalMessage] = useState("External provider를 선택하세요");
 
-  const activeSources = useMemo(() => sources.filter((source) => source.enabled), [sources]);
+  const activeSources = useMemo(
+    () => sources.filter((source) => source.enabled && source.provider_type === "csv"),
+    [sources]
+  );
 
   const loadRuns = useCallback(async () => {
     const data = await callApi<ImportRun[]>("/api/data/import-runs?limit=20");
@@ -150,10 +161,18 @@ export default function DataPage() {
       setMessage("조회 중");
     }
     try {
-      const [sourceData, runData] = await Promise.all([callApi<DataSourceConfig[]>("/api/data/sources"), loadRuns()]);
+      const [sourceData, externalData, runData] = await Promise.all([
+        callApi<DataSourceConfig[]>("/api/data/sources"),
+        callApi<DataSourceConfig[]>("/api/data/external/providers"),
+        loadRuns()
+      ]);
       setSources(sourceData);
+      setExternalProviders(externalData);
       if (!sourceData.some((source) => source.source_id === selectedSource)) {
-        setSelectedSource(sourceData.find((source) => source.enabled)?.source_id ?? "csv_krx");
+        setSelectedSource(sourceData.find((source) => source.enabled && source.provider_type === "csv")?.source_id ?? "csv_krx");
+      }
+      if (!externalData.some((source) => source.source_id === selectedExternalSource)) {
+        setSelectedExternalSource(externalData.find((source) => source.enabled)?.source_id ?? "external_yfinance");
       }
       if (runData[0]) {
         await loadRunDetail(runData[0].run_id);
@@ -164,7 +183,7 @@ export default function DataPage() {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "조회 실패");
     }
-  }, [loadRunDetail, loadRuns, selectedSource]);
+  }, [loadRunDetail, loadRuns, selectedExternalSource, selectedSource]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -193,6 +212,7 @@ export default function DataPage() {
     try {
       const run = await callApi<ImportRun>("/api/data/validate-csv", { method: "POST", body: formData });
       setValidationRun(run);
+      setExternalRun(null);
       setConfirmRun(null);
       await loadRuns();
       await loadRunDetail(run.run_id);
@@ -229,6 +249,57 @@ export default function DataPage() {
     }
   }
 
+  async function fetchExternalPreview() {
+    setExternalStatus("loading");
+    setExternalMessage("External preview 생성 중");
+    try {
+      const run = await callApi<ImportRun>("/api/data/external/preview-daily-ohlcv", {
+        method: "POST",
+        body: JSON.stringify({
+          source_id: selectedExternalSource,
+          symbol: externalSymbol,
+          start_date: externalStartDate,
+          end_date: externalEndDate
+        })
+      });
+      setExternalRun(run);
+      setValidationRun(null);
+      setConfirmRun(null);
+      await loadRuns();
+      await loadRunDetail(run.run_id);
+      setExternalStatus(run.can_confirm ? "ok" : "error");
+      setExternalMessage(run.can_confirm ? "External preview 완료" : "External preview 검증 실패");
+    } catch (error) {
+      setExternalStatus("error");
+      setExternalMessage(error instanceof Error ? error.message : "External preview 실패");
+    }
+  }
+
+  async function confirmExternalImport() {
+    if (!externalRun?.can_confirm) {
+      setExternalStatus("error");
+      setExternalMessage("confirm 가능한 external run이 없습니다.");
+      return;
+    }
+    setExternalStatus("loading");
+    setExternalMessage("External import confirm 중");
+    try {
+      const run = await callApi<ImportRun>("/api/data/external/confirm-import", {
+        method: "POST",
+        body: JSON.stringify({ run_id: externalRun.run_id })
+      });
+      setExternalRun(run);
+      setConfirmRun(run);
+      await loadRuns();
+      await loadRunDetail(run.run_id);
+      setExternalStatus("ok");
+      setExternalMessage("External import confirm 완료");
+    } catch (error) {
+      setExternalStatus("error");
+      setExternalMessage(error instanceof Error ? error.message : "External import confirm 실패");
+    }
+  }
+
   function handleRunKeyDown(event: KeyboardEvent<HTMLTableRowElement>, runId: string) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -236,13 +307,17 @@ export default function DataPage() {
     }
   }
 
-  const summaryRun = validationRun ?? selectedRun;
+  const summaryRun = confirmRun ?? externalRun ?? validationRun ?? selectedRun;
+  const providerMetadata = summaryRun?.provider_metadata ?? {};
+  const selectedExternalProvider = externalProviders.find((source) => source.source_id === selectedExternalSource);
+  const showExternalMockNotice =
+    selectedExternalProvider?.provider_name === "yfinance" && selectedExternalProvider.network_enabled === false;
 
   return (
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 3A</p>
+          <p className="eyebrow">Phase 3B</p>
           <h1>Data Quality</h1>
         </div>
         <nav className="nav">
@@ -289,6 +364,49 @@ export default function DataPage() {
         </div>
       </section>
 
+      <section className="panel">
+        <div className="sectionHeader">
+          <div>
+            <h2>External Daily OHLCV Preview</h2>
+            <p className="muted">provider-neutral flow이며 preview 단계에서는 market data table을 변경하지 않는다.</p>
+            {showExternalMockNotice ? (
+              <p className="muted">network_enabled=false 상태이므로 현재 preview는 실제 yfinance 호출이 아니라 mock/fixture 데이터입니다.</p>
+            ) : null}
+          </div>
+          <StatusPill status={externalStatus} text={externalMessage} />
+        </div>
+        <div className="formRow">
+          <label>
+            external source_id
+            <select value={selectedExternalSource} onChange={(event) => setSelectedExternalSource(event.target.value)}>
+              {externalProviders.map((source) => (
+                <option key={source.source_id} value={source.source_id}>
+                  {source.source_id} / {source.provider_name} / {source.enabled ? "enabled" : "disabled"}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            symbol
+            <input value={externalSymbol} onChange={(event) => setExternalSymbol(event.target.value)} />
+          </label>
+          <label>
+            start_date
+            <input type="date" value={externalStartDate} onChange={(event) => setExternalStartDate(event.target.value)} />
+          </label>
+          <label>
+            end_date
+            <input type="date" value={externalEndDate} onChange={(event) => setExternalEndDate(event.target.value)} />
+          </label>
+          <button type="button" onClick={fetchExternalPreview}>
+            Fetch Preview
+          </button>
+          <button type="button" className="secondary" disabled={!externalRun?.can_confirm} onClick={confirmExternalImport}>
+            Confirm External Import
+          </button>
+        </div>
+      </section>
+
       <section className="cardGrid compactCards">
         <article>
           <h2>status</h2>
@@ -301,6 +419,14 @@ export default function DataPage() {
         <article>
           <h2>valid_rows</h2>
           <p className="bigNumber">{formatNumber(summaryRun?.valid_rows)}</p>
+        </article>
+        <article>
+          <h2>raw_rows</h2>
+          <p className="bigNumber">{formatNumber(providerMetadata.raw_row_count)}</p>
+        </article>
+        <article>
+          <h2>normalized</h2>
+          <p className="bigNumber">{formatNumber(providerMetadata.normalized_row_count)}</p>
         </article>
         <article>
           <h2>errors</h2>
@@ -331,9 +457,10 @@ export default function DataPage() {
             {sources.map((source) => (
               <div className="metric" key={source.source_id}>
                 <span>{source.source_id}</span>
-                <strong>{source.provider_type}</strong>
+                <strong>{source.provider_type} / {source.provider_name}</strong>
                 <p className="muted">
-                  {source.enabled ? "enabled" : "disabled"} / {source.market} / {source.venue} / max {formatNumber(source.max_rows)}
+                  {source.enabled ? "enabled" : "disabled"} / network {source.network_enabled ? "on" : "off"} / {source.market} /{" "}
+                  {source.venue} / max {formatNumber(source.max_rows)}
                 </p>
               </div>
             ))}
@@ -366,6 +493,7 @@ export default function DataPage() {
               <tr>
                 <th>run_id</th>
                 <th>source_id</th>
+                <th>provider</th>
                 <th>status</th>
                 <th>can_confirm</th>
                 <th>rows</th>
@@ -388,6 +516,7 @@ export default function DataPage() {
                 >
                   <td>{run.run_id}</td>
                   <td>{run.source_id}</td>
+                  <td>{run.provider_metadata.provider_name ?? run.provider_type}</td>
                   <td>{run.status}</td>
                   <td>{run.can_confirm ? "yes" : "no"}</td>
                   <td>{formatNumber(run.total_rows)}</td>

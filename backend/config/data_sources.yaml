@@ -1,7 +1,9 @@
 sources:
   - source_id: "sample_krx"
     provider_type: "sample"
+    provider_name: "sample"
     enabled: true
+    network_enabled: false
     market: "KRX"
     venue: "KRX"
     timezone: "Asia/Seoul"
@@ -10,7 +12,9 @@ sources:
     max_rows: 10000
   - source_id: "csv_krx"
     provider_type: "csv"
+    provider_name: "csv"
     enabled: true
+    network_enabled: false
     market: "KRX"
     venue: "KRX"
     timezone: "Asia/Seoul"
@@ -19,10 +23,53 @@ sources:
     max_rows: 10000
   - source_id: "external_placeholder_disabled"
     provider_type: "external"
+    provider_name: "placeholder"
     enabled: false
+    network_enabled: false
     market: "KRX"
     venue: "KRX"
     timezone: "Asia/Seoul"
     zero_volume_policy: "warn"
     unknown_symbol_policy: "reject"
     max_rows: 10000
+  - source_id: "external_yfinance"
+    provider_type: "external_market_data"
+    provider_name: "yfinance"
+    enabled: true
+    network_enabled: false
+    manual_preview_only: true
+    requires_api_key: false
+    supported_markets:
+      - "US"
+      - "KR"
+    market: "KR"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "warn_and_create_on_confirm"
+    max_rows: 1000
+    max_date_range_days: 730
+    timeout_seconds: 10
+    retry_count: 0
+  - source_id: "kis_openapi"
+    provider_type: "broker_data"
+    provider_name: "kis"
+    enabled: false
+    network_enabled: false
+    read_only_enabled: false
+    paper_trading_enabled: false
+    live_trading_enabled: false
+    websocket_enabled: false
+    manual_preview_only: false
+    requires_api_key: true
+    supported_markets:
+      - "KR"
+    market: "KR"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "reject"
+    max_rows: 1000
+    max_date_range_days: 730
+    timeout_seconds: 10
+    retry_count: 0

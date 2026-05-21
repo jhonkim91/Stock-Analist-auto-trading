@@ -35,18 +35,25 @@ def init_db() -> None:
 
 
 def _ensure_sqlite_columns() -> None:
-    """기존 SQLite DB에 Phase 2 기본 컬럼을 안전하게 보강한다."""
+    """기존 SQLite DB에 누락된 호환 컬럼을 안전하게 보강한다."""
     if not _database_url().startswith("sqlite"):
         return
     inspector = inspect(engine)
-    if "symbol_master" not in inspector.get_table_names():
+    table_names = inspector.get_table_names()
+    if "symbol_master" not in table_names:
         return
-    existing = {column["name"] for column in inspector.get_columns("symbol_master")}
     statements: list[str] = []
+    existing = {column["name"] for column in inspector.get_columns("symbol_master")}
     if "asset_type" not in existing:
         statements.append("ALTER TABLE symbol_master ADD COLUMN asset_type VARCHAR(32) DEFAULT 'stock'")
     if "currency" not in existing:
         statements.append("ALTER TABLE symbol_master ADD COLUMN currency VARCHAR(8) DEFAULT 'KRW'")
+    if "import_runs" in table_names:
+        import_run_columns = {column["name"] for column in inspector.get_columns("import_runs")}
+        if "source_config_snapshot_json" not in import_run_columns:
+            statements.append("ALTER TABLE import_runs ADD COLUMN source_config_snapshot_json TEXT DEFAULT '{}'")
+        if "provider_metadata_json" not in import_run_columns:
+            statements.append("ALTER TABLE import_runs ADD COLUMN provider_metadata_json TEXT DEFAULT '{}'")
     if not statements:
         return
     with engine.begin() as connection:

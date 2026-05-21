@@ -4,13 +4,14 @@ from datetime import date
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_config
 from backend.app.models.tables import (
     BacktestRun,
     DailyOhlcv,
+    ExternalSymbolMapping,
     FundamentalsPti,
     IndexOhlcv,
     IndicatorSnapshot,
@@ -51,6 +52,51 @@ class MarketDataService:
                     list_date=date(2015, 1, 2),
                 )
                 for symbol, profile in profiles.items()
+            ]
+        )
+        self.db.execute(
+            delete(ExternalSymbolMapping).where(ExternalSymbolMapping.source_id.in_(["external_yfinance", "kis_openapi"]))
+        )
+        self.db.add_all(
+            [
+                ExternalSymbolMapping(
+                    source_id="external_yfinance",
+                    external_symbol=f"{symbol}.KS",
+                    symbol=symbol,
+                    market="KR",
+                    venue="KRX",
+                )
+                for symbol in profiles
+            ]
+        )
+        self.db.add_all(
+            [
+                ExternalSymbolMapping(
+                    source_id="kis_openapi",
+                    external_symbol=symbol,
+                    symbol=symbol,
+                    market="KR",
+                    venue="KRX",
+                )
+                for symbol in profiles
+            ]
+        )
+        self.db.add_all(
+            [
+                ExternalSymbolMapping(
+                    source_id="external_yfinance",
+                    external_symbol="005930.KS",
+                    symbol="005930",
+                    market="KR",
+                    venue="KRX",
+                ),
+                ExternalSymbolMapping(
+                    source_id="kis_openapi",
+                    external_symbol="005930",
+                    symbol="005930",
+                    market="KR",
+                    venue="KRX",
+                ),
             ]
         )
 

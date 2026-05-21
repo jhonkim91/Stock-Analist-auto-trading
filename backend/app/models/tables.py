@@ -81,6 +81,8 @@ class ImportRun(Base):
     skipped_count: Mapped[int] = mapped_column(Integer, default=0)
     staged_rows_json: Mapped[str] = mapped_column(Text, default="[]")
     preview_rows_json: Mapped[str] = mapped_column(Text, default="[]")
+    source_config_snapshot_json: Mapped[str] = mapped_column(Text, default="{}")
+    provider_metadata_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
