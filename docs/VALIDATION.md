@@ -4,6 +4,8 @@
 
 검증 시각: 2026-05-21
 
+Checkpoint: `MVP v0.2 checkpoint`
+
 | 항목 | 결과 | 명령/도구 |
 |---|---|---|
 | Phase 2 browser QA | 통과 | Playwright + Microsoft Edge, `http://127.0.0.1:3001` |
@@ -78,7 +80,7 @@ Browser 플러그인은 세션에 있었지만 Node REPL 실행 도구가 노출
 | `frontend/package.json`, `frontend/package-lock.json` | `postcss@8.5.15` override로 npm audit advisory 제거 |
 | `.gitignore` | `.env*.local` 무시 |
 | `frontend/.env.local.example` | 8000 기본값 및 8001 포트 충돌 예시 추가 |
-| `frontend/.env.local` | 현재 QA용 `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001` |
+| `frontend/.env.local` | 현재 QA용 local-only ignored file, Git 공유 대상 아님 |
 
 ## 검증 명령 결과
 
@@ -136,6 +138,7 @@ npm.cmd exec tsc -- --noEmit
 | Backend `8001` | 실행 확인 |
 | Frontend `3001` | 실행 확인 |
 | `NEXT_PUBLIC_API_BASE_URL` | `frontend/.env.local`에서 `http://127.0.0.1:8001` |
+| 공유 가능 env 파일 | `frontend/.env.local.example`만 Git 추적 |
 | build env 반영 | `.next/static` client chunk에 `http://127.0.0.1:8001` 반영 확인 |
 | post-build smoke | `POST_BUILD_BROWSER_SMOKE_OK` |
 | post-restore smoke | `POST_RESTORE_BROWSER_SMOKE_OK` |

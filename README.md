@@ -2,7 +2,7 @@
 
 상위권 트레이더형 주식 분석 및 자동매매 보조 시스템 MVP입니다.
 
-현재 checkpoint는 MVP v0.2 / Phase 2 Web Flow입니다. 실제 주문, 외부 API 연동, live broker, paper broker 체결은 구현하지 않습니다.
+현재 checkpoint 명칭은 `MVP v0.2 checkpoint`입니다. 실제 주문, 외부 API 연동, live broker, paper broker 체결은 구현하지 않습니다.
 
 ## Phase 2 현재 기능
 
