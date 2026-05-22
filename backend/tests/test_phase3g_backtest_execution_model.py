@@ -23,6 +23,9 @@ EXPECTED_METRIC_KEYS = {
     "exposure",
     "total_estimated_cost",
     "cost_bps",
+    "partial_fill_count",
+    "no_fill_count",
+    "total_unfilled_qty",
 }
 
 EXPECTED_TRADE_KEYS = {
@@ -58,6 +61,21 @@ EXPECTED_EXECUTION_DETAIL_KEYS = {
     "slippage_bps",
 }
 
+EXPECTED_LIQUIDITY_DETAIL_KEYS = {
+    "planned_qty",
+    "filled_qty",
+    "unfilled_qty",
+    "requested_notional",
+    "liquidity_notional",
+    "cap_notional",
+    "fill_ratio",
+    "max_participation_rate",
+    "min_fill_ratio",
+    "allow_partial_fill",
+    "liquidity_basis",
+    "position_size_cap_applied",
+}
+
 
 def _execution_counts() -> dict[str, int]:
     with SessionLocal() as db:
@@ -89,7 +107,10 @@ def test_phase3g_backtest_api_contract_and_metrics_remain_backward_compatible(cl
         first_trade = run_payload["trades"][0]
         assert EXPECTED_TRADE_KEYS.issubset(first_trade)
         assert EXPECTED_EXECUTION_DETAIL_KEYS.issubset(first_trade["execution_detail"])
+        assert EXPECTED_LIQUIDITY_DETAIL_KEYS.issubset(first_trade["liquidity_detail"])
         assert first_trade["execution_detail"]["entry_assumption"] == "next_open"
+        assert first_trade["qty"] == first_trade["liquidity_detail"]["filled_qty"]
+        assert first_trade["liquidity_detail"]["planned_qty"] >= first_trade["liquidity_detail"]["filled_qty"]
 
     runs_response = client.get("/api/backtest/runs?limit=20")
     assert runs_response.status_code == 200

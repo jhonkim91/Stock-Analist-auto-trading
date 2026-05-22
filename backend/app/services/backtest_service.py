@@ -59,6 +59,7 @@ class BacktestService:
             rows_by_date.setdefault(row.trade_date, []).append(row)
 
         trades: list[dict[str, object]] = []
+        liquidity_stats = {"partial_fill_count": 0, "no_fill_count": 0, "total_unfilled_qty": 0}
         equity_curve = [{"date": dates[0], "equity": equity}]
         exposure_days = 0
         total_days = max((dates[-1] - dates[0]).days, 1)
@@ -77,7 +78,7 @@ class BacktestService:
             if not candidates:
                 continue
             _, indicator, risk = sorted(candidates, key=lambda item: item[0], reverse=True)[0]
-            trade = self._simulate_trade(indicator.symbol, signal_date, risk, price_by_symbol)
+            trade = self._simulate_trade(indicator.symbol, signal_date, risk, price_by_symbol, liquidity_stats)
             if trade is None:
                 continue
             equity += float(trade["pnl"])
@@ -85,7 +86,15 @@ class BacktestService:
             equity_curve.append({"date": trade["exit_date"], "equity": equity})
             trades.append(trade)
 
-        metrics = self._metrics(trades, equity_curve, equity, initial_equity or get_config("risk")["portfolio"]["equity"], exposure_days, total_days)
+        metrics = self._metrics(
+            trades,
+            equity_curve,
+            equity,
+            initial_equity or get_config("risk")["portfolio"]["equity"],
+            exposure_days,
+            total_days,
+            liquidity_stats,
+        )
         run_id = f"bt-{uuid4().hex[:12]}"
         config_hash = stable_hash({"strategy": strategy_name, "backtest": self.backtest_config, "risk": get_config("risk")})
         self.backtest_repo.save(
@@ -133,7 +142,14 @@ class BacktestService:
             stmt = stmt.where(IndicatorSnapshot.trade_date <= end_date)
         return list(self.db.scalars(stmt.order_by(IndicatorSnapshot.trade_date, IndicatorSnapshot.symbol)).all())
 
-    def _simulate_trade(self, symbol: str, signal_date: date, risk, price_by_symbol: dict[str, pd.DataFrame]) -> dict[str, object] | None:
+    def _simulate_trade(
+        self,
+        symbol: str,
+        signal_date: date,
+        risk,
+        price_by_symbol: dict[str, pd.DataFrame],
+        liquidity_stats: dict[str, int] | None = None,
+    ) -> dict[str, object] | None:
         prices = price_by_symbol.get(symbol)
         if prices is None or prices.empty:
             return None
@@ -150,7 +166,13 @@ class BacktestService:
         entry_price = raw_entry_price * (1 + bps)
         stop_price = float(risk.stop_price)
         target_price = entry_price + (entry_price - stop_price) * float(self.strategy_config["common"]["target_reward_risk"])
-        qty = int(risk.position_size)
+        planned_qty = int(risk.position_size)
+        liquidity_detail = self._liquidity_detail(entry_bar, raw_entry_price, planned_qty, execution_config)
+        filled_qty = int(liquidity_detail["filled_qty"])
+        unfilled_qty = int(liquidity_detail["unfilled_qty"])
+        if filled_qty <= 0:
+            self._record_no_fill(liquidity_stats, planned_qty)
+            return None
         max_holding_days = int(execution_config["max_holding_days"])
 
         for index, bar in future.iloc[:max_holding_days].iterrows():
@@ -165,8 +187,10 @@ class BacktestService:
             if exit_decision is not None:
                 raw_exit_price = float(exit_decision["raw_exit_price"])
                 exit_price = raw_exit_price * (1 - bps)
-                pnl = (exit_price - entry_price) * qty
-                estimated_cost = ((raw_entry_price * bps) + (raw_exit_price * bps)) * qty
+                pnl = (exit_price - entry_price) * filled_qty
+                estimated_cost = ((raw_entry_price * bps) + (raw_exit_price * bps)) * filled_qty
+                if unfilled_qty > 0:
+                    self._record_partial_fill(liquidity_stats, unfilled_qty)
                 return {
                     "symbol": symbol,
                     "signal_date": signal_date,
@@ -177,7 +201,7 @@ class BacktestService:
                     "raw_exit_price": round(raw_exit_price, 4),
                     "exit_price": round(exit_price, 4),
                     "exit_reason": exit_decision["exit_reason"],
-                    "qty": qty,
+                    "qty": filled_qty,
                     "pnl": round(pnl, 2),
                     "estimated_cost": round(estimated_cost, 2),
                     "cost_bps": round(bps * 10000, 4),
@@ -197,8 +221,82 @@ class BacktestService:
                         "commission_bps": commission_bps,
                         "slippage_bps": slippage_bps,
                     },
+                    "liquidity_detail": liquidity_detail,
                 }
         return None
+
+    @classmethod
+    def _liquidity_detail(
+        cls,
+        entry_bar: pd.Series,
+        raw_entry_price: float,
+        planned_qty: int,
+        execution_config: dict[str, object],
+    ) -> dict[str, object]:
+        max_participation_rate = float(execution_config.get("max_participation_rate", 1.0))
+        min_fill_ratio = float(execution_config.get("min_fill_ratio", 0.0))
+        allow_partial_fill = bool(execution_config.get("allow_partial_fill", True))
+        requested_notional = planned_qty * raw_entry_price
+        turnover_value = cls._positive_float(entry_bar.get("turnover_value", 0))
+        volume = cls._positive_float(entry_bar.get("volume", 0))
+
+        if turnover_value > 0:
+            liquidity_notional = turnover_value
+            liquidity_basis = "turnover_value"
+        elif volume > 0:
+            liquidity_notional = volume * raw_entry_price
+            liquidity_basis = "volume_x_entry_price"
+        else:
+            liquidity_notional = 0.0
+            liquidity_basis = "missing_liquidity"
+
+        cap_notional = liquidity_notional * max_participation_rate
+        fill_ratio = min(1.0, cap_notional / requested_notional) if requested_notional > 0 else 0.0
+        filled_qty = planned_qty if fill_ratio >= 1.0 else int(planned_qty * fill_ratio)
+        if not allow_partial_fill and fill_ratio < 1.0:
+            filled_qty = 0
+        if planned_qty <= 0 or filled_qty <= 0 or (filled_qty / planned_qty) < min_fill_ratio:
+            filled_qty = 0
+        unfilled_qty = max(planned_qty - filled_qty, 0)
+
+        return {
+            "planned_qty": planned_qty,
+            "filled_qty": filled_qty,
+            "unfilled_qty": unfilled_qty,
+            "requested_notional": round(requested_notional, 2),
+            "liquidity_notional": round(liquidity_notional, 2),
+            "cap_notional": round(cap_notional, 2),
+            "fill_ratio": round(fill_ratio, 6),
+            "max_participation_rate": max_participation_rate,
+            "min_fill_ratio": min_fill_ratio,
+            "allow_partial_fill": allow_partial_fill,
+            "liquidity_basis": liquidity_basis,
+            "position_size_cap_applied": filled_qty < planned_qty,
+        }
+
+    @staticmethod
+    def _positive_float(value: object) -> float:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        if pd.isna(numeric) or numeric <= 0:
+            return 0.0
+        return numeric
+
+    @staticmethod
+    def _record_no_fill(liquidity_stats: dict[str, int] | None, planned_qty: int) -> None:
+        if liquidity_stats is None:
+            return
+        liquidity_stats["no_fill_count"] = int(liquidity_stats.get("no_fill_count", 0)) + 1
+        liquidity_stats["total_unfilled_qty"] = int(liquidity_stats.get("total_unfilled_qty", 0)) + max(planned_qty, 0)
+
+    @staticmethod
+    def _record_partial_fill(liquidity_stats: dict[str, int] | None, unfilled_qty: int) -> None:
+        if liquidity_stats is None:
+            return
+        liquidity_stats["partial_fill_count"] = int(liquidity_stats.get("partial_fill_count", 0)) + 1
+        liquidity_stats["total_unfilled_qty"] = int(liquidity_stats.get("total_unfilled_qty", 0)) + max(unfilled_qty, 0)
 
     @staticmethod
     def _exit_decision(
@@ -323,6 +421,7 @@ class BacktestService:
         initial_equity: float,
         exposure_days: int,
         total_days: int,
+        liquidity_stats: dict[str, int] | None = None,
     ) -> dict[str, object]:
         pnls = [float(trade["pnl"]) for trade in trades]
         wins = [pnl for pnl in pnls if pnl > 0]
@@ -351,4 +450,7 @@ class BacktestService:
             "exposure": round(exposure_days / total_days, 6),
             "total_estimated_cost": round(total_estimated_cost, 2),
             "cost_bps": 7.0,
+            "partial_fill_count": int((liquidity_stats or {}).get("partial_fill_count", 0)),
+            "no_fill_count": int((liquidity_stats or {}).get("no_fill_count", 0)),
+            "total_unfilled_qty": int((liquidity_stats or {}).get("total_unfilled_qty", 0)),
         }

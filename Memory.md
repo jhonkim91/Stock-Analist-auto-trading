@@ -2,7 +2,7 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `MVP v0.10 Phase 3G-1 Backtest Execution Model Hardening`
+- [x] 현재 상태명: `MVP v0.11 Phase 3G-2 Liquidity and Partial Fill Model`
 - [x] Phase 1 Backend Core MVP 구현
 - [x] Phase 2 MVP Web Flow 구현
 - [x] Phase 3A CSV validate/confirm import 구현
@@ -12,42 +12,51 @@
 - [x] Phase 3E-1 paper preview safety scaffold 구현
 - [x] Phase 3F read-only data reliability 구현
 - [x] Phase 3G-1 backtest execution model hardening 구현
+- [x] Phase 3G-2 liquidity and partial fill model 구현
 - [x] 현재 브랜치: `main`
 
 ## 현재 프로젝트 상태
 
 - Backend: FastAPI + SQLite, sample seed, CSV import, external daily OHLCV preview/confirm, KIS read-only foundation, broker safety scaffold, paper preview scaffold, data quality summary, hardened backtest execution model.
 - Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/settings`.
-- Backtest: long-only exit simulation에서 gap-aware stop/target, config 기반 same-bar priority, optional `trades[*].execution_detail`을 제공한다.
-- `POST /api/backtest/run`, `GET /api/backtest/runs`, `GET /api/backtest/runs/{run_id}` contract와 기존 metrics key는 유지한다.
+- Backtest: long-only exit simulation에서 gap-aware stop/target, config 기반 same-bar priority, optional `trades[*].execution_detail`, optional `trades[*].liquidity_detail`을 제공한다.
+- Liquidity model: `risk.position_size`를 `planned_qty`로 유지하고 `turnover_value` 또는 `volume * raw_entry_price` 기준 participation cap으로 backtest 체결 수량만 제한한다.
+- `POST /api/backtest/run`, `GET /api/backtest/runs`, `GET /api/backtest/runs/{run_id}` contract와 기존 metrics key/type은 유지한다.
+- Optional metrics: `partial_fill_count`, `no_fill_count`, `total_unfilled_qty`.
 - `backtest_runs.metrics_json` 저장 구조는 유지한다.
 - Frontend security: `postcss@8.5.15` override로 `npm audit` 0 vulnerabilities.
 
-## Phase 3G-1 변경 파일/구조
+## Phase 3G-2 변경 파일/구조
 
+- `backend/config/backtest.yaml`
+  - `execution.max_participation_rate: 0.05`
+  - `execution.min_fill_ratio: 0.25`
+  - `execution.allow_partial_fill: true`
 - `backend/app/services/backtest_service.py`
-  - `_exit_decision()` helper 추가.
-  - entry gap below stop은 skip하지 않고 next-open entry 후 open stop exit 처리.
-  - holding day gap-down stop은 `stop_price`가 아니라 bar open 가격으로 손실 반영.
-  - target gap-up은 open fill만 인정하고 intraday high 초과 이익은 반영하지 않음.
-  - same-bar stop/target은 `backtest.yaml.execution.same_bar_stop_first`를 따름.
-  - `execution_detail` optional trade field 추가.
+  - `planned_qty = risk.position_size`
+  - `requested_notional = planned_qty * raw_entry_price`
+  - `liquidity_notional`은 `turnover_value` 우선, 없거나 0이면 `volume * raw_entry_price` fallback.
+  - `cap_notional = liquidity_notional * max_participation_rate`
+  - `fill_ratio = min(1.0, cap_notional / requested_notional)`
+  - partial fill 허용 시 `filled_qty = floor(planned_qty * fill_ratio)`.
+  - no-fill/insufficient liquidity는 `qty=0` trade record를 남기지 않고 skip.
+  - generated trade의 top-level `qty`, `pnl`, `estimated_cost`는 `filled_qty` 기준.
 - `backend/tests/test_backtest.py`
-  - gap-down entry/holding, gap-up target, same-bar true/false, max holding, cost regression 테스트 보강.
+  - 충분한 유동성, partial fill, min fill 미달 skip, partial disabled skip, volume fallback, zero liquidity skip, optional metrics 테스트 추가.
 - `backend/tests/test_phase3g_backtest_execution_model.py`
-  - backtest API smoke, metrics contract, execution safety invariant 테스트 추가.
+  - 기존 backtest API smoke에 optional metrics와 `liquidity_detail` contract 확인 추가.
 - `docs/VALIDATION.md`
-  - Phase 3G-1 최신 검증 결과와 safety contract로 갱신.
+  - Phase 3G-2 최신 검증 결과와 safety contract로 갱신.
 
 ## 최신 검증 결과
 
-- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 10 passed in 42.07s
-- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 86 passed in 154.65s
+- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 17 passed in 55.95s
+- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 93 passed in 188.86s
 - 2026-05-22 `npm.cmd run lint`: 통과
 - 2026-05-22 `npm.cmd exec tsc -- --noEmit`: 통과
 - 2026-05-22 `npm.cmd run build`: Next.js 16.2.6 production build 통과
 - 2026-05-22 `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities
-- Safety invariant: orders/paper rows 0, token/cache/network/adapter flags false, KIS execution routes 404, `POST /api/paper/orders` 404, `POST /api/paper/fill-simulator/run` 404.
+- Safety invariant: `orders_count == 0`, `paper_orders/fills/positions/audit_events == 0`, KIS execution routes 404, `POST /api/paper/orders` 404, `POST /api/paper/fill-simulator/run` 404, provider network/token/adapter flags false, `.cache/kis/token.json` 미생성.
 
 ## 최신 DB count
 
@@ -59,7 +68,7 @@
 - indicator_snapshot: 4,800
 - screen_results: 45
 - reports: 1
-- backtest_runs: local test DB에서 backtest smoke마다 증가 가능
+- backtest_runs: local DB에서 backtest smoke마다 증가 가능
 - orders_count: 0
 - paper_orders: 0
 - paper_fills: 0
@@ -71,19 +80,19 @@
 
 ## 불변 조건
 
-- 실제 주문, paper order/fill/position mutation, live broker 구현 금지.
+- 실제 주문, paper order/fill/position/audit mutation, live broker 구현 금지.
 - KIS/KRX/yfinance network call, token 발급/cache/credential 저장 금지.
 - broker/order adapter import 또는 호출 금지.
 - DB schema 변경, Alembic/migration 도입 금지.
 - 기존 backtest API breaking change 금지.
 - 기존 metrics key 삭제/타입 변경 금지.
-- Frontend API client와 화면 변경은 Phase 3G-1 범위 밖.
+- strategy 조건 대규모 변경 금지.
+- portfolio cash/position state와 walk-forward 구현은 Phase 3G-2 범위 밖.
 - `orders_count == 0`, `paper_* == 0`, KIS/paper execution routes 404 유지.
 - `npm audit fix --force`, Next.js downgrade, main 강제 push 금지.
 
 ## 다음 작업
 
-- [ ] Phase 3G-2: Liquidity and partial fill model.
-- [ ] ADV/turnover participation limit와 insufficient liquidity case 설계.
-- [ ] partial fill simulation은 DB mutation 없이 backtest 내부 trade simulation field로만 시작.
-- [ ] position size cap 보강은 risk sizing contract와 기존 screener/backtest 결과 영향을 먼저 분리 검토.
+- [ ] Phase 3G-3: corporate action adjusted price와 delisted symbol handling 보강.
+- [ ] `daily_ohlcv.adj_close` 사용 기준과 split/dividend adjustment 범위 확정.
+- [ ] 상장폐지/거래정지/마지막 가용 가격 청산 규칙 설계.

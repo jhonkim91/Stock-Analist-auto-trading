@@ -4,5 +4,8 @@ execution:
   commission_bps: 2.0
   slippage_bps: 5.0
   max_holding_days: 30
+  max_participation_rate: 0.05
+  min_fill_ratio: 0.25
+  allow_partial_fill: true
 metrics:
   annual_trading_days: 252
