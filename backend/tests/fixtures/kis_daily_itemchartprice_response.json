@@ -1,0 +1,34 @@
+{
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "OK",
+  "output2": [
+    {
+      "stck_bsop_date": "20260519",
+      "stck_oprc": "50252",
+      "stck_hgpr": "50452",
+      "stck_lwpr": "50122",
+      "stck_clpr": "50302",
+      "acml_vol": "120000",
+      "acml_tr_pbmn": "6036240000"
+    },
+    {
+      "stck_bsop_date": "20260520",
+      "stck_oprc": "50362",
+      "stck_hgpr": "50562",
+      "stck_lwpr": "50232",
+      "stck_clpr": "50412",
+      "acml_vol": "121200",
+      "acml_tr_pbmn": "6109934400"
+    },
+    {
+      "stck_bsop_date": "20260521",
+      "stck_oprc": "50472",
+      "stck_hgpr": "50672",
+      "stck_lwpr": "50342",
+      "stck_clpr": "50522",
+      "acml_vol": "122400",
+      "acml_tr_pbmn": "6183892800"
+    }
+  ]
+}

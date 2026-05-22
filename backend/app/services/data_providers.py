@@ -239,6 +239,121 @@ class YFinanceDailyProvider(MockExternalDailyProvider):
         )
 
 
+KIS_DAILY_ITEMCHART_RESPONSE_FIELDS = frozenset({"rt_cd", "msg_cd", "msg1", "output2"})
+KIS_DAILY_ITEMCHART_REQUIRED_ROW_FIELDS = frozenset(
+    {"stck_bsop_date", "stck_oprc", "stck_hgpr", "stck_lwpr", "stck_clpr", "acml_vol"}
+)
+KIS_DAILY_ITEMCHART_OPTIONAL_ROW_FIELDS = frozenset({"acml_tr_pbmn"})
+KIS_DAILY_ITEMCHART_ROW_FIELDS = KIS_DAILY_ITEMCHART_REQUIRED_ROW_FIELDS | KIS_DAILY_ITEMCHART_OPTIONAL_ROW_FIELDS
+
+
+def _kis_schema_issue(message: str) -> dict[str, object]:
+    return {
+        "field": "provider_response",
+        "check_code": "PROVIDER_RESPONSE_SCHEMA_MISMATCH",
+        "severity": "error",
+        "message": message,
+    }
+
+
+def validate_kis_daily_itemchart_fixture(payload: object) -> list[dict[str, object]]:
+    """KIS itemchart fixture response shape을 canonical schema 기준으로 검증한다."""
+    if not isinstance(payload, dict):
+        return [_kis_schema_issue("KIS provider response는 object여야 합니다.")]
+
+    issues: list[dict[str, object]] = []
+    fields = set(payload)
+    missing_top_level = sorted(KIS_DAILY_ITEMCHART_RESPONSE_FIELDS - fields)
+    extra_top_level = sorted(fields - KIS_DAILY_ITEMCHART_RESPONSE_FIELDS)
+    if missing_top_level:
+        issues.append(_kis_schema_issue(f"KIS response 필수 필드 누락: {', '.join(missing_top_level)}"))
+    if extra_top_level:
+        issues.append(_kis_schema_issue(f"KIS response 허용되지 않은 필드: {', '.join(extra_top_level)}"))
+
+    output_rows = payload.get("output2")
+    if not isinstance(output_rows, list):
+        issues.append(_kis_schema_issue("KIS response output2는 list여야 합니다."))
+        return issues
+    if not output_rows:
+        return [
+            {
+                "field": "provider_response",
+                "check_code": "PROVIDER_PARTIAL_RESPONSE",
+                "severity": "error",
+                "message": "KIS provider 응답 row가 비어 있습니다.",
+            }
+        ]
+
+    for index, row in enumerate(output_rows, start=1):
+        if not isinstance(row, dict):
+            issues.append(_kis_schema_issue(f"KIS output2 row {index}는 object여야 합니다."))
+            continue
+        row_fields = set(row)
+        missing_row_fields = sorted(KIS_DAILY_ITEMCHART_REQUIRED_ROW_FIELDS - row_fields)
+        extra_row_fields = sorted(row_fields - KIS_DAILY_ITEMCHART_ROW_FIELDS)
+        if missing_row_fields:
+            issues.append(_kis_schema_issue(f"KIS output2 row {index} 필수 필드 누락: {', '.join(missing_row_fields)}"))
+        if extra_row_fields:
+            issues.append(_kis_schema_issue(f"KIS output2 row {index} 허용되지 않은 필드: {', '.join(extra_row_fields)}"))
+    return issues
+
+
+def build_kis_daily_itemchart_fixture_response(request: ExternalDailyRequest) -> dict[str, object]:
+    """network call 없이 KIS itemchart canonical schema의 deterministic fixture를 만든다."""
+    dates = pd.bdate_range(start=request.start_date, end=request.end_date)
+    rows: list[dict[str, object]] = []
+    seed = sum(ord(char) for char in request.internal_symbol)
+    base = 50000 + seed
+    for offset, trade_date in enumerate(dates):
+        close = base + offset * 110
+        volume = 120000 + offset * 1200
+        rows.append(
+            {
+                "stck_bsop_date": trade_date.strftime("%Y%m%d"),
+                "stck_oprc": str(close - 50),
+                "stck_hgpr": str(close + 150),
+                "stck_lwpr": str(close - 180),
+                "stck_clpr": str(close),
+                "acml_vol": str(volume),
+                "acml_tr_pbmn": str(close * volume),
+            }
+        )
+    return {
+        "rt_cd": "0",
+        "msg_cd": "MCA00000",
+        "msg1": "OK",
+        "output2": rows,
+    }
+
+
+def normalize_kis_daily_itemchart_rows(raw: RawProviderResponse, request: ExternalDailyRequest) -> pd.DataFrame:
+    """KIS itemchart raw rows를 daily OHLCV preview schema로 변환한다."""
+    rows: list[dict[str, object]] = []
+    source = request.source
+    for row in raw.rows:
+        close = float(row["stck_clpr"])
+        volume = int(float(row["acml_vol"]))
+        turnover_value = row.get("acml_tr_pbmn")
+        trade_date = pd.to_datetime(str(row["stck_bsop_date"]), format="%Y%m%d", errors="raise").date()
+        rows.append(
+            {
+                "trade_date": trade_date.isoformat(),
+                "symbol": request.internal_symbol,
+                "open": float(row["stck_oprc"]),
+                "high": float(row["stck_hgpr"]),
+                "low": float(row["stck_lwpr"]),
+                "close": close,
+                "adj_close": close,
+                "volume": volume,
+                "turnover_value": float(turnover_value) if turnover_value is not None else close * volume,
+                "market": str(source.get("market") or "KR"),
+                "venue": str(source.get("venue") or "KRX"),
+                "provider": str(source.get("provider_type") or "external_market_data"),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 class MockKisMarketDataProvider:
     provider_name = "kis"
 
@@ -247,25 +362,15 @@ class MockKisMarketDataProvider:
         return ProviderRateLimitState(allowed=True)
 
     def fetch_daily_ohlcv(self, request: ExternalDailyRequest) -> RawProviderResponse:
-        """KIS 기간별시세 응답 형태의 deterministic fixture row를 만든다."""
-        dates = pd.bdate_range(start=request.start_date, end=request.end_date)
-        rows: list[dict[str, object]] = []
-        seed = sum(ord(char) for char in request.internal_symbol)
-        base = 50000 + seed
-        for offset, trade_date in enumerate(dates):
-            close = base + offset * 110
-            volume = 120000 + offset * 1200
-            rows.append(
-                {
-                    "stck_bsop_date": trade_date.strftime("%Y%m%d"),
-                    "stck_oprc": str(close - 50),
-                    "stck_hgpr": str(close + 150),
-                    "stck_lwpr": str(close - 180),
-                    "stck_clpr": str(close),
-                    "acml_vol": str(volume),
-                    "acml_tr_pbmn": str(close * volume),
-                }
-            )
+        """KIS itemchart canonical schema 기반 deterministic fixture row를 만든다."""
+        response = build_kis_daily_itemchart_fixture_response(request)
+        issues = validate_kis_daily_itemchart_fixture(response)
+        if issues:
+            raise ExternalProviderError("KIS fixture schema validation failed.")
+        output_rows = response["output2"]
+        if not isinstance(output_rows, list):
+            raise ExternalProviderError("KIS fixture output2 must be a list.")
+        rows = [dict(row) for row in output_rows if isinstance(row, dict)]
         return RawProviderResponse(
             provider_name=self.provider_name,
             provider_symbol=request.provider_symbol,
@@ -275,59 +380,18 @@ class MockKisMarketDataProvider:
 
     def validate_raw_response(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> list[dict[str, object]]:
         """KIS 기간별시세 fixture의 필수 필드 존재 여부를 검증한다."""
-        if not raw.rows:
-            return [
-                {
-                    "field": "provider_response",
-                    "check_code": "PROVIDER_PARTIAL_RESPONSE",
-                    "severity": "error",
-                    "message": "KIS provider 응답 row가 비어 있습니다.",
-                }
-            ]
-        required = {"stck_bsop_date", "stck_oprc", "stck_hgpr", "stck_lwpr", "stck_clpr", "acml_vol"}
-        missing = sorted(required - set(raw.rows[0]))
-        if not missing:
-            return []
-        return [
-            {
-                "field": "provider_response",
-                "check_code": "PROVIDER_RESPONSE_SCHEMA_MISMATCH",
-                "severity": "error",
-                "message": f"KIS provider 응답 필수 필드 누락: {', '.join(missing)}",
-            }
-        ]
+        payload = {"rt_cd": "0", "msg_cd": "MCA00000", "msg1": "OK", "output2": raw.rows}
+        return validate_kis_daily_itemchart_fixture(payload)
 
     def normalize_ohlcv(self, raw: RawProviderResponse, request: ExternalDailyRequest) -> pd.DataFrame:
         """KIS 기간별시세 raw row를 표준 daily OHLCV DataFrame으로 변환한다."""
-        rows: list[dict[str, object]] = []
-        source = request.source
-        for row in raw.rows:
-            close = float(row["stck_clpr"])
-            volume = int(float(row["acml_vol"]))
-            turnover_value = row.get("acml_tr_pbmn")
-            rows.append(
-                {
-                    "trade_date": pd.Timestamp(str(row["stck_bsop_date"])).date().isoformat(),
-                    "symbol": request.internal_symbol,
-                    "open": float(row["stck_oprc"]),
-                    "high": float(row["stck_hgpr"]),
-                    "low": float(row["stck_lwpr"]),
-                    "close": close,
-                    "adj_close": close,
-                    "volume": volume,
-                    "turnover_value": float(turnover_value) if turnover_value is not None else close * volume,
-                    "market": str(source.get("market") or "KR"),
-                    "venue": str(source.get("venue") or "KRX"),
-                    "provider": str(source.get("provider_type") or "external_market_data"),
-                }
-            )
-        return pd.DataFrame(rows)
+        return normalize_kis_daily_itemchart_rows(raw, request)
 
 
 class KisMarketDataProvider(MockKisMarketDataProvider):
     def fetch_daily_ohlcv(self, request: ExternalDailyRequest) -> RawProviderResponse:
-        """Phase 3C에서는 실제 KIS 네트워크 호출을 수행하지 않는다."""
-        raise ExternalProviderError("Phase 3C에서는 KIS 실제 API 호출을 금지합니다.")
+        """Phase 3F-2에서는 실제 KIS 네트워크 호출을 수행하지 않는다."""
+        raise ExternalProviderError("Phase 3F-2에서는 KIS 실제 API 호출을 금지합니다.")
 
 
 def build_external_daily_provider(source: dict[str, object]) -> BaseExternalDataProvider:
