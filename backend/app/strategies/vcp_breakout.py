@@ -28,12 +28,30 @@ class VcpBreakoutStrategy(BaseStrategy):
             "volume_surge": self._gte(indicator.volume, (indicator.volume_ma50 or 0) * self.config["volume_surge_multiple"]),
             "rs_percentile_min": self._gte(indicator.rs_percentile, self.config["rs_percentile_min"]),
         }
+        optional_conditions = []
+        if bool(self.config.get("pivot_distance_limit_enabled", False)):
+            pivot_high = float(indicator.pivot_high_20_prev or 0)
+            pivot_distance_pct = ((float(indicator.close) - pivot_high) / pivot_high) if pivot_high > 0 else None
+            flags["pivot_distance_limit"] = self._lte(pivot_distance_pct, self.config["max_pivot_distance_pct"])
+            optional_conditions.append("pivot_distance_limit")
         failed = self._failed(flags)
         passed = self._all_flags(flags)
+        summary = self._summary(self.name, passed, failed)
         return StrategyResult(
             strategy_tag=self.name,
             passed=passed,
             pass_flags=flags,
             failed_conditions=failed,
-            reason_summary=self._summary(self.name, passed, failed),
+            reason_summary=summary,
+            metadata=self._metadata(
+                flags,
+                failed,
+                summary,
+                data_quality_flags={
+                    "atr20_pct_available": indicator.atr20_pct is not None,
+                    "atr20_pct_ma60_available": indicator.atr20_pct_ma60 is not None,
+                    "pivot_high_20_prev_available": indicator.pivot_high_20_prev is not None,
+                },
+                optional_conditions=optional_conditions,
+            ),
         )

@@ -222,6 +222,109 @@ def test_max_holding_exit_still_uses_close(seeded_db):
     assert trade["execution_detail"]["exit_assumption"] == "max_holding_close_exit"
 
 
+def test_adjusted_price_option_uses_adj_close_factor_without_changing_default(seeded_db):
+    raw_service = _service_with_execution(seeded_db, max_holding_days=1, use_adjusted_price=False)
+    adjusted_service = _service_with_execution(seeded_db, max_holding_days=1, use_adjusted_price=True)
+    risk = SimpleNamespace(stop_price=90.0, position_size=10)
+    price_by_symbol = _price_df(
+        [
+            {
+                "trade_date": date(2026, 1, 2),
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 102.0,
+                "adj_close": 51.0,
+            }
+        ]
+    )
+
+    raw_trade = raw_service._simulate_trade("TEST", date(2026, 1, 1), risk, price_by_symbol)
+    adjusted_trade = adjusted_service._simulate_trade("TEST", date(2026, 1, 1), risk, price_by_symbol)
+
+    assert raw_trade is not None
+    assert adjusted_trade is not None
+    assert raw_trade["raw_entry_price"] == 100.0
+    assert raw_trade["raw_exit_price"] == 102.0
+    assert raw_trade["price_detail"]["use_adjusted_price"] is False
+    assert adjusted_trade["raw_entry_price"] == 50.0
+    assert adjusted_trade["raw_exit_price"] == 51.0
+    assert adjusted_trade["price_detail"]["use_adjusted_price"] is True
+    assert adjusted_trade["price_detail"]["entry_adjustment_factor"] == 0.5
+    assert adjusted_trade["execution_detail"]["stop_price"] == 45.0
+
+
+def test_delisted_policy_forces_last_available_close_exit(seeded_db):
+    service = _service_with_execution(seeded_db, max_holding_days=5, delisted_handling_policy="last_available_close")
+    risk = SimpleNamespace(stop_price=50.0, position_size=10)
+    realism_stats = {"adjusted_price_trade_count": 0, "forced_exit_count": 0, "delisted_exit_count": 0, "missing_data_exit_count": 0}
+    price_by_symbol = _price_df(
+        [
+            {
+                "trade_date": date(2026, 1, 2),
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 100.0,
+            },
+            {
+                "trade_date": date(2026, 1, 3),
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 80.0,
+                "delist_date": "2026-01-03",
+            },
+        ]
+    )
+
+    trade = service._simulate_trade("TEST", date(2026, 1, 1), risk, price_by_symbol, realism_stats=realism_stats)
+
+    assert trade is not None
+    assert trade["exit_reason"] == "delisted"
+    assert trade["raw_exit_price"] == 80.0
+    assert trade["holding_days"] == 2
+    assert trade["execution_detail"]["forced_exit"] is True
+    assert trade["execution_detail"]["delisted_exit"] is True
+    assert trade["execution_detail"]["exit_assumption"] == "delisted_last_available_close_exit"
+    assert realism_stats["forced_exit_count"] == 1
+    assert realism_stats["delisted_exit_count"] == 1
+
+
+def test_missing_data_policy_can_force_last_available_close_exit(seeded_db):
+    service = _service_with_execution(seeded_db, max_holding_days=5, missing_data_policy="last_available_close")
+    risk = SimpleNamespace(stop_price=50.0, position_size=10)
+    realism_stats = {"adjusted_price_trade_count": 0, "forced_exit_count": 0, "delisted_exit_count": 0, "missing_data_exit_count": 0}
+    price_by_symbol = _price_df(
+        [
+            {
+                "trade_date": date(2026, 1, 2),
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 100.0,
+            },
+            {
+                "trade_date": date(2026, 1, 3),
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 98.0,
+            },
+        ]
+    )
+
+    trade = service._simulate_trade("TEST", date(2026, 1, 1), risk, price_by_symbol, realism_stats=realism_stats)
+
+    assert trade is not None
+    assert trade["exit_reason"] == "missing_data"
+    assert trade["raw_exit_price"] == 98.0
+    assert trade["execution_detail"]["forced_exit"] is True
+    assert trade["execution_detail"]["missing_data_exit"] is True
+    assert realism_stats["forced_exit_count"] == 1
+    assert realism_stats["missing_data_exit_count"] == 1
+
+
 def test_backtest_metrics_include_fee_and_slippage_costs(seeded_db):
     metrics = BacktestService._metrics(
         trades=[
@@ -416,8 +519,18 @@ def test_backtest_metrics_include_optional_liquidity_counts(seeded_db):
         exposure_days=0,
         total_days=10,
         liquidity_stats={"partial_fill_count": 2, "no_fill_count": 3, "total_unfilled_qty": 40},
+        realism_stats={
+            "adjusted_price_trade_count": 1,
+            "forced_exit_count": 2,
+            "delisted_exit_count": 1,
+            "missing_data_exit_count": 1,
+        },
     )
 
     assert metrics["partial_fill_count"] == 2
     assert metrics["no_fill_count"] == 3
     assert metrics["total_unfilled_qty"] == 40
+    assert metrics["adjusted_price_trade_count"] == 1
+    assert metrics["forced_exit_count"] == 2
+    assert metrics["delisted_exit_count"] == 1
+    assert metrics["missing_data_exit_count"] == 1

@@ -2,95 +2,127 @@
 
 ## 최신 검증 결과
 
-검증 시각: 2026-05-22
+검증 기준일: 2026-05-22
 
-Checkpoint: `MVP v0.11 Phase 3G-2 Liquidity and Partial Fill Model`
+Checkpoint: `MVP v0.13 Phase 3H Strategy Extension`
 
 기준 브랜치: `main`
 
-Status: 로컬 구현 및 검증 완료, commit/push 미수행
-
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
-| Phase 3G-2 targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 17 passed |
-| Backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests`: 93 passed |
+| Backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests`: 101 passed |
+| Phase 3H strategy/API targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_phase2_api.py backend/tests/test_api_smoke.py -q`: 12 passed |
+| Phase 3G backtest targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 20 passed |
+| Safety targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 19 passed |
+| Alembic migration smoke | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_alembic_migrations.py -q`: 2 passed |
 | Frontend lint | 통과 | `npm.cmd run lint` |
 | Frontend typecheck | 통과 | `npm.cmd exec tsc -- --noEmit` |
 | Frontend production build | 통과 | `npm.cmd run build`: Next.js 16.2.6 production build |
-| Frontend npm audit | 통과 | `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities |
-| Backtest API contract | 통과 | `POST /api/backtest/run`, `GET /api/backtest/runs`, `GET /api/backtest/runs/{run_id}` smoke 유지 |
+| Secret/safety grep | 통과 | tracked backend/frontend code/config 대상 secret assignment scan: no matches |
+| Backtest API contract | 통과 | `POST /api/backtest/run`, `GET /api/backtest/runs`, `GET /api/backtest/runs/{run_id}` contract 유지 |
+| Screener explanation contract | 통과 | `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale` 응답 포함 |
 | Safety invariant | 통과 | orders/paper rows 0, token/cache/network/adapter flags false, KIS/paper mutation routes 404, `.cache/kis/token.json` 미생성 |
 
-## Phase 3G-2 Backtest Liquidity Model
+## 표준 검증 명령
+
+Backend full suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests
+```
+
+Phase 3H strategy targeted suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_phase2_api.py backend/tests/test_api_smoke.py -q
+```
+
+Phase 3G backtest targeted suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q
+```
+
+Broker/paper/KIS/backtest safety targeted suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_phase3g_backtest_execution_model.py -q
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm.cmd run lint
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+```
+
+Tracked code/config secret assignment scan:
+
+```powershell
+$matches = rg -n --hidden --glob '!docs/**' --glob '!frontend/package-lock.json' --glob '!frontend/node_modules/**' --glob '!backend/data/**' '(app_key|app_secret|access_token|refresh_token|account_no|password)\s*:\s*\x22[^*<][^\x22]{7,}\x22' backend frontend
+if ($LASTEXITCODE -eq 1) { 'secret scan: no matches' } elseif ($LASTEXITCODE -eq 0) { $matches; exit 1 } else { exit $LASTEXITCODE }
+```
+
+`rg`는 매치가 없을 때 exit code 1을 반환하므로 위 wrapper는 no-match를 성공으로 처리한다.
+
+Alembic migration smoke:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_alembic_migrations.py -q
+```
+
+## Phase 3H Strategy Extension
 
 변경 범위:
 
-- `BacktestService`의 long-only backtest 내부 simulation에만 liquidity participation limit과 partial fill을 추가.
-- `risk.position_size`는 `planned_qty`로 유지하고, 실제 backtest 체결 수량만 `filled_qty`로 보수적으로 제한.
-- `backtest.yaml.execution`에 `max_participation_rate`, `min_fill_ratio`, `allow_partial_fill` 추가.
-- DB schema, migration/Alembic, frontend 화면/API client, broker, paper order/fill/position, KIS/KRX/yfinance network path 변경 없음.
+- 기존 3개 전략 `trend_breakout`, `vcp_breakout`, `canslim_lite`의 기본 pass/fail 결과를 보존했다.
+- `StrategyResult.metadata`에 공통 설명 필드 생성을 지원하는 helper를 추가했다.
+- Screener result 응답에 `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`를 추가했다.
+- 새 optional strategy filter는 모두 기본 비활성이다.
+- DB schema, backtest 수익률 산식, frontend 화면 구조, broker/paper/KIS safety contract는 변경하지 않았다.
 
 Config:
 
 ```yaml
-execution:
-  max_participation_rate: 0.05
-  min_fill_ratio: 0.25
-  allow_partial_fill: true
+trend_breakout:
+  atr_risk_filter_enabled: false
+  max_atr20_pct: 0.08
+
+vcp_breakout:
+  pivot_distance_limit_enabled: false
+  max_pivot_distance_pct: 0.05
+
+canslim_lite:
+  earnings_quality_enabled: false
+  min_roe: 0.15
 ```
 
-Liquidity rule:
+Strategy explanation contract:
 
-| 단계 | 처리 |
+| 필드 | 의미 |
 |---|---|
-| planned quantity | 기존 `risk.position_size` 사용 |
-| requested notional | `planned_qty * raw_entry_price` |
-| liquidity notional | `turnover_value > 0`이면 우선 사용 |
-| fallback | `turnover_value`가 0/누락이면 `volume * raw_entry_price` 사용 |
-| missing liquidity | `turnover_value`와 `volume` 모두 0/누락이면 no-fill skip |
-| cap notional | `liquidity_notional * max_participation_rate` |
-| fill ratio | `min(1.0, cap_notional / requested_notional)` |
-| partial disabled | `allow_partial_fill=false`이고 `fill_ratio < 1`이면 trade record 없이 skip |
-| partial enabled | `filled_qty = floor(planned_qty * fill_ratio)` |
-| minimum fill | `filled_qty == 0` 또는 `filled_qty / planned_qty < min_fill_ratio`이면 skip |
-| generated trade | top-level `qty`, `pnl`, `estimated_cost`는 모두 `filled_qty` 기준 |
+| `triggered_conditions` | `pass_flags` 중 true인 조건 목록 |
+| `failed_conditions` | 기존 미충족 조건 목록 |
+| `score_breakdown` | total score, grade, condition score, triggered/failed count |
+| `risk_flags` | liquidity, reward/risk, position size, risk per share 확인 |
+| `data_quality_flags` | parse 가능 여부와 주요 가격 필드 존재 여부 |
+| `explanation` / `rationale` | 기존 `reason_summary` 기반 설명 |
 
-`trades[*].liquidity_detail` 예시:
+Optional filter rule:
 
-```json
-{
-  "planned_qty": 1000,
-  "filled_qty": 500,
-  "unfilled_qty": 500,
-  "requested_notional": 100000.0,
-  "liquidity_notional": 1000000.0,
-  "cap_notional": 50000.0,
-  "fill_ratio": 0.5,
-  "max_participation_rate": 0.05,
-  "min_fill_ratio": 0.25,
-  "allow_partial_fill": true,
-  "liquidity_basis": "turnover_value",
-  "position_size_cap_applied": true
-}
-```
-
-Optional metrics 예시:
-
-```json
-{
-  "partial_fill_count": 1,
-  "no_fill_count": 0,
-  "total_unfilled_qty": 500
-}
-```
-
-기존 `trades[*].execution_detail`과 기존 metrics key는 삭제하거나 타입 변경하지 않는다.
+| 전략 | 옵션 | 기본값 | 활성화 시 처리 |
+|---|---|---|---|
+| `trend_breakout` | `atr_risk_filter_enabled` | `false` | `atr20_pct <= max_atr20_pct` 조건 추가 |
+| `vcp_breakout` | `pivot_distance_limit_enabled` | `false` | breakout close와 pivot high 거리 제한 |
+| `canslim_lite` | `earnings_quality_enabled` | `false` | `roe >= min_roe` 조건 추가 |
 
 ## Safety Contract
 
 | 항목 | 상태 |
 |---|---|
-| DB schema/migration | 변경 없음 |
+| Runtime table/column contract | 기존 모델 기준 유지, Alembic initial snapshot 유지 |
 | provider fetch/network call | 없음 |
 | token 발급/cache/refresh/storage | 없음 |
 | KIS credential 저장 | 없음 |
@@ -113,19 +145,19 @@ Optional metrics 예시:
 
 ## 제외 범위
 
-- 실제 주문, paper order/fill/position/audit mutation, live broker
-- KIS/KRX/yfinance network call
-- token/cache/credential 저장
-- broker/order adapter import 또는 호출
-- DB schema 변경, Alembic/migration 도입
-- frontend 대규모 변경
-- backtest API breaking change
-- 기존 metrics key 삭제/타입 변경
-- strategy 조건 대규모 변경
-- portfolio cash/position state 구현
-- walk-forward 구현
+- 실제 주문, paper order/fill/position/audit mutation, live broker.
+- KIS/KRX/yfinance network call.
+- token/cache/credential 저장.
+- broker/order adapter import 또는 호출.
+- DB table/column 변경.
+- frontend 대규모 변경.
+- backtest API breaking change.
+- 기존 metrics key 제거/타입 변경.
+- 기존 전략 기본 결과를 바꾸는 기본 활성 조건.
+- portfolio cash/position state 구현.
+- walk-forward 구현.
 
 ## 다음 Phase
 
-- Phase 3G-3 제안: backtest의 corporate action adjusted price와 delisted symbol handling을 보강한다.
-- 권장 범위: split/dividend adjustment 기준 확정, 상장폐지/거래정지 row 처리, 마지막 가용 가격 청산 규칙, 기존 `daily_ohlcv.adj_close` 사용 여부 검증.
+- Phase 3I 제안: weekly review report를 검토한다.
+- 권장 범위: 기존 safety contract를 유지하고 fixture 기반 리포트 생성/검증을 우선한다.

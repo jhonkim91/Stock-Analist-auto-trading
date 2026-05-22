@@ -1,258 +1,68 @@
 # Stock Analyst Auto Trading
 
-주식 분석과 자동매매 보조 흐름을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
+주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 checkpoint는 `MVP v0.9 Phase 3F-4 Data Freshness/Quality Summary`입니다. 실제 주문, paper order create, paper fill/position 변경, live broker, cancel, fill, websocket 연결, KIS/KRX/yfinance 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
+현재 기준선은 `MVP v0.13 / Phase 3H Strategy Extension`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
 
-단계별 개발 계획은 [docs/plans/README.md](docs/plans/README.md)에서 관리하고, Phase 3F 상세 계획은 [docs/plans/phase-3f-readonly-data-reliability.md](docs/plans/phase-3f-readonly-data-reliability.md)에서 관리합니다.
+상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
-PR #3 `Phase 3C: Add KIS read-only foundation`과 PR #4 `Phase 3D: KIS broker safety scaffold`는 `main`에 merge 완료됐습니다. Phase 3D merge commit은 `2d5a146c8b89c355397eec458fd7343412e92c6e`입니다.
-
-## Phase 3D 최종 기록
+## Current Baseline
 
 | 항목 | 값 |
 |---|---|
-| Status | Completed |
-| PR | #4 |
-| Merge commit | `2d5a146c8b89c355397eec458fd7343412e92c6e` |
-| Post-merge docs commit | `127527ecec905227b15b5654dc3615f21fd244ec` |
-| Current HEAD | `8e503332c23875bd82754ffd29314b65e1235089` |
+| Version | `MVP v0.13` |
+| Phase | `Phase 3H Strategy Extension` |
+| Branch | `main` |
+| Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
+| Trading state | fail-closed, preview-only, real order 미구현 |
+| Next recommended phase | `Phase 3I Weekly Review Report` |
 
-최종 검증 결과는 backend pytest 56 passed, frontend lint/typecheck/build/audit 통과, API smoke 통과, browser route smoke 통과입니다. KIS execution routes는 404를 유지했고, `orders_count == 0`, `token_issued == false`, token cache 미생성, 외부 network call 미수행, adapter order/network call 미수행, audit DB persistence 비활성, sensitive value 미노출을 확인했습니다.
+## Implemented Scope
 
-## Phase 3E-1 기록
+- Phase 1: FastAPI backend core MVP.
+- Phase 2: Next.js MVP web flow.
+- Phase 3A: CSV data quality validation and preview-confirm import.
+- Phase 3B: provider-neutral external daily OHLCV preview-confirm flow.
+- Phase 3C: KIS read-only foundation.
+- Phase 3D: broker safety scaffold.
+- Phase 3E-1: paper trading safety shell.
+- Phase 3F: read-only data reliability, provider contract, KRX fixture contract, data quality summary.
+- Phase 3G-1: backtest execution realism hardening.
+- Phase 3G-2: liquidity participation cap and partial fill model.
+- Phase 3G-3: adjusted price option, delisted symbol forced exit, missing data forced exit metrics.
+- Phase 3H: strategy explanation contract and conservative optional filters.
+- GitHub Actions CI scaffold: backend pytest, frontend lint/typecheck/build.
+- Alembic migration scaffold: current SQLAlchemy model 기준 초기 SQLite migration.
 
-Phase 3E-1은 paper preview safety scaffold까지만 구현했습니다.
+## Phase 3H Behavior
 
-- `backend/config/paper.yaml`: disabled/fail-closed 기본값
-- `/api/paper/status`: paper control plane disabled 상태 요약
-- `/api/paper/orders/preview`: DB write 없는 deny preview
-- `PaperTradingService`, `LocalPaperSimulator` skeleton
-- `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` 모델 정의
-- frontend `/paper`: status와 preview deny 표시
+Phase 3H는 기존 rule-based 전략 3종의 기본 결과를 보존하면서 설명력과 옵션 조건을 확장합니다.
 
-이번 Phase에서 구현하지 않은 범위:
+- `trend_breakout`, `vcp_breakout`, `canslim_lite`의 기본 조건과 기본 pass/fail 결과는 유지합니다.
+- screener result 응답에 `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`을 추가합니다.
+- 기존 `pass_flags`, `failed_conditions`, `reason_summary`, `score_details_json`, `risk_details_json`은 제거하지 않습니다.
+- 새 전략 조건은 모두 기본값 `false`로 비활성화되어 기존 결과를 보존합니다.
+- DB schema, backtest 수익률 산식, broker/paper/KIS safety contract는 변경하지 않습니다.
 
-- `POST /api/paper/orders`
-- `POST /api/paper/fill-simulator/run`
-- paper order create DB write
-- paper fill 생성 또는 paper position 변경
-- cancel API
-- KIS 주문, KIS paper API, KIS network call, token 발급/refresh/cache/DB 저장
+Phase 3H config options:
 
-최신 검증 결과는 backend pytest 60 passed, frontend lint/typecheck/build/audit 통과, `/paper` browser smoke 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, token/cache/network/adapter call 미수행을 확인했습니다.
+```yaml
+trend_breakout:
+  atr_risk_filter_enabled: false
+  max_atr20_pct: 0.08
 
-## Phase 3F-1 기록
+vcp_breakout:
+  pivot_distance_limit_enabled: false
+  max_pivot_distance_pct: 0.05
 
-Phase 3F-1은 실데이터 read-only adapter 기반 데이터 신뢰성 보강의 첫 contract 단계입니다.
+canslim_lite:
+  earnings_quality_enabled: false
+  min_roe: 0.15
+```
 
-- `GET /api/data/read-only/providers`: KIS/KRX read-only provider capability/status 조회
-- `kis_market_data`: `daily_ohlcv` read-only candidate, 기본 disabled/fail-closed
-- `krx_index_sector`, `krx_symbol_master`, `krx_trading_calendar`, `krx_corporate_actions`: KRX read-only contract source
-- frontend `/data`: read-only provider contract panel 표시
+## Main APIs
 
-이번 Phase에서 구현하지 않은 범위:
-
-- KIS 실제 network fetch
-- KIS token 발급/refresh/cache/DB 저장
-- KIS 주문, 계좌, 잔고, 체결, websocket
-- KRX 실제 network fetch
-- paper order create, fill simulator, paper position 변경
-
-최신 검증 결과는 backend pytest 62 passed, frontend lint/typecheck/build/audit 통과, `/data` browser smoke 통과입니다. `orders_count == 0`, `paper_*` row 0, token/cache/network/adapter call 미수행을 확인했습니다.
-
-## Phase 3F-2 기록
-
-Phase 3F-2는 KIS read-only daily OHLCV adapter의 fixture/normalization 단계입니다.
-
-- `backend/tests/fixtures/kis_daily_itemchartprice_response.json`: KIS 일봉 itemchart canonical fixture schema 고정
-- `MockKisMarketDataProvider`: `network_enabled=false` 경로에서 canonical fixture schema 기반 deterministic raw rows 생성
-- KIS raw response -> normalized daily OHLCV 컬럼 변환 검증
-- 기존 `/api/data/external/preview-daily-ohlcv`와 `/api/data/external/confirm-import` flow에서 `source_id=kis_market_data` mock preview/confirm 검증
-- `GET /api/data/read-only/providers` contract regression 유지
-
-이번 Phase에서 구현하지 않은 범위:
-
-- KIS 실제 API 호출
-- KIS token 발급/refresh/cache/DB 저장
-- KIS credential 저장
-- KIS 주문, 계좌, 잔고, 체결, cancel, websocket route
-- broker adapter network/order call
-- `POST /api/paper/orders`
-- paper fill simulator
-- paper order/fill/position/audit row mutation
-- frontend API contract 변경
-- DB schema 변경
-
-최신 검증 결과는 backend pytest 67 passed, frontend lint/typecheck/build/audit 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, token/cache/network/adapter call 미수행, token cache 미생성을 확인했습니다.
-
-## Phase 3F-3 기록
-
-Phase 3F-3은 KRX index/sector/symbol/calendar/corporate action source contract를 fixture/read-only 기반으로 고정한 단계입니다.
-
-- `backend/tests/fixtures/krx_index_sector_reference.json`: index/sector fixture schema
-- `backend/tests/fixtures/krx_symbol_master_reference.json`: symbol master fixture schema
-- `backend/tests/fixtures/krx_trading_calendar_reference.json`: trading calendar fixture schema
-- `backend/tests/fixtures/krx_corporate_actions_reference.json`: corporate action fixture schema
-- KRX raw fixture -> 기존 SQLAlchemy model 컬럼 payload `list[dict]` 순수 normalize 함수
-- 기존 `GET /api/data/read-only/providers` contract regression 유지
-- KRX source 4종은 `enabled=false`, `network_enabled=false`, `read_only_enabled=false` 유지
-
-이번 Phase에서 구현하지 않은 범위:
-
-- 실제 KRX/KIS API 호출
-- 신규 실행 endpoint
-- DB schema 변경, Alembic/migration
-- KRX fixture 결과 DB upsert API/service/runtime flow
-- token 발급/cache/credential 저장
-- 주문/계좌/잔고/체결/cancel/websocket route
-- `POST /api/paper/orders`, paper fill simulator
-- broker adapter network/order call, live broker, 자동매매 scheduler
-
-최신 검증 결과는 backend pytest 73 passed, frontend lint/typecheck/build/audit 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, paper mutation routes 404, token/cache/network/adapter call 미수행, token cache 미생성을 확인했습니다.
-
-## Phase 3F-4 기록
-
-Phase 3F-4는 기존 DB와 provider status만 조회하는 data freshness/quality summary 단계입니다.
-
-- `GET /api/data/quality-summary`: freshness, missing rows, duplicate, quality, safety summary 조회
-- `backend/app/services/data_quality_summary_service.py`: SELECT 기반 summary 계산
-- frontend `/data`: `Freshness & Quality Summary` read-only panel 표시
-- `latest_trade_date`: `daily_ohlcv`의 `venue` 기준 max trade date
-- missing rows: `trading_calendar` open date 기준, 없으면 observed `daily_ohlcv` date 기준 fallback
-- duplicate summary: physical duplicate와 `data_quality_checks` duplicate code 집계를 분리
-- safety counts: `orders_count`, `paper_*` count 0과 token/network/adapter flags false 반환
-
-이번 Phase에서 구현하지 않은 범위:
-
-- 실제 KIS/KRX/yfinance network call
-- provider fetch 호출
-- token 발급/cache/refresh/credential 저장
-- 주문/계좌/잔고/체결/cancel/websocket route
-- `POST /api/paper/orders`, paper fill simulator
-- paper order/fill/position/audit row mutation
-- DB schema 변경, Alembic/migration
-- 기존 preview/confirm flow 또는 `GET /api/data/read-only/providers` contract 변경
-
-최신 검증 결과는 backend pytest 79 passed, frontend lint/typecheck/build/audit 통과, fresh `/data` Playwright screenshot smoke 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, paper mutation routes 404, token/cache/network/adapter call 미수행을 확인했습니다.
-
-## Phase 3D 기능
-
-- Phase 3A CSV validate/confirm flow 유지
-- Phase 3B provider-neutral external daily OHLCV preview/confirm flow 유지
-- Phase 3C KIS read-only foundation 유지
-- Phase 3D broker safety scaffold 추가
-  - `backend/config/broker.yaml`: disabled/fail-closed 기본값
-  - `/api/broker/status`: broker 안전 상태 요약
-  - `/api/broker/orders/preview`: dry-run preview only
-  - `TokenLifecycleService`: status-only, token 발급/refresh/cache/DB 저장 없음
-  - `BrokerAuditService`: sanitize scaffold, DB persistence 비활성
-  - `OrderRiskGate`: buy/sell preview deny reason code 반환
-- KIS execution route 미등록 유지
-  - `/api/kis/orders/*`: 404
-  - `/api/kis/broker/*`: 404
-  - `/api/kis/websocket/*`: 404
-
-## Broker Safety Contract
-
-`/api/broker/status`와 `/api/broker/orders/preview`는 항상 다음 안전 값을 보장합니다.
-
-| field | value |
-|---|---|
-| `mode` | `disabled` 또는 `safety_scaffold` |
-| `can_submit` | `false` |
-| `preview_only` | `true` |
-| `order_created` | `false` for preview |
-| `token_issued` | `false` |
-| `network_call_performed` | `false` |
-| `adapter_selected` | boolean |
-| `adapter_name` | `kis_openapi` |
-| `adapter_order_call_performed` | `false` |
-| `adapter_network_call_performed` | `false` |
-
-Sell preview는 기존 long position 청산 검토 전용입니다. 기존 포지션이 없거나 보유 수량을 초과하면 deny하며, 신규 short sell은 지원하지 않습니다.
-
-`backend/config/broker.yaml` 원문과 broker summary는 `/api/settings`에 노출하지 않습니다. broker 안전 상태 요약은 `/api/broker/status`에서만 반환합니다.
-
-## Import Flow
-
-CSV flow:
-
-1. `POST /api/data/validate-csv`
-2. `POST /api/data/import-csv-confirmed`
-
-External flow:
-
-1. `POST /api/data/external/preview-daily-ohlcv`
-2. `POST /api/data/external/confirm-import`
-
-Preview 단계는 market data table을 직접 변경하지 않습니다. 허용되는 write는 `import_runs +1`, `data_quality_checks +N`뿐입니다.
-
-Confirm은 `run_id`만 받으며 파일 또는 provider를 다시 조회하지 않습니다. `import_runs.staged_rows_json`을 transaction으로 `daily_ohlcv`에 반영합니다.
-
-## External Provider 정책
-
-`yfinance`는 production-grade 데이터 provider가 아닙니다. 자동매매의 최종 의사결정 데이터 소스로 사용하지 않고, provider-neutral 구조 검증과 manual preview/prototype 용도로만 사용합니다.
-
-- 기본값은 `network_enabled=false`입니다.
-- 테스트와 smoke에서는 실제 외부 네트워크 호출을 하지 않습니다.
-- API key, secret, token, account 정보는 저장하지 않습니다.
-- provider별 symbol mapping은 `external_symbol_mapping`을 반드시 거칩니다.
-- mapping이 없으면 `SYMBOL_MAPPING_FAILED` quality check를 생성하고 `daily_ohlcv`에는 쓰지 않습니다.
-
-Symbol mapping 예:
-
-| provider | internal_symbol | provider_symbol |
-|---|---|---|
-| yfinance | `005930` | `005930.KS` |
-| kis | `005930` | `005930` |
-
-## KIS 확장 정책
-
-KIS는 data provider와 broker adapter를 분리합니다.
-
-- `kis_market_data`: read-only market data 후보, 기본 disabled
-- `kis_openapi`: broker placeholder, 기본 disabled
-- `KisMarketDataProvider`: 실제 KIS 호출 금지 skeleton
-- `MockKisMarketDataProvider`: KIS 기간별시세 형태 fixture provider
-
-단계:
-
-- Phase 3C: KIS read-only foundation
-- Phase 3D: broker safety scaffold only
-- Phase 3E-1: paper preview safety scaffold only
-- Phase 3F-1: read-only data provider contract
-- Phase 3F-2: KIS read-only daily OHLCV fixture adapter
-- Phase 3F-3: KRX fixture source contract
-- Phase 3F-4: data freshness/quality summary, 현재 checkpoint
-- Phase 3G 후보: 백테스트 현실성 보강, 별도 승인 필요
-- Phase 3H 후보: 전략 확장, 별도 승인 필요
-- Phase 3I 후보: weekly review report, 별도 승인 필요
-- Phase 3J 후보: portfolio-level risk guard, 별도 승인 필요
-- Phase 4A 후보: broker paper adapter, 별도 승인 필요
-- Phase 4B 후보: live gate design, 별도 승인 필요
-
-KIS read-only API 후보는 fixture/schema/normalization 설계에만 사용합니다.
-
-| 후보 | 용도 |
-|---|---|
-| `/uapi/domestic-stock/v1/quotations/inquire-price`, TR `FHKST01010100` | 국내주식 현재가 후보 |
-| `/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice`, TR `FHKST03010100` | Phase 3C primary daily_ohlcv fixture |
-| `/uapi/domestic-stock/v1/quotations/inquire-daily-price`, TR `FHKST01010400` | 일자별 시세 후보 |
-| `/uapi/domestic-stock/v1/quotations/search-stock-info` | 종목 기본정보 후보 |
-
-## Secret 정책
-
-- 실제 KIS app key/app secret/account/token은 저장하지 않습니다.
-- `.env.example`에는 placeholder만 둡니다.
-- `/api/kis/status`와 `/api/kis/config`는 configured boolean만 반환하며 secret 값을 반환하지 않습니다.
-- `/api/kis/config/validate`는 환경변수 존재와 형식만 확인하고 KIS network call, token 발급, token cache 생성을 하지 않습니다.
-- `/api/broker/status`와 `/api/broker/orders/preview`는 `token_issued=false`, `network_call_performed=false`를 반환합니다.
-- Settings API와 logs에는 secret 값을 출력하지 않습니다.
-
-## 주요 API
-
-| Method | Path | 설명 |
+| Method | Path | 목적 |
 |---|---|---|
 | `GET` | `/api/data/status` | 데이터 row count와 최신 기준일 |
 | `GET` | `/api/data/sources` | data source 목록 |
@@ -261,15 +71,22 @@ KIS read-only API 후보는 fixture/schema/normalization 설계에만 사용합�
 | `GET` | `/api/data/external/providers` | external-capable provider source 목록 |
 | `POST` | `/api/data/external/preview-daily-ohlcv` | external daily OHLCV preview |
 | `POST` | `/api/data/external/confirm-import` | external run confirm |
+| `GET` | `/api/data/read-only/providers` | KIS/KRX read-only provider contract |
+| `GET` | `/api/data/quality-summary` | data freshness/quality/safety summary |
 | `GET` | `/api/kis/status` | KIS read-only status |
 | `GET` | `/api/kis/config` | KIS redacted config |
 | `POST` | `/api/kis/config/validate` | KIS env configured boolean 검증 |
-| `GET` | `/api/broker/status` | Phase 3D broker safety status |
-| `POST` | `/api/broker/orders/preview` | Phase 3D dry-run preview only |
-| `GET` | `/api/paper/status` | Phase 3E-1 paper disabled safety status |
-| `POST` | `/api/paper/orders/preview` | Phase 3E-1 paper deny preview only |
+| `GET` | `/api/broker/status` | broker safety status |
+| `POST` | `/api/broker/orders/preview` | dry-run preview only |
+| `GET` | `/api/paper/status` | paper disabled safety status |
+| `POST` | `/api/paper/orders/preview` | paper deny preview only |
+| `POST` | `/api/screener/run` | rule-based screener run |
+| `GET` | `/api/screener/results` | screener result list with explanation contract |
+| `POST` | `/api/backtest/run` | strategy backtest run |
+| `GET` | `/api/backtest/runs` | backtest run 목록 |
+| `GET` | `/api/backtest/runs/{run_id}` | backtest run 상세 |
 
-## 실행
+## Run Locally
 
 Backend:
 
@@ -288,34 +105,81 @@ npm.cmd run build
 npm.cmd run start -- --hostname 127.0.0.1 --port 3000
 ```
 
-포트 충돌 시 backend `8001`, frontend `3001`을 사용합니다. backend 포트를 바꾸면 `frontend/.env.local`의 `NEXT_PUBLIC_API_BASE_URL`을 맞춘 뒤 다시 build해야 합니다.
+backend 포트가 `8001` 등으로 바뀌면 `frontend/.env.local`의 `NEXT_PUBLIC_API_BASE_URL`을 맞춘 뒤 다시 build/start 해야 합니다. `NEXT_PUBLIC_*` 값은 production build에 포함됩니다.
 
-## 검증
+## Verification Commands
+
+Backend full suite:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend/tests
+```
+
+Phase 3H strategy targeted suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_phase2_api.py backend/tests/test_api_smoke.py -q
+```
+
+Phase 3G backtest targeted suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q
+```
+
+Broker/paper/KIS/backtest safety targeted suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_phase3g_backtest_execution_model.py -q
+```
+
+Frontend:
+
+```powershell
 cd frontend
 npm.cmd run lint
 npm.cmd exec tsc -- --noEmit
 npm.cmd run build
-npm.cmd audit --audit-level=moderate
 ```
 
-최신 검증 결과는 `docs/VALIDATION.md`를 확인합니다.
+Tracked code/config secret assignment scan:
 
-## 안전 제약
+```powershell
+$matches = rg -n --hidden --glob '!docs/**' --glob '!frontend/package-lock.json' --glob '!frontend/node_modules/**' --glob '!backend/data/**' '(app_key|app_secret|access_token|refresh_token|account_no|password)\s*:\s*\x22[^*<][^\x22]{7,}\x22' backend frontend
+if ($LASTEXITCODE -eq 1) { 'secret scan: no matches' } elseif ($LASTEXITCODE -eq 0) { $matches; exit 1 } else { exit $LASTEXITCODE }
+```
 
-- KIS 실제 API 호출 없음
-- KIS app key/app secret 저장 없음
-- KIS 계좌번호 저장 없음
-- KIS token 발급/refresh/cache/DB 저장 없음
-- KIS 주문 API 구현 없음
-- KIS broker/order/websocket route 등록 없음
-- 실제 주문 없음
-- paper order create, fill, position 변경, live broker 없음
-- cancel/fill/websocket 연결 없음
-- 주문 row 생성 없음
-- audit DB persistence 없음
-- API key/secret/token/password/account/header/raw credential 저장 또는 노출 없음
-- Mock/safety broker는 preview-only
-- Phase 3F-2 후에도 `orders_count == 0`
+Alembic migration smoke:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_alembic_migrations.py -q
+```
+
+## Safety Invariants
+
+- `orders_count == 0` 유지.
+- `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` row count 0 유지.
+- `/api/broker/status`는 `can_submit=false`, `preview_only=true`, `token_issued=false`, `network_call_performed=false`를 반환.
+- `/api/broker/orders/preview`는 실제 주문, token 발급, network call, adapter order call 없이 deny preview만 반환.
+- `/api/paper/status`는 `enabled=false`, `can_create=false`, `can_simulate_fills=false`, `preview_only=true`를 반환.
+- `/api/paper/orders/preview`는 paper order/fill/position/audit mutation 없이 deny preview만 반환.
+- `POST /api/paper/orders`, `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*` route는 미등록 404 상태를 유지.
+- `.cache/kis/token.json`은 생성하지 않음.
+- API key, secret, token, password, account/header/raw credential 값을 저장하거나 출력하지 않음.
+
+## Not Implemented
+
+- 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker.
+- paper order create, paper fill simulator, paper position mutation.
+- KIS credential/token 저장, KIS token 발급/refresh/cache, 실제 KIS API 호출.
+- KRX/yfinance 실제 network fetch.
+- 자동매매 scheduler, live broker adapter, AI prediction model.
+- portfolio cash/position state, walk-forward validation.
+
+## CI
+
+GitHub Actions workflow는 `.github/workflows/ci.yml`에 정의합니다.
+
+- backend job: Python 3.12, `requirements.txt` 설치, `python -m pytest backend/tests`.
+- frontend job: Node 22, `npm ci`, lint, typecheck, build.
+- CI는 KIS credential/token secret을 요구하지 않으며 실제 외부 API 호출 없이 fail-closed 테스트만 실행합니다.

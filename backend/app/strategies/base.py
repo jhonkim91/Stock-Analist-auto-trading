@@ -44,6 +44,35 @@ class BaseStrategy:
             return f"{strategy_name} 조건을 모두 충족했습니다."
         return f"{strategy_name} 탈락 조건: {', '.join(failed)}"
 
+    @classmethod
+    def _metadata(
+        cls,
+        flags: dict[str, bool],
+        failed: list[str],
+        explanation: str,
+        *,
+        risk_flags: dict[str, bool] | None = None,
+        data_quality_flags: dict[str, bool] | None = None,
+        optional_conditions: list[str] | None = None,
+    ) -> dict[str, Any]:
+        triggered = [key for key, value in flags.items() if value]
+        total_conditions = max(len(flags), 1)
+        return {
+            "triggered_conditions": triggered,
+            "failed_conditions": failed,
+            "score_breakdown": {
+                "condition_score": round(len(triggered) / total_conditions, 4),
+                "triggered_count": len(triggered),
+                "failed_count": len(failed),
+                "total_conditions": len(flags),
+            },
+            "risk_flags": risk_flags or {},
+            "data_quality_flags": data_quality_flags or {},
+            "optional_conditions": optional_conditions or [],
+            "explanation": explanation,
+            "rationale": explanation,
+        }
+
     @staticmethod
     def _gt(left: float | None, right: float | None) -> bool:
         return left is not None and right is not None and left > right
@@ -51,3 +80,7 @@ class BaseStrategy:
     @staticmethod
     def _gte(left: float | None, right: float | None) -> bool:
         return left is not None and right is not None and left >= right
+
+    @staticmethod
+    def _lte(left: float | None, right: float | None) -> bool:
+        return left is not None and right is not None and left <= right

@@ -75,6 +75,12 @@ def test_screener_results_filtering_sorting_and_limit(client):
         "failed_conditions_json",
         "score_details_json",
         "risk_details_json",
+        "triggered_conditions",
+        "score_breakdown",
+        "risk_flags",
+        "data_quality_flags",
+        "explanation",
+        "rationale",
     ):
         assert key in first
 

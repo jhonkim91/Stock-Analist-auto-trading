@@ -2,7 +2,7 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `MVP v0.11 Phase 3G-2 Liquidity and Partial Fill Model`
+- [x] 현재 상태명: `MVP v0.13 Phase 3H Strategy Extension`
 - [x] Phase 1 Backend Core MVP 구현
 - [x] Phase 2 MVP Web Flow 구현
 - [x] Phase 3A CSV validate/confirm import 구현
@@ -13,86 +13,59 @@
 - [x] Phase 3F read-only data reliability 구현
 - [x] Phase 3G-1 backtest execution model hardening 구현
 - [x] Phase 3G-2 liquidity and partial fill model 구현
+- [x] Phase 3G-3 adjusted price and delisted/missing data handling 구현
+- [x] Phase 3H strategy explanation and optional filters 구현
+- [x] GitHub Actions CI scaffold 추가
+- [x] Alembic migration scaffold 및 initial schema migration 추가
 - [x] 현재 브랜치: `main`
 
 ## 현재 프로젝트 상태
 
-- Backend: FastAPI + SQLite, sample seed, CSV import, external daily OHLCV preview/confirm, KIS read-only foundation, broker safety scaffold, paper preview scaffold, data quality summary, hardened backtest execution model.
+- Backend: FastAPI + SQLite, sample seed, CSV import, external daily OHLCV preview/confirm, KIS read-only foundation, broker safety scaffold, paper preview scaffold, data quality summary, hardened backtest execution model, strategy explanation contract.
 - Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/settings`.
-- Backtest: long-only exit simulation에서 gap-aware stop/target, config 기반 same-bar priority, optional `trades[*].execution_detail`, optional `trades[*].liquidity_detail`을 제공한다.
-- Liquidity model: `risk.position_size`를 `planned_qty`로 유지하고 `turnover_value` 또는 `volume * raw_entry_price` 기준 participation cap으로 backtest 체결 수량만 제한한다.
+- Product state: 실주문 자동매매 엔진이 아니라 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP.
+- Strategy: `trend_breakout`, `vcp_breakout`, `canslim_lite` 기본 결과를 보존하고 screener response에 `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`를 제공한다.
+- Strategy options: `atr_risk_filter_enabled=false`, `pivot_distance_limit_enabled=false`, `earnings_quality_enabled=false` 기본값으로 기존 결과를 보존한다.
+- Backtest: gap-aware stop/target, same-bar priority, liquidity participation cap, partial fill, adjusted price, delisted/missing data forced exit를 옵션 기반으로 제공한다.
 - `POST /api/backtest/run`, `GET /api/backtest/runs`, `GET /api/backtest/runs/{run_id}` contract와 기존 metrics key/type은 유지한다.
-- Optional metrics: `partial_fill_count`, `no_fill_count`, `total_unfilled_qty`.
-- `backtest_runs.metrics_json` 저장 구조는 유지한다.
-- Frontend security: `postcss@8.5.15` override로 `npm audit` 0 vulnerabilities.
+- DB migration: root `alembic.ini`, `backend/alembic`, initial revision `da9ab5998e36_initial_schema`, SQLite upgrade/downgrade smoke test.
 
-## Phase 3G-2 변경 파일/구조
+## 기준 문서
 
-- `backend/config/backtest.yaml`
-  - `execution.max_participation_rate: 0.05`
-  - `execution.min_fill_ratio: 0.25`
-  - `execution.allow_partial_fill: true`
-- `backend/app/services/backtest_service.py`
-  - `planned_qty = risk.position_size`
-  - `requested_notional = planned_qty * raw_entry_price`
-  - `liquidity_notional`은 `turnover_value` 우선, 없거나 0이면 `volume * raw_entry_price` fallback.
-  - `cap_notional = liquidity_notional * max_participation_rate`
-  - `fill_ratio = min(1.0, cap_notional / requested_notional)`
-  - partial fill 허용 시 `filled_qty = floor(planned_qty * fill_ratio)`.
-  - no-fill/insufficient liquidity는 `qty=0` trade record를 남기지 않고 skip.
-  - generated trade의 top-level `qty`, `pnl`, `estimated_cost`는 `filled_qty` 기준.
-- `backend/tests/test_backtest.py`
-  - 충분한 유동성, partial fill, min fill 미달 skip, partial disabled skip, volume fallback, zero liquidity skip, optional metrics 테스트 추가.
-- `backend/tests/test_phase3g_backtest_execution_model.py`
-  - 기존 backtest API smoke에 optional metrics와 `liquidity_detail` contract 확인 추가.
-- `docs/VALIDATION.md`
-  - Phase 3G-2 최신 검증 결과와 safety contract로 갱신.
+- `README.md`: 실행, API, 검증 명령, 안전 불변조건.
+- `docs/PROJECT_STATUS.md`: 다음 작업자가 가장 먼저 볼 단일 상태 요약.
+- `docs/VALIDATION.md`: 최신 검증 결과와 검증 명령.
+- `docs/plans/README.md`: Phase index와 다음 권장 Phase.
+- `docs/DB_MIGRATION.md`: Alembic migration 생성/적용/롤백 절차.
 
 ## 최신 검증 결과
 
-- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 17 passed in 55.95s
-- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 93 passed in 188.86s
-- 2026-05-22 `npm.cmd run lint`: 통과
-- 2026-05-22 `npm.cmd exec tsc -- --noEmit`: 통과
-- 2026-05-22 `npm.cmd run build`: Next.js 16.2.6 production build 통과
-- 2026-05-22 `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities
+- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 101 passed.
+- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_phase2_api.py backend/tests/test_api_smoke.py -q`: 12 passed.
+- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 20 passed.
+- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 19 passed.
+- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_alembic_migrations.py -q`: 2 passed.
+- 2026-05-22 frontend lint/typecheck/build: 통과.
+- 2026-05-22 tracked backend/frontend code/config secret assignment scan: no matches.
 - Safety invariant: `orders_count == 0`, `paper_orders/fills/positions/audit_events == 0`, KIS execution routes 404, `POST /api/paper/orders` 404, `POST /api/paper/fill-simulator/run` 404, provider network/token/adapter flags false, `.cache/kis/token.json` 미생성.
-
-## 최신 DB count
-
-- symbol_master: 15
-- daily_ohlcv: 4,800
-- index_ohlcv: 320
-- sector_ohlcv: 2,880
-- fundamentals_pti: 30
-- indicator_snapshot: 4,800
-- screen_results: 45
-- reports: 1
-- backtest_runs: local DB에서 backtest smoke마다 증가 가능
-- orders_count: 0
-- paper_orders: 0
-- paper_fills: 0
-- paper_positions: 0
-- paper_audit_events: 0
-- latest_trade_date: 2026-05-20
-- latest_indicator_date: 2026-05-20
-- latest_screen_date: 2026-05-20
 
 ## 불변 조건
 
-- 실제 주문, paper order/fill/position/audit mutation, live broker 구현 금지.
-- KIS/KRX/yfinance network call, token 발급/cache/credential 저장 금지.
+- 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker 구현 금지.
+- paper order/fill/position/audit mutation 구현 금지.
+- KIS/KRX/yfinance network call, KIS token 발급/cache/credential 저장 금지.
 - broker/order adapter import 또는 호출 금지.
-- DB schema 변경, Alembic/migration 도입 금지.
+- 신규 DB schema 변경은 Alembic revision과 검증 없이 금지.
 - 기존 backtest API breaking change 금지.
-- 기존 metrics key 삭제/타입 변경 금지.
-- strategy 조건 대규모 변경 금지.
-- portfolio cash/position state와 walk-forward 구현은 Phase 3G-2 범위 밖.
+- 기존 metrics key 제거/타입 변경 금지.
+- 기존 전략 기본 결과를 변경하는 새 조건은 기본 비활성으로 둔다.
+- portfolio cash/position state와 walk-forward 구현은 현재 범위 밖.
 - `orders_count == 0`, `paper_* == 0`, KIS/paper execution routes 404 유지.
 - `npm audit fix --force`, Next.js downgrade, main 강제 push 금지.
 
 ## 다음 작업
 
-- [ ] Phase 3G-3: corporate action adjusted price와 delisted symbol handling 보강.
-- [ ] `daily_ohlcv.adj_close` 사용 기준과 split/dividend adjustment 범위 확정.
-- [ ] 상장폐지/거래정지/마지막 가용 가격 청산 규칙 설계.
+- [ ] Phase 3I: weekly review report를 fixture 기반으로 검토.
+- [ ] Strategy explanation contract를 frontend에서 표시할지 별도 범위로 검토.
+- [ ] adjusted price factor/corporate action fixture를 실제 데이터 계약 수준으로 정교화.
+- [ ] Phase 4A/4B broker 또는 live gate는 별도 승인 전까지 구현하지 않는다.

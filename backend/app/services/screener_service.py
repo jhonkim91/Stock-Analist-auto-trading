@@ -158,9 +158,18 @@ class ScreenerService:
     def _serialize_result(cls, row: ScreenResult, name: str) -> dict[str, object]:
         pass_flags = json.loads(row.pass_flags)
         failed_conditions = json.loads(row.failed_conditions)
+        triggered_conditions = [key for key, value in pass_flags.items() if value]
+        total_conditions = max(len(pass_flags), 1)
         score_details = {
             "total_score": row.total_score,
             "grade": cls._grade(row.total_score),
+        }
+        score_breakdown = {
+            **score_details,
+            "condition_score": round(len(triggered_conditions) / total_conditions, 4),
+            "triggered_count": len(triggered_conditions),
+            "failed_count": len(failed_conditions),
+            "total_conditions": len(pass_flags),
         }
         risk_details = {
             "entry_price": row.entry_price,
@@ -170,6 +179,19 @@ class ScreenerService:
             "reward_risk_ratio": row.reward_risk_ratio,
             "position_size": row.position_size,
             "position_notional": row.position_notional,
+        }
+        risk_flags = {
+            "liquidity_ok": bool(pass_flags.get("liquidity_ok", False)),
+            "rr_ok": bool(pass_flags.get("rr_ok", False)),
+            "position_size_positive": int(row.position_size or 0) > 0,
+            "risk_per_share_positive": float(row.risk_per_share or 0) > 0,
+        }
+        data_quality_flags = {
+            "pass_flags_parseable": isinstance(pass_flags, dict),
+            "failed_conditions_parseable": isinstance(failed_conditions, list),
+            "entry_price_available": row.entry_price is not None,
+            "stop_price_available": row.stop_price is not None,
+            "target_price_available": row.target_price is not None,
         }
         return {
             "trade_date": row.trade_date,
@@ -190,6 +212,12 @@ class ScreenerService:
             "failed_conditions_json": failed_conditions,
             "score_details_json": score_details,
             "risk_details_json": risk_details,
+            "triggered_conditions": triggered_conditions,
+            "score_breakdown": score_breakdown,
+            "risk_flags": risk_flags,
+            "data_quality_flags": data_quality_flags,
+            "explanation": row.reason_summary,
+            "rationale": row.reason_summary,
             "pass_flags": pass_flags,
             "failed_conditions": failed_conditions,
             "risk_per_share": row.risk_per_share,

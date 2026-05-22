@@ -26,6 +26,10 @@ EXPECTED_METRIC_KEYS = {
     "partial_fill_count",
     "no_fill_count",
     "total_unfilled_qty",
+    "adjusted_price_trade_count",
+    "forced_exit_count",
+    "delisted_exit_count",
+    "missing_data_exit_count",
 }
 
 EXPECTED_TRADE_KEYS = {
@@ -44,6 +48,7 @@ EXPECTED_TRADE_KEYS = {
     "cost_bps",
     "return_pct",
     "holding_days",
+    "price_detail",
 }
 
 EXPECTED_EXECUTION_DETAIL_KEYS = {
@@ -59,6 +64,11 @@ EXPECTED_EXECUTION_DETAIL_KEYS = {
     "target_price",
     "commission_bps",
     "slippage_bps",
+    "forced_exit",
+    "delisted_exit",
+    "missing_data_exit",
+    "delisted_handling_policy",
+    "missing_data_policy",
 }
 
 EXPECTED_LIQUIDITY_DETAIL_KEYS = {
@@ -74,6 +84,18 @@ EXPECTED_LIQUIDITY_DETAIL_KEYS = {
     "allow_partial_fill",
     "liquidity_basis",
     "position_size_cap_applied",
+}
+
+EXPECTED_PRICE_DETAIL_KEYS = {
+    "use_adjusted_price",
+    "entry_price_basis",
+    "exit_price_basis",
+    "entry_adjustment_factor",
+    "exit_adjustment_factor",
+    "entry_raw_close",
+    "entry_adj_close",
+    "exit_raw_close",
+    "exit_adj_close",
 }
 
 
@@ -108,6 +130,7 @@ def test_phase3g_backtest_api_contract_and_metrics_remain_backward_compatible(cl
         assert EXPECTED_TRADE_KEYS.issubset(first_trade)
         assert EXPECTED_EXECUTION_DETAIL_KEYS.issubset(first_trade["execution_detail"])
         assert EXPECTED_LIQUIDITY_DETAIL_KEYS.issubset(first_trade["liquidity_detail"])
+        assert EXPECTED_PRICE_DETAIL_KEYS.issubset(first_trade["price_detail"])
         assert first_trade["execution_detail"]["entry_assumption"] == "next_open"
         assert first_trade["qty"] == first_trade["liquidity_detail"]["filled_qty"]
         assert first_trade["liquidity_detail"]["planned_qty"] >= first_trade["liquidity_detail"]["filled_qty"]

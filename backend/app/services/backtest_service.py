@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from uuid import uuid4
 
 import pandas as pd
@@ -60,6 +60,7 @@ class BacktestService:
 
         trades: list[dict[str, object]] = []
         liquidity_stats = {"partial_fill_count": 0, "no_fill_count": 0, "total_unfilled_qty": 0}
+        realism_stats = {"adjusted_price_trade_count": 0, "forced_exit_count": 0, "delisted_exit_count": 0, "missing_data_exit_count": 0}
         equity_curve = [{"date": dates[0], "equity": equity}]
         exposure_days = 0
         total_days = max((dates[-1] - dates[0]).days, 1)
@@ -78,7 +79,7 @@ class BacktestService:
             if not candidates:
                 continue
             _, indicator, risk = sorted(candidates, key=lambda item: item[0], reverse=True)[0]
-            trade = self._simulate_trade(indicator.symbol, signal_date, risk, price_by_symbol, liquidity_stats)
+            trade = self._simulate_trade(indicator.symbol, signal_date, risk, price_by_symbol, liquidity_stats, realism_stats)
             if trade is None:
                 continue
             equity += float(trade["pnl"])
@@ -94,6 +95,7 @@ class BacktestService:
             exposure_days,
             total_days,
             liquidity_stats,
+            realism_stats,
         )
         run_id = f"bt-{uuid4().hex[:12]}"
         config_hash = stable_hash({"strategy": strategy_name, "backtest": self.backtest_config, "risk": get_config("risk")})
@@ -149,6 +151,7 @@ class BacktestService:
         risk,
         price_by_symbol: dict[str, pd.DataFrame],
         liquidity_stats: dict[str, int] | None = None,
+        realism_stats: dict[str, int] | None = None,
     ) -> dict[str, object] | None:
         prices = price_by_symbol.get(symbol)
         if prices is None or prices.empty:
@@ -162,9 +165,11 @@ class BacktestService:
         slippage_bps = float(execution_config["slippage_bps"])
         bps = (commission_bps + slippage_bps) / 10000
         same_bar_stop_first = bool(execution_config.get("same_bar_stop_first", True))
-        raw_entry_price = float(entry_bar["open"])
+        use_adjusted_price = bool(execution_config.get("use_adjusted_price", False))
+        entry_price_view = self._bar_price_view(entry_bar, use_adjusted_price)
+        raw_entry_price = float(entry_price_view["open"])
         entry_price = raw_entry_price * (1 + bps)
-        stop_price = float(risk.stop_price)
+        stop_price = float(risk.stop_price) * float(entry_price_view["adjustment_factor"])
         target_price = entry_price + (entry_price - stop_price) * float(self.strategy_config["common"]["target_reward_risk"])
         planned_qty = int(risk.position_size)
         liquidity_detail = self._liquidity_detail(entry_bar, raw_entry_price, planned_qty, execution_config)
@@ -175,9 +180,14 @@ class BacktestService:
             return None
         max_holding_days = int(execution_config["max_holding_days"])
 
+        exit_decision: dict[str, object] | None = None
+        exit_bar: pd.Series | None = None
+        exit_bar_index = 0
+        exit_price_view: dict[str, object] | None = None
         for index, bar in future.iloc[:max_holding_days].iterrows():
+            current_price_view = self._bar_price_view(bar, use_adjusted_price)
             exit_decision = self._exit_decision(
-                bar=bar,
+                bar=current_price_view,
                 bar_index=int(index),
                 max_holding_days=max_holding_days,
                 stop_price=stop_price,
@@ -185,45 +195,186 @@ class BacktestService:
                 same_bar_stop_first=same_bar_stop_first,
             )
             if exit_decision is not None:
-                raw_exit_price = float(exit_decision["raw_exit_price"])
-                exit_price = raw_exit_price * (1 - bps)
-                pnl = (exit_price - entry_price) * filled_qty
-                estimated_cost = ((raw_entry_price * bps) + (raw_exit_price * bps)) * filled_qty
-                if unfilled_qty > 0:
-                    self._record_partial_fill(liquidity_stats, unfilled_qty)
-                return {
-                    "symbol": symbol,
-                    "signal_date": signal_date,
-                    "entry_date": entry_bar["trade_date"],
-                    "raw_entry_price": round(raw_entry_price, 4),
-                    "entry_price": round(entry_price, 4),
-                    "exit_date": bar["trade_date"],
-                    "raw_exit_price": round(raw_exit_price, 4),
-                    "exit_price": round(exit_price, 4),
-                    "exit_reason": exit_decision["exit_reason"],
-                    "qty": filled_qty,
-                    "pnl": round(pnl, 2),
-                    "estimated_cost": round(estimated_cost, 2),
-                    "cost_bps": round(bps * 10000, 4),
-                    "return_pct": round((exit_price / entry_price) - 1, 6),
-                    "holding_days": int(index) + 1,
-                    "execution_detail": {
-                        "entry_assumption": "next_open",
-                        "exit_assumption": exit_decision["exit_assumption"],
-                        "same_bar_stop_first": same_bar_stop_first,
-                        "stop_touched": exit_decision["stop_touched"],
-                        "target_touched": exit_decision["target_touched"],
-                        "same_bar_both_touched": exit_decision["same_bar_both_touched"],
-                        "gap_stop": exit_decision["gap_stop"],
-                        "gap_target": exit_decision["gap_target"],
-                        "stop_price": round(stop_price, 4),
-                        "target_price": round(target_price, 4),
-                        "commission_bps": commission_bps,
-                        "slippage_bps": slippage_bps,
-                    },
-                    "liquidity_detail": liquidity_detail,
-                }
-        return None
+                exit_bar = bar
+                exit_bar_index = int(index)
+                exit_price_view = current_price_view
+                break
+
+        if exit_decision is None:
+            forced_exit = self._forced_exit(
+                symbol=symbol,
+                prices=prices,
+                future=future,
+                max_holding_days=max_holding_days,
+                execution_config=execution_config,
+                use_adjusted_price=use_adjusted_price,
+            )
+            if forced_exit is None:
+                return None
+            exit_bar = forced_exit["bar"]
+            exit_bar_index = int(forced_exit["bar_index"])
+            exit_price_view = forced_exit["price_view"]
+            exit_decision = forced_exit["exit_decision"]
+
+        raw_exit_price = float(exit_decision["raw_exit_price"])
+        exit_price = raw_exit_price * (1 - bps)
+        pnl = (exit_price - entry_price) * filled_qty
+        estimated_cost = ((raw_entry_price * bps) + (raw_exit_price * bps)) * filled_qty
+        if unfilled_qty > 0:
+            self._record_partial_fill(liquidity_stats, unfilled_qty)
+        self._record_realism_stats(realism_stats, use_adjusted_price, exit_decision)
+        assert exit_bar is not None
+        assert exit_price_view is not None
+        return {
+            "symbol": symbol,
+            "signal_date": signal_date,
+            "entry_date": entry_bar["trade_date"],
+            "raw_entry_price": round(raw_entry_price, 4),
+            "entry_price": round(entry_price, 4),
+            "exit_date": exit_bar["trade_date"],
+            "raw_exit_price": round(raw_exit_price, 4),
+            "exit_price": round(exit_price, 4),
+            "exit_reason": exit_decision["exit_reason"],
+            "qty": filled_qty,
+            "pnl": round(pnl, 2),
+            "estimated_cost": round(estimated_cost, 2),
+            "cost_bps": round(bps * 10000, 4),
+            "return_pct": round((exit_price / entry_price) - 1, 6),
+            "holding_days": exit_bar_index + 1,
+            "execution_detail": {
+                "entry_assumption": "next_open",
+                "exit_assumption": exit_decision["exit_assumption"],
+                "same_bar_stop_first": same_bar_stop_first,
+                "stop_touched": exit_decision["stop_touched"],
+                "target_touched": exit_decision["target_touched"],
+                "same_bar_both_touched": exit_decision["same_bar_both_touched"],
+                "gap_stop": exit_decision["gap_stop"],
+                "gap_target": exit_decision["gap_target"],
+                "stop_price": round(stop_price, 4),
+                "target_price": round(target_price, 4),
+                "commission_bps": commission_bps,
+                "slippage_bps": slippage_bps,
+                "forced_exit": bool(exit_decision.get("forced_exit", False)),
+                "delisted_exit": bool(exit_decision.get("delisted_exit", False)),
+                "missing_data_exit": bool(exit_decision.get("missing_data_exit", False)),
+                "delisted_handling_policy": str(execution_config.get("delisted_handling_policy", "ignore")),
+                "missing_data_policy": str(execution_config.get("missing_data_policy", "ignore")),
+            },
+            "liquidity_detail": liquidity_detail,
+            "price_detail": {
+                "use_adjusted_price": use_adjusted_price,
+                "entry_price_basis": entry_price_view["price_basis"],
+                "exit_price_basis": exit_price_view["price_basis"],
+                "entry_adjustment_factor": entry_price_view["adjustment_factor"],
+                "exit_adjustment_factor": exit_price_view["adjustment_factor"],
+                "entry_raw_close": entry_price_view["source_close"],
+                "entry_adj_close": entry_price_view["source_adj_close"],
+                "exit_raw_close": exit_price_view["source_close"],
+                "exit_adj_close": exit_price_view["source_adj_close"],
+            },
+        }
+
+    def _forced_exit(
+        self,
+        symbol: str,
+        prices: pd.DataFrame,
+        future: pd.DataFrame,
+        max_holding_days: int,
+        execution_config: dict[str, object],
+        use_adjusted_price: bool,
+    ) -> dict[str, object] | None:
+        holding_window = future.iloc[:max_holding_days]
+        if holding_window.empty or len(holding_window) >= max_holding_days:
+            return None
+        last_bar = holding_window.iloc[-1]
+        last_date = last_bar["trade_date"]
+        is_delisted = self._is_delisted_at_last_bar(symbol, prices, last_bar)
+        if is_delisted:
+            policy = str(execution_config.get("delisted_handling_policy", "ignore"))
+            if policy != "last_available_close":
+                return None
+            exit_reason = "delisted"
+            exit_assumption = "delisted_last_available_close_exit"
+        else:
+            policy = str(execution_config.get("missing_data_policy", "ignore"))
+            if policy != "last_available_close":
+                return None
+            exit_reason = "missing_data"
+            exit_assumption = "missing_data_last_available_close_exit"
+
+        price_view = self._bar_price_view(last_bar, use_adjusted_price)
+        return {
+            "bar": last_bar,
+            "bar_index": int(holding_window.index[-1]),
+            "price_view": price_view,
+            "exit_decision": {
+                "exit_reason": exit_reason,
+                "raw_exit_price": float(price_view["close"]),
+                "exit_assumption": exit_assumption,
+                "stop_touched": False,
+                "target_touched": False,
+                "same_bar_both_touched": False,
+                "gap_stop": False,
+                "gap_target": False,
+                "forced_exit": True,
+                "delisted_exit": is_delisted,
+                "missing_data_exit": not is_delisted,
+                "last_available_date": last_date,
+            },
+        }
+
+    def _is_delisted_at_last_bar(self, symbol: str, prices: pd.DataFrame, last_bar: pd.Series) -> bool:
+        row_flag = self._truthy_flag(last_bar.get("delisted", False)) or self._truthy_flag(last_bar.get("is_delisted", False))
+        if row_flag:
+            return True
+        delist_date = self._delist_date(symbol, prices)
+        last_trade_date = self._optional_date(last_bar["trade_date"])
+        return delist_date is not None and last_trade_date is not None and delist_date <= last_trade_date
+
+    def _delist_date(self, symbol: str, prices: pd.DataFrame) -> date | None:
+        if "delist_date" in prices.columns:
+            delist_dates = prices["delist_date"].dropna()
+            if not delist_dates.empty:
+                return self._optional_date(delist_dates.iloc[-1])
+        symbol_row = self.repo.get_symbol(symbol)
+        return symbol_row.delist_date if symbol_row is not None else None
+
+    @classmethod
+    def _bar_price_view(cls, bar: pd.Series, use_adjusted_price: bool) -> dict[str, object]:
+        close = float(bar["close"])
+        adj_close = cls._optional_positive_float(bar.get("adj_close"))
+        factor = adj_close / close if use_adjusted_price and close > 0 and adj_close is not None else 1.0
+        return {
+            "open": float(bar["open"]) * factor,
+            "high": float(bar["high"]) * factor,
+            "low": float(bar["low"]) * factor,
+            "close": close * factor,
+            "adjustment_factor": round(factor, 8),
+            "price_basis": "adjusted_ohlc_from_adj_close" if use_adjusted_price and factor != 1.0 else "raw_ohlc",
+            "source_close": close,
+            "source_adj_close": adj_close,
+        }
+
+    @staticmethod
+    def _truthy_flag(value: object) -> bool:
+        if pd.isna(value):
+            return False
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "y"}
+        return bool(value)
+
+    @staticmethod
+    def _optional_date(value: object) -> date | None:
+        if value is None or pd.isna(value):
+            return None
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            return None
+        return parsed.date()
 
     @classmethod
     def _liquidity_detail(
@@ -285,6 +436,11 @@ class BacktestService:
         return numeric
 
     @staticmethod
+    def _optional_positive_float(value: object) -> float | None:
+        numeric = BacktestService._positive_float(value)
+        return numeric if numeric > 0 else None
+
+    @staticmethod
     def _record_no_fill(liquidity_stats: dict[str, int] | None, planned_qty: int) -> None:
         if liquidity_stats is None:
             return
@@ -299,8 +455,25 @@ class BacktestService:
         liquidity_stats["total_unfilled_qty"] = int(liquidity_stats.get("total_unfilled_qty", 0)) + max(unfilled_qty, 0)
 
     @staticmethod
+    def _record_realism_stats(
+        realism_stats: dict[str, int] | None,
+        use_adjusted_price: bool,
+        exit_decision: dict[str, object],
+    ) -> None:
+        if realism_stats is None:
+            return
+        if use_adjusted_price:
+            realism_stats["adjusted_price_trade_count"] = int(realism_stats.get("adjusted_price_trade_count", 0)) + 1
+        if bool(exit_decision.get("forced_exit", False)):
+            realism_stats["forced_exit_count"] = int(realism_stats.get("forced_exit_count", 0)) + 1
+        if bool(exit_decision.get("delisted_exit", False)):
+            realism_stats["delisted_exit_count"] = int(realism_stats.get("delisted_exit_count", 0)) + 1
+        if bool(exit_decision.get("missing_data_exit", False)):
+            realism_stats["missing_data_exit_count"] = int(realism_stats.get("missing_data_exit_count", 0)) + 1
+
+    @staticmethod
     def _exit_decision(
-        bar: pd.Series,
+        bar: dict[str, object],
         bar_index: int,
         max_holding_days: int,
         stop_price: float,
@@ -422,6 +595,7 @@ class BacktestService:
         exposure_days: int,
         total_days: int,
         liquidity_stats: dict[str, int] | None = None,
+        realism_stats: dict[str, int] | None = None,
     ) -> dict[str, object]:
         pnls = [float(trade["pnl"]) for trade in trades]
         wins = [pnl for pnl in pnls if pnl > 0]
@@ -453,4 +627,8 @@ class BacktestService:
             "partial_fill_count": int((liquidity_stats or {}).get("partial_fill_count", 0)),
             "no_fill_count": int((liquidity_stats or {}).get("no_fill_count", 0)),
             "total_unfilled_qty": int((liquidity_stats or {}).get("total_unfilled_qty", 0)),
+            "adjusted_price_trade_count": int((realism_stats or {}).get("adjusted_price_trade_count", 0)),
+            "forced_exit_count": int((realism_stats or {}).get("forced_exit_count", 0)),
+            "delisted_exit_count": int((realism_stats or {}).get("delisted_exit_count", 0)),
+            "missing_data_exit_count": int((realism_stats or {}).get("missing_data_exit_count", 0)),
         }

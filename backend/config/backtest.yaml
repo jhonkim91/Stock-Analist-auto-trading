@@ -7,5 +7,8 @@ execution:
   max_participation_rate: 0.05
   min_fill_ratio: 0.25
   allow_partial_fill: true
+  use_adjusted_price: false
+  delisted_handling_policy: "ignore"
+  missing_data_policy: "ignore"
 metrics:
   annual_trading_days: 252

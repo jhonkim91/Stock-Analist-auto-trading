@@ -6,13 +6,19 @@ trend_breakout:
   rs_percentile_min: 80
   high_52w_threshold: 0.85
   volume_surge_multiple: 1.5
+  atr_risk_filter_enabled: false
+  max_atr20_pct: 0.08
 vcp_breakout:
   rs_percentile_min: 75
   volume_surge_multiple: 1.5
   volume_dry_up_ratio: 0.8
   atr_contract_window: 60
+  pivot_distance_limit_enabled: false
+  max_pivot_distance_pct: 0.05
 canslim_lite:
   quarterly_eps_growth_min: 0.25
   sales_growth_min: 0.20
   rs_percentile_min: 80
   required_market_regime: "bull"
+  earnings_quality_enabled: false
+  min_roe: 0.15
