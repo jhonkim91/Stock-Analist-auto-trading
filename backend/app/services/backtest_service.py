@@ -141,36 +141,32 @@ class BacktestService:
         if future.empty:
             return None
         entry_bar = future.iloc[0]
-        bps = (float(self.backtest_config["execution"]["commission_bps"]) + float(self.backtest_config["execution"]["slippage_bps"])) / 10000
+        execution_config = self.backtest_config["execution"]
+        commission_bps = float(execution_config["commission_bps"])
+        slippage_bps = float(execution_config["slippage_bps"])
+        bps = (commission_bps + slippage_bps) / 10000
+        same_bar_stop_first = bool(execution_config.get("same_bar_stop_first", True))
         raw_entry_price = float(entry_bar["open"])
         entry_price = raw_entry_price * (1 + bps)
         stop_price = float(risk.stop_price)
         target_price = entry_price + (entry_price - stop_price) * float(self.strategy_config["common"]["target_reward_risk"])
         qty = int(risk.position_size)
-        max_holding_days = int(self.backtest_config["execution"]["max_holding_days"])
+        max_holding_days = int(execution_config["max_holding_days"])
 
         for index, bar in future.iloc[:max_holding_days].iterrows():
-            low = float(bar["low"])
-            high = float(bar["high"])
-            close = float(bar["close"])
-            exit_price = None
-            raw_exit_price = None
-            exit_reason = None
-            if low <= stop_price:
-                raw_exit_price = stop_price
+            exit_decision = self._exit_decision(
+                bar=bar,
+                bar_index=int(index),
+                max_holding_days=max_holding_days,
+                stop_price=stop_price,
+                target_price=target_price,
+                same_bar_stop_first=same_bar_stop_first,
+            )
+            if exit_decision is not None:
+                raw_exit_price = float(exit_decision["raw_exit_price"])
                 exit_price = raw_exit_price * (1 - bps)
-                exit_reason = "stop"
-            elif high >= target_price:
-                raw_exit_price = target_price
-                exit_price = raw_exit_price * (1 - bps)
-                exit_reason = "target"
-            elif index == max_holding_days - 1:
-                raw_exit_price = close
-                exit_price = raw_exit_price * (1 - bps)
-                exit_reason = "max_holding"
-            if exit_price is not None:
                 pnl = (exit_price - entry_price) * qty
-                estimated_cost = ((raw_entry_price * bps) + (float(raw_exit_price) * bps)) * qty
+                estimated_cost = ((raw_entry_price * bps) + (raw_exit_price * bps)) * qty
                 return {
                     "symbol": symbol,
                     "signal_date": signal_date,
@@ -178,16 +174,122 @@ class BacktestService:
                     "raw_entry_price": round(raw_entry_price, 4),
                     "entry_price": round(entry_price, 4),
                     "exit_date": bar["trade_date"],
-                    "raw_exit_price": round(float(raw_exit_price), 4),
+                    "raw_exit_price": round(raw_exit_price, 4),
                     "exit_price": round(exit_price, 4),
-                    "exit_reason": exit_reason,
+                    "exit_reason": exit_decision["exit_reason"],
                     "qty": qty,
                     "pnl": round(pnl, 2),
                     "estimated_cost": round(estimated_cost, 2),
                     "cost_bps": round(bps * 10000, 4),
                     "return_pct": round((exit_price / entry_price) - 1, 6),
                     "holding_days": int(index) + 1,
+                    "execution_detail": {
+                        "entry_assumption": "next_open",
+                        "exit_assumption": exit_decision["exit_assumption"],
+                        "same_bar_stop_first": same_bar_stop_first,
+                        "stop_touched": exit_decision["stop_touched"],
+                        "target_touched": exit_decision["target_touched"],
+                        "same_bar_both_touched": exit_decision["same_bar_both_touched"],
+                        "gap_stop": exit_decision["gap_stop"],
+                        "gap_target": exit_decision["gap_target"],
+                        "stop_price": round(stop_price, 4),
+                        "target_price": round(target_price, 4),
+                        "commission_bps": commission_bps,
+                        "slippage_bps": slippage_bps,
+                    },
                 }
+        return None
+
+    @staticmethod
+    def _exit_decision(
+        bar: pd.Series,
+        bar_index: int,
+        max_holding_days: int,
+        stop_price: float,
+        target_price: float,
+        same_bar_stop_first: bool,
+    ) -> dict[str, object] | None:
+        open_price = float(bar["open"])
+        high = float(bar["high"])
+        low = float(bar["low"])
+        close = float(bar["close"])
+        stop_touched = low <= stop_price
+        target_touched = high >= target_price
+        gap_stop = open_price <= stop_price
+        gap_target = open_price >= target_price
+        same_bar_both_touched = stop_touched and target_touched
+
+        if bar_index == 0 and gap_stop:
+            return {
+                "exit_reason": "stop",
+                "raw_exit_price": open_price,
+                "exit_assumption": "entry_gap_below_stop_open_exit",
+                "stop_touched": True,
+                "target_touched": target_touched,
+                "same_bar_both_touched": same_bar_both_touched,
+                "gap_stop": True,
+                "gap_target": gap_target,
+            }
+
+        if same_bar_both_touched:
+            if same_bar_stop_first:
+                return {
+                    "exit_reason": "stop",
+                    "raw_exit_price": min(open_price, stop_price),
+                    "exit_assumption": "same_bar_stop_first_stop_exit",
+                    "stop_touched": True,
+                    "target_touched": True,
+                    "same_bar_both_touched": True,
+                    "gap_stop": gap_stop,
+                    "gap_target": gap_target,
+                }
+            return {
+                "exit_reason": "target",
+                "raw_exit_price": max(open_price, target_price),
+                "exit_assumption": "same_bar_target_first_target_exit",
+                "stop_touched": True,
+                "target_touched": True,
+                "same_bar_both_touched": True,
+                "gap_stop": gap_stop,
+                "gap_target": gap_target,
+            }
+
+        if stop_touched:
+            return {
+                "exit_reason": "stop",
+                "raw_exit_price": min(open_price, stop_price),
+                "exit_assumption": "gap_down_stop_open_exit" if gap_stop else "intraday_stop_exit",
+                "stop_touched": True,
+                "target_touched": False,
+                "same_bar_both_touched": False,
+                "gap_stop": gap_stop,
+                "gap_target": gap_target,
+            }
+
+        if target_touched:
+            return {
+                "exit_reason": "target",
+                "raw_exit_price": max(open_price, target_price),
+                "exit_assumption": "gap_up_target_open_exit" if gap_target else "intraday_target_exit",
+                "stop_touched": False,
+                "target_touched": True,
+                "same_bar_both_touched": False,
+                "gap_stop": gap_stop,
+                "gap_target": gap_target,
+            }
+
+        if bar_index == max_holding_days - 1:
+            return {
+                "exit_reason": "max_holding",
+                "raw_exit_price": close,
+                "exit_assumption": "max_holding_close_exit",
+                "stop_touched": False,
+                "target_touched": False,
+                "same_bar_both_touched": False,
+                "gap_stop": False,
+                "gap_target": False,
+            }
+
         return None
 
     def _market_regime_on(self, signal_date: date) -> str:
