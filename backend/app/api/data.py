@@ -42,6 +42,14 @@ def external_providers(db: Session = Depends(get_db)) -> list[dict[str, object]]
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/read-only/providers")
+def read_only_providers(db: Session = Depends(get_db)) -> list[dict[str, object]]:
+    try:
+        return MarketDataImportService(db).list_read_only_providers()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/external/preview-daily-ohlcv")
 def preview_external_daily_ohlcv(
     payload: ExternalPreviewDailyOhlcvRequest,

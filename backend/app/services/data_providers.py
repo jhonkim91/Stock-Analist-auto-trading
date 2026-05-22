@@ -110,6 +110,13 @@ class BaseExternalDataProvider(Protocol):
         """원천 응답을 Phase 3A validate flow가 받는 표준 DataFrame으로 변환한다."""
 
 
+class ReadOnlyDataProvider(Protocol):
+    provider_name: str
+
+    def status(self, source: dict[str, object]) -> dict[str, object]:
+        """실행 없이 provider capability와 차단 상태만 반환한다."""
+
+
 class MockExternalDailyProvider:
     def __init__(self, provider_name: str = "mock") -> None:
         self.provider_name = provider_name

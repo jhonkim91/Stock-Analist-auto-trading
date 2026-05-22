@@ -2,7 +2,9 @@
 
 주식 분석과 자동매매 보조 흐름을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 checkpoint는 `MVP v0.7 Phase 3E-1 paper preview safety scaffold`입니다. 실제 주문, paper order create, paper fill/position 변경, live broker, cancel, fill, websocket 연결, KIS 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
+현재 checkpoint는 `MVP v0.8 Phase 3F-1 read-only data provider contract`입니다. 실제 주문, paper order create, paper fill/position 변경, live broker, cancel, fill, websocket 연결, KIS 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
+
+단계별 개발 계획은 [docs/plans/README.md](docs/plans/README.md)에서 관리하고, Phase 3F 상세 계획은 [docs/plans/phase-3f-readonly-data-reliability.md](docs/plans/phase-3f-readonly-data-reliability.md)에서 관리합니다.
 
 PR #3 `Phase 3C: Add KIS read-only foundation`과 PR #4 `Phase 3D: KIS broker safety scaffold`는 `main`에 merge 완료됐습니다. Phase 3D merge commit은 `2d5a146c8b89c355397eec458fd7343412e92c6e`입니다.
 
@@ -39,6 +41,25 @@ Phase 3E-1은 paper preview safety scaffold까지만 구현했습니다.
 - KIS 주문, KIS paper API, KIS network call, token 발급/refresh/cache/DB 저장
 
 최신 검증 결과는 backend pytest 60 passed, frontend lint/typecheck/build/audit 통과, `/paper` browser smoke 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, token/cache/network/adapter call 미수행을 확인했습니다.
+
+## Phase 3F-1 기록
+
+Phase 3F-1은 실데이터 read-only adapter 기반 데이터 신뢰성 보강의 첫 contract 단계입니다.
+
+- `GET /api/data/read-only/providers`: KIS/KRX read-only provider capability/status 조회
+- `kis_market_data`: `daily_ohlcv` read-only candidate, 기본 disabled/fail-closed
+- `krx_index_sector`, `krx_symbol_master`, `krx_trading_calendar`, `krx_corporate_actions`: KRX read-only contract source
+- frontend `/data`: read-only provider contract panel 표시
+
+이번 Phase에서 구현하지 않은 범위:
+
+- KIS 실제 network fetch
+- KIS token 발급/refresh/cache/DB 저장
+- KIS 주문, 계좌, 잔고, 체결, websocket
+- KRX 실제 network fetch
+- paper order create, fill simulator, paper position 변경
+
+최신 검증 결과는 backend pytest 62 passed, frontend lint/typecheck/build/audit 통과, `/data` browser smoke 통과입니다. `orders_count == 0`, `paper_*` row 0, token/cache/network/adapter call 미수행을 확인했습니다.
 
 ## Phase 3D 기능
 
@@ -124,10 +145,17 @@ KIS는 data provider와 broker adapter를 분리합니다.
 
 - Phase 3C: KIS read-only foundation
 - Phase 3D: broker safety scaffold only
-- Phase 3E-1: paper preview safety scaffold only, 현재 checkpoint
-- Phase 3E-2 후보: paper order create/fill simulator 설계와 구현, 별도 승인 필요
-- Phase 3F 후보: live trading gate 설계, 별도 승인 필요
-- Phase 3G 후보: websocket/체결통보 설계, 별도 승인 필요
+- Phase 3E-1: paper preview safety scaffold only
+- Phase 3F-1: read-only data provider contract, 현재 checkpoint
+- Phase 3F-2 후보: KIS read-only daily OHLCV adapter, 별도 승인 필요
+- Phase 3F-3 후보: KRX index/sector/symbol/calendar/corporate action source, 별도 승인 필요
+- Phase 3F-4 후보: data freshness/quality summary, 별도 승인 필요
+- Phase 3G 후보: 백테스트 현실성 보강, 별도 승인 필요
+- Phase 3H 후보: 전략 확장, 별도 승인 필요
+- Phase 3I 후보: weekly review report, 별도 승인 필요
+- Phase 3J 후보: portfolio-level risk guard, 별도 승인 필요
+- Phase 4A 후보: broker paper adapter, 별도 승인 필요
+- Phase 4B 후보: live gate design, 별도 승인 필요
 
 KIS read-only API 후보는 fixture/schema/normalization 설계에만 사용합니다.
 

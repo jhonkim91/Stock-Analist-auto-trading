@@ -233,6 +233,31 @@ export type DataSourceConfig = {
   retry_count: number;
 };
 
+export type ReadOnlyProviderStatus = {
+  source_id: string;
+  provider_type: string;
+  provider_name: string;
+  asset_scope: string[];
+  capabilities: string[];
+  enabled: boolean;
+  network_enabled: boolean;
+  read_only_enabled: boolean;
+  manual_preview_only: boolean;
+  requires_api_key: boolean;
+  supported_markets: string[];
+  market: string;
+  venue: string;
+  status: string;
+  blocked_reason: string;
+  reason_codes: string[];
+  network_call_performed: boolean;
+  token_issued: boolean;
+  token_cache_enabled: boolean;
+  adapter_order_call_performed: boolean;
+  adapter_network_call_performed: boolean;
+  credential_fields_exposed: boolean;
+};
+
 export type DataPreviewRow = {
   row_number: number;
   trade_date: string;

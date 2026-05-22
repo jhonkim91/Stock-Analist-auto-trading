@@ -30,6 +30,13 @@ TERMINAL_STATUSES = {"confirmed"}
 STATUS_CANDIDATES = {"validated", "confirmed", "failed", "rejected", "expired"}
 SEVERITIES = {"error", "warning", "info"}
 EXTERNAL_PROVIDER_TYPES = {"external", "external_market_data"}
+READ_ONLY_PROVIDER_TYPES = {
+    "external_market_data",
+    "krx_market_reference",
+    "krx_symbol_master",
+    "krx_trading_calendar",
+    "krx_corporate_actions",
+}
 
 
 class ImportRunNotFoundError(ValueError):
@@ -55,6 +62,28 @@ class QualityIssue:
     message: str
 
 
+def _default_asset_scope(provider_type: str) -> list[str]:
+    defaults = {
+        "external_market_data": ["daily_ohlcv"],
+        "krx_market_reference": ["index_ohlcv", "sector_ohlcv"],
+        "krx_symbol_master": ["symbol_master"],
+        "krx_trading_calendar": ["trading_calendar"],
+        "krx_corporate_actions": ["corporate_actions"],
+    }
+    return defaults.get(provider_type, [])
+
+
+def _default_capabilities(provider_type: str) -> list[str]:
+    defaults = {
+        "external_market_data": ["daily_ohlcv_preview"],
+        "krx_market_reference": ["index_daily_ohlcv_status", "sector_daily_ohlcv_status"],
+        "krx_symbol_master": ["symbol_master_sync_status"],
+        "krx_trading_calendar": ["trading_calendar_sync_status"],
+        "krx_corporate_actions": ["corporate_action_loader_status"],
+    }
+    return defaults.get(provider_type, [])
+
+
 class DataSourceService:
     def list_sources(self) -> list[dict[str, object]]:
         """backend/config/data_sources.yaml의 source 설정을 반환한다."""
@@ -77,6 +106,14 @@ class DataSourceService:
         """external provider 후보 source를 enabled 여부와 무관하게 반환한다."""
         return [source for source in self.list_sources() if str(source["provider_type"]) in EXTERNAL_PROVIDER_TYPES]
 
+    def list_read_only_providers(self) -> list[dict[str, object]]:
+        """read-only data provider 후보의 capability/status를 실행 없이 반환한다."""
+        return [
+            self._read_only_status(source)
+            for source in self.list_sources()
+            if bool(source["read_only_capable"]) or str(source["provider_type"]) in READ_ONLY_PROVIDER_TYPES
+        ]
+
     @staticmethod
     def _normalize_source(source: object) -> dict[str, object]:
         if not isinstance(source, dict):
@@ -97,6 +134,9 @@ class DataSourceService:
             "paper_trading_enabled": bool(source.get("paper_trading_enabled", False)),
             "live_trading_enabled": bool(source.get("live_trading_enabled", False)),
             "websocket_enabled": bool(source.get("websocket_enabled", False)),
+            "read_only_capable": bool(source.get("read_only_capable", provider_type in READ_ONLY_PROVIDER_TYPES)),
+            "asset_scope": list(source.get("asset_scope") or _default_asset_scope(provider_type)),
+            "capabilities": list(source.get("capabilities") or _default_capabilities(provider_type)),
             "supported_markets": list(source.get("supported_markets") or []),
             "market": str(source.get("market") or "KRX").strip() or "KRX",
             "venue": str(source.get("venue") or "KRX").strip() or "KRX",
@@ -108,6 +148,48 @@ class DataSourceService:
             "max_date_range_days": int(source.get("max_date_range_days") or 0),
             "timeout_seconds": int(source.get("timeout_seconds") or 0),
             "retry_count": int(source.get("retry_count") or 0),
+        }
+
+    @staticmethod
+    def _read_only_status(source: dict[str, object]) -> dict[str, object]:
+        reason_codes: list[str] = []
+        if not bool(source["enabled"]):
+            reason_codes.append("SOURCE_DISABLED")
+        if not bool(source["read_only_enabled"]):
+            reason_codes.append("READ_ONLY_DISABLED")
+        if not bool(source["network_enabled"]):
+            reason_codes.append("NETWORK_DISABLED_FAIL_CLOSED")
+        if bool(source["paper_trading_enabled"]):
+            reason_codes.append("PAPER_TRADING_UNSUPPORTED_FOR_DATA_PROVIDER")
+        if bool(source["live_trading_enabled"]):
+            reason_codes.append("LIVE_TRADING_UNSUPPORTED_FOR_DATA_PROVIDER")
+        if bool(source["websocket_enabled"]):
+            reason_codes.append("WEBSOCKET_UNSUPPORTED_FOR_PHASE_3F1")
+
+        status = "available" if not reason_codes else ("disabled" if "SOURCE_DISABLED" in reason_codes else "blocked")
+        return {
+            "source_id": source["source_id"],
+            "provider_type": source["provider_type"],
+            "provider_name": source["provider_name"],
+            "asset_scope": source["asset_scope"],
+            "capabilities": source["capabilities"],
+            "enabled": source["enabled"],
+            "network_enabled": source["network_enabled"],
+            "read_only_enabled": source["read_only_enabled"],
+            "manual_preview_only": source["manual_preview_only"],
+            "requires_api_key": source["requires_api_key"],
+            "supported_markets": source["supported_markets"],
+            "market": source["market"],
+            "venue": source["venue"],
+            "status": status,
+            "blocked_reason": ", ".join(reason_codes),
+            "reason_codes": reason_codes,
+            "network_call_performed": False,
+            "token_issued": False,
+            "token_cache_enabled": False,
+            "adapter_order_call_performed": False,
+            "adapter_network_call_performed": False,
+            "credential_fields_exposed": False,
         }
 
 
@@ -123,6 +205,10 @@ class MarketDataImportService:
     def list_external_providers(self) -> list[dict[str, object]]:
         """provider-neutral external data source 목록을 반환한다."""
         return self.source_service.list_external_sources()
+
+    def list_read_only_providers(self) -> list[dict[str, object]]:
+        """Phase 3F-1 read-only provider capability/status 목록을 반환한다."""
+        return self.source_service.list_read_only_providers()
 
     def preview_external_daily_ohlcv(
         self,

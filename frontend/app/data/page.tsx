@@ -11,7 +11,8 @@ import {
   type DataQualityCheck,
   type DataSourceConfig,
   type ImportRun,
-  type KisStatus
+  type KisStatus,
+  type ReadOnlyProviderStatus
 } from "../../lib/api";
 
 function StatusPill({ status, text }: { status: ApiStatus; text: string }) {
@@ -113,11 +114,56 @@ function QualityTable({ checks }: { checks: DataQualityCheck[] }) {
   );
 }
 
+function ReadOnlyProviderTable({ providers }: { providers: ReadOnlyProviderStatus[] }) {
+  if (!providers.length) {
+    return <p className="muted">read-only provider contract가 없습니다.</p>;
+  }
+  return (
+    <div className="tableWrap compactTable">
+      <table>
+        <thead>
+          <tr>
+            <th>source_id</th>
+            <th>provider</th>
+            <th>scope</th>
+            <th>capabilities</th>
+            <th>status</th>
+            <th>network</th>
+            <th>tokens</th>
+            <th>blocked_reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {providers.map((provider) => (
+            <tr key={provider.source_id}>
+              <td>{provider.source_id}</td>
+              <td>
+                {provider.provider_name}
+                <br />
+                <span className="muted">{provider.provider_type}</span>
+              </td>
+              <td className="summaryCell">{provider.asset_scope.join(", ") || "-"}</td>
+              <td className="summaryCell">{provider.capabilities.join(", ") || "-"}</td>
+              <td>
+                <Badge tone={provider.status === "available" ? "pass" : "fail"}>{provider.status}</Badge>
+              </td>
+              <td>{provider.network_call_performed ? "called" : "blocked"}</td>
+              <td>{provider.token_issued || provider.token_cache_enabled ? "enabled" : "disabled"}</td>
+              <td className="summaryCell">{provider.blocked_reason || "-"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function DataPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [message, setMessage] = useState("조회 중");
   const [sources, setSources] = useState<DataSourceConfig[]>([]);
   const [externalProviders, setExternalProviders] = useState<DataSourceConfig[]>([]);
+  const [readOnlyProviders, setReadOnlyProviders] = useState<ReadOnlyProviderStatus[]>([]);
   const [kisStatusData, setKisStatusData] = useState<KisStatus | null>(null);
   const [selectedSource, setSelectedSource] = useState("csv_krx");
   const [selectedExternalSource, setSelectedExternalSource] = useState("external_yfinance");
@@ -163,14 +209,16 @@ export default function DataPage() {
       setMessage("조회 중");
     }
     try {
-      const [sourceData, externalData, kisData, runData] = await Promise.all([
+      const [sourceData, externalData, readOnlyData, kisData, runData] = await Promise.all([
         callApi<DataSourceConfig[]>("/api/data/sources"),
         callApi<DataSourceConfig[]>("/api/data/external/providers"),
+        callApi<ReadOnlyProviderStatus[]>("/api/data/read-only/providers"),
         callApi<KisStatus>("/api/kis/status"),
         loadRuns()
       ]);
       setSources(sourceData);
       setExternalProviders(externalData);
+      setReadOnlyProviders(readOnlyData);
       setKisStatusData(kisData);
       if (!sourceData.some((source) => source.source_id === selectedSource)) {
         setSelectedSource(sourceData.find((source) => source.enabled && source.provider_type === "csv")?.source_id ?? "csv_krx");
@@ -314,6 +362,9 @@ export default function DataPage() {
   const summaryRun = confirmRun ?? externalRun ?? validationRun ?? selectedRun;
   const providerMetadata = summaryRun?.provider_metadata ?? {};
   const selectedExternalProvider = externalProviders.find((source) => source.source_id === selectedExternalSource);
+  const blockedReadOnlyProviders = readOnlyProviders.filter((provider) => provider.status !== "available").length;
+  const networkCallsBlocked = readOnlyProviders.every((provider) => !provider.network_call_performed);
+  const tokenCallsBlocked = readOnlyProviders.every((provider) => !provider.token_issued && !provider.token_cache_enabled);
   const showExternalMockNotice =
     selectedExternalProvider?.provider_name === "yfinance" && selectedExternalProvider.network_enabled === false;
 
@@ -367,6 +418,22 @@ export default function DataPage() {
             Confirm Import
           </button>
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="sectionHeader">
+          <div>
+            <h2>Read-only Provider Contract</h2>
+          </div>
+          <StatusPill status={readOnlyProviders.length ? "ok" : "idle"} text={readOnlyProviders.length ? "contract" : "조회 대기"} />
+        </div>
+        <section className="cardGrid compactCards">
+          <Metric label="providers" value={formatNumber(readOnlyProviders.length)} />
+          <Metric label="blocked" value={formatNumber(blockedReadOnlyProviders)} />
+          <Metric label="network_call" value={networkCallsBlocked ? "false" : "true"} />
+          <Metric label="token_or_cache" value={tokenCallsBlocked ? "false" : "true"} />
+        </section>
+        <ReadOnlyProviderTable providers={readOnlyProviders} />
       </section>
 
       <section className="panel">

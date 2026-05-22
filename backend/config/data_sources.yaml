@@ -56,9 +56,15 @@ sources:
     provider_name: "kis"
     enabled: false
     network_enabled: false
+    read_only_capable: true
     read_only_enabled: false
     manual_preview_only: true
     requires_api_key: true
+    asset_scope:
+      - "daily_ohlcv"
+    capabilities:
+      - "daily_ohlcv_preview"
+      - "daily_ohlcv_network_candidate"
     supported_markets:
       - "KR"
     market: "KR"
@@ -68,6 +74,104 @@ sources:
     unknown_symbol_policy: "reject"
     max_rows: 100
     max_date_range_days: 100
+    timeout_seconds: 10
+    retry_count: 0
+  - source_id: "krx_index_sector"
+    provider_type: "krx_market_reference"
+    provider_name: "krx"
+    enabled: false
+    network_enabled: false
+    read_only_capable: true
+    read_only_enabled: false
+    manual_preview_only: true
+    requires_api_key: false
+    asset_scope:
+      - "index_ohlcv"
+      - "sector_ohlcv"
+    capabilities:
+      - "index_daily_ohlcv_status"
+      - "sector_daily_ohlcv_status"
+    supported_markets:
+      - "KR"
+    market: "KR"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "reject"
+    max_rows: 10000
+    max_date_range_days: 730
+    timeout_seconds: 10
+    retry_count: 0
+  - source_id: "krx_symbol_master"
+    provider_type: "krx_symbol_master"
+    provider_name: "krx"
+    enabled: false
+    network_enabled: false
+    read_only_capable: true
+    read_only_enabled: false
+    manual_preview_only: true
+    requires_api_key: false
+    asset_scope:
+      - "symbol_master"
+    capabilities:
+      - "symbol_master_sync_status"
+    supported_markets:
+      - "KR"
+    market: "KR"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "reject"
+    max_rows: 10000
+    max_date_range_days: 0
+    timeout_seconds: 10
+    retry_count: 0
+  - source_id: "krx_trading_calendar"
+    provider_type: "krx_trading_calendar"
+    provider_name: "krx"
+    enabled: false
+    network_enabled: false
+    read_only_capable: true
+    read_only_enabled: false
+    manual_preview_only: true
+    requires_api_key: false
+    asset_scope:
+      - "trading_calendar"
+    capabilities:
+      - "trading_calendar_sync_status"
+    supported_markets:
+      - "KR"
+    market: "KR"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "reject"
+    max_rows: 10000
+    max_date_range_days: 1095
+    timeout_seconds: 10
+    retry_count: 0
+  - source_id: "krx_corporate_actions"
+    provider_type: "krx_corporate_actions"
+    provider_name: "krx"
+    enabled: false
+    network_enabled: false
+    read_only_capable: true
+    read_only_enabled: false
+    manual_preview_only: true
+    requires_api_key: false
+    asset_scope:
+      - "corporate_actions"
+    capabilities:
+      - "corporate_action_loader_status"
+    supported_markets:
+      - "KR"
+    market: "KR"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
+    zero_volume_policy: "warn"
+    unknown_symbol_policy: "reject"
+    max_rows: 10000
+    max_date_range_days: 0
     timeout_seconds: 10
     retry_count: 0
   - source_id: "kis_openapi"
