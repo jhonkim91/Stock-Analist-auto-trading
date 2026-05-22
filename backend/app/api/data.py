@@ -11,6 +11,7 @@ from backend.app.services.market_data_import_service import (
     ImportRunNotFoundError,
     MarketDataImportService,
 )
+from backend.app.services.data_quality_summary_service import DataQualitySummaryService
 from backend.app.services.market_data_service import MarketDataService
 
 router = APIRouter(prefix="/api/data", tags=["data"])
@@ -48,6 +49,20 @@ def read_only_providers(db: Session = Depends(get_db)) -> list[dict[str, object]
         return MarketDataImportService(db).list_read_only_providers()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/quality-summary")
+def data_quality_summary(
+    market: str = Query(default="KR", min_length=1, max_length=16),
+    venue: str = Query(default="KRX", min_length=1, max_length=32),
+    lookback_trading_dates: int = Query(default=30, ge=1, le=252),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return DataQualitySummaryService(db).summary(
+        market=market,
+        venue=venue,
+        lookback_trading_dates=lookback_trading_dates,
+    )
 
 
 @router.post("/external/preview-daily-ohlcv")

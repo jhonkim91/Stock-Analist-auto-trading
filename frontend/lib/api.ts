@@ -258,6 +258,82 @@ export type ReadOnlyProviderStatus = {
   credential_fields_exposed: boolean;
 };
 
+export type SourceFreshness = {
+  source_id: string;
+  provider_type: string;
+  provider_name: string;
+  source_kind: string;
+  enabled: boolean;
+  read_only_enabled: boolean;
+  network_enabled: boolean;
+  asset_scope: string[];
+  status: string;
+  freshness_status: string;
+  reason_code: string;
+  latest_confirmed_at: string | null;
+  latest_confirmed_trade_date: string | null;
+  trading_date_lag: number | null;
+};
+
+export type DataQualitySummary = {
+  market: string;
+  venue: string;
+  latest_trade_date: string | null;
+  row_counts: {
+    daily_ohlcv: number;
+    symbol_master: number;
+    active_symbols: number;
+    trading_calendar: number;
+    import_runs: number;
+    confirmed_import_runs: number;
+    data_quality_checks: number;
+  };
+  source_freshness: SourceFreshness[];
+  missing_rows: {
+    basis: string;
+    lookback_trading_dates: number;
+    date_count: number;
+    active_symbol_count: number;
+    expected_rows: number;
+    actual_rows: number;
+    missing_rows_estimate: number;
+    coverage_ratio: number | null;
+    latest_trade_date_missing_symbol_count: number;
+    missing_symbol_sample: string[];
+  };
+  duplicate_summary: {
+    physical_duplicate_groups: number;
+    physical_duplicate_rows: number;
+    physical_duplicate_sample: Array<{
+      trade_date: string;
+      symbol: string;
+      venue: string;
+      row_count: number;
+    }>;
+    quality_duplicate_code_counts: Record<string, number>;
+  };
+  quality_counts: {
+    total: number;
+    by_severity: Record<string, number>;
+    top_check_codes: Array<{
+      check_code: string;
+      count: number;
+    }>;
+  };
+  safety_counts: {
+    orders_count: number;
+    paper_orders_count: number;
+    paper_fills_count: number;
+    paper_positions_count: number;
+    paper_audit_events_count: number;
+    token_issued: boolean;
+    token_cache_enabled: boolean;
+    network_call_performed: boolean;
+    adapter_order_call_performed: boolean;
+    adapter_network_call_performed: boolean;
+  };
+};
+
 export type DataPreviewRow = {
   row_number: number;
   trade_date: string;

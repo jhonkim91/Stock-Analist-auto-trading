@@ -9,6 +9,7 @@ import {
   type ApiStatus,
   type DataPreviewRow,
   type DataQualityCheck,
+  type DataQualitySummary,
   type DataSourceConfig,
   type ImportRun,
   type KisStatus,
@@ -158,12 +159,130 @@ function ReadOnlyProviderTable({ providers }: { providers: ReadOnlyProviderStatu
   );
 }
 
+function QualitySummaryPanel({ summary }: { summary: DataQualitySummary | null }) {
+  const coverageRatio = summary?.missing_rows.coverage_ratio;
+  const safety = summary?.safety_counts;
+  const safetyClosed =
+    safety !== undefined &&
+    safety.orders_count === 0 &&
+    safety.paper_orders_count === 0 &&
+    safety.paper_fills_count === 0 &&
+    safety.paper_positions_count === 0 &&
+    safety.paper_audit_events_count === 0 &&
+    !safety.token_issued &&
+    !safety.token_cache_enabled &&
+    !safety.network_call_performed &&
+    !safety.adapter_order_call_performed &&
+    !safety.adapter_network_call_performed;
+
+  return (
+    <section className="panel">
+      <div className="sectionHeader">
+        <div>
+          <h2>Freshness & Quality Summary</h2>
+          <p className="muted">Read-only summary from existing tables and provider status.</p>
+        </div>
+        <StatusPill status={summary ? "ok" : "idle"} text={summary ? "read-only" : "waiting"} />
+      </div>
+      <section className="cardGrid compactCards">
+        <Metric label="latest_trade_date" value={summary?.latest_trade_date ?? "-"} />
+        <Metric label="daily_rows" value={formatNumber(summary?.row_counts.daily_ohlcv)} />
+        <Metric label="active_symbols" value={formatNumber(summary?.row_counts.active_symbols)} />
+        <Metric label="calendar_rows" value={formatNumber(summary?.row_counts.trading_calendar)} />
+        <Metric
+          label="coverage"
+          value={coverageRatio === null || coverageRatio === undefined ? "-" : `${formatNumber(coverageRatio * 100, 2)}%`}
+        />
+        <Metric label="missing_estimate" value={formatNumber(summary?.missing_rows.missing_rows_estimate)} />
+        <Metric label="physical_duplicates" value={formatNumber(summary?.duplicate_summary.physical_duplicate_groups)} />
+        <Metric label="safety_closed" value={safetyClosed ? "true" : "false"} />
+      </section>
+
+      {summary ? (
+        <>
+          <section className="grid">
+            <article>
+              <h2>Missing Rows</h2>
+              <div className="sourceList">
+                <Metric label="basis" value={summary.missing_rows.basis} />
+                <Metric label="lookback" value={formatNumber(summary.missing_rows.lookback_trading_dates)} />
+                <Metric label="dates" value={formatNumber(summary.missing_rows.date_count)} />
+                <Metric label="expected" value={formatNumber(summary.missing_rows.expected_rows)} />
+                <Metric label="actual" value={formatNumber(summary.missing_rows.actual_rows)} />
+                <Metric
+                  label="latest_missing_symbols"
+                  value={formatNumber(summary.missing_rows.latest_trade_date_missing_symbol_count)}
+                />
+              </div>
+              <p className="muted">{summary.missing_rows.missing_symbol_sample.join(", ") || "No missing symbol sample"}</p>
+            </article>
+            <article>
+              <h2>Quality Counts</h2>
+              <div className="sourceList">
+                <Metric label="total" value={formatNumber(summary.quality_counts.total)} />
+                <Metric label="error" value={formatNumber(summary.quality_counts.by_severity.error ?? 0)} />
+                <Metric label="warning" value={formatNumber(summary.quality_counts.by_severity.warning ?? 0)} />
+                <Metric label="info" value={formatNumber(summary.quality_counts.by_severity.info ?? 0)} />
+                {Object.entries(summary.duplicate_summary.quality_duplicate_code_counts).map(([code, count]) => (
+                  <Metric key={code} label={code} value={formatNumber(count)} />
+                ))}
+              </div>
+            </article>
+          </section>
+
+          <div className="tableWrap compactTable">
+            <table>
+              <thead>
+                <tr>
+                  <th>source_id</th>
+                  <th>kind</th>
+                  <th>status</th>
+                  <th>freshness</th>
+                  <th>reason</th>
+                  <th>latest_confirmed_trade_date</th>
+                  <th>lag</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.source_freshness.map((source) => (
+                  <tr key={source.source_id}>
+                    <td>{source.source_id}</td>
+                    <td>{source.source_kind}</td>
+                    <td>{source.status}</td>
+                    <td>
+                      <Badge
+                        tone={
+                          source.freshness_status === "CURRENT"
+                            ? "pass"
+                            : source.freshness_status === "STALE"
+                              ? "gradeC"
+                              : "fail"
+                        }
+                      >
+                        {source.freshness_status}
+                      </Badge>
+                    </td>
+                    <td className="summaryCell">{source.reason_code}</td>
+                    <td>{source.latest_confirmed_trade_date ?? "-"}</td>
+                    <td>{source.trading_date_lag ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 export default function DataPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [message, setMessage] = useState("조회 중");
   const [sources, setSources] = useState<DataSourceConfig[]>([]);
   const [externalProviders, setExternalProviders] = useState<DataSourceConfig[]>([]);
   const [readOnlyProviders, setReadOnlyProviders] = useState<ReadOnlyProviderStatus[]>([]);
+  const [qualitySummary, setQualitySummary] = useState<DataQualitySummary | null>(null);
   const [kisStatusData, setKisStatusData] = useState<KisStatus | null>(null);
   const [selectedSource, setSelectedSource] = useState("csv_krx");
   const [selectedExternalSource, setSelectedExternalSource] = useState("external_yfinance");
@@ -209,16 +328,18 @@ export default function DataPage() {
       setMessage("조회 중");
     }
     try {
-      const [sourceData, externalData, readOnlyData, kisData, runData] = await Promise.all([
+      const [sourceData, externalData, readOnlyData, qualitySummaryData, kisData, runData] = await Promise.all([
         callApi<DataSourceConfig[]>("/api/data/sources"),
         callApi<DataSourceConfig[]>("/api/data/external/providers"),
         callApi<ReadOnlyProviderStatus[]>("/api/data/read-only/providers"),
+        callApi<DataQualitySummary>("/api/data/quality-summary"),
         callApi<KisStatus>("/api/kis/status"),
         loadRuns()
       ]);
       setSources(sourceData);
       setExternalProviders(externalData);
       setReadOnlyProviders(readOnlyData);
+      setQualitySummary(qualitySummaryData);
       setKisStatusData(kisData);
       if (!sourceData.some((source) => source.source_id === selectedSource)) {
         setSelectedSource(sourceData.find((source) => source.enabled && source.provider_type === "csv")?.source_id ?? "csv_krx");
@@ -435,6 +556,8 @@ export default function DataPage() {
         </section>
         <ReadOnlyProviderTable providers={readOnlyProviders} />
       </section>
+
+      <QualitySummaryPanel summary={qualitySummary} />
 
       <section className="panel">
         <div className="sectionHeader">

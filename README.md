@@ -2,7 +2,7 @@
 
 주식 분석과 자동매매 보조 흐름을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 checkpoint는 `MVP v0.8 Phase 3F-3 KRX fixture source contract`입니다. 실제 주문, paper order create, paper fill/position 변경, live broker, cancel, fill, websocket 연결, KIS/KRX 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
+현재 checkpoint는 `MVP v0.9 Phase 3F-4 Data Freshness/Quality Summary`입니다. 실제 주문, paper order create, paper fill/position 변경, live broker, cancel, fill, websocket 연결, KIS/KRX/yfinance 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
 
 단계별 개발 계획은 [docs/plans/README.md](docs/plans/README.md)에서 관리하고, Phase 3F 상세 계획은 [docs/plans/phase-3f-readonly-data-reliability.md](docs/plans/phase-3f-readonly-data-reliability.md)에서 관리합니다.
 
@@ -111,6 +111,31 @@ Phase 3F-3은 KRX index/sector/symbol/calendar/corporate action source contract�
 
 최신 검증 결과는 backend pytest 73 passed, frontend lint/typecheck/build/audit 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, paper mutation routes 404, token/cache/network/adapter call 미수행, token cache 미생성을 확인했습니다.
 
+## Phase 3F-4 기록
+
+Phase 3F-4는 기존 DB와 provider status만 조회하는 data freshness/quality summary 단계입니다.
+
+- `GET /api/data/quality-summary`: freshness, missing rows, duplicate, quality, safety summary 조회
+- `backend/app/services/data_quality_summary_service.py`: SELECT 기반 summary 계산
+- frontend `/data`: `Freshness & Quality Summary` read-only panel 표시
+- `latest_trade_date`: `daily_ohlcv`의 `venue` 기준 max trade date
+- missing rows: `trading_calendar` open date 기준, 없으면 observed `daily_ohlcv` date 기준 fallback
+- duplicate summary: physical duplicate와 `data_quality_checks` duplicate code 집계를 분리
+- safety counts: `orders_count`, `paper_*` count 0과 token/network/adapter flags false 반환
+
+이번 Phase에서 구현하지 않은 범위:
+
+- 실제 KIS/KRX/yfinance network call
+- provider fetch 호출
+- token 발급/cache/refresh/credential 저장
+- 주문/계좌/잔고/체결/cancel/websocket route
+- `POST /api/paper/orders`, paper fill simulator
+- paper order/fill/position/audit row mutation
+- DB schema 변경, Alembic/migration
+- 기존 preview/confirm flow 또는 `GET /api/data/read-only/providers` contract 변경
+
+최신 검증 결과는 backend pytest 79 passed, frontend lint/typecheck/build/audit 통과, fresh `/data` Playwright screenshot smoke 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, paper mutation routes 404, token/cache/network/adapter call 미수행을 확인했습니다.
+
 ## Phase 3D 기능
 
 - Phase 3A CSV validate/confirm flow 유지
@@ -198,8 +223,8 @@ KIS는 data provider와 broker adapter를 분리합니다.
 - Phase 3E-1: paper preview safety scaffold only
 - Phase 3F-1: read-only data provider contract
 - Phase 3F-2: KIS read-only daily OHLCV fixture adapter
-- Phase 3F-3: KRX fixture source contract, 현재 checkpoint
-- Phase 3F-4 후보: data freshness/quality summary, 별도 승인 필요
+- Phase 3F-3: KRX fixture source contract
+- Phase 3F-4: data freshness/quality summary, 현재 checkpoint
 - Phase 3G 후보: 백테스트 현실성 보강, 별도 승인 필요
 - Phase 3H 후보: 전략 확장, 별도 승인 필요
 - Phase 3I 후보: weekly review report, 별도 승인 필요

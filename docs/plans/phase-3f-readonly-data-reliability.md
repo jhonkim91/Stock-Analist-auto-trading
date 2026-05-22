@@ -129,43 +129,66 @@ DB 변경 원칙:
 
 ## Phase 3F-4: Data Freshness/Quality Summary
 
-상태: 대기
+상태: 완료
 
 목표:
 
-- read-only provider 상태와 기존 import 품질 정보를 한 화면에서 확인한다.
+- 기존 DB와 provider status만 조회해 data freshness/quality/safety summary를 제공한다.
+- `/data` 화면에서 read-only summary panel을 확인할 수 있게 한다.
+- 실제 network call, token/cache, broker/order path는 계속 금지한다.
 
-범위 후보:
+구현 범위:
 
-- latest date.
-- stale source.
-- missing row.
-- duplicate summary.
-- source별 freshness.
-- `/data` UI read-only summary panel.
+- `backend/app/services/data_quality_summary_service.py` 신규 추가.
+- `GET /api/data/quality-summary` 추가.
+- `latest_trade_date`, source freshness, missing rows, duplicate summary, quality counts, safety counts 계산.
+- frontend `/data`의 `Freshness & Quality Summary` panel 추가.
+- `backend/tests/test_phase3f4_data_quality_summary.py` 추가.
 
-API contract 후보:
+API contract:
 
 | Method | Path | 설명 |
 |---|---|---|
 | `GET` | `/api/data/quality-summary` | 데이터 freshness/quality/safety 요약 |
 
-응답 후보 필드:
+Query:
 
+- `market`: 기본 `KR`
+- `venue`: 기본 `KRX`
+- `lookback_trading_dates`: 기본 `30`, 범위 `1..252`
+
+Response 주요 필드:
+
+- `market`
+- `venue`
 - `latest_trade_date`
+- `row_counts`
 - `source_freshness`
 - `missing_rows`
 - `duplicate_summary`
 - `quality_counts`
 - `safety_counts`
 
-테스트 계획:
+계산 규칙:
 
-- seeded DB summary 값 검증.
-- duplicate quality code 집계 검증.
-- summary 조회가 DB mutation을 만들지 않는지 검증.
-- `/data` UI lint/typecheck/build 검증.
-- `orders_count == 0`, `paper_* == 0` 유지.
+- `latest_trade_date`: `daily_ohlcv.trade_date` max, `venue` 필터 적용.
+- disabled source는 `freshness_status=DISABLED`.
+- enabled daily OHLCV source에 confirmed import run이 없으면 `NO_CONFIRMED_RUN`.
+- enabled read-only reference source에 confirmed import run이 없으면 `NOT_APPLICABLE`.
+- `trading_calendar` open date가 있으면 calendar 기준 missing rows 계산, 없으면 observed `daily_ohlcv` date 기준 fallback.
+- latest trade date missing symbol sample은 최대 20개.
+- duplicate summary는 physical duplicate와 `data_quality_checks` duplicate code를 분리.
+- safety counts는 `orders_count`, `paper_*` count 0과 token/network/adapter flags false를 반환.
+
+검증 결과:
+
+- `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f4_data_quality_summary.py -q`: 6 passed.
+- `.\.venv\Scripts\python.exe -m pytest backend/tests`: 79 passed.
+- `npm.cmd run lint`: 통과.
+- `npm.cmd exec tsc -- --noEmit`: 통과.
+- `npm.cmd run build`: 통과.
+- `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities.
+- fresh `8010/3010` `/data` Playwright screenshot smoke 통과.
 
 ## Phase 3F 공통 검증 명령
 

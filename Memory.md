@@ -2,7 +2,7 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `MVP v0.8 Phase 3F-3 KRX fixture source contract`
+- [x] 현재 상태명: `MVP v0.9 Phase 3F-4 Data Freshness/Quality Summary`
 - [x] Phase 1 Backend Core MVP 구현
 - [x] Phase 2 MVP Web Flow 구현
 - [x] Phase 3A CSV validate/confirm import 구현
@@ -13,50 +13,59 @@
 - [x] Phase 3F-1 read-only data provider contract 구현
 - [x] Phase 3F-2 KIS daily OHLCV fixture adapter 구현
 - [x] Phase 3F-3 KRX fixture source contract 구현
+- [x] Phase 3F-4 data freshness/quality summary 구현
 - [x] 현재 브랜치: `main`
 
 ## 현재 프로젝트 상태
 
-- Backend: FastAPI + SQLite, sample seed, CSV import, external daily OHLCV preview/confirm, KIS read-only foundation, broker safety scaffold, paper preview scaffold, Phase 3F read-only data provider contract.
+- Backend: FastAPI + SQLite, sample seed, CSV import, external daily OHLCV preview/confirm, KIS read-only foundation, broker safety scaffold, paper preview scaffold, Phase 3F read-only data reliability API.
 - Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/settings`.
-- Data Quality: `/data`에서 CSV validate/confirm, External Daily OHLCV preview/confirm, KIS status, read-only provider contract 확인 가능.
-- Plan docs: 전체 Phase 순서는 `docs/plans/README.md`, Phase 3F 상세 계획은 `docs/plans/phase-3f-readonly-data-reliability.md`에서 관리한다.
-- KIS market data source: `kis_market_data`는 `provider_type=external_market_data`, `provider_name=kis`, `enabled=false`, `network_enabled=false`, `read_only_enabled=false`.
-- KRX read-only sources: `krx_index_sector`, `krx_symbol_master`, `krx_trading_calendar`, `krx_corporate_actions`는 모두 `enabled=false`, `network_enabled=false`, `read_only_enabled=false`.
-- KIS broker placeholder: `kis_openapi`는 `provider_type=broker_placeholder`, `enabled=false`, `network_enabled=false`, `paper_trading_enabled=false`, `live_trading_enabled=false`, `websocket_enabled=false`.
-- KIS execution routes: `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*`는 미등록 404 상태를 유지한다.
-- Paper safety: `/api/paper/status`, `/api/paper/orders/preview`만 disabled deny scaffold 상태를 반환한다.
+- `/data`: CSV validate/confirm, External Daily OHLCV preview/confirm, KIS status, read-only provider contract, freshness/quality summary panel을 표시한다.
+- Phase 계획 문서: `docs/plans/README.md`, `docs/plans/phase-3f-readonly-data-reliability.md`.
 - Frontend security: `postcss@8.5.15` override로 `npm audit` 0 vulnerabilities.
 
-## Phase 3F-3 변경 파일/구조
+## Phase 3F-4 변경 파일/구조
 
-- Backend provider: `backend/app/services/data_providers.py`
-  - KRX index/sector, symbol master, trading calendar, corporate action fixture schema constants와 validator 추가.
-  - `normalize_krx_index_rows()`, `normalize_krx_sector_rows()`, `normalize_krx_symbol_master_rows()`, `normalize_krx_trading_calendar_rows()`, `normalize_krx_corporate_action_rows()` 추가.
-  - normalize 함수는 raw `dict` 또는 `list`를 받아 기존 SQLAlchemy model 컬럼명 기준 `list[dict]`만 반환한다.
-  - DB/session/API/network/token/cache 접근 없음.
-- Fixtures:
-  - `backend/tests/fixtures/krx_index_sector_reference.json`
-  - `backend/tests/fixtures/krx_symbol_master_reference.json`
-  - `backend/tests/fixtures/krx_trading_calendar_reference.json`
-  - `backend/tests/fixtures/krx_corporate_actions_reference.json`
-  - secret/account/token/header 계열 필드 없음.
-- Config: `backend/config/data_sources.yaml`
-  - 기존 KRX source 4종의 `asset_scope` 유지 및 fixture schema/normalize contract capability 보강.
-  - `enabled=false`, `network_enabled=false`, `read_only_enabled=false` 유지.
-- Backend tests: `backend/tests/test_phase3f3_krx_fixture_contract.py`
-  - fixture schema, normalize output, sensitive field 부재, no network/no token/no mutation, read-only provider contract, KIS/paper mutation route 404 검증.
-- Docs: `docs/VALIDATION.md`, `Memory.md`.
+- `backend/app/services/data_quality_summary_service.py`
+  - `DataQualitySummaryService.summary()` 신규 추가.
+  - SELECT 기반으로 `latest_trade_date`, row counts, source freshness, missing rows, duplicate summary, quality counts, safety counts를 계산한다.
+  - service 내부에서 `add/delete/commit/rollback/provider fetch`를 호출하지 않는다.
+- `backend/app/api/data.py`
+  - `GET /api/data/quality-summary` 추가.
+  - query: `market=KR`, `venue=KRX`, `lookback_trading_dates=30`, 범위 `1..252`.
+- `frontend/lib/api.ts`
+  - `DataQualitySummary`, `SourceFreshness` 타입 추가.
+- `frontend/app/data/page.tsx`
+  - `Freshness & Quality Summary` read-only panel 추가.
+  - 기존 validate/confirm/read-only providers UI flow는 유지.
+- `backend/tests/test_phase3f4_data_quality_summary.py`
+  - response contract, calendar fallback, calendar 기준 coverage, duplicate code count, no mutation, safety/route invariant, 기존 provider contract regression 검증.
+- 문서: `docs/VALIDATION.md`, `Memory.md`, `docs/plans/phase-3f-readonly-data-reliability.md`, `README.md`.
+
+## Phase 3F-4 계산 규칙
+
+- `latest_trade_date`: `daily_ohlcv.trade_date` max, `venue` 필터 적용.
+- `source_freshness`: CSV/external/read-only source 기준.
+  - disabled source: `freshness_status=DISABLED`
+  - enabled daily OHLCV source confirmed run 없음: `NO_CONFIRMED_RUN`
+  - enabled read-only reference source confirmed run 없음: `NOT_APPLICABLE`
+  - confirmed trade date가 latest trade date와 같으면 `CURRENT`, 뒤처지면 `STALE`
+- `missing_rows`: `trading_calendar` open date가 있으면 calendar 기준, 없으면 observed `daily_ohlcv` date 기준.
+- latest trade date missing symbol sample은 최대 20개.
+- `duplicate_summary`: physical duplicate와 `DUPLICATE_IN_BATCH`/`DUPLICATE_IN_DATABASE` quality code 집계를 분리.
+- `quality_counts`: severity별 count와 top check code 집계.
+- `safety_counts`: orders/paper row count는 DB 조회, token/network/adapter flags는 false.
 
 ## 최신 검증 결과
 
-- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f3_krx_fixture_contract.py backend/tests/test_phase3f_readonly_provider_contract.py -q`: 8 passed in 2.05s
-- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 73 passed in 114.32s
+- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f4_data_quality_summary.py -q`: 6 passed in 4.98s
+- 2026-05-22 `.\.venv\Scripts\python.exe -m pytest backend/tests`: 79 passed in 123.38s
 - 2026-05-22 `npm.cmd run lint`: 통과
 - 2026-05-22 `npm.cmd exec tsc -- --noEmit`: 통과
 - 2026-05-22 `npm.cmd run build`: Next.js 16.2.6 production build 통과
 - 2026-05-22 `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities
-- 2026-05-22 safety readback: `orders_count == 0`, `paper_* == 0`, token/cache/network/adapter order call false, KIS execution routes 미등록 404, paper mutation routes 미등록 404, token cache file 없음.
+- 2026-05-22 API sample: seeded DB `GET /api/data/quality-summary` 200, `latest_trade_date=2026-05-20`, `daily_ohlcv=4800`, safety counts 0/false.
+- 2026-05-22 `/data` smoke: fresh backend/frontend `8010/3010`, Playwright CLI screenshot selector `Freshness & Quality Summary` 확인.
 
 ## 최신 DB count
 
@@ -80,14 +89,12 @@
 
 ## 불변 조건
 
+- `GET /api/data/quality-summary`는 SELECT 기반 read-only 조회만 수행한다.
 - `GET /api/data/read-only/providers`는 status/capability 조회만 수행하고 fetch 또는 DB mutation을 하지 않는다.
-- KRX Phase 3F-3 normalize 함수는 기존 table model 컬럼 payload만 만들고 DB에 저장하지 않는다.
-- KRX source는 기본 `enabled=false`, `network_enabled=false`, `read_only_enabled=false` 상태를 유지한다.
 - CSV `validate-csv`와 external/KIS market-data preview는 `import_runs`와 `data_quality_checks`만 기록한다.
 - Confirm 전에는 `daily_ohlcv`와 `symbol_master`를 변경하지 않는다.
 - Confirm은 `run_id`만 받아 staged rows를 transaction으로 `daily_ohlcv`에 반영한다.
-- External provider는 반드시 `external_symbol_mapping`을 거친다.
-- Mapping이 없으면 `SYMBOL_MAPPING_FAILED`를 기록하고 confirm 불가 상태가 된다.
+- KRX source 4종은 기본 `enabled=false`, `network_enabled=false`, `read_only_enabled=false`.
 - Broker preview는 safety scaffold only이며 `orders_count == 0`을 유지한다.
 - Paper preview는 disabled deny scaffold only이며 `orders_count == 0`, `paper_* == 0`을 유지한다.
 
@@ -102,9 +109,8 @@
 - yfinance/KIS/KRX 전용 UI write path를 만들지 말고 `source_id` 기반 provider-neutral API를 유지한다.
 - `npm audit fix --force`, Next.js downgrade, main 강제 push 금지.
 - `frontend/.env.local`은 local-only ignored file이다. backend 포트를 바꾸면 값을 맞춘 뒤 `npm.cmd run build`를 다시 실행한다.
-- 현재 작업 전부터 `docs/research/검색결과.md`, `docs/research/제품설계문서.md`가 untracked 상태일 수 있으므로 관련 없는 구현에서 건드리지 않는다.
 
 ## 다음 작업
 
-- [ ] Phase 3F-4: data freshness/quality summary와 `/data` read-only summary panel 구현.
 - [ ] Phase 3G: gap-aware stop, liquidity cap, partial fill, portfolio state 기반 백테스트 보강.
+- [ ] Phase 3F 후속: quality-summary 기간/시장 필터 UI, source freshness 상세 drilldown, calendar load flow는 별도 승인 후 진행.

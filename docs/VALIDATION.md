@@ -4,145 +4,137 @@
 
 검증 시각: 2026-05-22
 
-Checkpoint: `MVP v0.8 Phase 3F-3 KRX fixture source contract`
+Checkpoint: `MVP v0.9 Phase 3F-4 Data Freshness/Quality Summary`
 
 기준 브랜치: `main`
 
-Status: Validated locally before commit/deploy
+Status: 로컬 구현 및 검증 완료, commit/push 미수행
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
-| Phase 3F-3 targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f3_krx_fixture_contract.py backend/tests/test_phase3f_readonly_provider_contract.py -q`: 8 passed |
-| Backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 73 passed |
+| Phase 3F-4 targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f4_data_quality_summary.py -q`: 6 passed |
+| Backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests`: 79 passed |
 | Frontend lint | 통과 | `npm.cmd run lint` |
 | Frontend typecheck | 통과 | `npm.cmd exec tsc -- --noEmit` |
 | Frontend production build | 통과 | `npm.cmd run build`: Next.js 16.2.6 production build |
 | Frontend npm audit | 통과 | `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities |
-| Safety invariant readback | 통과 | targeted/API test에서 orders/paper rows 0, token/cache/network/adapter flags false, KIS/paper mutation routes 404 확인 |
+| API sample | 통과 | seeded DB에서 `GET /api/data/quality-summary` 200, `latest_trade_date=2026-05-20`, `daily_ohlcv=4800`, safety counts 0/false |
+| `/data` browser smoke | 통과 | fresh backend/frontend `8010/3010`, Playwright CLI screenshot, `Freshness & Quality Summary` selector 확인 |
+| Safety invariant | 통과 | tests에서 orders/paper rows 0, token/cache/network/adapter flags false, KIS/paper mutation routes 404 확인 |
 
-## Phase 3F-3 KRX Fixture Contract
+## Phase 3F-4 Data Quality Summary
 
-- 신규 실행 endpoint 없음.
-- DB schema 변경 없음.
-- Alembic/migration 도입 없음.
-- KRX/KIS 실제 network call 구현 없음.
-- KRX fixture normalize 결과를 DB에 저장하는 runtime flow 없음.
-- `GET /api/data/read-only/providers` 응답 필드는 추가/삭제하지 않음.
-- KRX source 4종은 계속 `enabled=false`, `network_enabled=false`, `read_only_enabled=false`.
+신규 API:
 
-### Fixture schema
-
-공통 top-level fields:
-
-```text
-fixture_version, source_id, provider_name, market, venue
+```http
+GET /api/data/quality-summary?market=KR&venue=KRX&lookback_trading_dates=30
 ```
 
-Fixture별 entity fields:
+Query 기본값:
 
-| Fixture | Entity field | Row fields |
-|---|---|---|
-| `krx_index_sector_reference.json` | `indexes[]` | `trade_date`, `symbol`, `name`, `open`, `high`, `low`, `close`, `volume` |
-| `krx_index_sector_reference.json` | `sectors[]` | `trade_date`, `sector`, `open`, `high`, `low`, `close`, `volume` |
-| `krx_symbol_master_reference.json` | `symbols[]` | `symbol`, `name`, `asset_type`, `currency`, `market`, `exchange`, `sector`, `industry`, `is_active`, `list_date`, `delist_date` |
-| `krx_trading_calendar_reference.json` | `dates[]` | `calendar_date`, `is_open`, `session`, `holiday_name` |
-| `krx_corporate_actions_reference.json` | `actions[]` | `symbol`, `action_date`, `action_type`, `value`, `note` |
+| query | 기본값 | 범위 |
+|---|---:|---:|
+| `market` | `KR` | length 1..16 |
+| `venue` | `KRX` | length 1..32 |
+| `lookback_trading_dates` | `30` | 1..252 |
 
-Fixtures do not contain `app_key`, `app_secret`, `secret`, `token`, `access_token`, `refresh_token`, `account`, `account_no`, `cano`, `authorization`, `headers`, or `raw_credentials`.
-
-### Normalize output examples
-
-`index_ohlcv` payload:
-
-```json
-{
-  "trade_date": "2026-05-20",
-  "symbol": "KOSPI",
-  "open": 2725.1,
-  "high": 2744.2,
-  "low": 2718.35,
-  "close": 2738.42,
-  "volume": 483920000
-}
-```
-
-`symbol_master` payload:
-
-```json
-{
-  "symbol": "005930",
-  "name": "Samsung Electronics",
-  "asset_type": "stock",
-  "currency": "KRW",
-  "market": "KR",
-  "exchange": "KRX",
-  "sector": "Semiconductors",
-  "industry": "Memory",
-  "is_active": true,
-  "list_date": "1975-06-11",
-  "delist_date": null
-}
-```
-
-`trading_calendar` payload:
+대표 응답 예시:
 
 ```json
 {
   "market": "KR",
-  "calendar_date": "2026-05-20",
-  "is_open": true,
-  "source_id": "krx_trading_calendar",
-  "note": "session=regular"
+  "venue": "KRX",
+  "latest_trade_date": "2026-05-20",
+  "row_counts": {
+    "daily_ohlcv": 4800,
+    "symbol_master": 15,
+    "active_symbols": 15,
+    "trading_calendar": 0,
+    "import_runs": 0,
+    "confirmed_import_runs": 0,
+    "data_quality_checks": 0
+  },
+  "missing_rows": {
+    "basis": "observed_daily_ohlcv",
+    "lookback_trading_dates": 30,
+    "date_count": 30,
+    "active_symbol_count": 15,
+    "expected_rows": 450,
+    "actual_rows": 450,
+    "missing_rows_estimate": 0,
+    "coverage_ratio": 1.0,
+    "latest_trade_date_missing_symbol_count": 0,
+    "missing_symbol_sample": []
+  },
+  "duplicate_summary": {
+    "physical_duplicate_groups": 0,
+    "physical_duplicate_rows": 0,
+    "physical_duplicate_sample": [],
+    "quality_duplicate_code_counts": {
+      "DUPLICATE_IN_BATCH": 0,
+      "DUPLICATE_IN_DATABASE": 0
+    }
+  },
+  "safety_counts": {
+    "orders_count": 0,
+    "paper_orders_count": 0,
+    "paper_fills_count": 0,
+    "paper_positions_count": 0,
+    "paper_audit_events_count": 0,
+    "token_issued": false,
+    "token_cache_enabled": false,
+    "network_call_performed": false,
+    "adapter_order_call_performed": false,
+    "adapter_network_call_performed": false
+  }
 }
 ```
 
-`corporate_actions` payload:
+계산 규칙:
 
-```json
-{
-  "symbol": "005930",
-  "action_date": "2026-05-20",
-  "action_type": "DIVIDEND",
-  "value": 361.0,
-  "source_id": "krx_corporate_actions",
-  "note": "cash dividend fixture"
-}
-```
+- `latest_trade_date`: `daily_ohlcv.trade_date` max, `venue` 필터 적용.
+- `source_freshness`: `data_sources.yaml`의 CSV/external/read-only source 기준. disabled source는 `DISABLED`, enabled daily OHLCV source의 confirmed run 없음은 `NO_CONFIRMED_RUN`, enabled read-only reference source의 confirmed run 없음은 `NOT_APPLICABLE`.
+- `missing_rows`: `trading_calendar` open date가 있으면 calendar 기준, 없으면 observed `daily_ohlcv` date 기준. latest trade date missing symbol sample은 최대 20개.
+- `duplicate_summary`: physical duplicate group/row count와 `data_quality_checks` duplicate code count를 분리.
+- `quality_counts`: severity별 count와 top check code를 집계.
+- `safety_counts`: execution/paper row count는 DB에서 조회하고 token/network/adapter flags는 false로 반환.
 
 ## Safety Contract
 
 | 항목 | 상태 |
 |---|---|
+| DB schema/migration | 변경 없음 |
+| provider fetch/network call | 없음 |
+| token 발급/cache/refresh/storage | 없음 |
+| KIS credential 저장 | 없음 |
+| broker adapter network/order call | 없음 |
 | `orders_count` | 0 |
-| `paper_orders` | 0 |
-| `paper_fills` | 0 |
-| `paper_positions` | 0 |
-| `paper_audit_events` | 0 |
+| `paper_orders_count` | 0 |
+| `paper_fills_count` | 0 |
+| `paper_positions_count` | 0 |
+| `paper_audit_events_count` | 0 |
 | `token_issued` | false |
 | `token_cache_enabled` | false |
 | `network_call_performed` | false |
 | `adapter_order_call_performed` | false |
 | `adapter_network_call_performed` | false |
-| `.cache/kis/token.json` | 없음 |
 | KIS order/broker/websocket routes | 404 유지 |
 | `POST /api/paper/orders` | 404 유지 |
 | `POST /api/paper/fill-simulator/run` | 404 유지 |
 
 ## 제외 범위
 
-- 실제 KRX API 호출
-- 실제 KIS API 호출
+- 실제 KIS/KRX/yfinance network call
+- provider fetch 실행
 - token 발급/cache/credential 저장
-- 신규 실행 endpoint
-- DB schema 변경, Alembic/migration
-- KRX normalize 결과 DB upsert API/service/runtime flow
 - 주문/계좌/잔고/체결/cancel/websocket route
 - `POST /api/paper/orders`
 - paper fill simulator
-- broker adapter network/order call
-- live broker, 자동매매 scheduler
+- paper order/fill/position/audit mutation
+- DB schema 변경, Alembic/migration 도입
+- 기존 preview/confirm flow 변경
+- 기존 `GET /api/data/read-only/providers` contract 변경
 
 ## 다음 Phase
 
-- Phase 3F-4: data freshness/quality summary와 `/data` read-only summary panel 구현.
-- Phase 3F-4에서도 실제 network call, token/cache, broker/order path는 별도 승인 전까지 금지.
+- Phase 3G: backtest/execution realism 보강 후보. gap-aware stop, liquidity participation cap, partial fill, delisted symbol, corporate action adjusted price, portfolio cash/position state, overlapping trades control.
