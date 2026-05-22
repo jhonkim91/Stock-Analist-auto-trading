@@ -1,0 +1,21 @@
+{
+  "fixture_version": "phase3f3.v1",
+  "source_id": "krx_trading_calendar",
+  "provider_name": "krx",
+  "market": "KR",
+  "venue": "KRX",
+  "dates": [
+    {
+      "calendar_date": "2026-05-20",
+      "is_open": true,
+      "session": "regular",
+      "holiday_name": ""
+    },
+    {
+      "calendar_date": "2026-05-25",
+      "is_open": false,
+      "session": "closed",
+      "holiday_name": "Observed Holiday"
+    }
+  ]
+}

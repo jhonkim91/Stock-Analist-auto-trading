@@ -239,6 +239,260 @@ class YFinanceDailyProvider(MockExternalDailyProvider):
         )
 
 
+KRX_FIXTURE_BASE_FIELDS = frozenset({"fixture_version", "source_id", "provider_name", "market", "venue"})
+KRX_INDEX_SECTOR_FIXTURE_FIELDS = KRX_FIXTURE_BASE_FIELDS | {"indexes", "sectors"}
+KRX_SYMBOL_MASTER_FIXTURE_FIELDS = KRX_FIXTURE_BASE_FIELDS | {"symbols"}
+KRX_TRADING_CALENDAR_FIXTURE_FIELDS = KRX_FIXTURE_BASE_FIELDS | {"dates"}
+KRX_CORPORATE_ACTION_FIXTURE_FIELDS = KRX_FIXTURE_BASE_FIELDS | {"actions"}
+
+KRX_INDEX_ROW_FIELDS = frozenset({"trade_date", "symbol", "name", "open", "high", "low", "close", "volume"})
+KRX_SECTOR_ROW_FIELDS = frozenset({"trade_date", "sector", "open", "high", "low", "close", "volume"})
+KRX_SYMBOL_MASTER_ROW_FIELDS = frozenset(
+    {
+        "symbol",
+        "name",
+        "asset_type",
+        "currency",
+        "market",
+        "exchange",
+        "sector",
+        "industry",
+        "is_active",
+        "list_date",
+        "delist_date",
+    }
+)
+KRX_TRADING_CALENDAR_ROW_FIELDS = frozenset({"calendar_date", "is_open", "session", "holiday_name"})
+KRX_CORPORATE_ACTION_ROW_FIELDS = frozenset({"symbol", "action_date", "action_type", "value", "note"})
+
+
+def _krx_schema_issue(message: str) -> dict[str, object]:
+    return {
+        "field": "provider_response",
+        "check_code": "PROVIDER_RESPONSE_SCHEMA_MISMATCH",
+        "severity": "error",
+        "message": message,
+    }
+
+
+def _validate_krx_fixture(
+    payload: object,
+    *,
+    top_level_fields: frozenset[str],
+    row_specs: dict[str, frozenset[str]],
+) -> list[dict[str, object]]:
+    if not isinstance(payload, dict):
+        return [_krx_schema_issue("KRX fixture response must be an object.")]
+
+    issues: list[dict[str, object]] = []
+    fields = set(payload)
+    missing_top_level = sorted(top_level_fields - fields)
+    extra_top_level = sorted(fields - top_level_fields)
+    if missing_top_level:
+        issues.append(_krx_schema_issue(f"KRX fixture missing top-level fields: {', '.join(missing_top_level)}"))
+    if extra_top_level:
+        issues.append(_krx_schema_issue(f"KRX fixture has unsupported top-level fields: {', '.join(extra_top_level)}"))
+
+    for row_key, row_fields in row_specs.items():
+        rows = payload.get(row_key)
+        if not isinstance(rows, list):
+            issues.append(_krx_schema_issue(f"KRX fixture {row_key} must be a list."))
+            continue
+        if not rows:
+            issues.append(
+                {
+                    "field": "provider_response",
+                    "check_code": "PROVIDER_PARTIAL_RESPONSE",
+                    "severity": "error",
+                    "message": f"KRX fixture {row_key} rows are empty.",
+                }
+            )
+            continue
+        for index, row in enumerate(rows, start=1):
+            if not isinstance(row, dict):
+                issues.append(_krx_schema_issue(f"KRX fixture {row_key} row {index} must be an object."))
+                continue
+            current_fields = set(row)
+            missing_row_fields = sorted(row_fields - current_fields)
+            extra_row_fields = sorted(current_fields - row_fields)
+            if missing_row_fields:
+                issues.append(
+                    _krx_schema_issue(
+                        f"KRX fixture {row_key} row {index} missing fields: {', '.join(missing_row_fields)}"
+                    )
+                )
+            if extra_row_fields:
+                issues.append(
+                    _krx_schema_issue(
+                        f"KRX fixture {row_key} row {index} unsupported fields: {', '.join(extra_row_fields)}"
+                    )
+                )
+    return issues
+
+
+def validate_krx_index_sector_fixture(payload: object) -> list[dict[str, object]]:
+    """KRX index/sector fixture schema를 실행 없이 검증한다."""
+    return _validate_krx_fixture(
+        payload,
+        top_level_fields=KRX_INDEX_SECTOR_FIXTURE_FIELDS,
+        row_specs={"indexes": KRX_INDEX_ROW_FIELDS, "sectors": KRX_SECTOR_ROW_FIELDS},
+    )
+
+
+def validate_krx_symbol_master_fixture(payload: object) -> list[dict[str, object]]:
+    """KRX symbol master fixture schema를 실행 없이 검증한다."""
+    return _validate_krx_fixture(
+        payload,
+        top_level_fields=KRX_SYMBOL_MASTER_FIXTURE_FIELDS,
+        row_specs={"symbols": KRX_SYMBOL_MASTER_ROW_FIELDS},
+    )
+
+
+def validate_krx_trading_calendar_fixture(payload: object) -> list[dict[str, object]]:
+    """KRX trading calendar fixture schema를 실행 없이 검증한다."""
+    return _validate_krx_fixture(
+        payload,
+        top_level_fields=KRX_TRADING_CALENDAR_FIXTURE_FIELDS,
+        row_specs={"dates": KRX_TRADING_CALENDAR_ROW_FIELDS},
+    )
+
+
+def validate_krx_corporate_action_fixture(payload: object) -> list[dict[str, object]]:
+    """KRX corporate action fixture schema를 실행 없이 검증한다."""
+    return _validate_krx_fixture(
+        payload,
+        top_level_fields=KRX_CORPORATE_ACTION_FIXTURE_FIELDS,
+        row_specs={"actions": KRX_CORPORATE_ACTION_ROW_FIELDS},
+    )
+
+
+def _krx_rows(payload: dict[str, object] | list[dict[str, object]], row_key: str) -> list[dict[str, object]]:
+    if isinstance(payload, list):
+        return [dict(row) for row in payload]
+    rows = payload.get(row_key)
+    if not isinstance(rows, list):
+        raise ValueError(f"KRX fixture {row_key} must be a list.")
+    return [dict(row) for row in rows if isinstance(row, dict)]
+
+
+def _krx_source_id(payload: dict[str, object] | list[dict[str, object]], default: str) -> str:
+    if isinstance(payload, dict):
+        return str(payload.get("source_id") or default)
+    return default
+
+
+def _krx_market(payload: dict[str, object] | list[dict[str, object]]) -> str:
+    if isinstance(payload, dict):
+        return str(payload.get("market") or "KR")
+    return "KR"
+
+
+def _krx_iso_date(value: object) -> str | None:
+    if value is None or value == "":
+        return None
+    return pd.to_datetime(str(value), errors="raise").date().isoformat()
+
+
+def _krx_note(*, session: object = "", holiday_name: object = "", note: object = "") -> str:
+    parts = []
+    if session:
+        parts.append(f"session={session}")
+    if holiday_name:
+        parts.append(f"holiday={holiday_name}")
+    if note:
+        parts.append(str(note))
+    return "; ".join(parts)
+
+
+def normalize_krx_index_rows(payload: dict[str, object] | list[dict[str, object]]) -> list[dict[str, object]]:
+    """KRX index raw rows를 index_ohlcv model 컬럼 payload로 변환한다."""
+    return [
+        {
+            "trade_date": _krx_iso_date(row["trade_date"]),
+            "symbol": str(row["symbol"]),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "volume": int(float(row["volume"])),
+        }
+        for row in _krx_rows(payload, "indexes")
+    ]
+
+
+def normalize_krx_sector_rows(payload: dict[str, object] | list[dict[str, object]]) -> list[dict[str, object]]:
+    """KRX sector raw rows를 sector_ohlcv model 컬럼 payload로 변환한다."""
+    return [
+        {
+            "trade_date": _krx_iso_date(row["trade_date"]),
+            "sector": str(row["sector"]),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "volume": int(float(row["volume"])),
+        }
+        for row in _krx_rows(payload, "sectors")
+    ]
+
+
+def normalize_krx_symbol_master_rows(payload: dict[str, object] | list[dict[str, object]]) -> list[dict[str, object]]:
+    """KRX symbol master raw rows를 symbol_master model 컬럼 payload로 변환한다."""
+    rows: list[dict[str, object]] = []
+    for row in _krx_rows(payload, "symbols"):
+        rows.append(
+            {
+                "symbol": str(row["symbol"]),
+                "name": str(row["name"]),
+                "asset_type": str(row["asset_type"]),
+                "currency": str(row["currency"]),
+                "market": str(row["market"]),
+                "exchange": str(row["exchange"]),
+                "sector": str(row["sector"]),
+                "industry": str(row["industry"]),
+                "is_active": bool(row["is_active"]),
+                "list_date": _krx_iso_date(row.get("list_date")),
+                "delist_date": _krx_iso_date(row.get("delist_date")),
+            }
+        )
+    return rows
+
+
+def normalize_krx_trading_calendar_rows(payload: dict[str, object] | list[dict[str, object]]) -> list[dict[str, object]]:
+    """KRX trading calendar raw rows를 trading_calendar model 컬럼 payload로 변환한다."""
+    source_id = _krx_source_id(payload, "krx_trading_calendar")
+    market = _krx_market(payload)
+    return [
+        {
+            "market": market,
+            "calendar_date": _krx_iso_date(row["calendar_date"]),
+            "is_open": bool(row["is_open"]),
+            "source_id": source_id,
+            "note": _krx_note(session=row.get("session", ""), holiday_name=row.get("holiday_name", "")),
+        }
+        for row in _krx_rows(payload, "dates")
+    ]
+
+
+def normalize_krx_corporate_action_rows(payload: dict[str, object] | list[dict[str, object]]) -> list[dict[str, object]]:
+    """KRX corporate action raw rows를 corporate_actions model 컬럼 payload로 변환한다."""
+    source_id = _krx_source_id(payload, "krx_corporate_actions")
+    rows: list[dict[str, object]] = []
+    for row in _krx_rows(payload, "actions"):
+        raw_value = row.get("value")
+        rows.append(
+            {
+                "symbol": str(row["symbol"]),
+                "action_date": _krx_iso_date(row["action_date"]),
+                "action_type": str(row["action_type"]).upper(),
+                "value": float(raw_value) if raw_value is not None and raw_value != "" else None,
+                "source_id": source_id,
+                "note": _krx_note(note=row.get("note", "")),
+            }
+        )
+    return rows
+
+
 KIS_DAILY_ITEMCHART_RESPONSE_FIELDS = frozenset({"rt_cd", "msg_cd", "msg1", "output2"})
 KIS_DAILY_ITEMCHART_REQUIRED_ROW_FIELDS = frozenset(
     {"stck_bsop_date", "stck_oprc", "stck_hgpr", "stck_lwpr", "stck_clpr", "acml_vol"}

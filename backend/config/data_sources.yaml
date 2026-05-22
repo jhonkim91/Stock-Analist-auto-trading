@@ -91,6 +91,10 @@ sources:
     capabilities:
       - "index_daily_ohlcv_status"
       - "sector_daily_ohlcv_status"
+      - "index_fixture_schema"
+      - "sector_fixture_schema"
+      - "index_normalize_contract"
+      - "sector_normalize_contract"
     supported_markets:
       - "KR"
     market: "KR"
@@ -115,6 +119,8 @@ sources:
       - "symbol_master"
     capabilities:
       - "symbol_master_sync_status"
+      - "symbol_master_fixture_schema"
+      - "symbol_master_normalize_contract"
     supported_markets:
       - "KR"
     market: "KR"
@@ -139,6 +145,8 @@ sources:
       - "trading_calendar"
     capabilities:
       - "trading_calendar_sync_status"
+      - "trading_calendar_fixture_schema"
+      - "trading_calendar_normalize_contract"
     supported_markets:
       - "KR"
     market: "KR"
@@ -163,6 +171,8 @@ sources:
       - "corporate_actions"
     capabilities:
       - "corporate_action_loader_status"
+      - "corporate_action_fixture_schema"
+      - "corporate_action_normalize_contract"
     supported_markets:
       - "KR"
     market: "KR"

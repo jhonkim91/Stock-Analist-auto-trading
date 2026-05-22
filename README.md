@@ -2,7 +2,7 @@
 
 주식 분석과 자동매매 보조 흐름을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 checkpoint는 `MVP v0.8 Phase 3F-2 KIS read-only daily OHLCV fixture adapter`입니다. 실제 주문, paper order create, paper fill/position 변경, live broker, cancel, fill, websocket 연결, KIS 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
+현재 checkpoint는 `MVP v0.8 Phase 3F-3 KRX fixture source contract`입니다. 실제 주문, paper order create, paper fill/position 변경, live broker, cancel, fill, websocket 연결, KIS/KRX 실제 API 호출, 자동매매 스케줄러, AI 예측 모델은 구현하지 않습니다.
 
 단계별 개발 계획은 [docs/plans/README.md](docs/plans/README.md)에서 관리하고, Phase 3F 상세 계획은 [docs/plans/phase-3f-readonly-data-reliability.md](docs/plans/phase-3f-readonly-data-reliability.md)에서 관리합니다.
 
@@ -85,6 +85,31 @@ Phase 3F-2는 KIS read-only daily OHLCV adapter의 fixture/normalization 단계�
 - DB schema 변경
 
 최신 검증 결과는 backend pytest 67 passed, frontend lint/typecheck/build/audit 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, token/cache/network/adapter call 미수행, token cache 미생성을 확인했습니다.
+
+## Phase 3F-3 기록
+
+Phase 3F-3은 KRX index/sector/symbol/calendar/corporate action source contract를 fixture/read-only 기반으로 고정한 단계입니다.
+
+- `backend/tests/fixtures/krx_index_sector_reference.json`: index/sector fixture schema
+- `backend/tests/fixtures/krx_symbol_master_reference.json`: symbol master fixture schema
+- `backend/tests/fixtures/krx_trading_calendar_reference.json`: trading calendar fixture schema
+- `backend/tests/fixtures/krx_corporate_actions_reference.json`: corporate action fixture schema
+- KRX raw fixture -> 기존 SQLAlchemy model 컬럼 payload `list[dict]` 순수 normalize 함수
+- 기존 `GET /api/data/read-only/providers` contract regression 유지
+- KRX source 4종은 `enabled=false`, `network_enabled=false`, `read_only_enabled=false` 유지
+
+이번 Phase에서 구현하지 않은 범위:
+
+- 실제 KRX/KIS API 호출
+- 신규 실행 endpoint
+- DB schema 변경, Alembic/migration
+- KRX fixture 결과 DB upsert API/service/runtime flow
+- token 발급/cache/credential 저장
+- 주문/계좌/잔고/체결/cancel/websocket route
+- `POST /api/paper/orders`, paper fill simulator
+- broker adapter network/order call, live broker, 자동매매 scheduler
+
+최신 검증 결과는 backend pytest 73 passed, frontend lint/typecheck/build/audit 통과입니다. `orders_count == 0`, `paper_*` row 0, KIS execution routes 404, paper mutation routes 404, token/cache/network/adapter call 미수행, token cache 미생성을 확인했습니다.
 
 ## Phase 3D 기능
 
@@ -172,8 +197,8 @@ KIS는 data provider와 broker adapter를 분리합니다.
 - Phase 3D: broker safety scaffold only
 - Phase 3E-1: paper preview safety scaffold only
 - Phase 3F-1: read-only data provider contract
-- Phase 3F-2: KIS read-only daily OHLCV fixture adapter, 현재 checkpoint
-- Phase 3F-3 후보: KRX index/sector/symbol/calendar/corporate action source, 별도 승인 필요
+- Phase 3F-2: KIS read-only daily OHLCV fixture adapter
+- Phase 3F-3: KRX fixture source contract, 현재 checkpoint
 - Phase 3F-4 후보: data freshness/quality summary, 별도 승인 필요
 - Phase 3G 후보: 백테스트 현실성 보강, 별도 승인 필요
 - Phase 3H 후보: 전략 확장, 별도 승인 필요

@@ -1,0 +1,23 @@
+{
+  "fixture_version": "phase3f3.v1",
+  "source_id": "krx_corporate_actions",
+  "provider_name": "krx",
+  "market": "KR",
+  "venue": "KRX",
+  "actions": [
+    {
+      "symbol": "005930",
+      "action_date": "2026-05-20",
+      "action_type": "dividend",
+      "value": "361.0",
+      "note": "cash dividend fixture"
+    },
+    {
+      "symbol": "373220",
+      "action_date": "2026-05-20",
+      "action_type": "split",
+      "value": "2.0",
+      "note": "split ratio fixture"
+    }
+  ]
+}

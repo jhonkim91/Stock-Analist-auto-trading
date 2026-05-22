@@ -1,0 +1,35 @@
+{
+  "fixture_version": "phase3f3.v1",
+  "source_id": "krx_symbol_master",
+  "provider_name": "krx",
+  "market": "KR",
+  "venue": "KRX",
+  "symbols": [
+    {
+      "symbol": "005930",
+      "name": "Samsung Electronics",
+      "asset_type": "stock",
+      "currency": "KRW",
+      "market": "KR",
+      "exchange": "KRX",
+      "sector": "Semiconductors",
+      "industry": "Memory",
+      "is_active": true,
+      "list_date": "1975-06-11",
+      "delist_date": null
+    },
+    {
+      "symbol": "373220",
+      "name": "LG Energy Solution",
+      "asset_type": "stock",
+      "currency": "KRW",
+      "market": "KR",
+      "exchange": "KRX",
+      "sector": "Battery",
+      "industry": "Energy Storage",
+      "is_active": true,
+      "list_date": "2022-01-27",
+      "delist_date": null
+    }
+  ]
+}

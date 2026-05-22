@@ -1,0 +1,49 @@
+{
+  "fixture_version": "phase3f3.v1",
+  "source_id": "krx_index_sector",
+  "provider_name": "krx",
+  "market": "KR",
+  "venue": "KRX",
+  "indexes": [
+    {
+      "trade_date": "2026-05-20",
+      "symbol": "KOSPI",
+      "name": "KOSPI Composite Index",
+      "open": "2725.10",
+      "high": "2744.20",
+      "low": "2718.35",
+      "close": "2738.42",
+      "volume": "483920000"
+    },
+    {
+      "trade_date": "2026-05-20",
+      "symbol": "KOSDAQ",
+      "name": "KOSDAQ Composite Index",
+      "open": "857.30",
+      "high": "864.90",
+      "low": "854.10",
+      "close": "861.24",
+      "volume": "743210000"
+    }
+  ],
+  "sectors": [
+    {
+      "trade_date": "2026-05-20",
+      "sector": "Semiconductors",
+      "open": "512.10",
+      "high": "520.30",
+      "low": "509.20",
+      "close": "517.65",
+      "volume": "128300000"
+    },
+    {
+      "trade_date": "2026-05-20",
+      "sector": "Healthcare",
+      "open": "318.40",
+      "high": "322.80",
+      "low": "315.70",
+      "close": "320.15",
+      "volume": "64200000"
+    }
+  ]
+}
