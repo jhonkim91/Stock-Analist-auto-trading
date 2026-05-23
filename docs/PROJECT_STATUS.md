@@ -4,8 +4,8 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.13` |
-| Phase | `Phase C-2 relative_strength_leader Strategy` |
+| Version | `MVP v0.14` |
+| Phase | `Phase C-3 new_high_breakout Strategy` |
 | Branch | `main` |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | 실거래 미구현, fail-closed, preview-only |
@@ -27,17 +27,20 @@
 - Phase 3H: strategy explanation contract, conservative optional strategy filters, fixture tests, strategy registry.
 - Phase C-1: `momentum_rank` available-only strategy.
 - Phase C-2: `relative_strength_leader` available-only strategy.
+- Phase C-3: `new_high_breakout` default and available strategy.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema migration과 SQLite upgrade/downgrade smoke test.
 
 ## Phase C 전략 상태
 
-- 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite` 3개를 유지한다.
+- 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout` 4개다.
+- `new_high_breakout`은 기본 실행과 명시 선택 시 screener/backtest에서 실행 가능하다.
 - `momentum_rank`와 `relative_strength_leader`는 available registry에만 포함하며 명시 선택 시 screener/backtest에서 실행 가능하다.
+- `new_high_breakout`은 `high_52w`, `distance_from_52w_high`, `breakout`, `volume`, `volume_ma50`, `volume_ratio_50`, `rs_percentile`, 이동평균 추세를 평가한다.
 - `relative_strength_leader`는 시장 대비 상대강도, 업종 상대강도, 52주 고점 근접, 단기/중기 추세, `volume_ratio_50`을 평가한다.
-- `relative_strength_leader`는 `indicator_snapshot` 기존 필드만 사용하고 DB migration을 만들지 않는다.
+- Phase C 전략은 `indicator_snapshot` 기존 필드만 사용하고 DB migration을 만들지 않는다.
 - Screener 응답의 기존 explanation contract 필드는 제거하지 않는다.
-- `relative_strength_leader` Screener 응답에는 strategy별 `data_quality_flags`를 기존 `data_quality_flags` 객체에 병합한다.
+- `new_high_breakout`과 `relative_strength_leader` Screener 응답에는 strategy별 `data_quality_flags`를 기존 `data_quality_flags` 객체에 병합한다.
 
 ## 미구현 항목
 
@@ -47,7 +50,7 @@
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.
 - portfolio cash/position state, walk-forward validation.
-- frontend strategy selector의 `relative_strength_leader` 추가는 별도 범위.
+- frontend strategy selector의 `new_high_breakout`, `relative_strength_leader` 추가는 별도 범위.
 
 ## 안전 제약사항
 

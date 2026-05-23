@@ -156,7 +156,7 @@ class ScreenerService:
         return "D"
 
     def _strategy_data_quality_flags(self, row: ScreenResult) -> dict[str, bool]:
-        if row.strategy_tag != "relative_strength_leader":
+        if row.strategy_tag not in {"new_high_breakout", "relative_strength_leader"}:
             return {}
         indicator = self.db.scalar(
             select(IndicatorSnapshot)

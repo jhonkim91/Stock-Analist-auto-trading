@@ -14,6 +14,7 @@ from backend.app.services.backtest_service import BacktestService
 from backend.app.services.screener_service import ScreenerService
 from backend.app.strategies.canslim_lite import CanslimLiteStrategy
 from backend.app.strategies.momentum_rank import MomentumRankStrategy
+from backend.app.strategies.new_high_breakout import NewHighBreakoutStrategy
 from backend.app.strategies.relative_strength_leader import RelativeStrengthLeaderStrategy
 from backend.app.strategies.registry import (
     AVAILABLE_STRATEGY_NAMES,
@@ -40,7 +41,8 @@ def _passing_indicator(**overrides):
         "atr20_pct_ma60": 0.04,
         "std20": 0.01,
         "std60": 0.02,
-        "high_52w": 110.0,
+        "high_52w": 100.0,
+        "distance_from_52w_high": 0.0,
         "pivot_high_20_prev": 98.0,
         "volume_dry_up": True,
         "breakout": True,
@@ -83,9 +85,12 @@ def test_canslim_uses_only_effective_date_not_future_fundamentals(seeded_db):
 def test_screener_stores_required_pass_fail_evidence(seeded_db):
     result = ScreenerService(seeded_db).run()
 
+    assert result["strategies"] == list(DEFAULT_STRATEGY_NAMES)
+    assert "new_high_breakout" in result["strategies"]
     assert result["rows"] >= 45
     rows = list(seeded_db.scalars(select(ScreenResult)).all())
     assert rows
+    assert {row.strategy_tag for row in rows} == set(DEFAULT_STRATEGY_NAMES)
     assert any(row.passed for row in rows)
     for row in rows:
         flags = json.loads(row.pass_flags)
@@ -110,6 +115,7 @@ def test_phase3h_default_strategy_options_preserve_base_condition_flags(seeded_d
     trend = TrendBreakoutStrategy(config["trend_breakout"]).evaluate(indicator, fundamentals, "bull")
     vcp = VcpBreakoutStrategy(config["vcp_breakout"]).evaluate(indicator, fundamentals, "bull")
     canslim = CanslimLiteStrategy(config["canslim_lite"]).evaluate(indicator, fundamentals, "bull")
+    new_high = NewHighBreakoutStrategy(config["new_high_breakout"]).evaluate(indicator, fundamentals, "bull")
 
     assert "atr20_pct_max" not in trend.pass_flags
     assert "pivot_distance_limit" not in vcp.pass_flags
@@ -117,6 +123,7 @@ def test_phase3h_default_strategy_options_preserve_base_condition_flags(seeded_d
     assert trend.passed is True
     assert vcp.passed is True
     assert canslim.passed is True
+    assert new_high.passed is True
 
 
 def test_strategy_registry_preserves_default_order_types_and_contract():
@@ -133,6 +140,8 @@ def test_strategy_registry_preserves_default_order_types_and_contract():
     assert isinstance(registry["trend_breakout"], TrendBreakoutStrategy)
     assert isinstance(registry["vcp_breakout"], VcpBreakoutStrategy)
     assert isinstance(registry["canslim_lite"], CanslimLiteStrategy)
+    assert isinstance(registry["new_high_breakout"], NewHighBreakoutStrategy)
+    assert isinstance(available_registry["new_high_breakout"], NewHighBreakoutStrategy)
     assert isinstance(available_registry["momentum_rank"], MomentumRankStrategy)
     assert isinstance(available_registry["relative_strength_leader"], RelativeStrengthLeaderStrategy)
     assert "relative_strength_leader" not in registry
@@ -145,6 +154,77 @@ def test_strategy_registry_preserves_default_order_types_and_contract():
     assert "atr20_pct_max" not in results["trend_breakout"].pass_flags
     assert "pivot_distance_limit" not in results["vcp_breakout"].pass_flags
     assert "roe_min" not in results["canslim_lite"].pass_flags
+
+
+def test_new_high_breakout_passes_with_near_high_breakout_fixture():
+    config = get_config("strategies")
+    result = NewHighBreakoutStrategy(config["new_high_breakout"]).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert result.strategy_tag == "new_high_breakout"
+    assert result.failed_conditions == []
+    assert result.pass_flags["new_high_threshold"] is True
+    assert result.pass_flags["breakout"] is True
+    assert result.pass_flags["volume_surge"] is True
+    assert result.metadata["data_quality_flags"]["high_52w_available"] is True
+    assert result.metadata["data_quality_flags"]["distance_from_52w_high_available"] is True
+    assert result.metadata["data_quality_flags"]["volume_ratio_50_available"] is True
+    assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation"}.issubset(result.metadata)
+
+
+def test_new_high_breakout_allows_configured_near_high_threshold_boundary():
+    config = get_config("strategies")
+    result = NewHighBreakoutStrategy(config["new_high_breakout"]).evaluate(
+        _passing_indicator(close=99.5, high_52w=100.0, distance_from_52w_high=-0.005),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert result.pass_flags["new_high_threshold"] is True
+
+
+def test_new_high_breakout_rejects_missing_high_52w_with_quality_flag():
+    config = get_config("strategies")
+    result = NewHighBreakoutStrategy(config["new_high_breakout"]).evaluate(
+        _passing_indicator(high_52w=None, distance_from_52w_high=None),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "high_52w_available" in result.failed_conditions
+    assert "new_high_threshold" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["high_52w_available"] is False
+    assert result.metadata["data_quality_flags"]["distance_from_52w_high_available"] is False
+
+
+def test_new_high_breakout_rejects_low_volume_surge():
+    config = get_config("strategies")
+    result = NewHighBreakoutStrategy(config["new_high_breakout"]).evaluate(
+        _passing_indicator(volume=149999, volume_ma50=100000.0),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "volume_surge" in result.failed_conditions
+
+
+def test_new_high_breakout_rejects_false_breakout():
+    config = get_config("strategies")
+    result = NewHighBreakoutStrategy(config["new_high_breakout"]).evaluate(
+        _passing_indicator(breakout=False),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "breakout" in result.failed_conditions
 
 
 def test_momentum_rank_passes_with_strong_relative_strength_fixture():
@@ -284,6 +364,32 @@ def test_backtest_can_run_relative_strength_leader_when_explicitly_selected(seed
 
     assert result["run_id"]
     assert result["strategy_name"] == "relative_strength_leader"
+    assert "metrics" in result
+    assert "trade_count" in result["metrics"]
+
+
+def test_screener_can_run_new_high_breakout_when_explicitly_selected(seeded_db):
+    result = ScreenerService(seeded_db).run(strategies=["new_high_breakout"])
+
+    rows = list(seeded_db.scalars(select(ScreenResult)).all())
+    listed = ScreenerService(seeded_db).list_results(strategy_name="new_high_breakout", limit=1)
+    assert result["rows"] > 0
+    assert result["strategies"] == ["new_high_breakout"]
+    assert {row.strategy_tag for row in rows} == {"new_high_breakout"}
+    assert listed
+    first = listed[0]
+    assert first["strategy_name"] == "new_high_breakout"
+    assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation", "rationale"}.issubset(first)
+    assert "high_52w_available" in first["data_quality_flags"]
+    assert "distance_from_52w_high_available" in first["data_quality_flags"]
+    assert "volume_ratio_50_available" in first["data_quality_flags"]
+
+
+def test_backtest_can_run_new_high_breakout_when_explicitly_selected(seeded_db):
+    result = BacktestService(seeded_db).run("new_high_breakout")
+
+    assert result["run_id"]
+    assert result["strategy_name"] == "new_high_breakout"
     assert "metrics" in result
     assert "trade_count" in result["metrics"]
 

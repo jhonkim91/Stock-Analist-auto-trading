@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `MVP v0.13 / Phase 3H Strategy Extension`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
+현재 기준선은 `MVP v0.14 / Phase C-3 new_high_breakout Strategy`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -10,8 +10,8 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.13` |
-| Phase | `Phase 3H Strategy Extension` |
+| Version | `MVP v0.14` |
+| Phase | `Phase C-3 new_high_breakout Strategy` |
 | Branch | `main` |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | Trading state | fail-closed, preview-only, real order 미구현 |
@@ -31,20 +31,24 @@
 - Phase 3G-2: liquidity participation cap and partial fill model.
 - Phase 3G-3: adjusted price option, delisted symbol forced exit, missing data forced exit metrics.
 - Phase 3H: strategy explanation contract and conservative optional filters.
+- Phase C-1: `momentum_rank` available-only strategy.
+- Phase C-2: `relative_strength_leader` available-only strategy.
+- Phase C-3: `new_high_breakout` default and available strategy.
 - GitHub Actions CI scaffold: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: current SQLAlchemy model 기준 초기 SQLite migration.
 
-## Phase 3H Behavior
+## Strategy Behavior
 
-Phase 3H는 기존 rule-based 전략 3종의 기본 결과를 보존하면서 설명력과 옵션 조건을 확장합니다.
+Phase 3H 이후 전략 registry 기반 확장을 유지합니다.
 
-- `trend_breakout`, `vcp_breakout`, `canslim_lite`의 기본 조건과 기본 pass/fail 결과는 유지합니다.
+- 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout` 4개입니다.
+- `new_high_breakout`은 52주 신고가 또는 신고가 근접 돌파를 평가합니다.
+- `momentum_rank`, `relative_strength_leader`는 available registry에 포함되며 명시 선택 시 screener/backtest에서 실행할 수 있습니다.
 - screener result 응답에 `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`을 추가합니다.
 - 기존 `pass_flags`, `failed_conditions`, `reason_summary`, `score_details_json`, `risk_details_json`은 제거하지 않습니다.
-- 새 전략 조건은 모두 기본값 `false`로 비활성화되어 기존 결과를 보존합니다.
 - DB schema, backtest 수익률 산식, broker/paper/KIS safety contract는 변경하지 않습니다.
 
-Phase 3H config options:
+Strategy config options:
 
 ```yaml
 trend_breakout:
@@ -58,6 +62,11 @@ vcp_breakout:
 canslim_lite:
   earnings_quality_enabled: false
   min_roe: 0.15
+
+new_high_breakout:
+  new_high_threshold: 0.995
+  volume_surge_multiple: 1.5
+  rs_percentile_min: 80
 ```
 
 ## Main APIs
@@ -115,10 +124,10 @@ Backend full suite:
 .\.venv\Scripts\python.exe -m pytest backend/tests
 ```
 
-Phase 3H strategy targeted suite:
+Phase C strategy targeted suite:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_phase2_api.py backend/tests/test_api_smoke.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_backtest.py -q
 ```
 
 Phase 3G backtest targeted suite:

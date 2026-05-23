@@ -22,6 +22,10 @@ canslim_lite:
   required_market_regime: "bull"
   earnings_quality_enabled: false
   min_roe: 0.15
+new_high_breakout:
+  new_high_threshold: 0.995
+  volume_surge_multiple: 1.5
+  rs_percentile_min: 80
 momentum_rank:
   rs_percentile_min: 85
   relative_strength_score_min: 0.85
