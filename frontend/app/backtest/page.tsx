@@ -19,7 +19,7 @@ const metricLabels: Array<[keyof BacktestRun["metrics"], string, "percent" | "nu
   ["exposure", "exposure", "percent"]
 ];
 
-const strategies = ["trend_breakout", "vcp_breakout", "canslim_lite"];
+const strategies = ["trend_breakout", "vcp_breakout", "canslim_lite", "momentum_rank"];
 
 function formatMetric(value: number | string | null | undefined, type: "percent" | "number") {
   if (typeof value !== "number") {

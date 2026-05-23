@@ -22,3 +22,15 @@ canslim_lite:
   required_market_regime: "bull"
   earnings_quality_enabled: false
   min_roe: 0.15
+momentum_rank:
+  rs_percentile_min: 85
+  relative_strength_score_min: 0.85
+  trend_score_min: 0.75
+  sector_rs_score_min: 0.60
+  market_score_min: 0.50
+relative_strength_leader:
+  rs_percentile_min: 90
+  relative_strength_score_min: 0.90
+  sector_rs_score_min: 0.70
+  near_high_52w_threshold: 0.90
+  min_volume_ratio_50: 1.0

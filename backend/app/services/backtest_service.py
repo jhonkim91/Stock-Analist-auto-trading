@@ -14,9 +14,7 @@ from backend.app.repositories.backtest_repository import BacktestRepository
 from backend.app.repositories.market_repository import MarketRepository
 from backend.app.services.risk_service import RiskService
 from backend.app.services.scoring_service import ScoringService
-from backend.app.strategies.canslim_lite import CanslimLiteStrategy
-from backend.app.strategies.trend_breakout import TrendBreakoutStrategy
-from backend.app.strategies.vcp_breakout import VcpBreakoutStrategy
+from backend.app.strategies.registry import get_available_strategy_registry
 from backend.app.utils.hashing import stable_hash
 
 
@@ -29,11 +27,7 @@ class BacktestService:
         self.scoring_service = ScoringService()
         self.strategy_config = get_config("strategies")
         self.backtest_config = get_config("backtest")
-        self.strategies = {
-            "trend_breakout": TrendBreakoutStrategy(self.strategy_config["trend_breakout"]),
-            "vcp_breakout": VcpBreakoutStrategy(self.strategy_config["vcp_breakout"]),
-            "canslim_lite": CanslimLiteStrategy(self.strategy_config["canslim_lite"]),
-        }
+        self.strategies = get_available_strategy_registry(self.strategy_config)
 
     def run(
         self,

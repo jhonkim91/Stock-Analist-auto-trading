@@ -5,7 +5,7 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.13` |
-| Phase | `Phase 3H Strategy Extension` |
+| Phase | `Phase C-2 relative_strength_leader Strategy` |
 | Branch | `main` |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | 실거래 미구현, fail-closed, preview-only |
@@ -24,27 +24,30 @@
 - Phase 3G-1: backtest execution model hardening.
 - Phase 3G-2: liquidity participation cap and partial fill model.
 - Phase 3G-3: adjusted price option, delisted symbol forced exit, missing data forced exit metrics.
-- Phase 3H: strategy explanation contract, conservative optional strategy filters, fixture tests.
+- Phase 3H: strategy explanation contract, conservative optional strategy filters, fixture tests, strategy registry.
+- Phase C-1: `momentum_rank` available-only strategy.
+- Phase C-2: `relative_strength_leader` available-only strategy.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
-- Alembic migration scaffold: 초기 schema migration과 SQLite upgrade/downgrade smoke test.
+- Alembic migration scaffold: initial schema migration과 SQLite upgrade/downgrade smoke test.
 
-## Phase 3H 변경 요약
+## Phase C 전략 상태
 
-- Screener result 응답에 `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`를 추가했다.
-- `trend_breakout`에 optional ATR risk filter를 추가했다.
-- `vcp_breakout`에 optional pivot distance limit filter를 추가했다.
-- `canslim_lite`에 optional ROE 기반 earnings quality filter를 추가했다.
-- 모든 새 전략 조건은 기본값 `false`로 비활성화되어 기존 전략 기본 결과를 보존한다.
-- DB schema, backtest 수익률 산식, broker/paper/KIS 기능은 변경하지 않았다.
+- 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite` 3개를 유지한다.
+- `momentum_rank`와 `relative_strength_leader`는 available registry에만 포함하며 명시 선택 시 screener/backtest에서 실행 가능하다.
+- `relative_strength_leader`는 시장 대비 상대강도, 업종 상대강도, 52주 고점 근접, 단기/중기 추세, `volume_ratio_50`을 평가한다.
+- `relative_strength_leader`는 `indicator_snapshot` 기존 필드만 사용하고 DB migration을 만들지 않는다.
+- Screener 응답의 기존 explanation contract 필드는 제거하지 않는다.
+- `relative_strength_leader` Screener 응답에는 strategy별 `data_quality_flags`를 기존 `data_quality_flags` 객체에 병합한다.
 
 ## 미구현 항목
 
-- 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker.
+- 실제 주문, 주문 취소, 체결, 계좌, 예수금, websocket, live broker.
 - paper order create, paper fill simulator, paper position mutation.
 - KIS credential/token 저장, token 발급/refresh/cache, 실제 KIS API 호출.
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.
 - portfolio cash/position state, walk-forward validation.
+- frontend strategy selector의 `relative_strength_leader` 추가는 별도 범위.
 
 ## 안전 제약사항
 
@@ -63,16 +66,10 @@ Backend:
 .\.venv\Scripts\python.exe -m pytest backend/tests
 ```
 
-Phase 3H strategy:
+Phase C strategy:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_phase2_api.py backend/tests/test_api_smoke.py -q
-```
-
-Phase 3G backtest realism:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_backtest.py -q
 ```
 
 Broker/paper/KIS/backtest safety:

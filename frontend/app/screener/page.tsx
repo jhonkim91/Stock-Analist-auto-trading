@@ -146,6 +146,7 @@ export default function ScreenerPage() {
                   <option value="trend_breakout">trend_breakout</option>
                   <option value="vcp_breakout">vcp_breakout</option>
                   <option value="canslim_lite">canslim_lite</option>
+                  <option value="momentum_rank">momentum_rank</option>
                 </>
               ) : null}
             </select>

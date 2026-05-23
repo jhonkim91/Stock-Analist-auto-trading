@@ -7,16 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_config
-from backend.app.models.tables import ScreenResult, SymbolMaster
+from backend.app.models.tables import IndicatorSnapshot, ScreenResult, SymbolMaster
 from backend.app.repositories.market_repository import MarketRepository
 from backend.app.repositories.screen_repository import ScreenRepository
 from backend.app.services.regime_service import RegimeService
 from backend.app.services.risk_service import RiskService
 from backend.app.services.scoring_service import ScoringService
 from backend.app.strategies.base import StrategyResult
-from backend.app.strategies.canslim_lite import CanslimLiteStrategy
-from backend.app.strategies.trend_breakout import TrendBreakoutStrategy
-from backend.app.strategies.vcp_breakout import VcpBreakoutStrategy
+from backend.app.strategies.registry import DEFAULT_STRATEGY_NAMES, get_available_strategy_registry
 
 
 class ScreenerService:
@@ -27,18 +25,14 @@ class ScreenerService:
         self.risk_service = RiskService()
         self.scoring_service = ScoringService()
         self.strategy_config = get_config("strategies")
-        self.strategies = {
-            "trend_breakout": TrendBreakoutStrategy(self.strategy_config["trend_breakout"]),
-            "vcp_breakout": VcpBreakoutStrategy(self.strategy_config["vcp_breakout"]),
-            "canslim_lite": CanslimLiteStrategy(self.strategy_config["canslim_lite"]),
-        }
+        self.strategies = get_available_strategy_registry(self.strategy_config)
 
     def run(self, trade_date: date | None = None, strategies: list[str] | None = None) -> dict[str, object]:
         """지정일 기준 조건검색을 실행하고 screen_results에 저장한다."""
         target_date = trade_date or self.screen_repo.latest_indicator_date()
         if target_date is None:
             raise ValueError("indicator_snapshot 데이터가 없습니다.")
-        enabled = strategies or list(self.strategies)
+        enabled = strategies or list(DEFAULT_STRATEGY_NAMES)
         indicators = self.screen_repo.indicators_for_date(target_date)
         if not indicators:
             raise ValueError(f"{target_date} 지표 스냅샷이 없습니다.")
@@ -122,7 +116,14 @@ class ScreenerService:
         rows = self.screen_repo.list_results(trade_date)
         symbol_rows = self.db.scalars(select(SymbolMaster)).all()
         names = {symbol.symbol: symbol.name for symbol in symbol_rows}
-        payload = [self._serialize_result(row, names.get(row.symbol, row.symbol)) for row in rows]
+        payload = [
+            self._serialize_result(
+                row,
+                names.get(row.symbol, row.symbol),
+                self._strategy_data_quality_flags(row),
+            )
+            for row in rows
+        ]
 
         if strategy_name:
             payload = [row for row in payload if row["strategy_name"] == strategy_name]
@@ -154,8 +155,33 @@ class ScreenerService:
             return "C"
         return "D"
 
+    def _strategy_data_quality_flags(self, row: ScreenResult) -> dict[str, bool]:
+        if row.strategy_tag != "relative_strength_leader":
+            return {}
+        indicator = self.db.scalar(
+            select(IndicatorSnapshot)
+            .where(IndicatorSnapshot.trade_date == row.trade_date, IndicatorSnapshot.symbol == row.symbol)
+            .limit(1)
+        )
+        if indicator is None:
+            return {"indicator_snapshot_available": False}
+        strategy = self.strategies.get(row.strategy_tag)
+        if strategy is None:
+            return {"indicator_snapshot_available": True, "strategy_available": False}
+        result = strategy.evaluate(indicator, None, "neutral")
+        return {
+            "indicator_snapshot_available": True,
+            "strategy_available": True,
+            **result.metadata.get("data_quality_flags", {}),
+        }
+
     @classmethod
-    def _serialize_result(cls, row: ScreenResult, name: str) -> dict[str, object]:
+    def _serialize_result(
+        cls,
+        row: ScreenResult,
+        name: str,
+        strategy_data_quality_flags: dict[str, bool] | None = None,
+    ) -> dict[str, object]:
         pass_flags = json.loads(row.pass_flags)
         failed_conditions = json.loads(row.failed_conditions)
         triggered_conditions = [key for key, value in pass_flags.items() if value]
@@ -192,6 +218,7 @@ class ScreenerService:
             "entry_price_available": row.entry_price is not None,
             "stop_price_available": row.stop_price is not None,
             "target_price_available": row.target_price is not None,
+            **(strategy_data_quality_flags or {}),
         }
         return {
             "trade_date": row.trade_date,

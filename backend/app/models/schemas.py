@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from backend.app.strategies.registry import DEFAULT_STRATEGY_NAMES
+
 
 class SeedResponse(BaseModel):
     symbols: int
@@ -34,7 +36,7 @@ class RegimeResponse(BaseModel):
 
 class ScreenerRunRequest(BaseModel):
     trade_date: date | None = None
-    strategies: list[str] = Field(default_factory=lambda: ["trend_breakout", "vcp_breakout", "canslim_lite"])
+    strategies: list[str] = Field(default_factory=lambda: list(DEFAULT_STRATEGY_NAMES))
 
 
 class BacktestRunRequest(BaseModel):
