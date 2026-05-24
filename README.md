@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `MVP v0.14 / Phase C-3 new_high_breakout Strategy`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
+현재 기준선은 `MVP v0.16 / Phase C-6 pullback_20ema Strategy`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -10,8 +10,8 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.14` |
-| Phase | `Phase C-3 new_high_breakout Strategy` |
+| Version | `MVP v0.16` |
+| Phase | `Phase C-6 pullback_20ema Strategy` |
 | Branch | `main` |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | Trading state | fail-closed, preview-only, real order 미구현 |
@@ -34,19 +34,25 @@
 - Phase C-1: `momentum_rank` available-only strategy.
 - Phase C-2: `relative_strength_leader` available-only strategy.
 - Phase C-3: `new_high_breakout` default and available strategy.
+- Phase C-4: `darvas_box` available-only strategy.
+- Phase C-5: `stage_analysis_weekly` available-only strategy and nullable weekly indicator snapshot fields.
+- Phase C-6: `pullback_20ema` default and available strategy, nullable `low`/`ema20` indicator snapshot fields.
 - GitHub Actions CI scaffold: backend pytest, frontend lint/typecheck/build.
-- Alembic migration scaffold: current SQLAlchemy model 기준 초기 SQLite migration.
+- Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, `c5b7d9a1e4f2` weekly indicator migration, `f6d4a2c9e8b1` pullback EMA migration.
 
 ## Strategy Behavior
 
 Phase 3H 이후 전략 registry 기반 확장을 유지합니다.
 
-- 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout` 4개입니다.
+- 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout`, `pullback_20ema` 5개입니다.
 - `new_high_breakout`은 52주 신고가 또는 신고가 근접 돌파를 평가합니다.
-- `momentum_rank`, `relative_strength_leader`는 available registry에 포함되며 명시 선택 시 screener/backtest에서 실행할 수 있습니다.
+- `darvas_box`는 `pivot_high_20_prev`, `pivot_low_20_prev`, breakout, volume surge, RS percentile, SMA trend를 이용해 Darvas Box 근사 breakout을 평가합니다.
+- `stage_analysis_weekly`는 `weekly_close > weekly_sma30`, `weekly_sma30_slope > 0`, daily SMA trend, RS percentile, volume ratio, market regime를 이용해 Stage 2 근사를 평가합니다.
+- `pullback_20ema`는 상승 추세 정배열, 20EMA 눌림목 touch, 종가 EMA20 회복, RS percentile, pullback volume, ATR risk 조건을 평가합니다.
+- `momentum_rank`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly`는 available registry에 포함되며 명시 선택 시 screener/backtest에서 실행할 수 있습니다.
 - screener result 응답에 `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`을 추가합니다.
 - 기존 `pass_flags`, `failed_conditions`, `reason_summary`, `score_details_json`, `risk_details_json`은 제거하지 않습니다.
-- DB schema, backtest 수익률 산식, broker/paper/KIS safety contract는 변경하지 않습니다.
+- DB schema는 `indicator_snapshot.weekly_close`, `weekly_sma30`, `weekly_sma30_slope`, `low`, `ema20` nullable 컬럼을 포함하며, backtest 실행 모델과 broker/paper/KIS safety contract는 유지합니다.
 
 Strategy config options:
 
@@ -67,6 +73,21 @@ new_high_breakout:
   new_high_threshold: 0.995
   volume_surge_multiple: 1.5
   rs_percentile_min: 80
+
+pullback_20ema:
+  pullback_touch_buffer: 1.01
+  rs_percentile_min: 70
+  max_pullback_volume_ratio: 1.2
+  max_atr20_pct: 0.08
+
+darvas_box:
+  max_box_height_pct: 0.25
+  volume_surge_multiple: 1.5
+  rs_percentile_min: 75
+
+stage_analysis_weekly:
+  rs_percentile_min: 70
+  min_volume_ratio_50: 1.0
 ```
 
 ## Main APIs
@@ -128,6 +149,7 @@ Phase C strategy targeted suite:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_backtest.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_indicators.py backend/tests/test_strategies.py backend/tests/test_alembic_migrations.py -q
 ```
 
 Phase 3G backtest targeted suite:

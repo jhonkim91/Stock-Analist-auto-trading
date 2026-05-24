@@ -9,6 +9,8 @@ from sqlalchemy import create_engine, inspect, text
 from backend.app.core.database import Base
 from backend.app.models import tables  # noqa: F401
 
+ALEMBIC_HEAD = "f6d4a2c9e8b1"
+
 
 def _alembic_config(database_url: str) -> Config:
     repo_root = Path(__file__).resolve().parents[2]
@@ -38,8 +40,10 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "paper_orders",
         "backtest_runs",
     }.issubset(table_names)
+    indicator_columns = {column["name"] for column in inspector.get_columns("indicator_snapshot")}
+    assert {"weekly_close", "weekly_sma30", "weekly_sma30_slope", "low", "ema20"}.issubset(indicator_columns)
     with engine.connect() as connection:
-        assert connection.scalar(text("select version_num from alembic_version")) == "da9ab5998e36"
+        assert connection.scalar(text("select version_num from alembic_version")) == ALEMBIC_HEAD
 
     command.downgrade(config, "base")
 
@@ -63,5 +67,5 @@ def test_existing_create_all_sqlite_schema_can_be_stamped_as_head(tmp_path: Path
     command.check(config)
 
     with engine.connect() as connection:
-        assert connection.scalar(text("select version_num from alembic_version")) == "da9ab5998e36"
+        assert connection.scalar(text("select version_num from alembic_version")) == ALEMBIC_HEAD
     engine.dispose()

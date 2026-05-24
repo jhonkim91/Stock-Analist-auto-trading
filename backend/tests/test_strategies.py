@@ -13,8 +13,10 @@ from backend.app.repositories.market_repository import MarketRepository
 from backend.app.services.backtest_service import BacktestService
 from backend.app.services.screener_service import ScreenerService
 from backend.app.strategies.canslim_lite import CanslimLiteStrategy
+from backend.app.strategies.darvas_box import DarvasBoxStrategy
 from backend.app.strategies.momentum_rank import MomentumRankStrategy
 from backend.app.strategies.new_high_breakout import NewHighBreakoutStrategy
+from backend.app.strategies.pullback_20ema import Pullback20EmaStrategy
 from backend.app.strategies.relative_strength_leader import RelativeStrengthLeaderStrategy
 from backend.app.strategies.registry import (
     AVAILABLE_STRATEGY_NAMES,
@@ -22,6 +24,7 @@ from backend.app.strategies.registry import (
     get_available_strategy_registry,
     get_strategy_registry,
 )
+from backend.app.strategies.stage_analysis_weekly import StageAnalysisWeeklyStrategy
 from backend.app.strategies.trend_breakout import TrendBreakoutStrategy
 from backend.app.strategies.vcp_breakout import VcpBreakoutStrategy
 
@@ -29,14 +32,19 @@ from backend.app.strategies.vcp_breakout import VcpBreakoutStrategy
 def _passing_indicator(**overrides):
     values = {
         "close": 100.0,
+        "low": 98.5,
         "volume": 200000,
         "turnover_value": 2_000_000_000.0,
+        "ema20": 98.0,
         "sma50": 90.0,
         "sma150": 80.0,
         "sma200": 70.0,
         "sma200_slope": 1.0,
+        "weekly_close": 100.0,
+        "weekly_sma30": 90.0,
+        "weekly_sma30_slope": 2.0,
         "volume_ma50": 100000.0,
-        "volume_ratio_50": 2.0,
+        "volume_ratio_50": 1.1,
         "atr20_pct": 0.02,
         "atr20_pct_ma60": 0.04,
         "std20": 0.01,
@@ -44,6 +52,7 @@ def _passing_indicator(**overrides):
         "high_52w": 100.0,
         "distance_from_52w_high": 0.0,
         "pivot_high_20_prev": 98.0,
+        "pivot_low_20_prev": 82.0,
         "volume_dry_up": True,
         "breakout": True,
         "rs_percentile": 90.0,
@@ -116,6 +125,7 @@ def test_phase3h_default_strategy_options_preserve_base_condition_flags(seeded_d
     vcp = VcpBreakoutStrategy(config["vcp_breakout"]).evaluate(indicator, fundamentals, "bull")
     canslim = CanslimLiteStrategy(config["canslim_lite"]).evaluate(indicator, fundamentals, "bull")
     new_high = NewHighBreakoutStrategy(config["new_high_breakout"]).evaluate(indicator, fundamentals, "bull")
+    pullback = Pullback20EmaStrategy(config["pullback_20ema"]).evaluate(indicator, fundamentals, "bull")
 
     assert "atr20_pct_max" not in trend.pass_flags
     assert "pivot_distance_limit" not in vcp.pass_flags
@@ -124,6 +134,7 @@ def test_phase3h_default_strategy_options_preserve_base_condition_flags(seeded_d
     assert vcp.passed is True
     assert canslim.passed is True
     assert new_high.passed is True
+    assert pullback.passed is True
 
 
 def test_strategy_registry_preserves_default_order_types_and_contract():
@@ -141,10 +152,16 @@ def test_strategy_registry_preserves_default_order_types_and_contract():
     assert isinstance(registry["vcp_breakout"], VcpBreakoutStrategy)
     assert isinstance(registry["canslim_lite"], CanslimLiteStrategy)
     assert isinstance(registry["new_high_breakout"], NewHighBreakoutStrategy)
+    assert isinstance(registry["pullback_20ema"], Pullback20EmaStrategy)
     assert isinstance(available_registry["new_high_breakout"], NewHighBreakoutStrategy)
+    assert isinstance(available_registry["pullback_20ema"], Pullback20EmaStrategy)
     assert isinstance(available_registry["momentum_rank"], MomentumRankStrategy)
     assert isinstance(available_registry["relative_strength_leader"], RelativeStrengthLeaderStrategy)
+    assert isinstance(available_registry["darvas_box"], DarvasBoxStrategy)
+    assert isinstance(available_registry["stage_analysis_weekly"], StageAnalysisWeeklyStrategy)
     assert "relative_strength_leader" not in registry
+    assert "darvas_box" not in registry
+    assert "stage_analysis_weekly" not in registry
 
     results = {
         strategy_name: strategy.evaluate(indicator, fundamentals, "bull")
@@ -154,6 +171,75 @@ def test_strategy_registry_preserves_default_order_types_and_contract():
     assert "atr20_pct_max" not in results["trend_breakout"].pass_flags
     assert "pivot_distance_limit" not in results["vcp_breakout"].pass_flags
     assert "roe_min" not in results["canslim_lite"].pass_flags
+
+
+def test_pullback_20ema_passes_after_ema_touch_and_close_reclaim():
+    config = get_config("strategies")
+    result = Pullback20EmaStrategy(config["pullback_20ema"]).evaluate(
+        _passing_indicator(low=98.5, ema20=98.0, close=100.0),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert result.strategy_tag == "pullback_20ema"
+    assert result.failed_conditions == []
+    assert result.pass_flags["low_touch_ema20"] is True
+    assert result.pass_flags["close_gte_ema20"] is True
+    assert result.metadata["data_quality_flags"]["ema20_available"] is True
+    assert result.metadata["data_quality_flags"]["low_available"] is True
+    assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation"}.issubset(result.metadata)
+
+
+def test_pullback_20ema_rejects_missing_ema20_with_quality_flag():
+    config = get_config("strategies")
+    result = Pullback20EmaStrategy(config["pullback_20ema"]).evaluate(
+        _passing_indicator(ema20=None),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "ema20_available" in result.failed_conditions
+    assert "low_touch_ema20" in result.failed_conditions
+    assert "close_gte_ema20" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["ema20_available"] is False
+
+
+def test_pullback_20ema_rejects_broken_trend_alignment():
+    config = get_config("strategies")
+    result = Pullback20EmaStrategy(config["pullback_20ema"]).evaluate(
+        _passing_indicator(sma150=95.0, sma200=96.0),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "sma150_gt_sma200" in result.failed_conditions
+
+
+def test_pullback_20ema_rejects_excessive_pullback_volume():
+    config = get_config("strategies")
+    result = Pullback20EmaStrategy(config["pullback_20ema"]).evaluate(
+        _passing_indicator(volume_ratio_50=1.21),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "volume_ratio_50_max" in result.failed_conditions
+
+
+def test_pullback_20ema_rejects_high_atr20_pct():
+    config = get_config("strategies")
+    result = Pullback20EmaStrategy(config["pullback_20ema"]).evaluate(
+        _passing_indicator(atr20_pct=0.081),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "atr20_pct_max" in result.failed_conditions
 
 
 def test_new_high_breakout_passes_with_near_high_breakout_fixture():
@@ -225,6 +311,141 @@ def test_new_high_breakout_rejects_false_breakout():
 
     assert result.passed is False
     assert "breakout" in result.failed_conditions
+
+
+def test_darvas_box_passes_with_box_breakout_fixture():
+    config = get_config("strategies")
+    result = DarvasBoxStrategy(config["darvas_box"]).evaluate(
+        _passing_indicator(close=100.0, pivot_high_20_prev=95.0, pivot_low_20_prev=80.0),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert result.strategy_tag == "darvas_box"
+    assert result.failed_conditions == []
+    assert result.pass_flags["valid_box_range"] is True
+    assert result.pass_flags["box_height_pct_max"] is True
+    assert result.pass_flags["close_gt_box_top"] is True
+    assert result.metadata["box_top"] == 95.0
+    assert result.metadata["box_bottom"] == 80.0
+    assert result.metadata["box_height_pct"] == 0.1875
+    assert result.metadata["score_breakdown"]["box_height_pct"] == 0.1875
+    assert result.metadata["data_quality_flags"]["box_height_pct_available"] is True
+
+
+def test_darvas_box_rejects_tall_box_height():
+    config = get_config("strategies")
+    result = DarvasBoxStrategy(config["darvas_box"]).evaluate(
+        _passing_indicator(close=131.0, pivot_high_20_prev=130.0, pivot_low_20_prev=100.0),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "box_height_pct_max" in result.failed_conditions
+    assert result.metadata["box_height_pct"] == 0.3
+
+
+def test_darvas_box_rejects_missing_pivots_with_quality_flags():
+    config = get_config("strategies")
+    result = DarvasBoxStrategy(config["darvas_box"]).evaluate(
+        _passing_indicator(pivot_high_20_prev=None, pivot_low_20_prev=None),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "pivot_high_20_prev_available" in result.failed_conditions
+    assert "pivot_low_20_prev_available" in result.failed_conditions
+    assert "valid_box_range" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["pivot_high_20_prev_available"] is False
+    assert result.metadata["data_quality_flags"]["pivot_low_20_prev_available"] is False
+    assert result.metadata["data_quality_flags"]["box_height_pct_available"] is False
+    assert result.metadata["score_breakdown"]["box_height_pct"] is None
+
+
+def test_darvas_box_rejects_low_volume_surge():
+    config = get_config("strategies")
+    result = DarvasBoxStrategy(config["darvas_box"]).evaluate(
+        _passing_indicator(close=100.0, pivot_high_20_prev=95.0, pivot_low_20_prev=80.0, volume=149999),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "volume_surge" in result.failed_conditions
+
+
+def test_stage_analysis_weekly_passes_with_stage2_fixture():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert result.strategy_tag == "stage_analysis_weekly"
+    assert result.failed_conditions == []
+    assert result.pass_flags["weekly_close_gt_sma30"] is True
+    assert result.pass_flags["weekly_sma30_slope_positive"] is True
+    assert result.pass_flags["market_regime_not_bear"] is True
+    assert result.metadata["data_quality_flags"]["weekly_data_available"] is True
+    assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation"}.issubset(result.metadata)
+
+
+def test_stage_analysis_weekly_rejects_flat_or_falling_sma30():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
+        _passing_indicator(weekly_sma30_slope=0.0),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "weekly_sma30_slope_positive" in result.failed_conditions
+
+
+def test_stage_analysis_weekly_rejects_close_below_weekly_sma30():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
+        _passing_indicator(weekly_close=89.0, weekly_sma30=90.0),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "weekly_close_gt_sma30" in result.failed_conditions
+
+
+def test_stage_analysis_weekly_rejects_bear_market_regime():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "bear",
+    )
+
+    assert result.passed is False
+    assert "market_regime_not_bear" in result.failed_conditions
+
+
+def test_stage_analysis_weekly_rejects_missing_weekly_data_with_quality_flag():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
+        _passing_indicator(weekly_close=None, weekly_sma30=None, weekly_sma30_slope=None),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "weekly_data_available" in result.failed_conditions
+    assert "weekly_close_gt_sma30" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["weekly_data_available"] is False
+    assert result.metadata["data_quality_flags"]["weekly_close_available"] is False
+    assert result.metadata["data_quality_flags"]["weekly_sma30_available"] is False
+    assert result.metadata["data_quality_flags"]["weekly_sma30_slope_available"] is False
 
 
 def test_momentum_rank_passes_with_strong_relative_strength_fixture():
@@ -390,6 +611,87 @@ def test_backtest_can_run_new_high_breakout_when_explicitly_selected(seeded_db):
 
     assert result["run_id"]
     assert result["strategy_name"] == "new_high_breakout"
+    assert "metrics" in result
+    assert "trade_count" in result["metrics"]
+
+
+def test_screener_can_run_pullback_20ema_when_explicitly_selected(seeded_db):
+    result = ScreenerService(seeded_db).run(strategies=["pullback_20ema"])
+
+    rows = list(seeded_db.scalars(select(ScreenResult)).all())
+    listed = ScreenerService(seeded_db).list_results(strategy_name="pullback_20ema", limit=100)
+    assert result["rows"] > 0
+    assert result["strategies"] == ["pullback_20ema"]
+    assert {row.strategy_tag for row in rows} == {"pullback_20ema"}
+    assert listed
+    first = listed[0]
+    assert first["strategy_name"] == "pullback_20ema"
+    assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation", "rationale"}.issubset(first)
+    assert "ema20_available" in first["data_quality_flags"]
+    assert "low_available" in first["data_quality_flags"]
+
+
+def test_backtest_can_run_pullback_20ema_when_explicitly_selected(seeded_db):
+    result = BacktestService(seeded_db).run("pullback_20ema")
+
+    assert result["run_id"]
+    assert result["strategy_name"] == "pullback_20ema"
+    assert "metrics" in result
+    assert "trade_count" in result["metrics"]
+
+
+def test_screener_can_run_darvas_box_when_explicitly_selected(seeded_db):
+    result = ScreenerService(seeded_db).run(strategies=["darvas_box"])
+
+    rows = list(seeded_db.scalars(select(ScreenResult)).all())
+    listed = ScreenerService(seeded_db).list_results(strategy_name="darvas_box", limit=100)
+    assert result["rows"] > 0
+    assert result["strategies"] == ["darvas_box"]
+    assert {row.strategy_tag for row in rows} == {"darvas_box"}
+    assert listed
+    first = listed[0]
+    assert first["strategy_name"] == "darvas_box"
+    assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation", "rationale"}.issubset(first)
+    assert "pivot_high_20_prev_available" in first["data_quality_flags"]
+    assert "pivot_low_20_prev_available" in first["data_quality_flags"]
+    assert "box_height_pct_available" in first["data_quality_flags"]
+    assert "box_top" in first["score_breakdown"]
+    assert "box_bottom" in first["score_breakdown"]
+    assert "box_height_pct" in first["score_breakdown"]
+
+
+def test_backtest_can_run_darvas_box_when_explicitly_selected(seeded_db):
+    result = BacktestService(seeded_db).run("darvas_box")
+
+    assert result["run_id"]
+    assert result["strategy_name"] == "darvas_box"
+    assert "metrics" in result
+    assert "trade_count" in result["metrics"]
+
+
+def test_screener_can_run_stage_analysis_weekly_when_explicitly_selected(seeded_db):
+    result = ScreenerService(seeded_db).run(strategies=["stage_analysis_weekly"])
+
+    rows = list(seeded_db.scalars(select(ScreenResult)).all())
+    listed = ScreenerService(seeded_db).list_results(strategy_name="stage_analysis_weekly", limit=100)
+    assert result["rows"] > 0
+    assert result["strategies"] == ["stage_analysis_weekly"]
+    assert {row.strategy_tag for row in rows} == {"stage_analysis_weekly"}
+    assert listed
+    first = listed[0]
+    assert first["strategy_name"] == "stage_analysis_weekly"
+    assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation", "rationale"}.issubset(first)
+    assert "weekly_data_available" in first["data_quality_flags"]
+    assert "weekly_close_available" in first["data_quality_flags"]
+    assert "weekly_sma30_available" in first["data_quality_flags"]
+    assert "weekly_sma30_slope_available" in first["data_quality_flags"]
+
+
+def test_backtest_can_run_stage_analysis_weekly_when_explicitly_selected(seeded_db):
+    result = BacktestService(seeded_db).run("stage_analysis_weekly")
+
+    assert result["run_id"]
+    assert result["strategy_name"] == "stage_analysis_weekly"
     assert "metrics" in result
     assert "trade_count" in result["metrics"]
 

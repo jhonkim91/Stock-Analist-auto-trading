@@ -4,8 +4,8 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.14` |
-| Phase | `Phase C-3 new_high_breakout Strategy` |
+| Version | `MVP v0.16` |
+| Phase | `Phase C-6 pullback_20ema Strategy` |
 | Branch | `main` |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | 실거래 미구현, fail-closed, preview-only |
@@ -28,19 +28,21 @@
 - Phase C-1: `momentum_rank` available-only strategy.
 - Phase C-2: `relative_strength_leader` available-only strategy.
 - Phase C-3: `new_high_breakout` default and available strategy.
+- Phase C-4: `darvas_box` available-only strategy.
+- Phase C-5: `stage_analysis_weekly` available-only strategy and nullable weekly indicator fields.
+- Phase C-6: `pullback_20ema` default and available strategy, nullable `low`/`ema20` indicator fields.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
-- Alembic migration scaffold: initial schema migration과 SQLite upgrade/downgrade smoke test.
+- Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields.
 
 ## Phase C 전략 상태
 
-- 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout` 4개다.
-- `new_high_breakout`은 기본 실행과 명시 선택 시 screener/backtest에서 실행 가능하다.
-- `momentum_rank`와 `relative_strength_leader`는 available registry에만 포함하며 명시 선택 시 screener/backtest에서 실행 가능하다.
-- `new_high_breakout`은 `high_52w`, `distance_from_52w_high`, `breakout`, `volume`, `volume_ma50`, `volume_ratio_50`, `rs_percentile`, 이동평균 추세를 평가한다.
-- `relative_strength_leader`는 시장 대비 상대강도, 업종 상대강도, 52주 고점 근접, 단기/중기 추세, `volume_ratio_50`을 평가한다.
-- Phase C 전략은 `indicator_snapshot` 기존 필드만 사용하고 DB migration을 만들지 않는다.
-- Screener 응답의 기존 explanation contract 필드는 제거하지 않는다.
-- `new_high_breakout`과 `relative_strength_leader` Screener 응답에는 strategy별 `data_quality_flags`를 기존 `data_quality_flags` 객체에 병합한다.
+- 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout`, `pullback_20ema` 5개다.
+- `pullback_20ema`는 상승 추세 정배열, 20EMA 눌림목 touch, 종가 EMA20 회복, RS percentile, pullback volume, ATR risk 조건을 평가한다.
+- `momentum_rank`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly`는 available registry에 포함되며 명시 선택 시 screener/backtest에서 실행 가능하다.
+- `IndicatorService`는 `ema20`을 `close.ewm(span=20, adjust=False, min_periods=20).mean()`으로 계산한다.
+- `indicator_snapshot`에는 nullable `weekly_close`, `weekly_sma30`, `weekly_sma30_slope`, `low`, `ema20`이 추가되어 있다.
+- 최신 Alembic head는 `f6d4a2c9e8b1_add_indicator_pullback_ema_fields`다.
+- Screener 응답은 기존 explanation contract 필드를 제거하지 않는다.
 
 ## 미구현 항목
 
@@ -50,7 +52,7 @@
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.
 - portfolio cash/position state, walk-forward validation.
-- frontend strategy selector의 `new_high_breakout`, `relative_strength_leader` 추가는 별도 범위.
+- frontend strategy selector의 Phase C 전략 확장.
 
 ## 안전 제약사항
 
@@ -66,13 +68,13 @@
 Backend:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests
+.\.venv\Scripts\python.exe -m pytest backend/tests -q
 ```
 
 Phase C strategy:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_backtest.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_indicators.py backend/tests/test_strategies.py backend/tests/test_alembic_migrations.py -q
 ```
 
 Broker/paper/KIS/backtest safety:
@@ -90,13 +92,6 @@ npm.cmd exec tsc -- --noEmit
 npm.cmd run build
 ```
 
-Secret/safety grep:
-
-```powershell
-$matches = rg -n --hidden --glob '!docs/**' --glob '!frontend/package-lock.json' --glob '!frontend/node_modules/**' --glob '!backend/data/**' '(app_key|app_secret|access_token|refresh_token|account_no|password)\s*:\s*\x22[^*<][^\x22]{7,}\x22' backend frontend
-if ($LASTEXITCODE -eq 1) { 'secret scan: no matches' } elseif ($LASTEXITCODE -eq 0) { $matches; exit 1 } else { exit $LASTEXITCODE }
-```
-
 Alembic migration:
 
 ```powershell
@@ -107,4 +102,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-Phase 3I에서 weekly review report를 검토한다. 기존 API, safety contract, no real-order 정책을 유지하고 fixture 기반 검증을 우선한다.
+Phase 3I에서 weekly review report를 검토한다. 기존 API, safety contract, no real-order 정책은 유지하고 fixture 기반 검증을 우선한다.

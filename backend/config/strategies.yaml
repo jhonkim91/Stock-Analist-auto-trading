@@ -26,6 +26,11 @@ new_high_breakout:
   new_high_threshold: 0.995
   volume_surge_multiple: 1.5
   rs_percentile_min: 80
+pullback_20ema:
+  pullback_touch_buffer: 1.01
+  rs_percentile_min: 70
+  max_pullback_volume_ratio: 1.2
+  max_atr20_pct: 0.08
 momentum_rank:
   rs_percentile_min: 85
   relative_strength_score_min: 0.85
@@ -37,4 +42,11 @@ relative_strength_leader:
   relative_strength_score_min: 0.90
   sector_rs_score_min: 0.70
   near_high_52w_threshold: 0.90
+  min_volume_ratio_50: 1.0
+darvas_box:
+  max_box_height_pct: 0.25
+  volume_surge_multiple: 1.5
+  rs_percentile_min: 75
+stage_analysis_weekly:
+  rs_percentile_min: 70
   min_volume_ratio_50: 1.0

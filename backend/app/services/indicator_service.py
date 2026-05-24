@@ -56,10 +56,12 @@ class IndicatorService:
         ).max(axis=1)
 
         df["sma20"] = close.rolling(20, min_periods=20).mean()
+        df["ema20"] = close.ewm(span=20, adjust=False, min_periods=20).mean()
         df["sma50"] = close.rolling(50, min_periods=50).mean()
         df["sma150"] = close.rolling(150, min_periods=150).mean()
         df["sma200"] = close.rolling(200, min_periods=200).mean()
         df["sma200_slope"] = df["sma200"] - df["sma200"].shift(20)
+        df = IndicatorService._attach_weekly_indicators(df, close)
         df["volume_ma20"] = volume.rolling(20, min_periods=20).mean()
         df["volume_ma50"] = volume.rolling(50, min_periods=50).mean()
         df["atr14"] = true_range.rolling(14, min_periods=14).mean()
@@ -86,6 +88,45 @@ class IndicatorService:
         ) / 4
         df["volume_score"] = np.minimum(df["volume_ratio_50"] / 1.5, 1).fillna(0)
         df["pattern_score"] = df["breakout"].astype(float)
+        return df
+
+    @staticmethod
+    def _attach_weekly_indicators(df: pd.DataFrame, close: pd.Series) -> pd.DataFrame:
+        """각 daily snapshot 시점 기준의 as-of 주봉 지표를 추가한다."""
+        trade_dates = pd.to_datetime(df["trade_date"])
+        week_ends = trade_dates.dt.to_period("W-FRI").dt.end_time.dt.normalize()
+        weekly_closes: list[float] = []
+        weekly_sma30_series: list[float | None] = []
+        current_week: pd.Timestamp | None = None
+        weekly_close_values: list[float] = []
+        weekly_sma30_values: list[float | None] = []
+        weekly_sma30_slope_values: list[float | None] = []
+
+        for week_end, close_value in zip(week_ends, close):
+            close_float = float(close_value)
+            if current_week is None or week_end != current_week:
+                current_week = week_end
+                weekly_closes.append(close_float)
+                weekly_sma30_series.append(None)
+            else:
+                weekly_closes[-1] = close_float
+
+            weekly_sma30 = float(np.mean(weekly_closes[-30:])) if len(weekly_closes) >= 30 else None
+            weekly_sma30_series[-1] = weekly_sma30
+            shifted_sma30 = weekly_sma30_series[-5] if len(weekly_sma30_series) >= 5 else None
+            weekly_sma30_slope = (
+                weekly_sma30 - shifted_sma30
+                if weekly_sma30 is not None and shifted_sma30 is not None
+                else None
+            )
+
+            weekly_close_values.append(close_float)
+            weekly_sma30_values.append(weekly_sma30)
+            weekly_sma30_slope_values.append(weekly_sma30_slope)
+
+        df["weekly_close"] = weekly_close_values
+        df["weekly_sma30"] = weekly_sma30_values
+        df["weekly_sma30_slope"] = weekly_sma30_slope_values
         return df
 
     @staticmethod
@@ -146,13 +187,18 @@ class IndicatorService:
             trade_date=pd.Timestamp(row["trade_date"]).date(),
             symbol=str(row["symbol"]),
             close=float(row["close"]),
+            low=self._clean(row.get("low")),
             volume=int(row["volume"]),
             turnover_value=float(row["turnover_value"]),
             sma20=self._clean(row.get("sma20")),
+            ema20=self._clean(row.get("ema20")),
             sma50=self._clean(row.get("sma50")),
             sma150=self._clean(row.get("sma150")),
             sma200=self._clean(row.get("sma200")),
             sma200_slope=self._clean(row.get("sma200_slope")),
+            weekly_close=self._clean(row.get("weekly_close")),
+            weekly_sma30=self._clean(row.get("weekly_sma30")),
+            weekly_sma30_slope=self._clean(row.get("weekly_sma30_slope")),
             volume_ma20=self._clean(row.get("volume_ma20")),
             volume_ma50=self._clean(row.get("volume_ma50")),
             atr14=self._clean(row.get("atr14")),

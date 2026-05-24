@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,6 +19,15 @@ from backend.app.strategies.registry import DEFAULT_STRATEGY_NAMES, get_availabl
 
 
 class ScreenerService:
+    STRATEGY_METADATA_NAMES = {
+        "new_high_breakout",
+        "pullback_20ema",
+        "relative_strength_leader",
+        "darvas_box",
+        "stage_analysis_weekly",
+    }
+    SCORE_BREAKDOWN_BASE_KEYS = {"condition_score", "triggered_count", "failed_count", "total_conditions"}
+
     def __init__(self, db: Session) -> None:
         self.db = db
         self.market_repo = MarketRepository(db)
@@ -120,7 +130,7 @@ class ScreenerService:
             self._serialize_result(
                 row,
                 names.get(row.symbol, row.symbol),
-                self._strategy_data_quality_flags(row),
+                self._strategy_metadata(row),
             )
             for row in rows
         ]
@@ -155,8 +165,8 @@ class ScreenerService:
             return "C"
         return "D"
 
-    def _strategy_data_quality_flags(self, row: ScreenResult) -> dict[str, bool]:
-        if row.strategy_tag not in {"new_high_breakout", "relative_strength_leader"}:
+    def _strategy_metadata(self, row: ScreenResult) -> dict[str, Any]:
+        if row.strategy_tag not in self.STRATEGY_METADATA_NAMES:
             return {}
         indicator = self.db.scalar(
             select(IndicatorSnapshot)
@@ -164,15 +174,18 @@ class ScreenerService:
             .limit(1)
         )
         if indicator is None:
-            return {"indicator_snapshot_available": False}
+            return {"data_quality_flags": {"indicator_snapshot_available": False}}
         strategy = self.strategies.get(row.strategy_tag)
         if strategy is None:
-            return {"indicator_snapshot_available": True, "strategy_available": False}
+            return {"data_quality_flags": {"indicator_snapshot_available": True, "strategy_available": False}}
         result = strategy.evaluate(indicator, None, "neutral")
         return {
-            "indicator_snapshot_available": True,
-            "strategy_available": True,
-            **result.metadata.get("data_quality_flags", {}),
+            "data_quality_flags": {
+                "indicator_snapshot_available": True,
+                "strategy_available": True,
+                **result.metadata.get("data_quality_flags", {}),
+            },
+            "score_breakdown": result.metadata.get("score_breakdown", {}),
         }
 
     @classmethod
@@ -180,12 +193,18 @@ class ScreenerService:
         cls,
         row: ScreenResult,
         name: str,
-        strategy_data_quality_flags: dict[str, bool] | None = None,
+        strategy_metadata: dict[str, Any] | None = None,
     ) -> dict[str, object]:
         pass_flags = json.loads(row.pass_flags)
         failed_conditions = json.loads(row.failed_conditions)
         triggered_conditions = [key for key, value in pass_flags.items() if value]
         total_conditions = max(len(pass_flags), 1)
+        metadata = strategy_metadata or {}
+        strategy_score_breakdown = {
+            key: value
+            for key, value in dict(metadata.get("score_breakdown", {})).items()
+            if key not in cls.SCORE_BREAKDOWN_BASE_KEYS
+        }
         score_details = {
             "total_score": row.total_score,
             "grade": cls._grade(row.total_score),
@@ -196,6 +215,7 @@ class ScreenerService:
             "triggered_count": len(triggered_conditions),
             "failed_count": len(failed_conditions),
             "total_conditions": len(pass_flags),
+            **strategy_score_breakdown,
         }
         risk_details = {
             "entry_price": row.entry_price,
@@ -218,7 +238,7 @@ class ScreenerService:
             "entry_price_available": row.entry_price is not None,
             "stop_price_available": row.stop_price is not None,
             "target_price_available": row.target_price is not None,
-            **(strategy_data_quality_flags or {}),
+            **dict(metadata.get("data_quality_flags", {})),
         }
         return {
             "trade_date": row.trade_date,
