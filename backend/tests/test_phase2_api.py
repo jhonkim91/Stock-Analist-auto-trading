@@ -5,16 +5,8 @@ from pathlib import Path
 from backend.app.services.settings_service import SettingsService
 
 
-def _prepare_full_flow(client) -> None:
-    assert client.post("/api/data/seed").status_code == 200
-    assert client.post("/api/indicators/recompute").status_code == 200
-    assert client.post("/api/screener/run", json={}).status_code == 200
-    assert client.post("/api/reports/daily").status_code == 200
-    assert client.post("/api/backtest/run", json={"strategy_name": "trend_breakout"}).status_code == 200
-
-
-def test_data_status_api_and_broker_preview_keep_orders_empty(client):
-    _prepare_full_flow(client)
+def test_data_status_api_and_broker_preview_keep_orders_empty(full_flow_client):
+    client = full_flow_client
 
     before = client.get("/api/data/status")
     assert before.status_code == 200
@@ -50,8 +42,8 @@ def test_data_status_api_and_broker_preview_keep_orders_empty(client):
     assert after.json()["orders_count"] == 0
 
 
-def test_screener_results_filtering_sorting_and_limit(client):
-    _prepare_full_flow(client)
+def test_screener_results_filtering_sorting_and_limit(full_flow_client):
+    client = full_flow_client
 
     limited = client.get("/api/screener/results?limit=2")
     assert limited.status_code == 200
@@ -114,8 +106,8 @@ def test_screener_results_filtering_sorting_and_limit(client):
     assert rr_values == sorted(rr_values, reverse=True)
 
 
-def test_reports_list_detail_and_markdown_api(client):
-    _prepare_full_flow(client)
+def test_reports_list_detail_and_markdown_api(full_flow_client):
+    client = full_flow_client
 
     reports = client.get("/api/reports?limit=20")
     assert reports.status_code == 200
@@ -146,8 +138,8 @@ def test_reports_list_detail_and_markdown_api(client):
     assert "# Daily Market Report" in markdown.text
 
 
-def test_backtest_runs_list_and_detail_api(client):
-    _prepare_full_flow(client)
+def test_backtest_runs_list_and_detail_api(full_flow_client):
+    client = full_flow_client
 
     runs = client.get("/api/backtest/runs?limit=20")
     assert runs.status_code == 200

@@ -32,9 +32,18 @@ class StageAnalysisWeeklyStrategy(BaseStrategy):
             "volume_ratio_50_min": self._gte(indicator.volume_ratio_50, self.config["min_volume_ratio_50"]),
             "market_regime_not_bear": market_regime != "bear",
         }
+        optional_conditions = []
+        self._apply_optional_hardening_flags(
+            flags,
+            optional_conditions,
+            indicator,
+            fundamentals,
+            market_regime,
+        )
         failed = self._failed(flags)
         passed = self._all_flags(flags)
         summary = self._summary(self.name, passed, failed)
+        risk_metadata = self._risk_metadata(indicator, entry_chase_reference=indicator.weekly_sma30)
         return StrategyResult(
             strategy_tag=self.name,
             passed=passed,
@@ -45,7 +54,12 @@ class StageAnalysisWeeklyStrategy(BaseStrategy):
                 flags,
                 failed,
                 summary,
-                data_quality_flags=self._data_quality_flags(indicator, weekly_data_available),
+                data_quality_flags={
+                    **self._data_quality_flags(indicator, weekly_data_available),
+                    **self._hardening_data_quality_flags(indicator, fundamentals, market_regime, risk_metadata),
+                },
+                optional_conditions=optional_conditions,
+                risk_metadata=risk_metadata,
             ),
         )
 

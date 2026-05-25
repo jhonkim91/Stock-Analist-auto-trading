@@ -39,6 +39,16 @@ class ScreenerRunRequest(BaseModel):
     strategies: list[str] = Field(default_factory=lambda: list(DEFAULT_STRATEGY_NAMES))
 
 
+class ScreenerStrategyResponse(BaseModel):
+    name: str
+    display_name: str
+    description: str
+    is_default: bool
+    is_available: bool
+    required_fields: list[str]
+    limitations: list[str]
+
+
 class BacktestRunRequest(BaseModel):
     strategy_name: str = "trend_breakout"
     start_date: date | None = None

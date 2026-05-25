@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `MVP v0.16 / Phase C-6 pullback_20ema Strategy`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
+현재 기준선은 `Phase C Strategy Hardening Foundation`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -10,8 +10,8 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.16` |
-| Phase | `Phase C-6 pullback_20ema Strategy` |
+| Version | `MVP v0.16.3` |
+| Phase | `Phase C Strategy Hardening Foundation` |
 | Branch | `main` |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | Trading state | fail-closed, preview-only, real order 미구현 |
@@ -27,68 +27,44 @@
 - Phase 3D: broker safety scaffold.
 - Phase 3E-1: paper trading safety shell.
 - Phase 3F: read-only data reliability, provider contract, KRX fixture contract, data quality summary.
-- Phase 3G-1: backtest execution realism hardening.
-- Phase 3G-2: liquidity participation cap and partial fill model.
-- Phase 3G-3: adjusted price option, delisted symbol forced exit, missing data forced exit metrics.
-- Phase 3H: strategy explanation contract and conservative optional filters.
-- Phase C-1: `momentum_rank` available-only strategy.
-- Phase C-2: `relative_strength_leader` available-only strategy.
-- Phase C-3: `new_high_breakout` default and available strategy.
-- Phase C-4: `darvas_box` available-only strategy.
-- Phase C-5: `stage_analysis_weekly` available-only strategy and nullable weekly indicator snapshot fields.
-- Phase C-6: `pullback_20ema` default and available strategy, nullable `low`/`ema20` indicator snapshot fields.
-- GitHub Actions CI scaffold: backend pytest, frontend lint/typecheck/build.
-- Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, `c5b7d9a1e4f2` weekly indicator migration, `f6d4a2c9e8b1` pullback EMA migration.
+- Phase 3G: hardened backtest execution model, gap/stop realism, liquidity and partial-fill simulation.
+- Phase 3H: strategy explanation contract, conservative optional filters, strategy registry.
+- Phase C-1 to C-6: `momentum_rank`, `relative_strength_leader`, `new_high_breakout`, `darvas_box`, `stage_analysis_weekly`, `pullback_20ema`.
+- Phase C Strategy Hardening Foundation: 9개 전략의 optional hardening 조건 기반, `data_quality_flags`, additive `risk_metadata`.
+- Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
+- Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration.
 
 ## Strategy Behavior
 
-Phase 3H 이후 전략 registry 기반 확장을 유지합니다.
+- Default strategy order: `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout`, `pullback_20ema`.
+- Available strategy order: default 5개 + `momentum_rank`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly`.
+- `GET /api/screener/strategies`는 `name`, `display_name`, `description`, `is_default`, `is_available`, `required_fields`, `limitations`를 반환합니다.
+- `/screener`는 기본 전략 5개를 기본 선택하고, available-only 전략은 사용자가 체크한 경우에만 `POST /api/screener/run`의 `strategies`에 포함합니다.
+- StrategyResult 기존 필드인 `strategy_tag`, `passed`, `pass_flags`, `failed_conditions`, `reason_summary`, `metadata`는 제거하지 않습니다.
+- 신규 hardening 조건은 config-gated optional 방식입니다. 기본 enable flag는 false이며 기존 default 동작을 과도하게 바꾸지 않습니다.
+- 신규 조건은 `metadata.data_quality_flags`에 사용 가능 여부를 남깁니다.
+- `metadata.risk_metadata`는 `suggested_stop_price`, `risk_per_share`, `risk_basis`, `entry_chase_warning`을 additive로 제공합니다.
+- Screener result 응답은 `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`를 유지합니다.
 
-- 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout`, `pullback_20ema` 5개입니다.
-- `new_high_breakout`은 52주 신고가 또는 신고가 근접 돌파를 평가합니다.
-- `darvas_box`는 `pivot_high_20_prev`, `pivot_low_20_prev`, breakout, volume surge, RS percentile, SMA trend를 이용해 Darvas Box 근사 breakout을 평가합니다.
-- `stage_analysis_weekly`는 `weekly_close > weekly_sma30`, `weekly_sma30_slope > 0`, daily SMA trend, RS percentile, volume ratio, market regime를 이용해 Stage 2 근사를 평가합니다.
-- `pullback_20ema`는 상승 추세 정배열, 20EMA 눌림목 touch, 종가 EMA20 회복, RS percentile, pullback volume, ATR risk 조건을 평가합니다.
-- `momentum_rank`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly`는 available registry에 포함되며 명시 선택 시 screener/backtest에서 실행할 수 있습니다.
-- screener result 응답에 `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`을 추가합니다.
-- 기존 `pass_flags`, `failed_conditions`, `reason_summary`, `score_details_json`, `risk_details_json`은 제거하지 않습니다.
-- DB schema는 `indicator_snapshot.weekly_close`, `weekly_sma30`, `weekly_sma30_slope`, `low`, `ema20` nullable 컬럼을 포함하며, backtest 실행 모델과 broker/paper/KIS safety contract는 유지합니다.
+## Strategy Config
 
-Strategy config options:
+공통 hardening key는 `backend/config/strategies.yaml`의 `common.hardening`에서 관리합니다.
 
 ```yaml
-trend_breakout:
-  atr_risk_filter_enabled: false
-  max_atr20_pct: 0.08
-
-vcp_breakout:
-  pivot_distance_limit_enabled: false
-  max_pivot_distance_pct: 0.05
-
-canslim_lite:
-  earnings_quality_enabled: false
-  min_roe: 0.15
-
-new_high_breakout:
-  new_high_threshold: 0.995
-  volume_surge_multiple: 1.5
-  rs_percentile_min: 80
-
-pullback_20ema:
-  pullback_touch_buffer: 1.01
-  rs_percentile_min: 70
-  max_pullback_volume_ratio: 1.2
-  max_atr20_pct: 0.08
-
-darvas_box:
-  max_box_height_pct: 0.25
-  volume_surge_multiple: 1.5
-  rs_percentile_min: 75
-
-stage_analysis_weekly:
-  rs_percentile_min: 70
-  min_volume_ratio_50: 1.0
+common:
+  hardening:
+    risk_metadata_enabled: true
+    market_regime_not_bear_enabled: false
+    sector_rs_score_min_enabled: false
+    market_score_min_enabled: false
+    atr20_pct_max_enabled: false
+    volume_ratio_50_min_enabled: false
+    near_high_52w_threshold_enabled: false
+    optional_fundamental_quality_enabled: false
+    optional_earnings_quality_enabled: false
 ```
+
+전략별 핵심 설정은 같은 파일의 각 strategy key에서 관리합니다.
 
 ## Main APIs
 
@@ -111,6 +87,7 @@ stage_analysis_weekly:
 | `GET` | `/api/paper/status` | paper disabled safety status |
 | `POST` | `/api/paper/orders/preview` | paper deny preview only |
 | `POST` | `/api/screener/run` | rule-based screener run |
+| `GET` | `/api/screener/strategies` | frontend strategy selector metadata |
 | `GET` | `/api/screener/results` | screener result list with explanation contract |
 | `POST` | `/api/backtest/run` | strategy backtest run |
 | `GET` | `/api/backtest/runs` | backtest run 목록 |
@@ -135,33 +112,26 @@ npm.cmd run build
 npm.cmd run start -- --hostname 127.0.0.1 --port 3000
 ```
 
-backend 포트가 `8001` 등으로 바뀌면 `frontend/.env.local`의 `NEXT_PUBLIC_API_BASE_URL`을 맞춘 뒤 다시 build/start 해야 합니다. `NEXT_PUBLIC_*` 값은 production build에 포함됩니다.
+backend 포트가 `8001` 등으로 바뀌면 `frontend/.env.local`의 `NEXT_PUBLIC_API_BASE_URL`을 맞춘 뒤 다시 build/start 해야 합니다.
 
 ## Verification Commands
 
 Backend full suite:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests
+.\.venv\Scripts\python.exe -m pytest backend/tests -q
 ```
 
-Phase C strategy targeted suite:
+Strategy hardening targeted suite:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py backend/tests/test_backtest.py -q
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_indicators.py backend/tests/test_strategies.py backend/tests/test_alembic_migrations.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py -q
 ```
 
-Phase 3G backtest targeted suite:
+Diff check:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q
-```
-
-Broker/paper/KIS/backtest safety targeted suite:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_phase3g_backtest_execution_model.py -q
+git diff --check
 ```
 
 Frontend:
@@ -171,19 +141,6 @@ cd frontend
 npm.cmd run lint
 npm.cmd exec tsc -- --noEmit
 npm.cmd run build
-```
-
-Tracked code/config secret assignment scan:
-
-```powershell
-$matches = rg -n --hidden --glob '!docs/**' --glob '!frontend/package-lock.json' --glob '!frontend/node_modules/**' --glob '!backend/data/**' '(app_key|app_secret|access_token|refresh_token|account_no|password)\s*:\s*\x22[^*<][^\x22]{7,}\x22' backend frontend
-if ($LASTEXITCODE -eq 1) { 'secret scan: no matches' } elseif ($LASTEXITCODE -eq 0) { $matches; exit 1 } else { exit $LASTEXITCODE }
-```
-
-Alembic migration smoke:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_alembic_migrations.py -q
 ```
 
 ## Safety Invariants

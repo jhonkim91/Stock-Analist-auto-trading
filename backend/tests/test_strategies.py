@@ -4,6 +4,7 @@ import json
 from datetime import date
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import select
 
 from backend.app.core.config import get_config
@@ -23,6 +24,7 @@ from backend.app.strategies.registry import (
     DEFAULT_STRATEGY_NAMES,
     get_available_strategy_registry,
     get_strategy_registry,
+    list_strategy_metadata,
 )
 from backend.app.strategies.stage_analysis_weekly import StageAnalysisWeeklyStrategy
 from backend.app.strategies.trend_breakout import TrendBreakoutStrategy
@@ -71,9 +73,20 @@ def _passing_fundamentals(**overrides):
         "quarterly_eps_growth": 0.30,
         "sales_growth": 0.25,
         "roe": 0.10,
+        "gross_profitability": 0.25,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
+
+
+def _strategy_config(strategy_name: str, **overrides):
+    config = get_config("strategies")
+    values = {
+        **dict(config.get("common", {}).get("hardening", {})),
+        **dict(config[strategy_name]),
+    }
+    values.update(overrides)
+    return values
 
 
 def test_canslim_uses_only_effective_date_not_future_fundamentals(seeded_db):
@@ -116,7 +129,7 @@ def test_screener_stores_required_pass_fail_evidence(seeded_db):
     assert "liquidity_ok" in json.loads(low_liquidity.failed_conditions)
 
 
-def test_phase3h_default_strategy_options_preserve_base_condition_flags(seeded_db):
+def test_phase3h_default_strategy_options_preserve_base_condition_flags():
     config = get_config("strategies")
     indicator = _passing_indicator()
     fundamentals = _passing_fundamentals()
@@ -135,6 +148,334 @@ def test_phase3h_default_strategy_options_preserve_base_condition_flags(seeded_d
     assert canslim.passed is True
     assert new_high.passed is True
     assert pullback.passed is True
+
+
+def test_canslim_rejects_broken_technical_trend_when_enabled():
+    result = CanslimLiteStrategy(
+        _strategy_config("canslim_lite", technical_trend_filter_enabled=True)
+    ).evaluate(
+        _passing_indicator(sma50=75.0),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["sma50_gt_sma150"] is False
+    assert "sma50_gt_sma150" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["technical_trend_available"] is True
+
+
+def test_canslim_rejects_missing_volume_surge_when_confirmation_enabled():
+    result = CanslimLiteStrategy(
+        _strategy_config("canslim_lite", volume_confirmation_enabled=True, volume_surge_multiple=1.5)
+    ).evaluate(
+        _passing_indicator(volume=149999, volume_ma50=100000.0),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["volume_surge"] is False
+    assert "volume_surge" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["volume_ma50_available"] is True
+
+
+def test_canslim_allows_missing_sector_rs_when_filter_disabled():
+    result = CanslimLiteStrategy(
+        _strategy_config("canslim_lite", sector_rs_filter_enabled=False)
+    ).evaluate(
+        _passing_indicator(sector_rs_score=None),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is True
+    assert "sector_rs_score_min" not in result.pass_flags
+    assert result.metadata["data_quality_flags"]["sector_rs_score_available"] is False
+
+
+def test_canslim_rejects_missing_fundamentals_with_explicit_failure():
+    result = CanslimLiteStrategy(_strategy_config("canslim_lite")).evaluate(
+        _passing_indicator(),
+        None,
+        "bull",
+    )
+
+    assert result.passed is False
+    assert "fundamentals_available_asof" in result.failed_conditions
+    assert result.metadata["fundamentals_available_asof"] is False
+    assert result.metadata["data_quality_flags"]["fundamentals_available"] is False
+    assert result.metadata["data_quality_flags"]["fundamentals_effective_date_available"] is False
+
+
+def test_canslim_marks_missing_roe_when_earnings_quality_enabled():
+    result = CanslimLiteStrategy(
+        _strategy_config("canslim_lite", earnings_quality_enabled=True, min_roe=0.15)
+    ).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(roe=None),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["roe_min"] is False
+    assert "roe_min" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["roe_available"] is False
+
+
+def test_canslim_metadata_includes_pti_mvp_status_without_lookahead_claim():
+    result = CanslimLiteStrategy(_strategy_config("canslim_lite")).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is True
+    assert result.metadata["fundamentals_available_asof"] is True
+    assert result.metadata["fundamentals_effective_date_available"] is True
+    assert result.metadata["pti_validation_status"] == "pti_validation_not_available_in_current_mvp"
+    assert result.metadata["data_quality_flags"]["pti_validation_not_available_in_current_mvp"] is True
+    assert "no_lookahead_claim" not in result.metadata
+
+
+def test_trend_breakout_rejects_false_breakout():
+    result = TrendBreakoutStrategy(_strategy_config("trend_breakout")).evaluate(
+        _passing_indicator(breakout=False),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["breakout"] is False
+    assert "breakout" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["breakout_available"] is True
+
+
+def test_trend_breakout_rejects_bear_market_regime():
+    result = TrendBreakoutStrategy(_strategy_config("trend_breakout")).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "bear",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["market_regime_not_bear"] is False
+    assert "market_regime_not_bear" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["market_regime_available"] is True
+
+
+def test_trend_breakout_allows_neutral_market_by_default():
+    result = TrendBreakoutStrategy(_strategy_config("trend_breakout")).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert result.pass_flags["market_regime_not_bear"] is True
+
+
+def test_trend_breakout_allows_missing_sector_rs_when_filter_disabled():
+    result = TrendBreakoutStrategy(_strategy_config("trend_breakout")).evaluate(
+        _passing_indicator(sector_rs_score=None),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is True
+    assert "sector_rs_score_min" not in result.pass_flags
+    assert result.metadata["data_quality_flags"]["sector_rs_score_available"] is False
+
+
+def test_trend_breakout_rejects_low_sector_rs_when_filter_enabled():
+    result = TrendBreakoutStrategy(
+        _strategy_config("trend_breakout", sector_rs_filter_enabled=True, sector_rs_score_min=0.60)
+    ).evaluate(
+        _passing_indicator(sector_rs_score=0.59),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["sector_rs_score_min"] is False
+    assert "sector_rs_score_min" in result.failed_conditions
+    assert "sector_rs_score_min" in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"]["sector_rs_score_available"] is True
+
+
+def test_trend_breakout_keeps_existing_contract_fields_with_new_quality_flags():
+    result = TrendBreakoutStrategy(_strategy_config("trend_breakout")).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert {
+        "close_gt_sma50",
+        "sma50_gt_sma150",
+        "sma150_gt_sma200",
+        "sma200_slope_positive",
+        "rs_percentile_min",
+        "near_52w_high",
+        "volume_surge",
+        "breakout",
+        "market_regime_not_bear",
+    }.issubset(result.pass_flags)
+    assert {
+        "triggered_conditions",
+        "score_breakdown",
+        "risk_flags",
+        "data_quality_flags",
+        "explanation",
+        "rationale",
+    }.issubset(result.metadata)
+    assert {
+        "breakout_available",
+        "high_52w_available",
+        "sector_rs_score_available",
+        "market_regime_available",
+        "atr20_pct_available",
+    }.issubset(result.metadata["data_quality_flags"])
+
+
+def test_trend_breakout_entry_chase_warning_is_metadata_only():
+    result = TrendBreakoutStrategy(_strategy_config("trend_breakout")).evaluate(
+        _passing_indicator(distance_from_52w_high=0.0),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is True
+    assert "entry_chase_warning" not in result.pass_flags
+    assert result.metadata["risk_flags"]["entry_chase_warning"] is True
+    assert result.metadata["risk_flags"]["distance_from_52w_high_too_low"] is True
+    assert result.metadata["risk_flags"]["close_extended_above_52w_high"] is False
+
+
+def test_trend_breakout_entry_chase_warning_detects_extended_close_above_high():
+    result = TrendBreakoutStrategy(_strategy_config("trend_breakout")).evaluate(
+        _passing_indicator(close=104.0, high_52w=100.0, distance_from_52w_high=-0.04),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is True
+    assert "entry_chase_warning" not in result.pass_flags
+    assert result.metadata["risk_flags"]["entry_chase_warning"] is True
+    assert result.metadata["risk_flags"]["distance_from_52w_high_too_low"] is False
+    assert result.metadata["risk_flags"]["close_extended_above_52w_high"] is True
+
+
+def test_vcp_breakout_rejects_bear_market_regime():
+    result = VcpBreakoutStrategy(_strategy_config("vcp_breakout")).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "bear",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["market_regime_not_bear"] is False
+    assert "market_regime_not_bear" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["market_regime_available"] is True
+
+
+def test_vcp_breakout_allows_neutral_market_by_default():
+    result = VcpBreakoutStrategy(_strategy_config("vcp_breakout")).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert result.pass_flags["market_regime_not_bear"] is True
+
+
+def test_vcp_breakout_allows_missing_sector_rs_when_filter_disabled():
+    result = VcpBreakoutStrategy(_strategy_config("vcp_breakout")).evaluate(
+        _passing_indicator(sector_rs_score=None),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is True
+    assert "sector_rs_score_min" not in result.pass_flags
+    assert result.metadata["data_quality_flags"]["sector_rs_score_available"] is False
+
+
+def test_vcp_breakout_rejects_low_sector_rs_when_filter_enabled():
+    result = VcpBreakoutStrategy(
+        _strategy_config("vcp_breakout", sector_rs_filter_enabled=True, sector_rs_score_min=0.60)
+    ).evaluate(
+        _passing_indicator(sector_rs_score=0.59),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["sector_rs_score_min"] is False
+    assert "sector_rs_score_min" in result.failed_conditions
+    assert "sector_rs_score_min" in result.metadata["optional_conditions"]
+
+
+def test_vcp_breakout_rejects_extended_pivot_distance_when_enabled():
+    result = VcpBreakoutStrategy(
+        _strategy_config("vcp_breakout", pivot_distance_limit_enabled=True, max_pivot_distance_pct=0.03)
+    ).evaluate(
+        _passing_indicator(close=110.0, pivot_high_20_prev=100.0),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["pivot_distance_limit"] is False
+    assert "pivot_distance_limit" in result.failed_conditions
+    assert result.metadata["pivot_distance_pct"] == pytest.approx(0.10)
+    assert result.metadata["data_quality_flags"]["pivot_high_20_prev_available"] is True
+
+
+def test_vcp_breakout_marks_missing_pivot_high_when_distance_limit_enabled():
+    result = VcpBreakoutStrategy(
+        _strategy_config("vcp_breakout", pivot_distance_limit_enabled=True, max_pivot_distance_pct=0.03)
+    ).evaluate(
+        _passing_indicator(pivot_high_20_prev=None),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["pivot_distance_limit"] is False
+    assert result.metadata["pivot_distance_pct"] is None
+    assert result.metadata["data_quality_flags"]["pivot_high_20_prev_available"] is False
+    assert result.metadata["data_quality_flags"]["pivot_distance_pct_available"] is False
+
+
+def test_vcp_breakout_rejects_high_atr20_pct_when_filter_enabled():
+    result = VcpBreakoutStrategy(
+        _strategy_config("vcp_breakout", atr_risk_filter_enabled=True, max_atr20_pct=0.08)
+    ).evaluate(
+        _passing_indicator(atr20_pct=0.081, atr20_pct_ma60=0.10),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["atr20_pct_max"] is False
+    assert "atr20_pct_max" in result.failed_conditions
+    assert "atr20_pct_max" in result.metadata["optional_conditions"]
+
+
+def test_vcp_breakout_metadata_includes_quality_fields():
+    result = VcpBreakoutStrategy(_strategy_config("vcp_breakout")).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is True
+    assert result.metadata["pivot_distance_pct"] == pytest.approx((100.0 - 98.0) / 98.0, abs=1e-6)
+    assert result.metadata["contraction_confirmed"] is True
+    assert result.metadata["volume_dry_up_confirmed"] is True
+    assert result.metadata["breakout_volume_confirmed"] is True
 
 
 def test_strategy_registry_preserves_default_order_types_and_contract():
@@ -171,6 +512,29 @@ def test_strategy_registry_preserves_default_order_types_and_contract():
     assert "atr20_pct_max" not in results["trend_breakout"].pass_flags
     assert "pivot_distance_limit" not in results["vcp_breakout"].pass_flags
     assert "roe_min" not in results["canslim_lite"].pass_flags
+
+
+def test_strategy_metadata_endpoint_exposes_default_and_available_contract(client):
+    metadata = list_strategy_metadata()
+
+    assert [row["name"] for row in metadata] == list(AVAILABLE_STRATEGY_NAMES)
+    assert [row["name"] for row in metadata if row["is_default"]] == list(DEFAULT_STRATEGY_NAMES)
+    assert all(row["is_available"] is True for row in metadata)
+    assert all(row["display_name"] for row in metadata)
+    assert all(row["description"] for row in metadata)
+    assert all(row["required_fields"] for row in metadata)
+    assert all(row["limitations"] for row in metadata)
+
+    response = client.get("/api/screener/strategies")
+    assert response.status_code == 200
+    payload = response.json()
+    assert [row["name"] for row in payload] == list(AVAILABLE_STRATEGY_NAMES)
+    assert [row["name"] for row in payload if row["is_default"]] == list(DEFAULT_STRATEGY_NAMES)
+    assert {"name", "display_name", "description", "is_default", "is_available", "required_fields", "limitations"}.issubset(
+        payload[0]
+    )
+    available_only = [row["name"] for row in payload if not row["is_default"] and row["is_available"]]
+    assert available_only == ["momentum_rank", "relative_strength_leader", "darvas_box", "stage_analysis_weekly"]
 
 
 def test_pullback_20ema_passes_after_ema_touch_and_close_reclaim():
@@ -714,7 +1078,7 @@ def test_backtest_can_run_momentum_rank_when_explicitly_selected(seeded_db):
     assert "trade_count" in result["metrics"]
 
 
-def test_phase3h_optional_strategy_filters_reject_fixture_conditions(seeded_db):
+def test_phase3h_optional_strategy_filters_reject_fixture_conditions():
     config = get_config("strategies")
     fundamentals = _passing_fundamentals(roe=0.05)
 
@@ -738,6 +1102,298 @@ def test_phase3h_optional_strategy_filters_reject_fixture_conditions(seeded_db):
     assert "pivot_distance_limit" in vcp.failed_conditions
     assert canslim.passed is False
     assert "roe_min" in canslim.failed_conditions
+
+
+@pytest.mark.parametrize(
+    (
+        "strategy_cls",
+        "strategy_name",
+        "enabled_config",
+        "condition_name",
+        "quality_flag",
+        "market_regime",
+        "indicator_overrides",
+        "fundamental_overrides",
+    ),
+    [
+        (
+            TrendBreakoutStrategy,
+            "trend_breakout",
+            {"sector_rs_filter_enabled": True, "sector_rs_score_min": 0.60},
+            "sector_rs_score_min",
+            "sector_rs_score_available",
+            "bull",
+            {},
+            {},
+        ),
+        (
+            VcpBreakoutStrategy,
+            "vcp_breakout",
+            {"sector_rs_score_min_enabled": True, "sector_rs_score_min": 0.60},
+            "sector_rs_score_min",
+            "sector_rs_score_available",
+            "bull",
+            {},
+            {},
+        ),
+        (
+            CanslimLiteStrategy,
+            "canslim_lite",
+            {"optional_fundamental_quality_enabled": True, "min_roe": 0.15, "min_gross_profitability": 0.20},
+            "optional_fundamental_quality",
+            "fundamental_quality_available",
+            "bull",
+            {},
+            {"roe": 0.20, "gross_profitability": 0.25},
+        ),
+        (
+            NewHighBreakoutStrategy,
+            "new_high_breakout",
+            {"market_score_min_enabled": True, "market_score_min": 0.50},
+            "market_score_min",
+            "market_score_available",
+            "bull",
+            {},
+            {},
+        ),
+        (
+            Pullback20EmaStrategy,
+            "pullback_20ema",
+            {"volume_ratio_50_min_enabled": True, "volume_ratio_50_min": 1.0},
+            "volume_ratio_50_min",
+            "volume_ratio_50_available",
+            "bull",
+            {},
+            {},
+        ),
+        (
+            MomentumRankStrategy,
+            "momentum_rank",
+            {"market_regime_not_bear_enabled": True},
+            "market_regime_not_bear",
+            "market_regime_available",
+            "bull",
+            {},
+            {},
+        ),
+        (
+            RelativeStrengthLeaderStrategy,
+            "relative_strength_leader",
+            {"market_score_min_enabled": True, "market_score_min": 0.50},
+            "market_score_min",
+            "market_score_available",
+            "bull",
+            {},
+            {},
+        ),
+        (
+            DarvasBoxStrategy,
+            "darvas_box",
+            {"atr20_pct_max_enabled": True, "atr20_pct_max": 0.08},
+            "atr20_pct_max",
+            "atr20_pct_available",
+            "bull",
+            {"close": 100.0, "pivot_high_20_prev": 95.0, "pivot_low_20_prev": 80.0},
+            {},
+        ),
+        (
+            StageAnalysisWeeklyStrategy,
+            "stage_analysis_weekly",
+            {"sector_rs_score_min_enabled": True, "sector_rs_score_min": 0.60},
+            "sector_rs_score_min",
+            "sector_rs_score_available",
+            "bull",
+            {},
+            {},
+        ),
+    ],
+)
+def test_phase_c_hardening_optional_conditions_pass_with_quality_flags(
+    strategy_cls,
+    strategy_name,
+    enabled_config,
+    condition_name,
+    quality_flag,
+    market_regime,
+    indicator_overrides,
+    fundamental_overrides,
+):
+    result = strategy_cls(_strategy_config(strategy_name, **enabled_config)).evaluate(
+        _passing_indicator(**indicator_overrides),
+        _passing_fundamentals(**fundamental_overrides),
+        market_regime,
+    )
+
+    assert result.passed is True
+    assert result.pass_flags[condition_name] is True
+    assert condition_name in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"][quality_flag] is True
+    assert result.metadata["risk_metadata"]["suggested_stop_price"] is not None
+    assert {"suggested_stop_price", "risk_per_share", "risk_basis", "entry_chase_warning"}.issubset(
+        result.metadata["risk_metadata"]
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "strategy_cls",
+        "strategy_name",
+        "enabled_config",
+        "condition_name",
+        "quality_flag",
+        "market_regime",
+        "indicator_overrides",
+        "fundamental_overrides",
+    ),
+    [
+        (
+            TrendBreakoutStrategy,
+            "trend_breakout",
+            {"sector_rs_filter_enabled": True, "sector_rs_score_min": 0.60},
+            "sector_rs_score_min",
+            "sector_rs_score_available",
+            "bull",
+            {"sector_rs_score": 0.59},
+            {},
+        ),
+        (
+            VcpBreakoutStrategy,
+            "vcp_breakout",
+            {"sector_rs_score_min_enabled": True, "sector_rs_score_min": 0.60},
+            "sector_rs_score_min",
+            "sector_rs_score_available",
+            "bull",
+            {"sector_rs_score": 0.59},
+            {},
+        ),
+        (
+            CanslimLiteStrategy,
+            "canslim_lite",
+            {"optional_fundamental_quality_enabled": True, "min_roe": 0.15, "min_gross_profitability": 0.20},
+            "optional_fundamental_quality",
+            "fundamental_quality_available",
+            "bull",
+            {},
+            {"roe": 0.20, "gross_profitability": 0.19},
+        ),
+        (
+            NewHighBreakoutStrategy,
+            "new_high_breakout",
+            {"market_score_min_enabled": True, "market_score_min": 0.50},
+            "market_score_min",
+            "market_score_available",
+            "bull",
+            {"market_score": 0.49},
+            {},
+        ),
+        (
+            Pullback20EmaStrategy,
+            "pullback_20ema",
+            {"volume_ratio_50_min_enabled": True, "volume_ratio_50_min": 1.0},
+            "volume_ratio_50_min",
+            "volume_ratio_50_available",
+            "bull",
+            {"volume_ratio_50": 0.99},
+            {},
+        ),
+        (
+            MomentumRankStrategy,
+            "momentum_rank",
+            {"market_regime_not_bear_enabled": True},
+            "market_regime_not_bear",
+            "market_regime_available",
+            "bear",
+            {},
+            {},
+        ),
+        (
+            RelativeStrengthLeaderStrategy,
+            "relative_strength_leader",
+            {"market_score_min_enabled": True, "market_score_min": 0.50},
+            "market_score_min",
+            "market_score_available",
+            "bull",
+            {"market_score": 0.49},
+            {},
+        ),
+        (
+            DarvasBoxStrategy,
+            "darvas_box",
+            {"atr20_pct_max_enabled": True, "atr20_pct_max": 0.08},
+            "atr20_pct_max",
+            "atr20_pct_available",
+            "bull",
+            {"close": 100.0, "pivot_high_20_prev": 95.0, "pivot_low_20_prev": 80.0, "atr20_pct": 0.081},
+            {},
+        ),
+        (
+            StageAnalysisWeeklyStrategy,
+            "stage_analysis_weekly",
+            {"sector_rs_score_min_enabled": True, "sector_rs_score_min": 0.60},
+            "sector_rs_score_min",
+            "sector_rs_score_available",
+            "bull",
+            {"sector_rs_score": 0.59},
+            {},
+        ),
+    ],
+)
+def test_phase_c_hardening_optional_conditions_fail_closed_with_quality_flags(
+    strategy_cls,
+    strategy_name,
+    enabled_config,
+    condition_name,
+    quality_flag,
+    market_regime,
+    indicator_overrides,
+    fundamental_overrides,
+):
+    result = strategy_cls(_strategy_config(strategy_name, **enabled_config)).evaluate(
+        _passing_indicator(**indicator_overrides),
+        _passing_fundamentals(**fundamental_overrides),
+        market_regime,
+    )
+
+    assert result.passed is False
+    assert result.pass_flags[condition_name] is False
+    assert condition_name in result.failed_conditions
+    assert condition_name in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"][quality_flag] is True
+
+
+def test_phase_c_hardening_risk_metadata_is_additive_not_a_pass_flag():
+    result = TrendBreakoutStrategy(_strategy_config("trend_breakout")).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is True
+    assert "risk_metadata" not in result.pass_flags
+    assert result.metadata["risk_metadata"] == {
+        "suggested_stop_price": 96.0,
+        "risk_per_share": 4.0,
+        "risk_basis": "atr20",
+        "entry_chase_warning": False,
+        "entry_chase_reference": 100.0,
+    }
+    assert result.metadata["data_quality_flags"]["suggested_stop_price_available"] is True
+    assert result.metadata["data_quality_flags"]["risk_per_share_available"] is True
+
+
+def test_canslim_optional_earnings_quality_is_config_gated():
+    result = CanslimLiteStrategy(
+        _strategy_config("canslim_lite", optional_earnings_quality_enabled=True)
+    ).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(sales_growth=0.19, roe=0.20),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["optional_earnings_quality"] is False
+    assert "optional_earnings_quality" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["earnings_quality_available"] is True
 
 
 def test_phase3h_screener_response_includes_explanation_contract(seeded_db):

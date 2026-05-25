@@ -4,10 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.models.schemas import ScreenerRunRequest
+from backend.app.models.schemas import ScreenerRunRequest, ScreenerStrategyResponse
 from backend.app.services.screener_service import ScreenerService
+from backend.app.strategies.registry import list_strategy_metadata
 
 router = APIRouter(prefix="/api/screener", tags=["screener"])
+
+
+@router.get("/strategies", response_model=list[ScreenerStrategyResponse])
+def list_strategies() -> list[dict[str, object]]:
+    """프론트 전략 선택 UI에 필요한 default/available 메타데이터를 반환한다."""
+    return list_strategy_metadata()
 
 
 @router.post("/run")

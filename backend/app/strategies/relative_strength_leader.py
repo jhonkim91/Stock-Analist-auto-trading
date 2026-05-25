@@ -29,9 +29,19 @@ class RelativeStrengthLeaderStrategy(BaseStrategy):
             "sma200_slope_positive": self._gt(indicator.sma200_slope, 0),
             "volume_ratio_50_min": self._gte(indicator.volume_ratio_50, self.config["min_volume_ratio_50"]),
         }
+        optional_conditions = []
+        self._apply_optional_hardening_flags(
+            flags,
+            optional_conditions,
+            indicator,
+            fundamentals,
+            market_regime,
+            include_near_high=True,
+        )
         failed = self._failed(flags)
         passed = self._all_flags(flags)
         summary = self._summary(self.name, passed, failed)
+        risk_metadata = self._risk_metadata(indicator, entry_chase_reference=indicator.high_52w)
         return StrategyResult(
             strategy_tag=self.name,
             passed=passed,
@@ -42,7 +52,12 @@ class RelativeStrengthLeaderStrategy(BaseStrategy):
                 flags,
                 failed,
                 summary,
-                data_quality_flags=self._data_quality_flags(indicator),
+                data_quality_flags={
+                    **self._data_quality_flags(indicator),
+                    **self._hardening_data_quality_flags(indicator, fundamentals, market_regime, risk_metadata),
+                },
+                optional_conditions=optional_conditions,
+                risk_metadata=risk_metadata,
             ),
         )
 

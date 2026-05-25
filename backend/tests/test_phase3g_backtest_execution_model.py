@@ -110,13 +110,8 @@ def _execution_counts() -> dict[str, int]:
         }
 
 
-def _seed_indicators(client) -> None:
-    assert client.post("/api/data/seed").status_code == 200
-    assert client.post("/api/indicators/recompute").status_code == 200
-
-
-def test_phase3g_backtest_api_contract_and_metrics_remain_backward_compatible(client):
-    _seed_indicators(client)
+def test_phase3g_backtest_api_contract_and_metrics_remain_backward_compatible(seeded_client):
+    client = seeded_client
 
     run_response = client.post("/api/backtest/run", json={"strategy_name": "trend_breakout"})
 
@@ -150,8 +145,8 @@ def test_phase3g_backtest_api_contract_and_metrics_remain_backward_compatible(cl
     assert detail_payload["metrics"]["trade_count"] == run_payload["metrics"]["trade_count"]
 
 
-def test_phase3g_backtest_keeps_execution_safety_invariants(client):
-    _seed_indicators(client)
+def test_phase3g_backtest_keeps_execution_safety_invariants(seeded_client):
+    client = seeded_client
     before = _execution_counts()
 
     response = client.post("/api/backtest/run", json={"strategy_name": "trend_breakout"})

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import math
+from bisect import bisect_right
 from datetime import date, datetime
 from uuid import uuid4
 
@@ -51,6 +53,10 @@ class BacktestService:
         rows_by_date: dict[date, list[IndicatorSnapshot]] = {}
         for row in indicators:
             rows_by_date.setdefault(row.trade_date, []).append(row)
+        market_regime_cache = self._build_market_regime_cache(dates)
+        execution_config = self.backtest_config["execution"]
+        execution_cost_bps = self._execution_cost_bps(execution_config)
+        annual_trading_days = int(self.backtest_config.get("metrics", {}).get("annual_trading_days", 252))
 
         trades: list[dict[str, object]] = []
         liquidity_stats = {"partial_fill_count": 0, "no_fill_count": 0, "total_unfilled_qty": 0}
@@ -61,7 +67,7 @@ class BacktestService:
 
         for signal_date in dates:
             candidates = []
-            market_regime = self._market_regime_on(signal_date)
+            market_regime = market_regime_cache.get(signal_date, "neutral")
             for indicator in rows_by_date.get(signal_date, []):
                 fundamentals = self.repo.fundamentals_asof(indicator.symbol, signal_date)
                 strategy_result = self.strategies[strategy_name].evaluate(indicator, fundamentals, market_regime)
@@ -90,6 +96,8 @@ class BacktestService:
             total_days,
             liquidity_stats,
             realism_stats,
+            execution_cost_bps=execution_cost_bps,
+            annual_trading_days=annual_trading_days,
         )
         run_id = f"bt-{uuid4().hex[:12]}"
         config_hash = stable_hash({"strategy": strategy_name, "backtest": self.backtest_config, "risk": get_config("risk")})
@@ -157,7 +165,8 @@ class BacktestService:
         execution_config = self.backtest_config["execution"]
         commission_bps = float(execution_config["commission_bps"])
         slippage_bps = float(execution_config["slippage_bps"])
-        bps = (commission_bps + slippage_bps) / 10000
+        cost_bps = commission_bps + slippage_bps
+        bps = cost_bps / 10000
         same_bar_stop_first = bool(execution_config.get("same_bar_stop_first", True))
         use_adjusted_price = bool(execution_config.get("use_adjusted_price", False))
         entry_price_view = self._bar_price_view(entry_bar, use_adjusted_price)
@@ -232,7 +241,7 @@ class BacktestService:
             "qty": filled_qty,
             "pnl": round(pnl, 2),
             "estimated_cost": round(estimated_cost, 2),
-            "cost_bps": round(bps * 10000, 4),
+            "cost_bps": round(cost_bps, 4),
             "return_pct": round((exit_price / entry_price) - 1, 6),
             "holding_days": exit_bar_index + 1,
             "execution_detail": {
@@ -557,28 +566,98 @@ class BacktestService:
 
         return None
 
-    def _market_regime_on(self, signal_date: date) -> str:
-        df = self.repo.index_df()
-        df = df[df["trade_date"] <= signal_date].sort_values("trade_date")
-        if len(df) < 200:
-            return "neutral"
+    @staticmethod
+    def _execution_cost_bps(execution_config: dict[str, object]) -> float:
+        return float(execution_config["commission_bps"]) + float(execution_config["slippage_bps"])
+
+    def _build_market_regime_cache(self, signal_dates: list[date]) -> dict[date, str]:
+        index_df = self.repo.index_df()
+        return self._market_regime_cache_from_index(index_df, signal_dates)
+
+    @classmethod
+    def _market_regime_cache_from_index(cls, index_df: pd.DataFrame, signal_dates: list[date]) -> dict[date, str]:
+        unique_signal_dates = sorted(set(signal_dates))
+        if not unique_signal_dates:
+            return {}
+        if index_df.empty:
+            return {signal_date: "neutral" for signal_date in unique_signal_dates}
+
+        regimes_by_index_date = cls._market_regimes_by_index_date(index_df)
+        index_dates = sorted(regimes_by_index_date)
+        if not index_dates:
+            return {signal_date: "neutral" for signal_date in unique_signal_dates}
+
+        cache: dict[date, str] = {}
+        for signal_date in unique_signal_dates:
+            position = bisect_right(index_dates, signal_date)
+            cache[signal_date] = regimes_by_index_date[index_dates[position - 1]] if position else "neutral"
+        return cache
+
+    @classmethod
+    def _market_regimes_by_index_date(cls, index_df: pd.DataFrame) -> dict[date, str]:
+        df = index_df.sort_values("trade_date").reset_index(drop=True).copy()
+        if df.empty:
+            return {}
+        df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
         df["sma50"] = df["close"].rolling(50, min_periods=50).mean()
         df["sma200"] = df["close"].rolling(200, min_periods=200).mean()
-        weekly = df.set_index(pd.to_datetime(df["trade_date"])).resample("W-FRI").agg({"close": "last"}).dropna()
-        weekly["weekly_sma30"] = weekly["close"].rolling(30, min_periods=30).mean()
-        weekly["weekly_sma30_slope"] = weekly["weekly_sma30"] - weekly["weekly_sma30"].shift(4)
-        latest = df.iloc[-1]
-        weekly_latest = weekly.iloc[-1]
-        bull = (
-            latest["close"] > latest["sma200"]
-            and latest["sma50"] > latest["sma200"]
-            and pd.notna(weekly_latest["weekly_sma30"])
-            and pd.notna(weekly_latest["weekly_sma30_slope"])
-            and weekly_latest["close"] > weekly_latest["weekly_sma30"]
-            and weekly_latest["weekly_sma30_slope"] > 0
-        )
-        bear = latest["close"] < latest["sma200"] and latest["sma50"] < latest["sma200"]
-        return "bull" if bull else ("bear" if bear else "neutral")
+        weekly_stats_by_date = cls._weekly_regime_stats_by_date(df)
+
+        regimes: dict[date, str] = {}
+        for index, row in df.iterrows():
+            trade_date = row["trade_date"]
+            if index + 1 < 200:
+                regimes[trade_date] = "neutral"
+                continue
+
+            weekly_latest = weekly_stats_by_date[trade_date]
+            weekly_sma30 = weekly_latest["weekly_sma30"]
+            weekly_sma30_slope = weekly_latest["weekly_sma30_slope"]
+            bull = (
+                float(row["close"]) > float(row["sma200"])
+                and float(row["sma50"]) > float(row["sma200"])
+                and pd.notna(weekly_sma30)
+                and pd.notna(weekly_sma30_slope)
+                and float(weekly_latest["close"]) > float(weekly_sma30)
+                and float(weekly_sma30_slope) > 0
+            )
+            bear = float(row["close"]) < float(row["sma200"]) and float(row["sma50"]) < float(row["sma200"])
+            regimes[trade_date] = "bull" if bull else ("bear" if bear else "neutral")
+        return regimes
+
+    @staticmethod
+    def _weekly_regime_stats_by_date(index_df: pd.DataFrame) -> dict[date, dict[str, float | None]]:
+        stats_by_date: dict[date, dict[str, float | None]] = {}
+        completed_week_closes: list[float] = []
+        current_week_label: date | None = None
+        current_week_close: float | None = None
+
+        for _, row in index_df.iterrows():
+            trade_date = row["trade_date"]
+            week_label = pd.Timestamp(trade_date).to_period("W-FRI").end_time.date()
+            if current_week_label is None:
+                current_week_label = week_label
+            elif week_label != current_week_label:
+                if current_week_close is not None:
+                    completed_week_closes.append(current_week_close)
+                current_week_label = week_label
+
+            current_week_close = float(row["close"])
+            weekly_closes = [*completed_week_closes, current_week_close]
+            weekly_sma30 = sum(weekly_closes[-30:]) / 30 if len(weekly_closes) >= 30 else None
+            weekly_sma30_slope = None
+            if len(weekly_closes) >= 34 and weekly_sma30 is not None:
+                weekly_sma30_slope = weekly_sma30 - (sum(weekly_closes[-34:-4]) / 30)
+
+            stats_by_date[trade_date] = {
+                "close": current_week_close,
+                "weekly_sma30": weekly_sma30,
+                "weekly_sma30_slope": weekly_sma30_slope,
+            }
+        return stats_by_date
+
+    def _market_regime_on(self, signal_date: date) -> str:
+        return self._market_regime_cache_from_index(self.repo.index_df(), [signal_date]).get(signal_date, "neutral")
 
     @staticmethod
     def _metrics(
@@ -590,6 +669,8 @@ class BacktestService:
         total_days: int,
         liquidity_stats: dict[str, int] | None = None,
         realism_stats: dict[str, int] | None = None,
+        execution_cost_bps: float = 0.0,
+        annual_trading_days: int = 252,
     ) -> dict[str, object]:
         pnls = [float(trade["pnl"]) for trade in trades]
         wins = [pnl for pnl in pnls if pnl > 0]
@@ -600,16 +681,41 @@ class BacktestService:
         equity_values = [float(row["equity"]) for row in equity_curve]
         peaks = pd.Series(equity_values).cummax()
         drawdowns = pd.Series(equity_values) / peaks - 1
+        max_drawdown = float(drawdowns.min()) if len(drawdowns) else 0.0
+        equity_returns = pd.Series(equity_values, dtype="float64").pct_change().dropna()
+        annualized_volatility = 0.0
+        sharpe_ratio: float | None = None
+        sortino_ratio: float | None = None
+        if len(equity_returns) >= 2:
+            return_std = float(equity_returns.std(ddof=0))
+            annualized_volatility = return_std * math.sqrt(annual_trading_days)
+            if return_std > 0:
+                sharpe_ratio = float(equity_returns.mean()) / return_std * math.sqrt(annual_trading_days)
+            downside_returns = equity_returns[equity_returns < 0]
+            if len(downside_returns) >= 2:
+                downside_std = float(downside_returns.std(ddof=0))
+                if downside_std > 0:
+                    sortino_ratio = float(equity_returns.mean()) / downside_std * math.sqrt(annual_trading_days)
+        calmar_ratio = float(cagr) / abs(max_drawdown) if max_drawdown < 0 else None
         gross_profit = sum(wins)
         gross_loss = abs(sum(losses))
         total_estimated_cost = sum(float(trade.get("estimated_cost", 0)) for trade in trades)
+        traded_notional = sum(
+            int(trade.get("qty", 0) or 0)
+            * (
+                BacktestService._positive_float(trade.get("raw_entry_price", trade.get("entry_price", 0)))
+                + BacktestService._positive_float(trade.get("raw_exit_price", trade.get("exit_price", 0)))
+            )
+            for trade in trades
+        )
+        turnover = traded_notional / initial_equity if initial_equity > 0 else 0.0
         return {
             "trade_count": len(trades),
             "trades": len(trades),
             "win_rate": round(len(wins) / len(trades), 4) if trades else 0.0,
             "total_return": round(total_return, 6),
             "cagr": round(float(cagr), 6),
-            "max_drawdown": round(float(drawdowns.min()), 6) if len(drawdowns) else 0.0,
+            "max_drawdown": round(max_drawdown, 6),
             "profit_factor": round(gross_profit / gross_loss, 4) if gross_loss else (None if gross_profit == 0 else 999.0),
             "expectancy": round(sum(pnls) / len(pnls), 4) if pnls else 0.0,
             "avg_win": round(sum(wins) / len(wins), 4) if wins else 0.0,
@@ -617,7 +723,13 @@ class BacktestService:
             "average_holding_days": round(sum(int(trade["holding_days"]) for trade in trades) / len(trades), 4) if trades else 0.0,
             "exposure": round(exposure_days / total_days, 6),
             "total_estimated_cost": round(total_estimated_cost, 2),
-            "cost_bps": 7.0,
+            "cost_bps": round(float(execution_cost_bps), 4),
+            "annualized_volatility": round(float(annualized_volatility), 6),
+            "sharpe_ratio": round(sharpe_ratio, 6) if sharpe_ratio is not None else None,
+            "sortino_ratio": round(sortino_ratio, 6) if sortino_ratio is not None else None,
+            "calmar_ratio": round(calmar_ratio, 6) if calmar_ratio is not None else None,
+            "turnover": round(turnover, 6),
+            "regime_segment_return": "not_available_in_current_mvp",
             "partial_fill_count": int((liquidity_stats or {}).get("partial_fill_count", 0)),
             "no_fill_count": int((liquidity_stats or {}).get("no_fill_count", 0)),
             "total_unfilled_qty": int((liquidity_stats or {}).get("total_unfilled_qty", 0)),

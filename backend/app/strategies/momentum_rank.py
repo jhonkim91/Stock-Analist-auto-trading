@@ -30,9 +30,19 @@ class MomentumRankStrategy(BaseStrategy):
             "sma150_gt_sma200": self._gt(indicator.sma150, indicator.sma200),
             "sma200_slope_positive": self._gt(indicator.sma200_slope, 0),
         }
+        optional_conditions = []
+        self._apply_optional_hardening_flags(
+            flags,
+            optional_conditions,
+            indicator,
+            fundamentals,
+            market_regime,
+            include_near_high=True,
+        )
         failed = self._failed(flags)
         passed = self._all_flags(flags)
         summary = self._summary(self.name, passed, failed)
+        risk_metadata = self._risk_metadata(indicator, entry_chase_reference=indicator.sma50)
         return StrategyResult(
             strategy_tag=self.name,
             passed=passed,
@@ -49,6 +59,9 @@ class MomentumRankStrategy(BaseStrategy):
                     "trend_score_available": indicator.trend_score is not None,
                     "sector_rs_score_available": indicator.sector_rs_score is not None,
                     "market_score_available": indicator.market_score is not None,
+                    **self._hardening_data_quality_flags(indicator, fundamentals, market_regime, risk_metadata),
                 },
+                optional_conditions=optional_conditions,
+                risk_metadata=risk_metadata,
             ),
         )

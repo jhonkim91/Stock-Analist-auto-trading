@@ -62,6 +62,11 @@ select {
   padding: 0 10px;
 }
 
+input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -157,6 +162,55 @@ h3 {
 
 .compactToolbar {
   padding: 12px 0 0;
+}
+
+.strategyHeader {
+  gap: 16px;
+}
+
+.strategyActions {
+  justify-content: flex-end;
+}
+
+.strategyGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+
+.strategyOption {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.strategyOption.selected {
+  border-color: var(--accent);
+  background: #eef8f5;
+}
+
+.strategyOptionTop {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.strategyOptionTop strong,
+.strategyOptionTop small {
+  display: block;
+}
+
+.strategyOptionTop small {
+  margin-top: 2px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.strategyMetaLine {
+  display: flex;
+  margin-top: 8px;
 }
 
 .grid {
@@ -420,14 +474,24 @@ tr[role="button"] {
   }
 
   .filters,
-  .formRow {
+  .formRow,
+  .strategyGrid {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .strategyGrid {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   button,
   input,
   select {
     width: 100%;
+  }
+
+  input[type="checkbox"] {
+    width: auto;
   }
 }

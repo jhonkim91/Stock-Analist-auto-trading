@@ -61,6 +61,16 @@ export type ScreenerResult = {
   position_notional?: number | null;
 };
 
+export type StrategyMetadata = {
+  name: string;
+  display_name: string;
+  description: string;
+  is_default: boolean;
+  is_available: boolean;
+  required_fields: string[];
+  limitations: string[];
+};
+
 export type ReportItem = {
   id: string;
   report_id: string;

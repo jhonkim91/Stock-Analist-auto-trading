@@ -31,9 +31,19 @@ class DarvasBoxStrategy(BaseStrategy):
             "close_gt_sma50": self._gt(indicator.close, indicator.sma50),
             "sma50_gt_sma150": self._gt(indicator.sma50, indicator.sma150),
         }
+        optional_conditions = []
+        self._apply_optional_hardening_flags(
+            flags,
+            optional_conditions,
+            indicator,
+            fundamentals,
+            market_regime,
+            include_near_high=True,
+        )
         failed = self._failed(flags)
         passed = self._all_flags(flags)
         summary = self._summary(self.name, passed, failed)
+        risk_metadata = self._risk_metadata(indicator, entry_chase_reference=box_top)
         metadata = self._metadata(
             flags,
             failed,
@@ -46,7 +56,10 @@ class DarvasBoxStrategy(BaseStrategy):
                 "rs_percentile_available": indicator.rs_percentile is not None,
                 "sma50_available": indicator.sma50 is not None,
                 "sma150_available": indicator.sma150 is not None,
+                **self._hardening_data_quality_flags(indicator, fundamentals, market_regime, risk_metadata),
             },
+            optional_conditions=optional_conditions,
+            risk_metadata=risk_metadata,
         )
         box_details = self._box_details(box_top, box_bottom, box_height_pct)
         metadata.update(box_details)

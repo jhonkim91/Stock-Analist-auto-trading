@@ -2,10 +2,33 @@ common:
   min_turnover_value: 1000000000
   target_reward_risk: 2.5
   max_rejected_close: 3
+  hardening:
+    risk_metadata_enabled: true
+    risk_stop_atr_multiple: 2.0
+    risk_hard_stop_pct: 0.08
+    entry_chase_warning_threshold_pct: 0.03
+    market_regime_not_bear_enabled: false
+    sector_rs_score_min_enabled: false
+    sector_rs_score_min: 0.60
+    market_score_min_enabled: false
+    market_score_min: 0.50
+    atr20_pct_max_enabled: false
+    atr20_pct_max: 0.08
+    volume_ratio_50_min_enabled: false
+    volume_ratio_50_min: 1.0
+    near_high_52w_threshold_enabled: false
+    near_high_52w_threshold: 0.90
+    optional_fundamental_quality_enabled: false
+    optional_earnings_quality_enabled: false
+    min_roe: 0.15
+    min_gross_profitability: 0.20
 trend_breakout:
   rs_percentile_min: 80
   high_52w_threshold: 0.85
   volume_surge_multiple: 1.5
+  allow_neutral_market: true
+  sector_rs_filter_enabled: false
+  sector_rs_score_min: 0.60
   atr_risk_filter_enabled: false
   max_atr20_pct: 0.08
 vcp_breakout:
@@ -13,15 +36,26 @@ vcp_breakout:
   volume_surge_multiple: 1.5
   volume_dry_up_ratio: 0.8
   atr_contract_window: 60
+  allow_neutral_market: true
+  sector_rs_filter_enabled: false
+  sector_rs_score_min: 0.60
   pivot_distance_limit_enabled: false
   max_pivot_distance_pct: 0.05
+  atr_risk_filter_enabled: false
+  max_atr20_pct: 0.08
 canslim_lite:
   quarterly_eps_growth_min: 0.25
   sales_growth_min: 0.20
   rs_percentile_min: 80
   required_market_regime: "bull"
+  technical_trend_filter_enabled: true
+  volume_confirmation_enabled: true
+  volume_surge_multiple: 1.5
+  sector_rs_filter_enabled: false
+  sector_rs_score_min: 0.60
   earnings_quality_enabled: false
   min_roe: 0.15
+  min_gross_profitability: 0.20
 new_high_breakout:
   new_high_threshold: 0.995
   volume_surge_multiple: 1.5

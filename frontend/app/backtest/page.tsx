@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { callApi, formatNumber, formatPercent, type ApiStatus, type BacktestRun } from "../../lib/api";
+import { callApi, formatNumber, formatPercent, type ApiStatus, type BacktestRun, type StrategyMetadata } from "../../lib/api";
 
 const metricLabels: Array<[keyof BacktestRun["metrics"], string, "percent" | "number"]> = [
   ["total_return", "total_return", "percent"],
@@ -19,8 +19,6 @@ const metricLabels: Array<[keyof BacktestRun["metrics"], string, "percent" | "nu
   ["exposure", "exposure", "percent"]
 ];
 
-const strategies = ["trend_breakout", "vcp_breakout", "canslim_lite", "momentum_rank"];
-
 function formatMetric(value: number | string | null | undefined, type: "percent" | "number") {
   if (typeof value !== "number") {
     return value ?? "-";
@@ -33,7 +31,14 @@ export default function BacktestPage() {
   const [message, setMessage] = useState("조회 중");
   const [runs, setRuns] = useState<BacktestRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<BacktestRun | null>(null);
-  const [strategyName, setStrategyName] = useState("trend_breakout");
+  const [strategyCatalog, setStrategyCatalog] = useState<StrategyMetadata[]>([]);
+  const [strategyName, setStrategyName] = useState("");
+
+  const strategyNames = useMemo(() => {
+    const names = new Set(strategyCatalog.map((strategy) => strategy.name));
+    runs.forEach((run) => names.add(run.strategy_name));
+    return Array.from(names);
+  }, [runs, strategyCatalog]);
 
   const loadRuns = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -54,6 +59,16 @@ export default function BacktestPage() {
     }
   }, []);
 
+  const loadStrategies = useCallback(async () => {
+    try {
+      const data = await callApi<StrategyMetadata[]>("/api/screener/strategies");
+      setStrategyCatalog(data);
+      setStrategyName((current) => current || data.find((strategy) => strategy.is_default)?.name || data[0]?.name || "");
+    } catch {
+      setStrategyCatalog([]);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadRuns(false);
@@ -61,7 +76,19 @@ export default function BacktestPage() {
     return () => window.clearTimeout(timer);
   }, [loadRuns]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadStrategies();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadStrategies]);
+
   async function runBacktest() {
+    if (!strategyName) {
+      setStatus("error");
+      setMessage("select a strategy");
+      return;
+    }
     setStatus("loading");
     setMessage("백테스트 실행 중");
     try {
@@ -102,14 +129,14 @@ export default function BacktestPage() {
           <label>
             strategy_name
             <select value={strategyName} onChange={(event) => setStrategyName(event.target.value)}>
-              {strategies.map((strategy) => (
-                <option key={strategy} value={strategy}>
-                  {strategy}
+              {strategyCatalog.map((strategy) => (
+                <option key={strategy.name} value={strategy.name}>
+                  {strategy.display_name}
                 </option>
               ))}
             </select>
           </label>
-          <button type="button" onClick={runBacktest}>
+          <button type="button" onClick={runBacktest} disabled={!strategyName}>
             Run Backtest
           </button>
         </div>
@@ -184,7 +211,7 @@ export default function BacktestPage() {
               </tr>
             </thead>
             <tbody>
-              {strategies.map((strategy) => {
+              {strategyNames.map((strategy) => {
                 const strategyRuns = runs.filter((run) => run.strategy_name === strategy);
                 const latest = strategyRuns[0];
                 const bestReturn = strategyRuns.reduce(

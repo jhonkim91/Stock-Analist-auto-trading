@@ -2,7 +2,7 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `Phase C-6 pullback_20ema Strategy`
+- [x] 현재 상태명: `Harden canslim_lite Strategy`
 - [x] Phase 1 Backend Core MVP 구현
 - [x] Phase 2 MVP Web Flow 구현
 - [x] Phase 3A CSV validate/confirm import 구현
@@ -13,53 +13,45 @@
 - [x] Phase 3F read-only data reliability 구현
 - [x] Phase 3G hardened backtest execution model 구현
 - [x] Phase 3H strategy explanation, optional filters, strategy registry 구현
-- [x] Phase C-1 `momentum_rank` 전략 구현
-- [x] Phase C-2 `relative_strength_leader` 전략 구현
-- [x] Phase C-3 `new_high_breakout` 전략 구현
-- [x] Phase C-4 `darvas_box` 전략 구현
-- [x] Phase C-5 `stage_analysis_weekly` 전략 구현
-- [x] Phase C-6 `pullback_20ema` 전략 구현
-- [x] Alembic migration scaffold와 strategy indicator migrations 추가
+- [x] Phase C 전략 9개 등록 및 hardening foundation 구현
+- [x] Frontend default/available strategy selector 구현
 - [x] 현재 브랜치: `main`
 
 ## 현재 프로젝트 상태
 
-- Backend: FastAPI + SQLite, sample seed, CSV import, external daily OHLCV preview/confirm, KIS read-only foundation, broker safety scaffold, paper preview scaffold, data quality summary, hardened backtest execution model, strategy explanation contract.
-- Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/settings`.
-- Product state: 실주문 자동매매 엔진이 아닌 분석, 스크리닝, 백테스트, 리포트 중심 자동매매 보조 MVP.
+- Backend: FastAPI + SQLite, sample seed, CSV import, external daily OHLCV preview/confirm, KIS read-only foundation, broker safety scaffold, paper preview scaffold, data quality summary, hardened backtest execution model, strategy explanation contract, strategy metadata endpoint.
+- Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/settings`; `/screener`, `/dashboard`, `/backtest`는 backend strategy metadata 기반 selector를 사용한다.
+- Product state: 실주문 자동매매 엔진이 아니라 분석, 스크리닝, 백테스트, 리포트 중심 자동매매 보조 MVP.
 - Strategy default: `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout`, `pullback_20ema`.
-- Strategy available: 기본 5개에 더해 `momentum_rank`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly`를 명시 선택 시 screener/backtest에서 실행 가능.
-- `pullback_20ema`: 상승 추세 정배열, `ema20` 존재, `low <= ema20 * 1.01`, `close >= ema20`, `rs_percentile >= 70`, `volume_ratio_50 <= 1.2`, `atr20_pct <= 0.08` 조건을 사용한다.
-- `IndicatorService`: daily OHLCV 기반 SMA/EMA/ATR/volume/weekly/as-of 지표를 계산해 `indicator_snapshot`에 저장한다. EMA20은 `close.ewm(span=20, adjust=False, min_periods=20).mean()`으로 계산한다.
-- DB migration: root `alembic.ini`, initial revision `da9ab5998e36_initial_schema`, weekly column revision `c5b7d9a1e4f2_add_indicator_weekly_fields`, pullback EMA revision `f6d4a2c9e8b1_add_indicator_pullback_ema_fields`.
+- Strategy available: 기본 5개에 `momentum_rank`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly`를 더해 명시 선택 시 screener/backtest 실행 가능.
+- `trend_breakout`: 추세 정배열, RS, 52주 고점 근접, 실제 `breakout`, `market_regime_not_bear`, 거래량 급증을 기본 pass flag로 평가한다. `allow_neutral_market: true`가 기본이라 `neutral`은 통과, `bear`는 실패한다.
+- `vcp_breakout`: 추세 정배열, ATR/std 변동성 축소, volume dry-up, pivot breakout, breakout volume, RS, `market_regime_not_bear`를 평가한다. Optional filter는 `sector_rs_filter_enabled`, `pivot_distance_limit_enabled`, `atr_risk_filter_enabled`로 제어한다.
+- `canslim_lite`: EPS/매출 성장, RS, breakout, bull market에 더해 `technical_trend_filter_enabled=true` 기준 SMA 정배열과 `volume_confirmation_enabled=true` 기준 거래량 surge를 기본 평가한다. `sector_rs_filter_enabled=false`라 섹터 leadership은 기본 optional이다.
+- `canslim_lite` PTI metadata: `fundamentals_available_asof`, `fundamentals_effective_date_available`, `pti_validation_status=pti_validation_not_available_in_current_mvp`를 additive로 반환한다. 현재 MVP에서는 완전한 point-in-time 검증을 주장하지 않으며 `no_lookahead_claim`은 쓰지 않는다.
+- `backend/config/strategies.yaml`의 `common.hardening`은 공통 optional hardening 기본값과 legacy enable flag를 보관한다. 기본 enable flag는 false라 기존 default 동작을 과도하게 바꾸지 않는다.
+- `StrategyResult` 기존 필드인 `pass_flags`, `failed_conditions`, `reason_summary`, `metadata` contract는 유지한다.
+- `GET /api/screener/strategies`: `name`, `display_name`, `description`, `is_default`, `is_available`, `required_fields`, `limitations`를 반환한다.
 - Screener explanation contract: `triggered_conditions`, `failed_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`를 유지한다.
 - API contract: `/api/screener/run`, `/api/backtest/run`, `/api/backtest/runs`, `/api/backtest/runs/{run_id}` 응답 shape와 metrics key/type은 유지한다.
+- DB migration: root `alembic.ini`, initial revision `da9ab5998e36_initial_schema`, weekly column revision `c5b7d9a1e4f2_add_indicator_weekly_fields`, pullback EMA revision `f6d4a2c9e8b1_add_indicator_pullback_ema_fields`.
 
 ## 최근 변경 요약
 
-- `backend/app/strategies/pullback_20ema.py`: 20EMA 눌림목 후 재상승 후보 전략 추가.
-- `backend/app/services/indicator_service.py`: `ema20` 계산과 `low` snapshot 저장 추가.
-- `backend/app/models/tables.py`: `IndicatorSnapshot.low`, `IndicatorSnapshot.ema20` nullable 컬럼 추가.
-- `backend/alembic/versions/f6d4a2c9e8b1_add_indicator_pullback_ema_fields.py`: `low`, `ema20` upgrade/downgrade migration 추가.
-- `backend/app/strategies/registry.py`, `backend/config/strategies.yaml`, `backend/app/services/screener_service.py`: `pullback_20ema` 기본 전략 등록, 설정, screener metadata 연결.
-- `backend/tests/test_indicators.py`, `backend/tests/test_strategies.py`, `backend/tests/test_alembic_migrations.py`: EMA20/low, 전략 pass/fail, registry/default, screener/backtest 실행, migration smoke 검증 추가.
-- `docs/VALIDATION.md`, `Memory.md`: Phase C-6 최신 검증 결과로 압축 갱신.
-
-## 기준 문서
-
-- `README.md`: 실행, API, 검증 명령, 안전 불변 조건.
-- `docs/PROJECT_STATUS.md`: 다음 작업자가 먼저 볼 단일 상태 요약.
-- `docs/VALIDATION.md`: 최신 검증 결과와 검증 명령.
-- `docs/plans/README.md`: Phase index와 다음 권장 Phase.
-- `docs/DB_MIGRATION.md`: Alembic migration 생성, 적용, 롤백 절차.
+- `backend/app/strategies/canslim_lite.py`: technical trend filter, volume confirmation, optional sector RS filter, ROE availability flag, PTI status metadata를 추가했다.
+- `backend/config/strategies.yaml`: `canslim_lite.technical_trend_filter_enabled`, `volume_confirmation_enabled`, `volume_surge_multiple`, `sector_rs_filter_enabled`, `sector_rs_score_min` 기본값을 추가했다.
+- `backend/tests/test_strategies.py`: CANSLIM SMA 정배열 실패, volume surge 실패, sector disabled pass, fundamentals missing fail, missing ROE quality flag, PTI metadata 테스트를 추가했다.
+- `docs/VALIDATION.md`: Harden canslim_lite Strategy 최신 검증 결과로 압축 갱신했다.
+- 제외 범위 유지: `earnings_events` 테이블, Fundamentals schema, provider 호출, 주문/broker 관련 변경 없음.
 
 ## 최신 검증 결과
 
-- 2026-05-24 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_indicators.py backend/tests/test_strategies.py backend/tests/test_alembic_migrations.py -q`: 51 passed.
-- 2026-05-24 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 144 passed.
-- 2026-05-24 `git diff --check`: 통과.
-- 2026-05-24 `.\.venv\Scripts\python.exe -m alembic heads`: `f6d4a2c9e8b1 (head)`.
-- 2026-05-24 frontend lint/typecheck/build: frontend 파일 변경 없음으로 미실행.
+- 2026-05-25 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py -q`: 89 passed in 32.42s.
+- 2026-05-25 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 189 passed in 84.04s.
+- 2026-05-25 `npm.cmd run lint`: 통과.
+- 2026-05-25 `npm.cmd exec tsc -- --noEmit`: 통과.
+- 2026-05-25 `npm.cmd run build`: 통과.
+- 2026-05-25 `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities.
+- 2026-05-25 `git diff --check`: 통과.
 
 ## 불변 조건
 
@@ -67,16 +59,20 @@
 - paper order/fill/position/audit mutation 구현 금지.
 - KIS/KRX/yfinance network call, KIS token 발급/cache/credential 저장 금지.
 - broker/order adapter import 또는 호출 금지.
+- `earnings_events` 테이블 신규 추가 금지.
+- Fundamentals schema 변경 금지.
 - 신규 DB schema 변경은 Alembic revision과 검증 없이 금지.
-- 기존 backtest API breaking change 금지.
+- 기존 strategy registry 순서 변경 금지.
+- 기존 `StrategyResult` 필드 제거 금지.
+- 기존 screener/backtest API breaking change 금지.
 - 기존 metrics key 제거, 타입 변경 금지.
-- portfolio cash/position state와 walk-forward 구현은 현재 범위 밖.
 - `orders_count == 0`, `paper_* == 0`, KIS/paper execution routes 404 유지.
 - `npm audit fix --force`, Next.js downgrade, main 강제 push 금지.
 
 ## 다음 작업
 
-- [ ] Phase 3I: weekly review report를 fixture 기반으로 검토한다.
-- [ ] Strategy explanation contract를 frontend에서 표시할지 별도 범위로 검토한다.
-- [ ] `new_high_breakout`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly`, `pullback_20ema`를 frontend strategy selector에 추가할지 별도 범위로 결정한다.
+- [ ] Phase 3I: weekly review report를 fixture 기반으로 검증한다.
+- [ ] `canslim_lite` 강화 조건이 실데이터/백테스트에서 지나치게 좁아지는지 별도 샘플 검증한다.
+- [ ] Strategy explanation contract와 `risk_metadata`, CANSLIM PTI metadata를 frontend에 표시할지 별도 범위로 검토한다.
 - [ ] Phase 4A/4B broker 또는 live gate는 별도 승인 전까지 구현하지 않는다.
+- [ ] 현재 작업트리는 기존 미커밋 변경이 다수 포함되어 있으므로 publish/commit 전 명시 파일 scope를 재확인한다.

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
 
-import { callApi, formatNumber, type ApiStatus, type ScreenerResult } from "../../lib/api";
+import { callApi, formatNumber, type ApiStatus, type ScreenerResult, type StrategyMetadata } from "../../lib/api";
 
 type Filters = {
   strategyName: string;
@@ -40,13 +40,21 @@ export default function ScreenerPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [message, setMessage] = useState("조회 중");
   const [results, setResults] = useState<ScreenerResult[]>([]);
+  const [strategyCatalog, setStrategyCatalog] = useState<StrategyMetadata[]>([]);
+  const [selectedStrategyNames, setSelectedStrategyNames] = useState<string[]>([]);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [selected, setSelected] = useState<ScreenerResult | null>(null);
 
-  const strategyOptions = useMemo(
-    () => Array.from(new Set(results.map((result) => result.strategy_name))).sort(),
-    [results]
+  const defaultStrategyNames = useMemo(
+    () => strategyCatalog.filter((strategy) => strategy.is_default).map((strategy) => strategy.name),
+    [strategyCatalog]
   );
+  const selectedStrategySet = useMemo(() => new Set(selectedStrategyNames), [selectedStrategyNames]);
+  const strategyOptions = useMemo(() => {
+    const names = new Set(strategyCatalog.map((strategy) => strategy.name));
+    results.forEach((result) => names.add(result.strategy_name));
+    return Array.from(names);
+  }, [results, strategyCatalog]);
 
   const buildPath = useCallback(() => {
     const params = new URLSearchParams({ limit: "100" });
@@ -93,6 +101,22 @@ export default function ScreenerPage() {
     [buildPath]
   );
 
+  const loadStrategies = useCallback(async () => {
+    try {
+      const data = await callApi<StrategyMetadata[]>("/api/screener/strategies");
+      const defaultNames = data.filter((strategy) => strategy.is_default).map((strategy) => strategy.name);
+      const validNames = new Set(data.map((strategy) => strategy.name));
+      setStrategyCatalog(data);
+      setSelectedStrategyNames((prev) => {
+        const stillValid = prev.filter((name) => validNames.has(name));
+        return stillValid.length > 0 ? stillValid : defaultNames;
+      });
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "strategy metadata load failed");
+    }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadResults(false);
@@ -100,8 +124,51 @@ export default function ScreenerPage() {
     return () => window.clearTimeout(timer);
   }, [loadResults]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadStrategies();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadStrategies]);
+
   function updateFilter(key: keyof Filters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function toggleStrategy(strategyName: string) {
+    setSelectedStrategyNames((prev) =>
+      prev.includes(strategyName) ? prev.filter((name) => name !== strategyName) : [...prev, strategyName]
+    );
+  }
+
+  function selectDefaultStrategies() {
+    setSelectedStrategyNames(defaultStrategyNames);
+  }
+
+  function selectAllStrategies() {
+    setSelectedStrategyNames(strategyCatalog.map((strategy) => strategy.name));
+  }
+
+  async function runScreener() {
+    if (selectedStrategyNames.length === 0) {
+      setStatus("error");
+      setMessage("select at least one strategy");
+      return;
+    }
+    setStatus("loading");
+    setMessage("screener run in progress");
+    try {
+      const data = await callApi<{ rows: number; passed: number; strategies: string[] }>("/api/screener/run", {
+        method: "POST",
+        body: JSON.stringify({ strategies: selectedStrategyNames })
+      });
+      await loadResults(false);
+      setStatus("ok");
+      setMessage(`run complete: ${data.rows} rows / ${data.strategies.length} strategies`);
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "screener run failed");
+    }
   }
 
   function handleRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, row: ScreenerResult) {
@@ -131,6 +198,45 @@ export default function ScreenerPage() {
       </header>
 
       <section className="panel">
+        <div className="sectionHeader strategyHeader">
+          <div>
+            <h2>Strategy Selection</h2>
+            <p className="muted">{selectedStrategyNames.length} selected</p>
+          </div>
+          <div className="toolbar compactToolbar strategyActions">
+            <button type="button" className="secondary" onClick={selectDefaultStrategies} disabled={defaultStrategyNames.length === 0}>
+              Defaults
+            </button>
+            <button type="button" className="secondary" onClick={selectAllStrategies} disabled={strategyCatalog.length === 0}>
+              All
+            </button>
+            <button type="button" onClick={runScreener} disabled={selectedStrategyNames.length === 0}>
+              Run Screener
+            </button>
+          </div>
+        </div>
+        <div className="strategyGrid">
+          {strategyCatalog.map((strategy) => (
+            <label key={strategy.name} className={`strategyOption ${selectedStrategySet.has(strategy.name) ? "selected" : ""}`}>
+              <span className="strategyOptionTop">
+                <input
+                  type="checkbox"
+                  checked={selectedStrategySet.has(strategy.name)}
+                  onChange={() => toggleStrategy(strategy.name)}
+                />
+                <span>
+                  <strong>{strategy.display_name}</strong>
+                  <small>{strategy.name}</small>
+                </span>
+              </span>
+              <span className="strategyMetaLine">
+                <Badge tone={strategy.is_default ? "pass" : undefined}>{strategy.is_default ? "default" : "available-only"}</Badge>
+              </span>
+            </label>
+          ))}
+          {strategyCatalog.length === 0 ? <p className="muted">strategy metadata loading</p> : null}
+        </div>
+
         <div className="filters">
           <label>
             strategy_name
@@ -141,14 +247,6 @@ export default function ScreenerPage() {
                   {strategy}
                 </option>
               ))}
-              {strategyOptions.length === 0 ? (
-                <>
-                  <option value="trend_breakout">trend_breakout</option>
-                  <option value="vcp_breakout">vcp_breakout</option>
-                  <option value="canslim_lite">canslim_lite</option>
-                  <option value="momentum_rank">momentum_rank</option>
-                </>
-              ) : null}
             </select>
           </label>
           <label>

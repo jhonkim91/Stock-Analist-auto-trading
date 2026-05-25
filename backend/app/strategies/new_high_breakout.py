@@ -26,9 +26,19 @@ class NewHighBreakoutStrategy(BaseStrategy):
             "sma50_gt_sma150": self._gt(indicator.sma50, indicator.sma150),
             "sma150_gt_sma200": self._gt(indicator.sma150, indicator.sma200),
         }
+        optional_conditions = []
+        self._apply_optional_hardening_flags(
+            flags,
+            optional_conditions,
+            indicator,
+            fundamentals,
+            market_regime,
+            include_near_high=True,
+        )
         failed = self._failed(flags)
         passed = self._all_flags(flags)
         summary = self._summary(self.name, passed, failed)
+        risk_metadata = self._risk_metadata(indicator, entry_chase_reference=indicator.high_52w)
         return StrategyResult(
             strategy_tag=self.name,
             passed=passed,
@@ -50,7 +60,10 @@ class NewHighBreakoutStrategy(BaseStrategy):
                     "sma50_available": indicator.sma50 is not None,
                     "sma150_available": indicator.sma150 is not None,
                     "sma200_available": indicator.sma200 is not None,
+                    **self._hardening_data_quality_flags(indicator, fundamentals, market_regime, risk_metadata),
                 },
+                optional_conditions=optional_conditions,
+                risk_metadata=risk_metadata,
             ),
         )
 

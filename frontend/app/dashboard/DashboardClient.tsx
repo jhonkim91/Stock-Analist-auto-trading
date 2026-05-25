@@ -15,6 +15,7 @@ import {
   type MarketRegime,
   type ReportItem,
   type ScreenerResult,
+  type StrategyMetadata,
   summarizeResults
 } from "../../lib/api";
 
@@ -64,6 +65,8 @@ export default function DashboardClient() {
   const [latestReport, setLatestReport] = useState<AsyncState<ReportItem[]>>(loadingState("리포트 조회 중"));
   const [latestBacktest, setLatestBacktest] = useState<AsyncState<BacktestRun[]>>(loadingState("백테스트 조회 중"));
   const [broker, setBroker] = useState<AsyncState<BrokerStatus>>(loadingState("브로커 상태 조회 중"));
+  const [strategyCatalog, setStrategyCatalog] = useState<StrategyMetadata[]>([]);
+  const [selectedStrategyName, setSelectedStrategyName] = useState("");
   const [actionStates, setActionStates] = useState<Record<ActionKey, AsyncState<ActionResponse>>>({
     seed: idleState("대기"),
     indicators: idleState("대기"),
@@ -107,12 +110,29 @@ export default function DashboardClient() {
     setBroker(stateFromSettled(brokerResult, "브로커 상태 없음"));
   }, []);
 
+  const loadStrategies = useCallback(async () => {
+    try {
+      const data = await callApi<StrategyMetadata[]>("/api/screener/strategies");
+      setStrategyCatalog(data);
+      setSelectedStrategyName((current) => current || data.find((strategy) => strategy.is_default)?.name || data[0]?.name || "");
+    } catch {
+      setStrategyCatalog([]);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadOverview(false);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadOverview]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadStrategies();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadStrategies]);
 
   async function runAction(key: ActionKey, path: string, body: object) {
     setActionStates((prev) => ({ ...prev, [key]: loadingState("실행 중") }));
@@ -149,6 +169,16 @@ export default function DashboardClient() {
       </header>
 
       <section className="toolbar" aria-label="Backend actions">
+        <label>
+          strategy_name
+          <select value={selectedStrategyName} onChange={(event) => setSelectedStrategyName(event.target.value)}>
+            {strategyCatalog.map((strategy) => (
+              <option key={strategy.name} value={strategy.name}>
+                {strategy.display_name}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="button" onClick={() => runAction("seed", "/api/data/seed", {})}>
           {actionLabels.seed}
         </button>
@@ -161,7 +191,11 @@ export default function DashboardClient() {
         <button type="button" onClick={() => runAction("report", "/api/reports/daily", {})}>
           {actionLabels.report}
         </button>
-        <button type="button" onClick={() => runAction("backtest", "/api/backtest/run", { strategy_name: "trend_breakout" })}>
+        <button
+          type="button"
+          onClick={() => runAction("backtest", "/api/backtest/run", { strategy_name: selectedStrategyName })}
+          disabled={!selectedStrategyName}
+        >
           {actionLabels.backtest}
         </button>
         <button

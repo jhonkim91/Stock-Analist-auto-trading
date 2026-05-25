@@ -4,8 +4,8 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.16` |
-| Phase | `Phase C-6 pullback_20ema Strategy` |
+| Version | `MVP v0.16.3` |
+| Phase | `Phase C Strategy Hardening Foundation` |
 | Branch | `main` |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | 실거래 미구현, fail-closed, preview-only |
@@ -21,9 +21,7 @@
 - Phase 3D: broker safety scaffold.
 - Phase 3E-1: paper trading safety shell.
 - Phase 3F: read-only data reliability, provider contract, KRX fixture contract, data quality summary.
-- Phase 3G-1: backtest execution model hardening.
-- Phase 3G-2: liquidity participation cap and partial fill model.
-- Phase 3G-3: adjusted price option, delisted symbol forced exit, missing data forced exit metrics.
+- Phase 3G: hardened backtest execution model, gap-aware stop/target, liquidity and partial-fill simulation.
 - Phase 3H: strategy explanation contract, conservative optional strategy filters, fixture tests, strategy registry.
 - Phase C-1: `momentum_rank` available-only strategy.
 - Phase C-2: `relative_strength_leader` available-only strategy.
@@ -31,28 +29,50 @@
 - Phase C-4: `darvas_box` available-only strategy.
 - Phase C-5: `stage_analysis_weekly` available-only strategy and nullable weekly indicator fields.
 - Phase C-6: `pullback_20ema` default and available strategy, nullable `low`/`ema20` indicator fields.
+- Phase C hardening foundation: 9개 전략의 optional hardening 조건, `data_quality_flags`, additive `risk_metadata`.
+- Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields.
+
+## BacktestService 상태
+
+- `metrics.cost_bps`는 `backend/config/backtest.yaml`의 `execution.commission_bps + execution.slippage_bps` 합산값을 반영한다.
+- trade-level `cost_bps`와 metrics-level `cost_bps`는 동일 execution 설정값을 사용한다.
+- `run()`은 시작 시 `index_df` 기반 market regime cache를 1회 생성하고 signal date별로 조회한다.
+- 기존 `/api/backtest/run`, `/api/backtest/runs`, `/api/backtest/runs/{run_id}` 응답 key는 제거하지 않는다.
+- Metrics에는 `annualized_volatility`, `sharpe_ratio`, `sortino_ratio`, `calmar_ratio`, `turnover`, `regime_segment_return`을 additive로 제공한다.
+- `regime_segment_return`은 현재 MVP 데이터/portfolio-state 부족으로 `not_available_in_current_mvp`를 반환한다.
+- portfolio-state backtest, cash lock, open_positions 상태머신, walk-forward/PBO/Deflated Sharpe 계산은 구현하지 않았다.
 
 ## Phase C 전략 상태
 
 - 기본 screener 전략은 `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout`, `pullback_20ema` 5개다.
-- `pullback_20ema`는 상승 추세 정배열, 20EMA 눌림목 touch, 종가 EMA20 회복, RS percentile, pullback volume, ATR risk 조건을 평가한다.
-- `momentum_rank`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly`는 available registry에 포함되며 명시 선택 시 screener/backtest에서 실행 가능하다.
-- `IndicatorService`는 `ema20`을 `close.ewm(span=20, adjust=False, min_periods=20).mean()`으로 계산한다.
-- `indicator_snapshot`에는 nullable `weekly_close`, `weekly_sma30`, `weekly_sma30_slope`, `low`, `ema20`이 추가되어 있다.
+- available strategy는 기본 5개에 `momentum_rank`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly` 4개를 더한 9개다.
+- `/api/screener/strategies`는 frontend selector에 필요한 `name`, `display_name`, `description`, `is_default`, `is_available`, `required_fields`, `limitations`를 제공한다.
+- `/screener`는 기본 전략 5개를 기본 선택하고, available-only 전략은 사용자가 명시 체크한 경우에만 실행 요청에 포함한다.
+- `/dashboard`와 `/backtest`의 단일 전략 실행 UI는 backend metadata를 사용한다.
+- `IndicatorService`는 EMA20, weekly fields, ATR, volume ratio, 52주 고점, pivot, RS/sector/market score를 `indicator_snapshot`에 저장한다.
 - 최신 Alembic head는 `f6d4a2c9e8b1_add_indicator_pullback_ema_fields`다.
 - Screener 응답은 기존 explanation contract 필드를 제거하지 않는다.
 
+## Phase C Hardening Foundation
+
+- `backend/config/strategies.yaml`의 `common.hardening`은 신규 조건 enable flag와 threshold를 관리한다.
+- 기본 신규 조건 enable flag는 false다.
+- 신규 조건 후보는 `market_regime_not_bear`, `sector_rs_score_min`, `market_score_min`, `atr20_pct_max`, `volume_ratio_50_min`, `near_high_52w_threshold`, `optional_fundamental_quality`, `optional_earnings_quality`다.
+- 신규 조건은 `pass_flags`와 `failed_conditions`에 additive로만 추가한다.
+- 신규 조건의 사용 가능 여부는 `metadata.data_quality_flags`에 남긴다.
+- `metadata.risk_metadata`는 `suggested_stop_price`, `risk_per_share`, `risk_basis`, `entry_chase_warning`을 additive로 제공한다.
+- strategy registry order, `DEFAULT_STRATEGY_NAMES`, `AVAILABLE_STRATEGY_NAMES`, `StrategyResult` 기존 필드는 변경하지 않는다.
+
 ## 미구현 항목
 
-- 실제 주문, 주문 취소, 체결, 계좌, 예수금, websocket, live broker.
+- 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker.
 - paper order create, paper fill simulator, paper position mutation.
 - KIS credential/token 저장, token 발급/refresh/cache, 실제 KIS API 호출.
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.
-- portfolio cash/position state, walk-forward validation.
-- frontend strategy selector의 Phase C 전략 확장.
+- portfolio cash/position state, cash lock, open_positions state machine, walk-forward/PBO/Deflated Sharpe validation.
 
 ## 안전 제약사항
 
@@ -71,10 +91,10 @@ Backend:
 .\.venv\Scripts\python.exe -m pytest backend/tests -q
 ```
 
-Phase C strategy:
+Strategy hardening:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_indicators.py backend/tests/test_strategies.py backend/tests/test_alembic_migrations.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py -q
 ```
 
 Broker/paper/KIS/backtest safety:

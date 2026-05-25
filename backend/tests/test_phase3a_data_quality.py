@@ -63,16 +63,8 @@ def _quality_codes(run_id: str) -> set[str]:
         return set(db.scalars(select(DataQualityCheck.check_code).where(DataQualityCheck.run_id == run_id)).all())
 
 
-def _prepare_full_flow(client) -> None:
-    assert client.post("/api/data/seed").status_code == 200
-    assert client.post("/api/indicators/recompute").status_code == 200
-    assert client.post("/api/screener/run", json={}).status_code == 200
-    assert client.post("/api/reports/daily").status_code == 200
-    assert client.post("/api/backtest/run", json={"strategy_name": "trend_breakout"}).status_code == 200
-
-
-def test_validate_csv_success_records_run_and_quality_without_market_writes(client):
-    _prepare_full_flow(client)
+def test_validate_csv_success_records_run_and_quality_without_market_writes(full_flow_client):
+    client = full_flow_client
     market_before = _market_counts()
     run_before = _run_counts()
 
@@ -199,8 +191,8 @@ def test_validate_csv_requires_existing_source_id(client):
     assert "존재하지 않는 source_id" in response.json()["detail"]
 
 
-def test_confirm_import_state_transitions_and_write_timing(client):
-    _prepare_full_flow(client)
+def test_confirm_import_state_transitions_and_write_timing(full_flow_client):
+    client = full_flow_client
     before = _market_counts()
     response = _post_validate(
         client,
