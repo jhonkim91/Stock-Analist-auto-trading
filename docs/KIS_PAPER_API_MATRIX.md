@@ -5,7 +5,7 @@
 - 이 문서는 Phase 0 확인 matrix이며 구현 사양서가 아니다.
 - 공식 KIS Developers 문서에서 완전 확인되지 않은 endpoint/path/TR-ID/request field는 모두 `확인 필요`로 표시한다.
 - Phase 0에서는 KIS 호출, token 발급, credential 저장, paper submit/cancel/sync 구현을 하지 않는다.
-- 현재 구현 상태는 `feature/kis-paper-goal-phases` Phase 8 기준이다. `/api/paper/orders/submit`은 local `paper_orders` 전용이고 `/api/paper/sync`는 no-op disabled contract이며 KIS paper endpoint/TR-ID/request field는 여전히 추정 구현하지 않는다. Frontend는 paper-only UI boundary만 제공한다.
+- 현재 구현 상태는 `feature/kis-paper-goal-phases` Phase 9 기준이다. `/api/paper/orders/submit`은 local `paper_orders` 전용이고 `/api/paper/sync`는 no-op disabled contract이며 KIS paper endpoint/TR-ID/request field는 여전히 추정 구현하지 않는다. Frontend는 paper-only UI boundary만 제공하고, repo secret scan/CI gate가 추가됐다.
 
 ## 공식 문서 확인 범위
 
@@ -38,6 +38,7 @@
 | Report notification | KIS API 아님 | 해당 없음 | 구현 | `/api/reports/{report_id}/notify`, channel-safe split, optional attachment metadata, sanitized delivery logs |
 | Paper bot scheduler | KIS API 아님 | 해당 없음 | 구현 | default scheduler disabled, `PAPER_BOT_AUTO_SUBMIT=false`, launcher auto-start 없음 |
 | Frontend paper control UI | KIS API 아님 | 해당 없음 | 구현 | `/paper`, `/portfolio`, `/reports`, `/settings`는 `모의투자`, `실거래 아님`, `paper only`를 표시하고 backend safety API만 호출 |
+| Secret/redaction validation | KIS API 아님 | 해당 없음 | 구현 | `tools/secret_scan.py`, `/api/settings` key-name redaction, CI secret scan |
 | KIS live broker adapter | 현재 범위 제외 | 해당 없음 | 미구현 | disabled placeholder only |
 | KIS WebSocket trading | 공식 WebSocket 방식은 확인 | 확인 필요 | 미구현 | live WebSocket trading은 non-goal |
 

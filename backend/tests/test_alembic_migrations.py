@@ -128,6 +128,10 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "breadth_score",
         "breadth_score_available",
     }.issubset(indicator_columns)
+    forbidden_secret_columns = {"app_key", "app_secret", "access_token", "refresh_token", "webhook_url", "chat_id"}
+    for table_name in table_names:
+        column_names = {column["name"].lower() for column in inspector.get_columns(table_name)}
+        assert not forbidden_secret_columns & column_names
     screen_result_columns = {column["name"] for column in inspector.get_columns("screen_results")}
     assert {
         "metadata_json",

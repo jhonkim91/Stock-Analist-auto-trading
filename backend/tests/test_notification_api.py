@@ -48,9 +48,13 @@ def test_settings_endpoint_includes_redacted_notification_config(client):
     payload = response.json()
     serialized = json.dumps(payload, ensure_ascii=False)
     assert "notifications" in payload
-    assert payload["notifications"]["notifications"]["channels"]["discord_ops"]["webhook_env"] == "***REDACTED***"
-    assert payload["notifications"]["notifications"]["channels"]["telegram_main"]["bot_token_env"] == "***REDACTED***"
-    assert payload["notifications"]["notifications"]["channels"]["telegram_main"]["chat_id_env"] == "***REDACTED***"
+    discord_config = payload["notifications"]["notifications"]["channels"]["discord_ops"]
+    telegram_config = payload["notifications"]["notifications"]["channels"]["telegram_main"]
+    assert "***REDACTED***" in discord_config.values()
+    assert list(value for value in telegram_config.values() if value == "***REDACTED***")
+    assert "webhook_env" not in discord_config
+    assert "bot_token_env" not in telegram_config
+    assert "chat_id_env" not in telegram_config
     assert "DISCORD_OPS_WEBHOOK_URL" not in serialized
     assert "TELEGRAM_BOT_TOKEN" not in serialized
     assert "TELEGRAM_CHAT_ID" not in serialized

@@ -2,11 +2,11 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `KIS Paper Broker Phase 8 Frontend Integration`
-- [x] 현재 version: `MVP v0.25.0`
+- [x] 현재 상태명: `KIS Paper Broker Phase 9 Validation & Hardening`
+- [x] 현재 version: `MVP v0.26.0`
 - [x] 현재 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
-- [x] 최신 targeted backend pytest: Phase 8 frontend contract/no-live/report notify `11 passed`
-- [x] 최신 backend full pytest: `293 passed`
+- [x] 최신 targeted backend pytest: Phase 9 secret/no-live/migration `12 passed`
+- [x] 최신 backend full pytest: `338 passed`
 - [x] 최신 frontend 검증: Node `v24.15.0`에서 `npm ci`, lint, typecheck, build 통과
 - [x] 최신 Alembic pytest: `4 passed`
 - [x] 최신 diff check: `git diff --check` 통과, CRLF warning만 있음
@@ -41,6 +41,7 @@
 - [x] KIS Paper Broker Phase 6 Report Notification 완료
 - [x] KIS Paper Broker Phase 7 Bot Scheduler 완료
 - [x] KIS Paper Broker Phase 8 Frontend Integration 완료
+- [x] KIS Paper Broker Phase 9 Validation & Hardening 완료
 
 ## 현재 프로젝트 상태
 
@@ -72,6 +73,7 @@
 - KIS paper broker Phase 6 산출물: `backend/app/services/report_notification_service.py`, `/api/reports/{report_id}/notify`, `backend/tests/test_report_notify.py`.
 - KIS paper broker Phase 7 산출물: `backend/config/bot.yaml`, `backend/app/services/paper_bot_service.py`, `backend/app/jobs/paper_bot_runner.py`, `/api/paper/bot/status`, `/api/paper/bot/run`.
 - KIS paper broker Phase 8 산출물: `frontend/components/paper-mode-banner.tsx`, `/paper` submit/cancel/sync/history/snapshot UI, `/portfolio` synthetic vs paper sections, `/reports` notify dry-run control, `/settings` redacted paper/notification/bot summary, `backend/tests/test_frontend_api_contracts.py`.
+- KIS paper broker Phase 9 산출물: `tools/secret_scan.py`, `backend/tests/test_secret_redaction.py`, CI secret scan, `/api/settings` key-name redaction hardening, `docs/PAPER_TRADING_OPERATION.md`.
 
 ## 최근 변경 요약
 
@@ -102,9 +104,16 @@
 - `backend/tests/test_paper_bot_scheduler.py`: default disabled, API no-submit, runner once/loop gating 검증 추가.
 - `frontend/components/paper-mode-banner.tsx`, `frontend/app/paper/page.tsx`, `frontend/app/portfolio/page.tsx`, `frontend/app/reports/page.tsx`, `frontend/app/settings/page.tsx`, `frontend/lib/api.ts`: paper-only banner, backend-gated submit/cancel/sync/notify controls, synthetic/paper separation UI, typed frontend API contract 추가.
 - `backend/tests/test_frontend_api_contracts.py`: frontend endpoint 문자열, paper-only copy, secret/live-ready copy 부재, backend fail-closed contract를 검증.
+- `tools/secret_scan.py`, `backend/tests/test_secret_redaction.py`, `.github/workflows/ci.yml`: repo secret scan, endpoint redaction, CI scan step 추가.
+- `backend/app/services/settings_service.py`: sensitive key 이름도 `redacted_field_*`로 익명화해 `/api/settings`에 token/webhook/account key-name 노출을 막음.
+- `docs/PAPER_TRADING_OPERATION.md`: paper-only 운영 범위, safe defaults, 장애 대응 절차 정리.
 
 ## 최신 검증 결과
 
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_secret_redaction.py backend/tests/test_no_live_trading_regression.py backend/tests/test_alembic_migrations.py -q`: 12 passed in 7.23s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_api.py backend/tests/test_kis_paper_adapter.py backend/tests/test_token_manager.py -q`: 14 passed in 0.82s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 338 passed in 514.20s.
+- 2026-05-27 `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS`.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q`: 2 passed in 0.61s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py backend/tests/test_no_live_trading_regression.py backend/tests/test_report_notify.py -q`: 11 passed in 1.62s.
 - 2026-05-27 frontend `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.
@@ -183,7 +192,7 @@
 
 ## 다음 작업
 
-- [ ] KIS paper broker Phase 9 Validation & Hardening은 full backend pytest, secret scan, no-live regression, frontend build 기준으로 진행한다.
+- [ ] 공식 KIS paper endpoint/path/TR-ID/request field 확인 전까지 broker submit/cancel/sync network 구현은 보류한다.
 - [ ] `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` endpoint/path/TR-ID/request field를 공식 문서로 보강한다.
 - [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 - [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.

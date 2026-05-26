@@ -1,6 +1,6 @@
 # Phase Plans
 
-이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `MVP v0.25.0 / KIS Paper Broker Phase 8 Frontend Integration`이다.
+이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `MVP v0.26.0 / KIS Paper Broker Phase 9 Validation & Hardening`이다.
 
 ## 문서 역할
 
@@ -13,10 +13,10 @@
 
 | 항목 | 값 |
 |---|---|
-| 현재 checkpoint | `KIS Paper Broker Phase 8 Frontend Integration` |
-| 현재 구현 완료 | Weekly Review Report, Trade Ledger Foundation, Portfolio Risk Guard v2, breadth/Data Reliability 2, Validation Framework Scaffold, Parameter Snapshot Foundation, Walk-forward/PBO/DSR minimal validation, Factor/Filter Attribution, KIS paper broker Phase 0 audit, Phase 1 notification foundation, Phase 2 broker contract, Phase 3 paper persistence, Phase 4 paper order lifecycle, Phase 5 paper sync views, Phase 6 report notification, Phase 7 bot scheduler, Phase 8 frontend integration |
-| 최신 backend pytest | Phase 8 frontend contract/no-live/report notify `11 passed`, full backend `293 passed` |
-| 다음 권장 Phase | `KIS paper broker Phase 9 Validation & Hardening` |
+| 현재 checkpoint | `KIS Paper Broker Phase 9 Validation & Hardening` |
+| 현재 구현 완료 | Weekly Review Report, Trade Ledger Foundation, Portfolio Risk Guard v2, breadth/Data Reliability 2, Validation Framework Scaffold, Parameter Snapshot Foundation, Walk-forward/PBO/DSR minimal validation, Factor/Filter Attribution, KIS paper broker Phase 0 audit, Phase 1 notification foundation, Phase 2 broker contract, Phase 3 paper persistence, Phase 4 paper order lifecycle, Phase 5 paper sync views, Phase 6 report notification, Phase 7 bot scheduler, Phase 8 frontend integration, Phase 9 validation hardening |
+| 최신 backend pytest | full backend `338 passed`, Phase 9 secret/no-live/migration `12 passed` |
+| 다음 권장 Phase | 없음. 공식 KIS paper endpoint/TR-ID/request field 확인 전 network 구현 금지 |
 | 상태 요약 문서 | `docs/PROJECT_STATUS.md` |
 | 상세 검증 문서 | `docs/VALIDATION.md` |
 | 프로젝트 메모리 | `Memory.md` |
@@ -59,15 +59,15 @@
 | KIS Paper Broker Phase 6 | 완료 | `backend/app/services/report_notification_service.py`, `/api/reports/{report_id}/notify` | channel-safe summary/file notification, sanitized delivery logs, failure isolation |
 | KIS Paper Broker Phase 7 | 완료 | `backend/app/services/paper_bot_service.py`, `backend/app/jobs/paper_bot_runner.py`, `/api/paper/bot/status`, `/api/paper/bot/run` | disabled scheduler, safe once/loop runner, explicit auto-submit gate |
 | KIS Paper Broker Phase 8 | 완료 | `frontend/app/paper/page.tsx`, `frontend/components/paper-mode-banner.tsx`, `backend/tests/test_frontend_api_contracts.py` | paper-only UI boundary, backend-gated submit/cancel/sync/notify controls, contract tests |
+| KIS Paper Broker Phase 9 | 완료 | `tools/secret_scan.py`, `backend/tests/test_secret_redaction.py`, `docs/PAPER_TRADING_OPERATION.md`, `.github/workflows/ci.yml` | full validation, CI secret scan, key-name redaction hardening, operation guide |
 | Phase 4A/4B | 보류 | 별도 승인 필요 | broker 또는 live gate |
 
 ## 다음 후보
 
-1. KIS paper broker Phase 9 Validation & Hardening은 full backend pytest, secret scan, no-live regression, frontend build를 최종 acceptance 기준으로 수행한다.
-2. KIS endpoint/path/TR-ID/request field는 `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` 항목을 공식 문서로 먼저 보강한다.
-3. Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
-4. Strategy hardening 조건을 기본 활성화할지는 별도 백테스트와 샘플 영향 검증 후 결정한다.
-5. Phase 4A/4B broker 또는 live gate는 현재 안전 기준과 충돌하므로 별도 승인 없이 구현하지 않는다.
+1. 공식 KIS paper endpoint/path/TR-ID/request field는 `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` 항목을 공식 문서로 먼저 보강한다.
+2. Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
+3. Strategy hardening 조건을 기본 활성화할지는 별도 백테스트와 샘플 영향 검증 후 결정한다.
+4. Phase 4A/4B broker 또는 live gate는 현재 안전 기준과 충돌하므로 별도 승인 없이 구현하지 않는다.
 
 ## Report 기준
 

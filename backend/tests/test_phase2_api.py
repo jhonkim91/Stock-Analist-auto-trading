@@ -358,5 +358,7 @@ def test_settings_read_api_and_secret_key_redaction(client, tmp_path):
     for name in ("strategies", "risk", "backtest", "app"):
         (tmp_path / f"{name}.yaml").write_text("safe: 1\napi_key: abc\nnested:\n  token_value: xyz\n", encoding="utf-8")
     data = SettingsService(config_dir=Path(tmp_path)).read_settings()
-    assert data["app"]["api_key"] == "***REDACTED***"
-    assert data["risk"]["nested"]["token_value"] == "***REDACTED***"
+    assert data["app"]["redacted_field_0"] == "***REDACTED***"
+    assert data["risk"]["nested"]["redacted_field_0"] == "***REDACTED***"
+    assert "api_key" not in data["app"]
+    assert "token_value" not in data["risk"]["nested"]

@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `MVP v0.25.0 / KIS Paper Broker Phase 8 Frontend Integration`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
+현재 기준선은 `MVP v0.26.0 / KIS Paper Broker Phase 9 Validation & Hardening`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -10,15 +10,15 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.25.0` |
-| Phase | `KIS Paper Broker Phase 8 Frontend Integration` |
+| Version | `MVP v0.26.0` |
+| Phase | `KIS Paper Broker Phase 9 Validation & Hardening` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | Trading state | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; sync fail-closed/no-network; real/live order 미구현 |
-| Latest backend pytest | Phase 8 frontend contract/no-live/report notify `11 passed`; full backend `293 passed` |
-| Latest Phase 8 frontend contract pytest | `2 passed` |
+| Latest backend pytest | full backend `338 passed`; Phase 9 secret/no-live/migration `12 passed` |
+| Latest secret scan | `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
-| Next recommended phase | `KIS paper broker Phase 9 Validation & Hardening` |
+| Next recommended phase | 없음. 공식 KIS paper endpoint/TR-ID/request field 확인 전 network 구현 금지 |
 
 ## Implemented Scope
 
@@ -56,6 +56,7 @@
 - KIS Paper Broker Phase 6 Report Notification: `POST /api/reports/{report_id}/notify`, channel-safe summary splitting, optional attachment metadata, sanitized notification event/delivery logs.
 - KIS Paper Broker Phase 7 Bot Scheduler: disabled-by-default paper bot config, safe once/loop runner, `/api/paper/bot/status`, `/api/paper/bot/run`, launcher check integration without automatic scheduler start.
 - KIS Paper Broker Phase 8 Frontend Integration: `/paper`, `/portfolio`, `/reports`, `/settings`에 `모의투자`, `실거래 아님`, `paper only` boundary를 표시하고 paper submit/history/snapshot/sync/report notify controls를 backend safety API로만 연결.
+- KIS Paper Broker Phase 9 Validation & Hardening: `tools/secret_scan.py`, `backend/tests/test_secret_redaction.py`, CI secret scan, key-name redaction hardening, `docs/PAPER_TRADING_OPERATION.md`, full backend/frontend acceptance 검증.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
 - Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration, strategy parameter snapshot migration, paper trading persistence migration.
 
@@ -336,6 +337,12 @@ Backend full suite:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend/tests -q
+```
+
+Secret scan:
+
+```powershell
+.\.venv\Scripts\python.exe tools\secret_scan.py
 ```
 
 Strategy hardening targeted suite:

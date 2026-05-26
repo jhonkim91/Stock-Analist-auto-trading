@@ -9,6 +9,8 @@ from backend.app.brokers.base import BrokerDisabledError, BrokerOrderRequest
 from backend.app.brokers.kis_live import LIVE_DISABLED_REASON, KisLiveBrokerAdapter
 from backend.app.main import app
 
+ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_live_adapter_methods_are_unreachable():
     adapter = KisLiveBrokerAdapter()
@@ -123,3 +125,21 @@ def test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path(client):
     assert payload["live_order_created"] is False
     assert payload["broker_order_created"] is False
     assert payload["network_call_performed"] is False
+
+
+def test_frontend_paper_controls_do_not_reference_live_execution_routes():
+    frontend_files = [
+        ROOT / "frontend" / "app" / "paper" / "page.tsx",
+        ROOT / "frontend" / "app" / "portfolio" / "page.tsx",
+        ROOT / "frontend" / "app" / "reports" / "page.tsx",
+        ROOT / "frontend" / "app" / "settings" / "page.tsx",
+        ROOT / "frontend" / "components" / "paper-mode-banner.tsx",
+    ]
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in frontend_files)
+
+    assert "실거래 아님" in combined
+    assert "paper only" in combined
+    assert "/api/kis/orders" not in combined
+    assert "/api/kis/broker" not in combined
+    assert "/api/kis/websocket" not in combined
+    assert "live trading ready" not in combined.lower()

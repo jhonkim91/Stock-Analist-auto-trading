@@ -4,13 +4,13 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.25.0` |
-| Phase | `KIS Paper Broker Phase 8 Frontend Integration` |
+| Version | `MVP v0.26.0` |
+| Phase | `KIS Paper Broker Phase 9 Validation & Hardening` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; sync fail-closed/no-network; live/real order disabled |
-| 최신 backend pytest | Phase 8 frontend contract/no-live/report notify `11 passed`, full `293 passed` |
-| 다음 권장 Phase | `KIS paper broker Phase 9 Validation & Hardening` |
+| 최신 backend pytest | full backend `338 passed`, Phase 9 secret/no-live/migration `12 passed` |
+| 다음 권장 Phase | 없음. 공식 KIS paper endpoint/TR-ID/request field 확인 전 network 구현 금지 |
 
 ## 구현 완료 항목
 
@@ -55,6 +55,7 @@
 - KIS Paper Broker Phase 6 Report Notification: saved report notification endpoint, channel-safe summary splitting, optional attachment metadata, sanitized notification event/delivery logs, delivery failure isolation.
 - KIS Paper Broker Phase 7 Bot Scheduler: disabled-by-default bot config, safe once/loop CLI runner, bot status/run API, launcher check-only integration, explicit auto-submit gate.
 - KIS Paper Broker Phase 8 Frontend Integration: `/paper`, `/portfolio`, `/reports`, `/settings`에 paper-only banner와 backend-gated submit/cancel/sync/notify controls를 추가하고 live readiness copy를 배제.
+- KIS Paper Broker Phase 9 Validation & Hardening: repo secret scan 도구, CI secret scan, settings key-name redaction hardening, operation doc, full backend/frontend acceptance 검증.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -220,6 +221,7 @@
 - Phase 6 Report Notification은 완료했다. notification failure는 report row/markdown을 rollback하지 않고 sanitized delivery log로 기록한다.
 - Phase 7 Bot Scheduler는 완료했다. scheduler/auto-submit은 기본 disabled이고 runner/API는 주문 없이 safe no-op을 반환한다.
 - Phase 8 Frontend Integration은 완료했다. `/paper`, `/portfolio`, `/reports`, `/settings`는 `모의투자`, `실거래 아님`, `paper only`를 명시하고 backend safety API만 호출한다.
+- Phase 9 Validation & Hardening은 완료했다. `tools/secret_scan.py`와 `backend/tests/test_secret_redaction.py`가 secret 원문과 민감 key-name 노출을 검증하며 CI에도 secret scan을 추가했다.
 
 ## 검증 명령
 
@@ -283,4 +285,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-다음 단계에서는 Phase 9 Validation & Hardening을 full test, secret scan, no-live regression 기준으로 수행한다.
+`goal.md` 기준 KIS paper broker phase는 완료됐다. 이후 작업은 공식 KIS paper endpoint/TR-ID/request field 확인 또는 운영 절차 고도화를 별도 승인 범위로 진행한다.

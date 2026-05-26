@@ -49,7 +49,16 @@ class SettingsService:
         if cls._is_sensitive_key(key):
             return "***REDACTED***"
         if isinstance(value, dict):
-            return {item_key: cls._redact(item_value, str(item_key)) for item_key, item_value in value.items()}
+            redacted: dict[str, Any] = {}
+            sensitive_index = 0
+            for item_key, item_value in value.items():
+                item_key_text = str(item_key)
+                if cls._is_sensitive_key(item_key_text):
+                    redacted[f"redacted_field_{sensitive_index}"] = "***REDACTED***"
+                    sensitive_index += 1
+                else:
+                    redacted[item_key] = cls._redact(item_value, item_key_text)
+            return redacted
         if isinstance(value, list):
             return [cls._redact(item) for item in value]
         return value
