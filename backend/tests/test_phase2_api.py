@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from backend.app.services.settings_service import SettingsService
@@ -171,7 +172,8 @@ def test_reports_api_supports_weekly_generation_filtering_and_markdown(client):
     assert daily.status_code == 200
     assert weekly.status_code == 200
     daily_id = daily.json()["report_id"]
-    weekly_id = weekly.json()["report_id"]
+    weekly_payload = weekly.json()
+    weekly_id = weekly_payload["report_id"]
     assert daily.json()["report_type"] == "daily"
     assert weekly.json()["report_type"] == "weekly"
 
@@ -196,6 +198,30 @@ def test_reports_api_supports_weekly_generation_filtering_and_markdown(client):
     assert f'report-{weekly_id}.md' in weekly_markdown.headers["content-disposition"]
     assert "- win_rate: not_available_in_current_mvp" in weekly_markdown.text
     assert "- realized_pnl: 0" not in weekly_markdown.text
+    assert "## Factor/Filter Attribution" in weekly_markdown.text
+    assert "- attribution_status: partial" in weekly_markdown.text
+    assert "- attribution_reason: trade_ledger_unavailable" in weekly_markdown.text
+    assert "realized_factor_pnl_attribution" not in weekly_markdown.text
+    assert "realized_filter_pnl_attribution" not in weekly_markdown.text
+    assert "| attribution_type | dimension | value | trade_count | pnl | win_rate | avg_return | joined_trade_count | unavailable_count | status |" in weekly_markdown.text
+    assert "| screen_filter_failure |" in weekly_markdown.text
+    assert "## Parameter Drift Check" in weekly_markdown.text
+    assert "- parameter_snapshot_status: not_available_in_current_mvp" in weekly_markdown.text
+    assert "- unavailable_reason: strategy_parameter_snapshot_not_found" in weekly_markdown.text
+    assert "- parameter_snapshot_diff: not_available_in_current_mvp" not in weekly_markdown.text
+    assert "- changed_keys: not_available_in_current_mvp" in weekly_markdown.text
+    assert "- snapshot_dates: not_available_in_current_mvp" in weekly_markdown.text
+    assert "- config_hash_diff: changed:0, unchanged:0, unavailable:" in weekly_markdown.text
+
+    weekly_detail = client.get(f"/api/reports/{weekly_id}")
+    assert weekly_detail.status_code == 200
+    generated_drift = weekly_payload["metadata"]["parameter_drift"]
+    detail_drift = weekly_detail.json()["metadata"]["parameter_drift"]
+    assert detail_drift["parameter_snapshot_status"] == "not_available_in_current_mvp"
+    assert detail_drift["unavailable_reason"] == "strategy_parameter_snapshot_not_found"
+    assert detail_drift["changed_keys"] == "not_available_in_current_mvp"
+    assert detail_drift["snapshot_dates"] == "not_available_in_current_mvp"
+    assert detail_drift["config_hash_diff"] == generated_drift["config_hash_diff"]
 
 
 def test_backtest_runs_list_and_detail_api(full_flow_client):
@@ -252,10 +278,34 @@ def test_strategy_summary_endpoint_shape_and_unspecified_baseline(full_flow_clie
     assert Path(payload["report"]["path"]).exists()
     assert payload["validation_documentation_format"]["docs_file"] == "docs/VALIDATION.md"
     assert "unavailable_metrics" in payload["validation_documentation_format"]["required_fields"]
-    assert payload["validation_framework"]["walk_forward"]["status"] == "not_available_in_current_mvp"
-    assert payload["validation_framework"]["overfitting"]["pbo"]["value"] == "not_available_in_current_mvp"
-    assert payload["validation_framework"]["overfitting"]["deflated_sharpe_ratio"]["value"] == "not_available_in_current_mvp"
-    assert payload["validation_framework"]["attribution"]["value"] == "not_available_in_current_mvp"
+    assert payload["validation_framework"]["walk_forward"]["status"] == "calculated"
+    assert payload["validation_framework"]["walk_forward"]["metric"] == "out_of_sample_summary"
+    assert payload["validation_framework"]["walk_forward"]["calculated"] is True
+    assert payload["validation_framework"]["walk_forward"]["calculated_strategy_count"] > 0
+    pbo = payload["validation_framework"]["overfitting"]["pbo"]
+    assert pbo["method"] == "walk_forward_leave_one_window_cscv_lite"
+    assert pbo["input_shape"]["candidate_source"] == "strategy_validation.walk_forward.windows"
+    if pbo["calculated"]:
+        assert 0 <= pbo["value"] <= 1
+    else:
+        assert pbo["value"] == "not_available_in_current_mvp"
+        assert pbo["reason"]
+    dsr = payload["validation_framework"]["overfitting"]["deflated_sharpe_ratio"]
+    assert dsr["method"] == "bailey_lopez_de_prado_deflated_sharpe_lite"
+    assert dsr["input_shape"]["multiple_testing"]["candidate_source"] == "available_strategy_registry"
+    assert dsr["input_shape"]["non_normal_adjustment"]["return_series_source"] == "walk_forward_window_total_return"
+    if dsr["calculated"]:
+        assert 0 <= dsr["value"] <= 1
+    else:
+        assert dsr["value"] == "not_available_in_current_mvp"
+        assert dsr["reason"]
+    attribution = payload["validation_framework"]["attribution"]
+    assert attribution["value"] == "calculated"
+    assert attribution["status"] in {"calculated", "partial"}
+    assert attribution["basis"]["join_keys"]
+    assert attribution["realized_pnl_attribution"]["rows"]
+    assert attribution["screen_filter_failure_counts"]["rows"]
+    assert attribution["unjoined_trade_count"] >= 0
     assert "orders" in payload["validation_framework"]["trade_ledger_schema"]["not_connected_to"]
 
     rows = payload["strategies"]
@@ -277,7 +327,23 @@ def test_strategy_summary_endpoint_shape_and_unspecified_baseline(full_flow_clie
     assert first["delta"]["max_drawdown_delta"] is None
     assert first["backtest"]["pbo"] == "not_available_in_current_mvp"
     assert first["backtest"]["deflated_sharpe_ratio"] == "not_available_in_current_mvp"
-    assert first["validation"]["walk_forward"]["metric"] == "not_available_in_current_mvp"
+    assert first["validation"]["walk_forward"]["metric"] == "out_of_sample_summary"
+    assert first["validation"]["walk_forward"]["calculated"] is True
+    assert first["validation"]["walk_forward"]["summary"]["oos_window_count"] >= 1
+    assert first["validation"]["walk_forward"]["summary"]["oos_total_return"] is not None
+    assert first["validation"]["overfitting"]["pbo"]["input_shape"]["performance_metric"] == "total_return"
+    assert (
+        "multiple_testing"
+        in first["validation"]["overfitting"]["deflated_sharpe_ratio"]["input_shape"]
+    )
+    assert first["validation"]["attribution"]["realized_pnl_attribution"]["rows"]
+    assert first["validation"]["attribution"]["screen_filter_failure_counts"]["rows"]
+
+    artifact = json.loads(Path(payload["report"]["path"]).read_text(encoding="utf-8"))
+    assert artifact["validation_framework"]["walk_forward"]["metric"] == "out_of_sample_summary"
+    assert "overfitting" in artifact["validation_framework"]
+    assert artifact["validation_framework"]["attribution"]["realized_pnl_attribution"]["rows"]
+    assert artifact["strategies"][0]["validation"]["walk_forward"]["summary"]["oos_window_count"] >= 1
 
     status = client.get("/api/data/status")
     assert status.status_code == 200

@@ -10,12 +10,27 @@ import pytest
 from sqlalchemy import select
 
 from backend.app.core.config import get_config
-from backend.app.models.tables import BacktestRun, BacktestTradeLedger, CorporateAction, SymbolMaster
+from backend.app.models.tables import (
+    BacktestRun,
+    BacktestTradeLedger,
+    CorporateAction,
+    ScreenResult,
+    StrategyParameterSnapshot,
+    SymbolMaster,
+)
 from backend.app.repositories.market_repository import MarketRepository
 from backend.app.services.backtest_service import BacktestService
+from backend.app.services.report_service import ReportService
 from backend.app.services.risk_service import RiskService
 from backend.app.services.scoring_service import ScoringService
-from backend.app.services.validation_service import NOT_AVAILABLE, StrategyValidationService, ValidationScaffold
+from backend.app.services.screener_service import ScreenerService
+from backend.app.services.validation_service import (
+    FactorFilterAttributionService,
+    NOT_AVAILABLE,
+    StrategyParameterSnapshotService,
+    StrategyValidationService,
+    ValidationScaffold,
+)
 from backend.app.strategies.registry import get_available_strategy_registry
 
 
@@ -315,6 +330,131 @@ def test_backtest_persists_trade_ledger_contract(seeded_db):
     assert len(detail["trades"]) == len(rows)
 
 
+def test_factor_filter_attribution_joins_ledger_and_screen_results(seeded_db):
+    signal_date = date(2026, 5, 20)
+    seeded_db.add_all(
+        [
+            ScreenResult(
+                trade_date=signal_date,
+                symbol="KR009",
+                strategy_tag="trend_breakout",
+                passed=True,
+                pass_flags=json.dumps({"breakout": True, "rr_ok": True}, ensure_ascii=False),
+                failed_conditions=json.dumps([], ensure_ascii=False),
+                reason_summary="fixture pass",
+                metadata_json=json.dumps(
+                    {
+                        "market_regime": "bull",
+                        "risk_flags": {"entry_chase_warning": True},
+                    },
+                    ensure_ascii=False,
+                ),
+                risk_flags_json=json.dumps({"entry_chase_warning": True}, ensure_ascii=False),
+                total_score=0.9,
+                entry_price=100.0,
+                stop_price=90.0,
+                target_price=120.0,
+                risk_per_share=10.0,
+                reward_risk_ratio=2.0,
+                position_size=10,
+                position_notional=1000.0,
+            ),
+            ScreenResult(
+                trade_date=signal_date,
+                symbol="KR010",
+                strategy_tag="trend_breakout",
+                passed=False,
+                pass_flags=json.dumps({"breakout": False, "rr_ok": False}, ensure_ascii=False),
+                failed_conditions=json.dumps(["breakout", "rr_ok"], ensure_ascii=False),
+                reason_summary="fixture fail",
+                metadata_json=json.dumps({"market_regime": "bull"}, ensure_ascii=False),
+                risk_flags_json=json.dumps({}, ensure_ascii=False),
+                total_score=0.2,
+            ),
+            BacktestTradeLedger(
+                run_id="bt-attribution-fixture",
+                trade_index=1,
+                strategy_name="trend_breakout",
+                symbol="KR009",
+                side="long",
+                status="closed",
+                signal_date=signal_date,
+                entry_date=signal_date,
+                exit_date=signal_date,
+                qty=10,
+                raw_entry_price=100.0,
+                entry_price=100.0,
+                raw_exit_price=110.0,
+                exit_price=110.0,
+                pnl=100.0,
+                return_pct=0.10,
+                estimated_cost=0.0,
+                cost_bps=0.0,
+                holding_days=1,
+                exit_reason="target",
+                risk_basis="fixture",
+            ),
+            BacktestTradeLedger(
+                run_id="bt-attribution-fixture",
+                trade_index=2,
+                strategy_name="trend_breakout",
+                symbol="KR012",
+                side="long",
+                status="closed",
+                signal_date=signal_date,
+                entry_date=signal_date,
+                exit_date=signal_date,
+                qty=10,
+                raw_entry_price=100.0,
+                entry_price=100.0,
+                raw_exit_price=97.5,
+                exit_price=97.5,
+                pnl=-25.0,
+                return_pct=-0.025,
+                estimated_cost=0.0,
+                cost_bps=0.0,
+                holding_days=1,
+                exit_reason="stop",
+                risk_basis="fixture",
+            ),
+        ]
+    )
+    seeded_db.commit()
+
+    payload = FactorFilterAttributionService(seeded_db).calculate(
+        start_date=signal_date,
+        end_date=signal_date,
+        strategy_names=["trend_breakout"],
+    )
+
+    assert payload["status"] == "partial"
+    assert payload["trade_count"] == 2
+    assert payload["joined_trade_count"] == 1
+    assert payload["unjoined_trade_count"] == 1
+    assert payload["basis"]["not_connected_to"] == ["orders", "paper_orders", "broker_adapters", "live_trading"]
+
+    pnl_rows = payload["realized_pnl_attribution"]["rows"]
+    assert any(
+        row["dimension"] == "strategy_name" and row["value"] == "trend_breakout" and row["pnl"] == 75.0
+        for row in pnl_rows
+    )
+    assert any(row["dimension"] == "sector" and row["value"] == "Technology" for row in pnl_rows)
+    assert any(row["dimension"] == "market_regime" and row["value"] == "bull" and row["pnl"] == 100.0 for row in pnl_rows)
+    assert any(
+        row["dimension"] == "market_regime"
+        and row["value"] == NOT_AVAILABLE
+        and row["unavailable_count"] == 1
+        for row in pnl_rows
+    )
+    assert any(row["dimension"] == "pass_flag" and row["value"] == "breakout=true" for row in pnl_rows)
+    assert any(row["dimension"] == "risk_flag" and row["value"] == "entry_chase_warning=true" for row in pnl_rows)
+
+    failure_rows = payload["screen_filter_failure_counts"]["rows"]
+    assert any(row["filter"] == "breakout" and row["failed_count"] == 1 for row in failure_rows)
+    assert any(row["filter"] == "rr_ok" and row["failed_count"] == 1 for row in failure_rows)
+    assert payload["strategies"]["trend_breakout"]["screen_filter_failure_counts"]["calculated"] is True
+
+
 def test_strategy_summary_uses_available_window_and_unspecified_baseline(seeded_db, monkeypatch):
     service = BacktestService(seeded_db)
     limited_dates = service._latest_indicator_dates(2)
@@ -328,6 +468,8 @@ def test_strategy_summary_uses_available_window_and_unspecified_baseline(seeded_
     assert summary["window"]["available_trading_days"] < summary["window"]["requested_trading_days"]
     assert summary["baseline"]["status"] == "unspecified"
     assert summary["validation_framework"]["walk_forward"]["metric"] == NOT_AVAILABLE
+    assert summary["validation_framework"]["walk_forward"]["calculated"] is False
+    assert summary["validation_framework"]["walk_forward"]["reason"] == "insufficient_indicator_trading_days"
     assert summary["validation_framework"]["overfitting"]["pbo"]["value"] == NOT_AVAILABLE
     assert summary["validation_framework"]["overfitting"]["deflated_sharpe_ratio"]["value"] == NOT_AVAILABLE
     assert summary["validation_framework"]["attribution"]["value"] == NOT_AVAILABLE
@@ -343,7 +485,157 @@ def test_strategy_summary_uses_available_window_and_unspecified_baseline(seeded_
     assert first["backtest"]["pbo"] == NOT_AVAILABLE
     assert first["backtest"]["deflated_sharpe_ratio"] == NOT_AVAILABLE
     assert first["validation"]["walk_forward"]["status"] == NOT_AVAILABLE
+    assert first["validation"]["walk_forward"]["calculated"] is False
+    assert first["validation"]["walk_forward"]["reason"] == "insufficient_indicator_trading_days"
     assert first["validation"]["attribution"]["value"] == NOT_AVAILABLE
+
+
+def test_walk_forward_runner_calculates_oos_summary_and_fail_closed_insufficient_data(seeded_db):
+    service = BacktestService(seeded_db)
+    dates = service._latest_indicator_dates(90)
+    assert len(dates) == 90
+
+    result = service.walk_forward(
+        "trend_breakout",
+        trading_dates=dates,
+        train_window_trading_days=30,
+        test_window_trading_days=10,
+        step_trading_days=20,
+        rebalance_frequency="weekly",
+    )
+
+    assert result["status"] == "calculated"
+    assert result["metric"] == "out_of_sample_summary"
+    assert result["calculated"] is True
+    assert result["rebalance_frequency"] == "weekly"
+    assert result["window_count"] >= 2
+    assert result["calculated_window_count"] == result["window_count"]
+    assert result["summary"]["oos_window_count"] == result["calculated_window_count"]
+    assert result["summary"]["oos_trade_count"] >= 0
+    assert result["summary"]["oos_total_return"] is not None
+    assert result["windows"][0]["train_trading_days"] == 30
+    assert result["windows"][0]["test_trading_days"] == 10
+    assert result["windows"][0]["calculated"] is True
+    assert {"trade_count", "win_rate", "total_return", "max_drawdown"}.issubset(
+        result["windows"][0]["metrics"]
+    )
+
+    insufficient = service.walk_forward(
+        "trend_breakout",
+        trading_dates=dates[:20],
+        train_window_trading_days=15,
+        test_window_trading_days=10,
+        step_trading_days=5,
+    )
+
+    assert insufficient["calculated"] is False
+    assert insufficient["status"] == NOT_AVAILABLE
+    assert insufficient["reason"] == "insufficient_indicator_trading_days"
+    assert insufficient["summary"] is None
+    assert insufficient["windows"] == []
+
+
+def test_strategy_summary_calculates_pbo_and_dsr_when_walk_forward_sample_is_sufficient(seeded_db, monkeypatch):
+    service = StrategyValidationService(seeded_db)
+    strategy_names = list(service.strategies)[:3]
+    assert len(strategy_names) == 3
+    service.strategies = strategy_names
+    dates = BacktestService(seeded_db)._latest_indicator_dates(60)
+    return_series = {
+        strategy_names[0]: [0.010, 0.020, 0.015, 0.025, 0.005],
+        strategy_names[1]: [0.005, 0.015, -0.005, 0.010, 0.020],
+        strategy_names[2]: [-0.010, 0.005, 0.000, 0.015, 0.010],
+    }
+    current_metrics = {
+        "summary_source": "computed_available_window",
+        "error": None,
+        "trade_count": 5,
+        "win_rate": 0.6,
+        "total_return": 0.05,
+        "max_drawdown": -0.03,
+        **ValidationScaffold.metric_placeholders(),
+    }
+
+    def fake_walk_forward(
+        strategy_name,
+        trading_dates,
+        train_window_trading_days=10,
+        test_window_trading_days=5,
+        step_trading_days=5,
+        rebalance_frequency=None,
+    ):
+        windows = [
+            {
+                "window_index": index,
+                "train_trading_days": train_window_trading_days,
+                "test_trading_days": test_window_trading_days,
+                "calculated": True,
+                "reason": None,
+                "metrics": {
+                    "trade_count": index,
+                    "win_rate": 0.5,
+                    "total_return": value,
+                    "max_drawdown": -abs(value) / 2,
+                    "sharpe_ratio": value,
+                    "sortino_ratio": value,
+                    "calmar_ratio": value,
+                    "turnover": 0.1,
+                    "average_active_positions": 1,
+                    "rebalance_count": 1,
+                },
+            }
+            for index, value in enumerate(return_series[strategy_name], start=1)
+        ]
+        return {
+            "strategy_name": strategy_name,
+            "status": "calculated",
+            "metric": "out_of_sample_summary",
+            "calculated": True,
+            "reason": None,
+            "train_window_trading_days": train_window_trading_days,
+            "test_window_trading_days": test_window_trading_days,
+            "step_trading_days": step_trading_days,
+            "rebalance_frequency": rebalance_frequency or "daily",
+            "window_count": len(windows),
+            "calculated_window_count": len(windows),
+            "unavailable_window_count": 0,
+            "summary": {
+                "oos_window_count": len(windows),
+                "oos_trade_count": sum(index for index in range(1, len(windows) + 1)),
+                "oos_total_return": 0.05,
+            },
+            "windows": windows,
+        }
+
+    monkeypatch.setattr(service, "_latest_indicator_dates", lambda _lookback_days: dates)
+    monkeypatch.setattr(service, "_strategy_backtest_summary", lambda **_kwargs: dict(current_metrics))
+    monkeypatch.setattr(service.walk_forward_runner, "run", fake_walk_forward)
+
+    summary = service.strategy_summary(
+        lookback_days=60,
+        walk_forward_train_days=10,
+        walk_forward_test_days=5,
+        walk_forward_step_days=5,
+    )
+    overfitting = summary["validation_framework"]["overfitting"]
+
+    assert overfitting["pbo"]["calculated"] is True
+    assert 0 <= overfitting["pbo"]["value"] <= 1
+    assert overfitting["pbo"]["input_shape"]["candidate_count"] == 3
+    assert overfitting["pbo"]["input_shape"]["split_count"] == 5
+    assert overfitting["deflated_sharpe_ratio"]["calculated"] is True
+    assert 0 <= overfitting["deflated_sharpe_ratio"]["value"] <= 1
+    assert overfitting["deflated_sharpe_ratio"]["input_shape"]["multiple_testing"]["candidate_count"] == 3
+    assert (
+        overfitting["deflated_sharpe_ratio"]["input_shape"]["non_normal_adjustment"]["sample_count"]
+        == 5
+    )
+
+    first = summary["strategies"][0]["validation"]["overfitting"]
+    assert first["pbo"]["calculated"] is True
+    assert first["pbo"]["strategy_name"] == strategy_names[0]
+    assert first["deflated_sharpe_ratio"]["calculated"] is True
+    assert first["deflated_sharpe_ratio"]["strategy_name"] == strategy_names[0]
 
 
 def test_strategy_validation_summary_supports_baseline_run_id_and_snapshot(seeded_db, monkeypatch):
@@ -421,6 +713,127 @@ def test_strategy_validation_summary_supports_baseline_run_id_and_snapshot(seede
     assert snapshot_trend["delta"]["win_rate_delta"] == 0.1
     assert snapshot_trend["backtest"]["pbo"] == NOT_AVAILABLE
     assert snapshot_trend["backtest"]["deflated_sharpe_ratio"] == NOT_AVAILABLE
+
+
+def test_strategy_parameter_snapshot_service_saves_queries_and_detects_drift(db_session):
+    strategy_config = deepcopy(get_config("strategies"))
+    service = StrategyParameterSnapshotService(db_session, strategy_config=strategy_config)
+
+    unavailable = service.parameter_drift_check(as_of=date(2026, 5, 20), strategy_names=["trend_breakout"])
+
+    assert unavailable["status"] == NOT_AVAILABLE
+    assert unavailable["comparison_available"] is False
+    assert unavailable["drifted_parameter_count"] == 0
+    assert unavailable["changed_keys"] == []
+    assert unavailable["unchanged_keys_count"] == 0
+    assert unavailable["snapshot_dates"] == []
+    assert unavailable["config_hash_diff"] == {
+        "changed_count": 0,
+        "unchanged_count": 0,
+        "unavailable_count": 1,
+    }
+    assert unavailable["strategies"][0]["reason"] == "strategy_parameter_snapshot_not_found"
+
+    rows = service.save_current_snapshots(
+        snapshot_date=date(2026, 5, 20),
+        effective_date=date(2026, 5, 20),
+        strategy_names=["trend_breakout"],
+    )
+    persisted = db_session.scalar(select(StrategyParameterSnapshot).where(StrategyParameterSnapshot.id == rows[0].id))
+
+    assert persisted is not None
+    assert persisted.strategy_name == "trend_breakout"
+    assert persisted.snapshot_date == date(2026, 5, 20)
+    assert persisted.effective_date == date(2026, 5, 20)
+    assert json.loads(persisted.parameter_json)["strategy"]["rs_percentile_min"] == 80
+    latest = service.latest_snapshots(as_of=date(2026, 5, 21), strategy_names=["trend_breakout"])
+    assert latest["trend_breakout"].id == persisted.id
+
+    modified_config = deepcopy(strategy_config)
+    modified_config["trend_breakout"]["rs_percentile_min"] = 82
+    drift = StrategyParameterSnapshotService(db_session, strategy_config=modified_config).parameter_drift_check(
+        as_of=date(2026, 5, 21),
+        strategy_names=["trend_breakout"],
+    )
+    trend = drift["strategies"][0]
+
+    assert drift["status"] == "drift_detected"
+    assert drift["comparison_available"] is True
+    assert drift["changed_keys"] == ["trend_breakout:strategy.rs_percentile_min"]
+    assert drift["unchanged_keys_count"] > 0
+    assert drift["snapshot_dates"] == [date(2026, 5, 20)]
+    assert drift["config_hash_diff"]["changed_count"] == 1
+    assert trend["status"] == "drift_detected"
+    assert trend["drift_count"] == 1
+    assert trend["changed_keys"] == ["strategy.rs_percentile_min"]
+    assert trend["unchanged_keys_count"] > 0
+    assert trend["config_hash_changed"] is True
+    assert trend["config_hash_diff"] == "changed"
+    assert trend["drifted_parameters"][0] == {
+        "parameter": "strategy.rs_percentile_min",
+        "change": "modified",
+        "snapshot": 80,
+        "current": 82,
+    }
+
+
+def test_weekly_report_parameter_drift_uses_latest_strategy_snapshot(seeded_db):
+    snapshot_config = deepcopy(get_config("strategies"))
+    snapshot_config["trend_breakout"]["rs_percentile_min"] = 70
+    StrategyParameterSnapshotService(seeded_db, strategy_config=snapshot_config).save_current_snapshots(
+        snapshot_date=date(2026, 5, 1),
+        effective_date=date(2026, 5, 1),
+        strategy_names=["trend_breakout"],
+    )
+    ScreenerService(seeded_db).run(strategies=["trend_breakout"])
+
+    report = ReportService(seeded_db).generate_weekly_report()
+    markdown = ReportService(seeded_db).get_markdown(str(report["report_id"]))
+
+    assert "## Parameter Drift Check" in markdown
+    assert "- parameter_history_source: strategy_parameter_snapshots" in markdown
+    assert "- parameter_snapshot_status: drift_detected" in markdown
+    assert "- changed_keys: trend_breakout:strategy.rs_percentile_min" in markdown
+    assert "- unchanged_keys_count: " in markdown
+    assert "- snapshot_dates: 2026-05-01" in markdown
+    assert "- effective_dates: 2026-05-01" in markdown
+    assert "- config_hash_diff: changed:1, unchanged:0, unavailable:" in markdown
+    assert "| strategy | status | snapshot_date | effective_date | config_hash_diff | current_config_hash | snapshot_config_hash | changed_keys | unchanged_keys_count | change_detail |" in markdown
+    assert "trend_breakout | drift_detected" in markdown
+    assert "| trend_breakout | drift_detected | 2026-05-01 | 2026-05-01 | changed |" in markdown
+    assert "strategy.rs_percentile_min |" in markdown
+    assert "strategy.rs_percentile_min:70->80" in markdown
+
+    detail = ReportService(seeded_db).get_report(str(report["report_id"]), include_markdown=True)
+    drift_metadata = detail["metadata"]["parameter_drift"]
+    assert drift_metadata["parameter_snapshot_status"] == "drift_detected"
+    assert drift_metadata["changed_keys"] == "trend_breakout:strategy.rs_percentile_min"
+    assert drift_metadata["snapshot_dates"] == "2026-05-01"
+    trend_metadata = next(row for row in drift_metadata["strategies"] if row["strategy"] == "trend_breakout")
+    assert trend_metadata["changed_keys"] == "strategy.rs_percentile_min"
+
+
+def test_weekly_report_parameter_drift_marks_no_drift_detected(seeded_db):
+    StrategyParameterSnapshotService(seeded_db).save_current_snapshots(
+        snapshot_date=date(2026, 5, 1),
+        effective_date=date(2026, 5, 1),
+    )
+    ScreenerService(seeded_db).run(strategies=["trend_breakout"])
+
+    report = ReportService(seeded_db).generate_weekly_report()
+    markdown = ReportService(seeded_db).get_markdown(str(report["report_id"]))
+
+    assert "- parameter_snapshot_status: no_drift" in markdown
+    assert "- changed_keys: no_drift_detected" in markdown
+    assert "- no_drift_detected: true" in markdown
+    assert "- config_hash_diff: changed:0, unchanged:" in markdown
+    assert "no_drift_detected" in markdown
+
+    detail = ReportService(seeded_db).get_report(str(report["report_id"]), include_markdown=True)
+    drift_metadata = detail["metadata"]["parameter_drift"]
+    assert drift_metadata["parameter_snapshot_status"] == "no_drift"
+    assert drift_metadata["changed_keys"] == "no_drift_detected"
+    assert drift_metadata["no_drift_detected"] is True
 
 
 def test_backtest_metrics_cost_bps_uses_execution_config_override(seeded_db):

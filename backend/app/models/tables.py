@@ -321,6 +321,27 @@ class BacktestRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
+class StrategyParameterSnapshot(Base):
+    __tablename__ = "strategy_parameter_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "strategy_name",
+            "snapshot_date",
+            "effective_date",
+            "config_hash",
+            name="uq_strategy_parameter_snapshot_identity",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    strategy_name: Mapped[str] = mapped_column(String(64), index=True)
+    config_hash: Mapped[str] = mapped_column(String(64), index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, index=True)
+    effective_date: Mapped[date] = mapped_column(Date, index=True)
+    parameter_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
 class BacktestTradeLedger(Base):
     __tablename__ = "backtest_trade_ledger"
     __table_args__ = (UniqueConstraint("run_id", "trade_index", name="uq_backtest_trade_ledger_run_index"),)

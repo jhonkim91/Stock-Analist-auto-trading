@@ -29,47 +29,1598 @@
     "version": "validation_scaffold_v0.1",
     "status": "scaffold",
     "walk_forward": {
-      "status": "not_available_in_current_mvp",
-      "metric": "not_available_in_current_mvp",
-      "strategy_name": null,
-      "reason": "walk_forward_window_engine_not_implemented",
-      "planned_inputs": [
-        "strategy_name",
-        "train_window_trading_days",
-        "test_window_trading_days",
-        "step_trading_days",
-        "baseline_snapshot"
-      ],
-      "calculated": false
+      "status": "calculated",
+      "metric": "out_of_sample_summary",
+      "calculated": true,
+      "reason": null,
+      "train_window_trading_days": 126,
+      "test_window_trading_days": 21,
+      "step_trading_days": 63,
+      "rebalance_frequency": "daily",
+      "strategy_count": 9,
+      "calculated_strategy_count": 9,
+      "unavailable_strategy_count": 0,
+      "strategy_summaries": [
+        {
+          "strategy_name": "trend_breakout",
+          "calculated": true,
+          "status": "calculated",
+          "reason": null,
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          }
+        },
+        {
+          "strategy_name": "vcp_breakout",
+          "calculated": true,
+          "status": "calculated",
+          "reason": null,
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          }
+        },
+        {
+          "strategy_name": "canslim_lite",
+          "calculated": true,
+          "status": "calculated",
+          "reason": null,
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          }
+        },
+        {
+          "strategy_name": "new_high_breakout",
+          "calculated": true,
+          "status": "calculated",
+          "reason": null,
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          }
+        },
+        {
+          "strategy_name": "pullback_20ema",
+          "calculated": true,
+          "status": "calculated",
+          "reason": null,
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          }
+        },
+        {
+          "strategy_name": "momentum_rank",
+          "calculated": true,
+          "status": "calculated",
+          "reason": null,
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 1,
+            "oos_weighted_win_rate": 0.0,
+            "oos_total_return": -0.00335,
+            "oos_average_window_return": -0.001675,
+            "oos_median_window_return": -0.001675,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": -0.00335,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.087262
+          }
+        },
+        {
+          "strategy_name": "relative_strength_leader",
+          "calculated": true,
+          "status": "calculated",
+          "reason": null,
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          }
+        },
+        {
+          "strategy_name": "darvas_box",
+          "calculated": true,
+          "status": "calculated",
+          "reason": null,
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          }
+        },
+        {
+          "strategy_name": "stage_analysis_weekly",
+          "calculated": true,
+          "status": "calculated",
+          "reason": null,
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          }
+        }
+      ]
     },
     "overfitting": {
       "pbo": {
-        "status": "not_available_in_current_mvp",
-        "value": "not_available_in_current_mvp",
-        "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-        "calculated": false
+        "status": "calculated",
+        "value": 0.0,
+        "probability_of_backtest_overfitting": 0.0,
+        "reason": null,
+        "method": "walk_forward_leave_one_window_cscv_lite",
+        "calculated": true,
+        "input_shape": {
+          "candidate_source": "strategy_validation.walk_forward.windows",
+          "candidate_count": 9,
+          "strategy_count": 9,
+          "window_count": 2,
+          "min_candidate_count": 2,
+          "min_window_count": 2,
+          "split_method": "leave_one_window_out",
+          "performance_metric": "total_return",
+          "split_count": 2
+        },
+        "selected_strategy_counts": {
+          "canslim_lite": 2,
+          "darvas_box": 0,
+          "momentum_rank": 0,
+          "new_high_breakout": 0,
+          "pullback_20ema": 0,
+          "relative_strength_leader": 0,
+          "stage_analysis_weekly": 0,
+          "trend_breakout": 0,
+          "vcp_breakout": 0
+        },
+        "splits": [
+          {
+            "holdout_window_index": 1,
+            "selected_strategy_name": "canslim_lite",
+            "in_sample_metric": 0.0,
+            "out_of_sample_metric": 0.0,
+            "out_of_sample_rank": 1,
+            "out_of_sample_rank_percentile": 1.0,
+            "logit_rank": 13.81551,
+            "overfit": false
+          },
+          {
+            "holdout_window_index": 2,
+            "selected_strategy_name": "canslim_lite",
+            "in_sample_metric": 0.0,
+            "out_of_sample_metric": 0.0,
+            "out_of_sample_rank": 1,
+            "out_of_sample_rank_percentile": 1.0,
+            "logit_rank": 13.81551,
+            "overfit": false
+          }
+        ]
       },
       "deflated_sharpe_ratio": {
         "status": "not_available_in_current_mvp",
         "value": "not_available_in_current_mvp",
-        "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+        "strategy_name": null,
+        "reason": "insufficient_multiple_testing_candidates",
+        "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+        "input_shape": {
+          "multiple_testing": {
+            "candidate_source": "available_strategy_registry",
+            "candidate_count": 0,
+            "min_candidate_count": 2,
+            "adjustment": "expected_max_sharpe_across_candidates"
+          },
+          "non_normal_adjustment": {
+            "return_series_source": "walk_forward_window_total_return",
+            "sample_count": 0,
+            "min_sample_count": 4,
+            "skewness": null,
+            "kurtosis": null
+          }
+        },
         "calculated": false
       }
     },
     "attribution": {
-      "status": "not_available_in_current_mvp",
-      "value": "not_available_in_current_mvp",
-      "strategy_name": null,
-      "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-      "planned_dimensions": [
-        "market_regime",
-        "sector",
-        "strategy_name",
-        "pass_flags",
-        "failed_conditions",
-        "risk_flags"
-      ],
-      "calculated": false
+      "status": "partial",
+      "value": "calculated",
+      "calculated": true,
+      "reason": "trade_ledger_unavailable",
+      "basis": {
+        "join_keys": [
+          "backtest_trade_ledger.signal_date = screen_results.trade_date",
+          "backtest_trade_ledger.symbol = screen_results.symbol",
+          "backtest_trade_ledger.strategy_name = screen_results.strategy_tag"
+        ],
+        "ledger_window_basis": "backtest_trade_ledger.exit_date",
+        "screen_window_basis": "screen_results.trade_date",
+        "ledger_source": "backtest_trade_ledger",
+        "screen_source": "screen_results",
+        "sector_source": "symbol_master.sector",
+        "market_regime_source": "screen_results.metadata_json.market_regime",
+        "unavailable_value": "not_available_in_current_mvp",
+        "scope": "backtest_and_report_analysis_only",
+        "not_connected_to": [
+          "orders",
+          "paper_orders",
+          "broker_adapters",
+          "live_trading"
+        ]
+      },
+      "trade_count": 0,
+      "screen_result_count": 75,
+      "joined_trade_count": 0,
+      "unjoined_trade_count": 0,
+      "market_regime_unavailable_count": 0,
+      "sector_unavailable_count": 0,
+      "realized_pnl_attribution": {
+        "status": "not_available_in_current_mvp",
+        "value": "not_available_in_current_mvp",
+        "calculated": false,
+        "rows": [
+          {
+            "attribution_type": "realized_pnl",
+            "dimension": "strategy_name",
+            "value": "not_available_in_current_mvp",
+            "trade_count": 0,
+            "pnl": "not_available_in_current_mvp",
+            "win_rate": "not_available_in_current_mvp",
+            "avg_return": "not_available_in_current_mvp",
+            "joined_trade_count": 0,
+            "unavailable_count": 0,
+            "status": "not_available_in_current_mvp",
+            "reason": "trade_ledger_unavailable"
+          }
+        ]
+      },
+      "screen_filter_failure_counts": {
+        "status": "calculated",
+        "value": "calculated",
+        "calculated": true,
+        "rows": [
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "breakout_buffer",
+            "failed_count": 15,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "new_high_threshold",
+            "failed_count": 15,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "vcp_breakout",
+            "filter": "volume_dry_up",
+            "failed_count": 15,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "quarterly_eps_growth_min",
+            "failed_count": 14,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "sales_growth_min",
+            "failed_count": 14,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "volume_dry_up_vs_ma20",
+            "failed_count": 12,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "breakout",
+            "failed_count": 11,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "rs_percentile_min",
+            "failed_count": 11,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "breakout",
+            "failed_count": 11,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "rs_percentile_min",
+            "failed_count": 11,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "trend_breakout",
+            "filter": "breakout",
+            "failed_count": 11,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "trend_breakout",
+            "filter": "rs_percentile_min",
+            "failed_count": 11,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "vcp_breakout",
+            "filter": "pivot_breakout",
+            "failed_count": 11,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "vcp_breakout",
+            "filter": "rs_percentile_min",
+            "failed_count": 11,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "rs_percentile_min",
+            "failed_count": 10,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "volume_ratio_50_max",
+            "failed_count": 8,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "volume_surge",
+            "failed_count": 7,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "volume_surge",
+            "failed_count": 7,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "trend_breakout",
+            "filter": "volume_surge",
+            "failed_count": 7,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "vcp_breakout",
+            "filter": "volume_surge",
+            "failed_count": 7,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "recent_new_high",
+            "failed_count": 6,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "vcp_breakout",
+            "filter": "pullback_depth_decreasing",
+            "failed_count": 6,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "pullback_count_within_limit",
+            "failed_count": 5,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "vcp_breakout",
+            "filter": "trend_ok",
+            "failed_count": 4,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "sma150_gt_sma200",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "sma200_slope_positive",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "sma50_gt_sma150",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "sma150_gt_sma200",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "sma200_slope_positive",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "sma50_gt_sma150",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "close_gte_ema20",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "sma150_gt_sma200",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "sma200_slope_positive",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "sma50_gt_sma150",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "trend_breakout",
+            "filter": "sma150_gt_sma200",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "trend_breakout",
+            "filter": "sma200_slope_positive",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "trend_breakout",
+            "filter": "sma50_gt_sma150",
+            "failed_count": 3,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "close_gt_sma50",
+            "failed_count": 2,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "breakout_day_volume_ratio",
+            "failed_count": 2,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "close_gt_sma50",
+            "failed_count": 2,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "close_gt_sma50",
+            "failed_count": 2,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "trend_breakout",
+            "filter": "close_gt_sma50",
+            "failed_count": 2,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "trend_breakout",
+            "filter": "near_52w_high",
+            "failed_count": 2,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "vcp_breakout",
+            "filter": "contraction_count_min",
+            "failed_count": 2,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "vcp_breakout",
+            "filter": "pullback_depth_available",
+            "failed_count": 2,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "canslim_lite",
+            "filter": "liquidity_ok",
+            "failed_count": 1,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "new_high_breakout",
+            "filter": "liquidity_ok",
+            "failed_count": 1,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "pullback_20ema",
+            "filter": "liquidity_ok",
+            "failed_count": 1,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "trend_breakout",
+            "filter": "liquidity_ok",
+            "failed_count": 1,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          },
+          {
+            "attribution_type": "screen_filter_failure",
+            "strategy_name": "vcp_breakout",
+            "filter": "liquidity_ok",
+            "failed_count": 1,
+            "screened_count": 15,
+            "status": "calculated",
+            "reason": null
+          }
+        ]
+      },
+      "strategies": {
+        "trend_breakout": {
+          "status": "partial",
+          "value": "calculated",
+          "strategy_name": "trend_breakout",
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "breakout",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "rs_percentile_min",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "volume_surge",
+                "failed_count": 7,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "sma150_gt_sma200",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "sma200_slope_positive",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "sma50_gt_sma150",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "close_gt_sma50",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "near_52w_high",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
+        },
+        "vcp_breakout": {
+          "status": "partial",
+          "value": "calculated",
+          "strategy_name": "vcp_breakout",
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "volume_dry_up",
+                "failed_count": 15,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "pivot_breakout",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "rs_percentile_min",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "volume_surge",
+                "failed_count": 7,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "pullback_depth_decreasing",
+                "failed_count": 6,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "trend_ok",
+                "failed_count": 4,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "contraction_count_min",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "pullback_depth_available",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
+        },
+        "canslim_lite": {
+          "status": "partial",
+          "value": "calculated",
+          "strategy_name": "canslim_lite",
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "quarterly_eps_growth_min",
+                "failed_count": 14,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "sales_growth_min",
+                "failed_count": 14,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "breakout",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "rs_percentile_min",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "volume_surge",
+                "failed_count": 7,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "recent_new_high",
+                "failed_count": 6,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "sma150_gt_sma200",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "sma200_slope_positive",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "sma50_gt_sma150",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "close_gt_sma50",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
+        },
+        "new_high_breakout": {
+          "status": "partial",
+          "value": "calculated",
+          "strategy_name": "new_high_breakout",
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "breakout_buffer",
+                "failed_count": 15,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "new_high_threshold",
+                "failed_count": 15,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "breakout",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "rs_percentile_min",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "volume_surge",
+                "failed_count": 7,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "sma150_gt_sma200",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "sma200_slope_positive",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "sma50_gt_sma150",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "breakout_day_volume_ratio",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "close_gt_sma50",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
+        },
+        "pullback_20ema": {
+          "status": "partial",
+          "value": "calculated",
+          "strategy_name": "pullback_20ema",
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "volume_dry_up_vs_ma20",
+                "failed_count": 12,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "rs_percentile_min",
+                "failed_count": 10,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "volume_ratio_50_max",
+                "failed_count": 8,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "pullback_count_within_limit",
+                "failed_count": 5,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "close_gte_ema20",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "sma150_gt_sma200",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "sma200_slope_positive",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "sma50_gt_sma150",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "close_gt_sma50",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
+        },
+        "momentum_rank": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "momentum_rank",
+          "calculated": false,
+          "reason": "trade_ledger_and_screen_results_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 0,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "not_available_in_current_mvp",
+                "filter": "not_available_in_current_mvp",
+                "failed_count": 0,
+                "screened_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "screen_results_unavailable"
+              }
+            ]
+          }
+        },
+        "relative_strength_leader": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "relative_strength_leader",
+          "calculated": false,
+          "reason": "trade_ledger_and_screen_results_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 0,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "not_available_in_current_mvp",
+                "filter": "not_available_in_current_mvp",
+                "failed_count": 0,
+                "screened_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "screen_results_unavailable"
+              }
+            ]
+          }
+        },
+        "darvas_box": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "darvas_box",
+          "calculated": false,
+          "reason": "trade_ledger_and_screen_results_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 0,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "not_available_in_current_mvp",
+                "filter": "not_available_in_current_mvp",
+                "failed_count": 0,
+                "screened_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "screen_results_unavailable"
+              }
+            ]
+          }
+        },
+        "stage_analysis_weekly": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "stage_analysis_weekly",
+          "calculated": false,
+          "reason": "trade_ledger_and_screen_results_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 0,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "not_available_in_current_mvp",
+                "filter": "not_available_in_current_mvp",
+                "failed_count": 0,
+                "screened_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "screen_results_unavailable"
+              }
+            ]
+          }
+        }
+      }
     },
     "trade_ledger_schema": {
       "status": "available_minimal_backtest_ledger",
@@ -197,47 +1748,264 @@
       "validation": {
         "strategy_name": "trend_breakout",
         "walk_forward": {
-          "status": "not_available_in_current_mvp",
-          "metric": "not_available_in_current_mvp",
           "strategy_name": "trend_breakout",
-          "reason": "walk_forward_window_engine_not_implemented",
-          "planned_inputs": [
-            "strategy_name",
-            "train_window_trading_days",
-            "test_window_trading_days",
-            "step_trading_days",
-            "baseline_snapshot"
-          ],
-          "calculated": false
+          "train_window_trading_days": 126,
+          "test_window_trading_days": 21,
+          "step_trading_days": 63,
+          "rebalance_frequency": "daily",
+          "available_trading_days": 252,
+          "minimum_required_trading_days": 147,
+          "basis": "indicator_snapshot.trade_date",
+          "execution_scope": "out_of_sample_test_windows_only",
+          "status": "calculated",
+          "metric": "out_of_sample_summary",
+          "calculated": true,
+          "reason": null,
+          "window_count": 2,
+          "calculated_window_count": 2,
+          "unavailable_window_count": 0,
+          "first_test_start_date": "2025-11-26",
+          "last_test_end_date": "2026-03-23",
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          },
+          "windows": [
+            {
+              "window_index": 1,
+              "train_start_date": "2025-06-03",
+              "train_end_date": "2025-11-25",
+              "test_start_date": "2025-11-26",
+              "test_end_date": "2025-12-24",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            },
+            {
+              "window_index": 2,
+              "train_start_date": "2025-08-29",
+              "train_end_date": "2026-02-20",
+              "test_start_date": "2026-02-23",
+              "test_end_date": "2026-03-23",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            }
+          ]
         },
         "overfitting": {
           "pbo": {
-            "status": "not_available_in_current_mvp",
-            "value": "not_available_in_current_mvp",
-            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-            "calculated": false
+            "status": "calculated",
+            "value": 0.0,
+            "strategy_name": "trend_breakout",
+            "reason": null,
+            "method": "walk_forward_leave_one_window_rank_decay_lite",
+            "calculated": true,
+            "input_shape": {
+              "candidate_source": "strategy_validation.walk_forward.windows",
+              "candidate_count": 9,
+              "strategy_count": 9,
+              "window_count": 2,
+              "min_candidate_count": 2,
+              "min_window_count": 2,
+              "split_method": "leave_one_window_out",
+              "performance_metric": "total_return",
+              "split_count": 2
+            },
+            "strategy_rank_decay_probability": 0.0,
+            "splits": [
+              {
+                "holdout_window_index": 1,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              },
+              {
+                "holdout_window_index": 2,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              }
+            ]
           },
           "deflated_sharpe_ratio": {
             "status": "not_available_in_current_mvp",
             "value": "not_available_in_current_mvp",
-            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "strategy_name": "trend_breakout",
+            "reason": "insufficient_oos_return_samples",
+            "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+            "input_shape": {
+              "multiple_testing": {
+                "candidate_source": "available_strategy_registry",
+                "candidate_count": 0,
+                "min_candidate_count": 2,
+                "adjustment": "expected_max_sharpe_across_candidates"
+              },
+              "non_normal_adjustment": {
+                "return_series_source": "walk_forward_window_total_return",
+                "sample_count": 2,
+                "min_sample_count": 4,
+                "skewness": null,
+                "kurtosis": null
+              }
+            },
             "calculated": false
           }
         },
         "attribution": {
-          "status": "not_available_in_current_mvp",
-          "value": "not_available_in_current_mvp",
+          "status": "partial",
+          "value": "calculated",
           "strategy_name": "trend_breakout",
-          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-          "planned_dimensions": [
-            "market_regime",
-            "sector",
-            "strategy_name",
-            "pass_flags",
-            "failed_conditions",
-            "risk_flags"
-          ],
-          "calculated": false
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "breakout",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "rs_percentile_min",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "volume_surge",
+                "failed_count": 7,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "sma150_gt_sma200",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "sma200_slope_positive",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "sma50_gt_sma150",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "close_gt_sma50",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "near_52w_high",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "trend_breakout",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
         }
       }
     },
@@ -276,47 +2044,264 @@
       "validation": {
         "strategy_name": "vcp_breakout",
         "walk_forward": {
-          "status": "not_available_in_current_mvp",
-          "metric": "not_available_in_current_mvp",
           "strategy_name": "vcp_breakout",
-          "reason": "walk_forward_window_engine_not_implemented",
-          "planned_inputs": [
-            "strategy_name",
-            "train_window_trading_days",
-            "test_window_trading_days",
-            "step_trading_days",
-            "baseline_snapshot"
-          ],
-          "calculated": false
+          "train_window_trading_days": 126,
+          "test_window_trading_days": 21,
+          "step_trading_days": 63,
+          "rebalance_frequency": "daily",
+          "available_trading_days": 252,
+          "minimum_required_trading_days": 147,
+          "basis": "indicator_snapshot.trade_date",
+          "execution_scope": "out_of_sample_test_windows_only",
+          "status": "calculated",
+          "metric": "out_of_sample_summary",
+          "calculated": true,
+          "reason": null,
+          "window_count": 2,
+          "calculated_window_count": 2,
+          "unavailable_window_count": 0,
+          "first_test_start_date": "2025-11-26",
+          "last_test_end_date": "2026-03-23",
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          },
+          "windows": [
+            {
+              "window_index": 1,
+              "train_start_date": "2025-06-03",
+              "train_end_date": "2025-11-25",
+              "test_start_date": "2025-11-26",
+              "test_end_date": "2025-12-24",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            },
+            {
+              "window_index": 2,
+              "train_start_date": "2025-08-29",
+              "train_end_date": "2026-02-20",
+              "test_start_date": "2026-02-23",
+              "test_end_date": "2026-03-23",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            }
+          ]
         },
         "overfitting": {
           "pbo": {
-            "status": "not_available_in_current_mvp",
-            "value": "not_available_in_current_mvp",
-            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-            "calculated": false
+            "status": "calculated",
+            "value": 0.0,
+            "strategy_name": "vcp_breakout",
+            "reason": null,
+            "method": "walk_forward_leave_one_window_rank_decay_lite",
+            "calculated": true,
+            "input_shape": {
+              "candidate_source": "strategy_validation.walk_forward.windows",
+              "candidate_count": 9,
+              "strategy_count": 9,
+              "window_count": 2,
+              "min_candidate_count": 2,
+              "min_window_count": 2,
+              "split_method": "leave_one_window_out",
+              "performance_metric": "total_return",
+              "split_count": 2
+            },
+            "strategy_rank_decay_probability": 0.0,
+            "splits": [
+              {
+                "holdout_window_index": 1,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              },
+              {
+                "holdout_window_index": 2,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              }
+            ]
           },
           "deflated_sharpe_ratio": {
             "status": "not_available_in_current_mvp",
             "value": "not_available_in_current_mvp",
-            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "strategy_name": "vcp_breakout",
+            "reason": "insufficient_oos_return_samples",
+            "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+            "input_shape": {
+              "multiple_testing": {
+                "candidate_source": "available_strategy_registry",
+                "candidate_count": 0,
+                "min_candidate_count": 2,
+                "adjustment": "expected_max_sharpe_across_candidates"
+              },
+              "non_normal_adjustment": {
+                "return_series_source": "walk_forward_window_total_return",
+                "sample_count": 2,
+                "min_sample_count": 4,
+                "skewness": null,
+                "kurtosis": null
+              }
+            },
             "calculated": false
           }
         },
         "attribution": {
-          "status": "not_available_in_current_mvp",
-          "value": "not_available_in_current_mvp",
+          "status": "partial",
+          "value": "calculated",
           "strategy_name": "vcp_breakout",
-          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-          "planned_dimensions": [
-            "market_regime",
-            "sector",
-            "strategy_name",
-            "pass_flags",
-            "failed_conditions",
-            "risk_flags"
-          ],
-          "calculated": false
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "volume_dry_up",
+                "failed_count": 15,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "pivot_breakout",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "rs_percentile_min",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "volume_surge",
+                "failed_count": 7,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "pullback_depth_decreasing",
+                "failed_count": 6,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "trend_ok",
+                "failed_count": 4,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "contraction_count_min",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "pullback_depth_available",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "vcp_breakout",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
         }
       }
     },
@@ -355,47 +2340,282 @@
       "validation": {
         "strategy_name": "canslim_lite",
         "walk_forward": {
-          "status": "not_available_in_current_mvp",
-          "metric": "not_available_in_current_mvp",
           "strategy_name": "canslim_lite",
-          "reason": "walk_forward_window_engine_not_implemented",
-          "planned_inputs": [
-            "strategy_name",
-            "train_window_trading_days",
-            "test_window_trading_days",
-            "step_trading_days",
-            "baseline_snapshot"
-          ],
-          "calculated": false
+          "train_window_trading_days": 126,
+          "test_window_trading_days": 21,
+          "step_trading_days": 63,
+          "rebalance_frequency": "daily",
+          "available_trading_days": 252,
+          "minimum_required_trading_days": 147,
+          "basis": "indicator_snapshot.trade_date",
+          "execution_scope": "out_of_sample_test_windows_only",
+          "status": "calculated",
+          "metric": "out_of_sample_summary",
+          "calculated": true,
+          "reason": null,
+          "window_count": 2,
+          "calculated_window_count": 2,
+          "unavailable_window_count": 0,
+          "first_test_start_date": "2025-11-26",
+          "last_test_end_date": "2026-03-23",
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          },
+          "windows": [
+            {
+              "window_index": 1,
+              "train_start_date": "2025-06-03",
+              "train_end_date": "2025-11-25",
+              "test_start_date": "2025-11-26",
+              "test_end_date": "2025-12-24",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            },
+            {
+              "window_index": 2,
+              "train_start_date": "2025-08-29",
+              "train_end_date": "2026-02-20",
+              "test_start_date": "2026-02-23",
+              "test_end_date": "2026-03-23",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            }
+          ]
         },
         "overfitting": {
           "pbo": {
-            "status": "not_available_in_current_mvp",
-            "value": "not_available_in_current_mvp",
-            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-            "calculated": false
+            "status": "calculated",
+            "value": 0.0,
+            "strategy_name": "canslim_lite",
+            "reason": null,
+            "method": "walk_forward_leave_one_window_rank_decay_lite",
+            "calculated": true,
+            "input_shape": {
+              "candidate_source": "strategy_validation.walk_forward.windows",
+              "candidate_count": 9,
+              "strategy_count": 9,
+              "window_count": 2,
+              "min_candidate_count": 2,
+              "min_window_count": 2,
+              "split_method": "leave_one_window_out",
+              "performance_metric": "total_return",
+              "split_count": 2
+            },
+            "strategy_rank_decay_probability": 0.0,
+            "splits": [
+              {
+                "holdout_window_index": 1,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              },
+              {
+                "holdout_window_index": 2,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              }
+            ]
           },
           "deflated_sharpe_ratio": {
             "status": "not_available_in_current_mvp",
             "value": "not_available_in_current_mvp",
-            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "strategy_name": "canslim_lite",
+            "reason": "insufficient_oos_return_samples",
+            "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+            "input_shape": {
+              "multiple_testing": {
+                "candidate_source": "available_strategy_registry",
+                "candidate_count": 0,
+                "min_candidate_count": 2,
+                "adjustment": "expected_max_sharpe_across_candidates"
+              },
+              "non_normal_adjustment": {
+                "return_series_source": "walk_forward_window_total_return",
+                "sample_count": 2,
+                "min_sample_count": 4,
+                "skewness": null,
+                "kurtosis": null
+              }
+            },
             "calculated": false
           }
         },
         "attribution": {
-          "status": "not_available_in_current_mvp",
-          "value": "not_available_in_current_mvp",
+          "status": "partial",
+          "value": "calculated",
           "strategy_name": "canslim_lite",
-          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-          "planned_dimensions": [
-            "market_regime",
-            "sector",
-            "strategy_name",
-            "pass_flags",
-            "failed_conditions",
-            "risk_flags"
-          ],
-          "calculated": false
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "quarterly_eps_growth_min",
+                "failed_count": 14,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "sales_growth_min",
+                "failed_count": 14,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "breakout",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "rs_percentile_min",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "volume_surge",
+                "failed_count": 7,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "recent_new_high",
+                "failed_count": 6,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "sma150_gt_sma200",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "sma200_slope_positive",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "sma50_gt_sma150",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "close_gt_sma50",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "canslim_lite",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
         }
       }
     },
@@ -434,47 +2654,282 @@
       "validation": {
         "strategy_name": "new_high_breakout",
         "walk_forward": {
-          "status": "not_available_in_current_mvp",
-          "metric": "not_available_in_current_mvp",
           "strategy_name": "new_high_breakout",
-          "reason": "walk_forward_window_engine_not_implemented",
-          "planned_inputs": [
-            "strategy_name",
-            "train_window_trading_days",
-            "test_window_trading_days",
-            "step_trading_days",
-            "baseline_snapshot"
-          ],
-          "calculated": false
+          "train_window_trading_days": 126,
+          "test_window_trading_days": 21,
+          "step_trading_days": 63,
+          "rebalance_frequency": "daily",
+          "available_trading_days": 252,
+          "minimum_required_trading_days": 147,
+          "basis": "indicator_snapshot.trade_date",
+          "execution_scope": "out_of_sample_test_windows_only",
+          "status": "calculated",
+          "metric": "out_of_sample_summary",
+          "calculated": true,
+          "reason": null,
+          "window_count": 2,
+          "calculated_window_count": 2,
+          "unavailable_window_count": 0,
+          "first_test_start_date": "2025-11-26",
+          "last_test_end_date": "2026-03-23",
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          },
+          "windows": [
+            {
+              "window_index": 1,
+              "train_start_date": "2025-06-03",
+              "train_end_date": "2025-11-25",
+              "test_start_date": "2025-11-26",
+              "test_end_date": "2025-12-24",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            },
+            {
+              "window_index": 2,
+              "train_start_date": "2025-08-29",
+              "train_end_date": "2026-02-20",
+              "test_start_date": "2026-02-23",
+              "test_end_date": "2026-03-23",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            }
+          ]
         },
         "overfitting": {
           "pbo": {
-            "status": "not_available_in_current_mvp",
-            "value": "not_available_in_current_mvp",
-            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-            "calculated": false
+            "status": "calculated",
+            "value": 0.0,
+            "strategy_name": "new_high_breakout",
+            "reason": null,
+            "method": "walk_forward_leave_one_window_rank_decay_lite",
+            "calculated": true,
+            "input_shape": {
+              "candidate_source": "strategy_validation.walk_forward.windows",
+              "candidate_count": 9,
+              "strategy_count": 9,
+              "window_count": 2,
+              "min_candidate_count": 2,
+              "min_window_count": 2,
+              "split_method": "leave_one_window_out",
+              "performance_metric": "total_return",
+              "split_count": 2
+            },
+            "strategy_rank_decay_probability": 0.0,
+            "splits": [
+              {
+                "holdout_window_index": 1,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              },
+              {
+                "holdout_window_index": 2,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              }
+            ]
           },
           "deflated_sharpe_ratio": {
             "status": "not_available_in_current_mvp",
             "value": "not_available_in_current_mvp",
-            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "strategy_name": "new_high_breakout",
+            "reason": "insufficient_oos_return_samples",
+            "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+            "input_shape": {
+              "multiple_testing": {
+                "candidate_source": "available_strategy_registry",
+                "candidate_count": 0,
+                "min_candidate_count": 2,
+                "adjustment": "expected_max_sharpe_across_candidates"
+              },
+              "non_normal_adjustment": {
+                "return_series_source": "walk_forward_window_total_return",
+                "sample_count": 2,
+                "min_sample_count": 4,
+                "skewness": null,
+                "kurtosis": null
+              }
+            },
             "calculated": false
           }
         },
         "attribution": {
-          "status": "not_available_in_current_mvp",
-          "value": "not_available_in_current_mvp",
+          "status": "partial",
+          "value": "calculated",
           "strategy_name": "new_high_breakout",
-          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-          "planned_dimensions": [
-            "market_regime",
-            "sector",
-            "strategy_name",
-            "pass_flags",
-            "failed_conditions",
-            "risk_flags"
-          ],
-          "calculated": false
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "breakout_buffer",
+                "failed_count": 15,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "new_high_threshold",
+                "failed_count": 15,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "breakout",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "rs_percentile_min",
+                "failed_count": 11,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "volume_surge",
+                "failed_count": 7,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "sma150_gt_sma200",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "sma200_slope_positive",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "sma50_gt_sma150",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "breakout_day_volume_ratio",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "close_gt_sma50",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "new_high_breakout",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
         }
       }
     },
@@ -513,47 +2968,273 @@
       "validation": {
         "strategy_name": "pullback_20ema",
         "walk_forward": {
-          "status": "not_available_in_current_mvp",
-          "metric": "not_available_in_current_mvp",
           "strategy_name": "pullback_20ema",
-          "reason": "walk_forward_window_engine_not_implemented",
-          "planned_inputs": [
-            "strategy_name",
-            "train_window_trading_days",
-            "test_window_trading_days",
-            "step_trading_days",
-            "baseline_snapshot"
-          ],
-          "calculated": false
+          "train_window_trading_days": 126,
+          "test_window_trading_days": 21,
+          "step_trading_days": 63,
+          "rebalance_frequency": "daily",
+          "available_trading_days": 252,
+          "minimum_required_trading_days": 147,
+          "basis": "indicator_snapshot.trade_date",
+          "execution_scope": "out_of_sample_test_windows_only",
+          "status": "calculated",
+          "metric": "out_of_sample_summary",
+          "calculated": true,
+          "reason": null,
+          "window_count": 2,
+          "calculated_window_count": 2,
+          "unavailable_window_count": 0,
+          "first_test_start_date": "2025-11-26",
+          "last_test_end_date": "2026-03-23",
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          },
+          "windows": [
+            {
+              "window_index": 1,
+              "train_start_date": "2025-06-03",
+              "train_end_date": "2025-11-25",
+              "test_start_date": "2025-11-26",
+              "test_end_date": "2025-12-24",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            },
+            {
+              "window_index": 2,
+              "train_start_date": "2025-08-29",
+              "train_end_date": "2026-02-20",
+              "test_start_date": "2026-02-23",
+              "test_end_date": "2026-03-23",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            }
+          ]
         },
         "overfitting": {
           "pbo": {
-            "status": "not_available_in_current_mvp",
-            "value": "not_available_in_current_mvp",
-            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-            "calculated": false
+            "status": "calculated",
+            "value": 0.0,
+            "strategy_name": "pullback_20ema",
+            "reason": null,
+            "method": "walk_forward_leave_one_window_rank_decay_lite",
+            "calculated": true,
+            "input_shape": {
+              "candidate_source": "strategy_validation.walk_forward.windows",
+              "candidate_count": 9,
+              "strategy_count": 9,
+              "window_count": 2,
+              "min_candidate_count": 2,
+              "min_window_count": 2,
+              "split_method": "leave_one_window_out",
+              "performance_metric": "total_return",
+              "split_count": 2
+            },
+            "strategy_rank_decay_probability": 0.0,
+            "splits": [
+              {
+                "holdout_window_index": 1,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              },
+              {
+                "holdout_window_index": 2,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              }
+            ]
           },
           "deflated_sharpe_ratio": {
             "status": "not_available_in_current_mvp",
             "value": "not_available_in_current_mvp",
-            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "strategy_name": "pullback_20ema",
+            "reason": "insufficient_oos_return_samples",
+            "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+            "input_shape": {
+              "multiple_testing": {
+                "candidate_source": "available_strategy_registry",
+                "candidate_count": 0,
+                "min_candidate_count": 2,
+                "adjustment": "expected_max_sharpe_across_candidates"
+              },
+              "non_normal_adjustment": {
+                "return_series_source": "walk_forward_window_total_return",
+                "sample_count": 2,
+                "min_sample_count": 4,
+                "skewness": null,
+                "kurtosis": null
+              }
+            },
             "calculated": false
           }
         },
         "attribution": {
-          "status": "not_available_in_current_mvp",
-          "value": "not_available_in_current_mvp",
+          "status": "partial",
+          "value": "calculated",
           "strategy_name": "pullback_20ema",
-          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-          "planned_dimensions": [
-            "market_regime",
-            "sector",
-            "strategy_name",
-            "pass_flags",
-            "failed_conditions",
-            "risk_flags"
-          ],
-          "calculated": false
+          "calculated": true,
+          "reason": "trade_ledger_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 15,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "calculated",
+            "value": "calculated",
+            "calculated": true,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "volume_dry_up_vs_ma20",
+                "failed_count": 12,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "rs_percentile_min",
+                "failed_count": 10,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "volume_ratio_50_max",
+                "failed_count": 8,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "pullback_count_within_limit",
+                "failed_count": 5,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "close_gte_ema20",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "sma150_gt_sma200",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "sma200_slope_positive",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "sma50_gt_sma150",
+                "failed_count": 3,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "close_gt_sma50",
+                "failed_count": 2,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              },
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "pullback_20ema",
+                "filter": "liquidity_ok",
+                "failed_count": 1,
+                "screened_count": 15,
+                "status": "calculated",
+                "reason": null
+              }
+            ]
+          }
         }
       }
     },
@@ -592,30 +3273,143 @@
       "validation": {
         "strategy_name": "momentum_rank",
         "walk_forward": {
-          "status": "not_available_in_current_mvp",
-          "metric": "not_available_in_current_mvp",
           "strategy_name": "momentum_rank",
-          "reason": "walk_forward_window_engine_not_implemented",
-          "planned_inputs": [
-            "strategy_name",
-            "train_window_trading_days",
-            "test_window_trading_days",
-            "step_trading_days",
-            "baseline_snapshot"
-          ],
-          "calculated": false
+          "train_window_trading_days": 126,
+          "test_window_trading_days": 21,
+          "step_trading_days": 63,
+          "rebalance_frequency": "daily",
+          "available_trading_days": 252,
+          "minimum_required_trading_days": 147,
+          "basis": "indicator_snapshot.trade_date",
+          "execution_scope": "out_of_sample_test_windows_only",
+          "status": "calculated",
+          "metric": "out_of_sample_summary",
+          "calculated": true,
+          "reason": null,
+          "window_count": 2,
+          "calculated_window_count": 2,
+          "unavailable_window_count": 0,
+          "first_test_start_date": "2025-11-26",
+          "last_test_end_date": "2026-03-23",
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 1,
+            "oos_weighted_win_rate": 0.0,
+            "oos_total_return": -0.00335,
+            "oos_average_window_return": -0.001675,
+            "oos_median_window_return": -0.001675,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": -0.00335,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.087262
+          },
+          "windows": [
+            {
+              "window_index": 1,
+              "train_start_date": "2025-06-03",
+              "train_end_date": "2025-11-25",
+              "test_start_date": "2025-11-26",
+              "test_end_date": "2025-12-24",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            },
+            {
+              "window_index": 2,
+              "train_start_date": "2025-08-29",
+              "train_end_date": "2026-02-20",
+              "test_start_date": "2026-02-23",
+              "test_end_date": "2026-03-23",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 1,
+                "win_rate": 0.0,
+                "total_return": -0.00335,
+                "max_drawdown": -0.00335,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": -12.784723,
+                "turnover": 0.174523,
+                "average_active_positions": 1.0,
+                "rebalance_count": 21
+              }
+            }
+          ]
         },
         "overfitting": {
           "pbo": {
-            "status": "not_available_in_current_mvp",
-            "value": "not_available_in_current_mvp",
-            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-            "calculated": false
+            "status": "calculated",
+            "value": 0.5,
+            "strategy_name": "momentum_rank",
+            "reason": null,
+            "method": "walk_forward_leave_one_window_rank_decay_lite",
+            "calculated": true,
+            "input_shape": {
+              "candidate_source": "strategy_validation.walk_forward.windows",
+              "candidate_count": 9,
+              "strategy_count": 9,
+              "window_count": 2,
+              "min_candidate_count": 2,
+              "min_window_count": 2,
+              "split_method": "leave_one_window_out",
+              "performance_metric": "total_return",
+              "split_count": 2
+            },
+            "strategy_rank_decay_probability": 0.5,
+            "splits": [
+              {
+                "holdout_window_index": 1,
+                "in_sample_rank_percentile": 0.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": -1.0,
+                "overfit": false
+              },
+              {
+                "holdout_window_index": 2,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 0.0,
+                "rank_decay": 1.0,
+                "overfit": true
+              }
+            ]
           },
           "deflated_sharpe_ratio": {
             "status": "not_available_in_current_mvp",
             "value": "not_available_in_current_mvp",
-            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "strategy_name": "momentum_rank",
+            "reason": "insufficient_oos_return_samples",
+            "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+            "input_shape": {
+              "multiple_testing": {
+                "candidate_source": "available_strategy_registry",
+                "candidate_count": 0,
+                "min_candidate_count": 2,
+                "adjustment": "expected_max_sharpe_across_candidates"
+              },
+              "non_normal_adjustment": {
+                "return_series_source": "walk_forward_window_total_return",
+                "sample_count": 2,
+                "min_sample_count": 4,
+                "skewness": null,
+                "kurtosis": null
+              }
+            },
             "calculated": false
           }
         },
@@ -623,16 +3417,48 @@
           "status": "not_available_in_current_mvp",
           "value": "not_available_in_current_mvp",
           "strategy_name": "momentum_rank",
-          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-          "planned_dimensions": [
-            "market_regime",
-            "sector",
-            "strategy_name",
-            "pass_flags",
-            "failed_conditions",
-            "risk_flags"
-          ],
-          "calculated": false
+          "calculated": false,
+          "reason": "trade_ledger_and_screen_results_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 0,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "not_available_in_current_mvp",
+                "filter": "not_available_in_current_mvp",
+                "failed_count": 0,
+                "screened_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "screen_results_unavailable"
+              }
+            ]
+          }
         }
       }
     },
@@ -671,30 +3497,143 @@
       "validation": {
         "strategy_name": "relative_strength_leader",
         "walk_forward": {
-          "status": "not_available_in_current_mvp",
-          "metric": "not_available_in_current_mvp",
           "strategy_name": "relative_strength_leader",
-          "reason": "walk_forward_window_engine_not_implemented",
-          "planned_inputs": [
-            "strategy_name",
-            "train_window_trading_days",
-            "test_window_trading_days",
-            "step_trading_days",
-            "baseline_snapshot"
-          ],
-          "calculated": false
+          "train_window_trading_days": 126,
+          "test_window_trading_days": 21,
+          "step_trading_days": 63,
+          "rebalance_frequency": "daily",
+          "available_trading_days": 252,
+          "minimum_required_trading_days": 147,
+          "basis": "indicator_snapshot.trade_date",
+          "execution_scope": "out_of_sample_test_windows_only",
+          "status": "calculated",
+          "metric": "out_of_sample_summary",
+          "calculated": true,
+          "reason": null,
+          "window_count": 2,
+          "calculated_window_count": 2,
+          "unavailable_window_count": 0,
+          "first_test_start_date": "2025-11-26",
+          "last_test_end_date": "2026-03-23",
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          },
+          "windows": [
+            {
+              "window_index": 1,
+              "train_start_date": "2025-06-03",
+              "train_end_date": "2025-11-25",
+              "test_start_date": "2025-11-26",
+              "test_end_date": "2025-12-24",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            },
+            {
+              "window_index": 2,
+              "train_start_date": "2025-08-29",
+              "train_end_date": "2026-02-20",
+              "test_start_date": "2026-02-23",
+              "test_end_date": "2026-03-23",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 21
+              }
+            }
+          ]
         },
         "overfitting": {
           "pbo": {
-            "status": "not_available_in_current_mvp",
-            "value": "not_available_in_current_mvp",
-            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-            "calculated": false
+            "status": "calculated",
+            "value": 0.0,
+            "strategy_name": "relative_strength_leader",
+            "reason": null,
+            "method": "walk_forward_leave_one_window_rank_decay_lite",
+            "calculated": true,
+            "input_shape": {
+              "candidate_source": "strategy_validation.walk_forward.windows",
+              "candidate_count": 9,
+              "strategy_count": 9,
+              "window_count": 2,
+              "min_candidate_count": 2,
+              "min_window_count": 2,
+              "split_method": "leave_one_window_out",
+              "performance_metric": "total_return",
+              "split_count": 2
+            },
+            "strategy_rank_decay_probability": 0.0,
+            "splits": [
+              {
+                "holdout_window_index": 1,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              },
+              {
+                "holdout_window_index": 2,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              }
+            ]
           },
           "deflated_sharpe_ratio": {
             "status": "not_available_in_current_mvp",
             "value": "not_available_in_current_mvp",
-            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "strategy_name": "relative_strength_leader",
+            "reason": "insufficient_oos_return_samples",
+            "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+            "input_shape": {
+              "multiple_testing": {
+                "candidate_source": "available_strategy_registry",
+                "candidate_count": 0,
+                "min_candidate_count": 2,
+                "adjustment": "expected_max_sharpe_across_candidates"
+              },
+              "non_normal_adjustment": {
+                "return_series_source": "walk_forward_window_total_return",
+                "sample_count": 2,
+                "min_sample_count": 4,
+                "skewness": null,
+                "kurtosis": null
+              }
+            },
             "calculated": false
           }
         },
@@ -702,16 +3641,48 @@
           "status": "not_available_in_current_mvp",
           "value": "not_available_in_current_mvp",
           "strategy_name": "relative_strength_leader",
-          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-          "planned_dimensions": [
-            "market_regime",
-            "sector",
-            "strategy_name",
-            "pass_flags",
-            "failed_conditions",
-            "risk_flags"
-          ],
-          "calculated": false
+          "calculated": false,
+          "reason": "trade_ledger_and_screen_results_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 0,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "not_available_in_current_mvp",
+                "filter": "not_available_in_current_mvp",
+                "failed_count": 0,
+                "screened_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "screen_results_unavailable"
+              }
+            ]
+          }
         }
       }
     },
@@ -750,30 +3721,143 @@
       "validation": {
         "strategy_name": "darvas_box",
         "walk_forward": {
-          "status": "not_available_in_current_mvp",
-          "metric": "not_available_in_current_mvp",
           "strategy_name": "darvas_box",
-          "reason": "walk_forward_window_engine_not_implemented",
-          "planned_inputs": [
-            "strategy_name",
-            "train_window_trading_days",
-            "test_window_trading_days",
-            "step_trading_days",
-            "baseline_snapshot"
-          ],
-          "calculated": false
+          "train_window_trading_days": 126,
+          "test_window_trading_days": 21,
+          "step_trading_days": 63,
+          "rebalance_frequency": "daily",
+          "available_trading_days": 252,
+          "minimum_required_trading_days": 147,
+          "basis": "indicator_snapshot.trade_date",
+          "execution_scope": "out_of_sample_test_windows_only",
+          "status": "calculated",
+          "metric": "out_of_sample_summary",
+          "calculated": true,
+          "reason": null,
+          "window_count": 2,
+          "calculated_window_count": 2,
+          "unavailable_window_count": 0,
+          "first_test_start_date": "2025-11-26",
+          "last_test_end_date": "2026-03-23",
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          },
+          "windows": [
+            {
+              "window_index": 1,
+              "train_start_date": "2025-06-03",
+              "train_end_date": "2025-11-25",
+              "test_start_date": "2025-11-26",
+              "test_end_date": "2025-12-24",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            },
+            {
+              "window_index": 2,
+              "train_start_date": "2025-08-29",
+              "train_end_date": "2026-02-20",
+              "test_start_date": "2026-02-23",
+              "test_end_date": "2026-03-23",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            }
+          ]
         },
         "overfitting": {
           "pbo": {
-            "status": "not_available_in_current_mvp",
-            "value": "not_available_in_current_mvp",
-            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-            "calculated": false
+            "status": "calculated",
+            "value": 0.0,
+            "strategy_name": "darvas_box",
+            "reason": null,
+            "method": "walk_forward_leave_one_window_rank_decay_lite",
+            "calculated": true,
+            "input_shape": {
+              "candidate_source": "strategy_validation.walk_forward.windows",
+              "candidate_count": 9,
+              "strategy_count": 9,
+              "window_count": 2,
+              "min_candidate_count": 2,
+              "min_window_count": 2,
+              "split_method": "leave_one_window_out",
+              "performance_metric": "total_return",
+              "split_count": 2
+            },
+            "strategy_rank_decay_probability": 0.0,
+            "splits": [
+              {
+                "holdout_window_index": 1,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              },
+              {
+                "holdout_window_index": 2,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              }
+            ]
           },
           "deflated_sharpe_ratio": {
             "status": "not_available_in_current_mvp",
             "value": "not_available_in_current_mvp",
-            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "strategy_name": "darvas_box",
+            "reason": "insufficient_oos_return_samples",
+            "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+            "input_shape": {
+              "multiple_testing": {
+                "candidate_source": "available_strategy_registry",
+                "candidate_count": 0,
+                "min_candidate_count": 2,
+                "adjustment": "expected_max_sharpe_across_candidates"
+              },
+              "non_normal_adjustment": {
+                "return_series_source": "walk_forward_window_total_return",
+                "sample_count": 2,
+                "min_sample_count": 4,
+                "skewness": null,
+                "kurtosis": null
+              }
+            },
             "calculated": false
           }
         },
@@ -781,16 +3865,48 @@
           "status": "not_available_in_current_mvp",
           "value": "not_available_in_current_mvp",
           "strategy_name": "darvas_box",
-          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-          "planned_dimensions": [
-            "market_regime",
-            "sector",
-            "strategy_name",
-            "pass_flags",
-            "failed_conditions",
-            "risk_flags"
-          ],
-          "calculated": false
+          "calculated": false,
+          "reason": "trade_ledger_and_screen_results_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 0,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "not_available_in_current_mvp",
+                "filter": "not_available_in_current_mvp",
+                "failed_count": 0,
+                "screened_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "screen_results_unavailable"
+              }
+            ]
+          }
         }
       }
     },
@@ -829,30 +3945,143 @@
       "validation": {
         "strategy_name": "stage_analysis_weekly",
         "walk_forward": {
-          "status": "not_available_in_current_mvp",
-          "metric": "not_available_in_current_mvp",
           "strategy_name": "stage_analysis_weekly",
-          "reason": "walk_forward_window_engine_not_implemented",
-          "planned_inputs": [
-            "strategy_name",
-            "train_window_trading_days",
-            "test_window_trading_days",
-            "step_trading_days",
-            "baseline_snapshot"
-          ],
-          "calculated": false
+          "train_window_trading_days": 126,
+          "test_window_trading_days": 21,
+          "step_trading_days": 63,
+          "rebalance_frequency": "daily",
+          "available_trading_days": 252,
+          "minimum_required_trading_days": 147,
+          "basis": "indicator_snapshot.trade_date",
+          "execution_scope": "out_of_sample_test_windows_only",
+          "status": "calculated",
+          "metric": "out_of_sample_summary",
+          "calculated": true,
+          "reason": null,
+          "window_count": 2,
+          "calculated_window_count": 2,
+          "unavailable_window_count": 0,
+          "first_test_start_date": "2025-11-26",
+          "last_test_end_date": "2026-03-23",
+          "summary": {
+            "oos_window_count": 2,
+            "oos_trade_count": 0,
+            "oos_weighted_win_rate": null,
+            "oos_total_return": 0.0,
+            "oos_average_window_return": 0.0,
+            "oos_median_window_return": 0.0,
+            "oos_positive_window_rate": 0.0,
+            "oos_max_drawdown": 0.0,
+            "oos_average_sharpe_ratio": null,
+            "oos_average_turnover": 0.0
+          },
+          "windows": [
+            {
+              "window_index": 1,
+              "train_start_date": "2025-06-03",
+              "train_end_date": "2025-11-25",
+              "test_start_date": "2025-11-26",
+              "test_end_date": "2025-12-24",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            },
+            {
+              "window_index": 2,
+              "train_start_date": "2025-08-29",
+              "train_end_date": "2026-02-20",
+              "test_start_date": "2026-02-23",
+              "test_end_date": "2026-03-23",
+              "train_trading_days": 126,
+              "test_trading_days": 21,
+              "calculated": true,
+              "reason": null,
+              "metrics": {
+                "trade_count": 0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": null,
+                "sortino_ratio": null,
+                "calmar_ratio": null,
+                "turnover": 0.0,
+                "average_active_positions": 0.0,
+                "rebalance_count": 0
+              }
+            }
+          ]
         },
         "overfitting": {
           "pbo": {
-            "status": "not_available_in_current_mvp",
-            "value": "not_available_in_current_mvp",
-            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
-            "calculated": false
+            "status": "calculated",
+            "value": 0.0,
+            "strategy_name": "stage_analysis_weekly",
+            "reason": null,
+            "method": "walk_forward_leave_one_window_rank_decay_lite",
+            "calculated": true,
+            "input_shape": {
+              "candidate_source": "strategy_validation.walk_forward.windows",
+              "candidate_count": 9,
+              "strategy_count": 9,
+              "window_count": 2,
+              "min_candidate_count": 2,
+              "min_window_count": 2,
+              "split_method": "leave_one_window_out",
+              "performance_metric": "total_return",
+              "split_count": 2
+            },
+            "strategy_rank_decay_probability": 0.0,
+            "splits": [
+              {
+                "holdout_window_index": 1,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              },
+              {
+                "holdout_window_index": 2,
+                "in_sample_rank_percentile": 1.0,
+                "out_of_sample_rank_percentile": 1.0,
+                "rank_decay": 0.0,
+                "overfit": false
+              }
+            ]
           },
           "deflated_sharpe_ratio": {
             "status": "not_available_in_current_mvp",
             "value": "not_available_in_current_mvp",
-            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "strategy_name": "stage_analysis_weekly",
+            "reason": "insufficient_oos_return_samples",
+            "method": "bailey_lopez_de_prado_deflated_sharpe_lite",
+            "input_shape": {
+              "multiple_testing": {
+                "candidate_source": "available_strategy_registry",
+                "candidate_count": 0,
+                "min_candidate_count": 2,
+                "adjustment": "expected_max_sharpe_across_candidates"
+              },
+              "non_normal_adjustment": {
+                "return_series_source": "walk_forward_window_total_return",
+                "sample_count": 2,
+                "min_sample_count": 4,
+                "skewness": null,
+                "kurtosis": null
+              }
+            },
             "calculated": false
           }
         },
@@ -860,21 +4089,53 @@
           "status": "not_available_in_current_mvp",
           "value": "not_available_in_current_mvp",
           "strategy_name": "stage_analysis_weekly",
-          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
-          "planned_dimensions": [
-            "market_regime",
-            "sector",
-            "strategy_name",
-            "pass_flags",
-            "failed_conditions",
-            "risk_flags"
-          ],
-          "calculated": false
+          "calculated": false,
+          "reason": "trade_ledger_and_screen_results_unavailable",
+          "trade_count": 0,
+          "screen_result_count": 0,
+          "joined_trade_count": 0,
+          "unjoined_trade_count": 0,
+          "realized_pnl_attribution": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "realized_pnl",
+                "dimension": "strategy_name",
+                "value": "not_available_in_current_mvp",
+                "trade_count": 0,
+                "pnl": "not_available_in_current_mvp",
+                "win_rate": "not_available_in_current_mvp",
+                "avg_return": "not_available_in_current_mvp",
+                "joined_trade_count": 0,
+                "unavailable_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "trade_ledger_unavailable"
+              }
+            ]
+          },
+          "screen_filter_failure_counts": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "calculated": false,
+            "rows": [
+              {
+                "attribution_type": "screen_filter_failure",
+                "strategy_name": "not_available_in_current_mvp",
+                "filter": "not_available_in_current_mvp",
+                "failed_count": 0,
+                "screened_count": 0,
+                "status": "not_available_in_current_mvp",
+                "reason": "screen_results_unavailable"
+              }
+            ]
+          }
         }
       }
     }
   ],
-  "generated_at": "2026-05-26T09:41:15.573545+00:00",
+  "generated_at": "2026-05-26T14:03:38.471701+00:00",
   "report": {
     "format": "json",
     "kind": "strategy_validation_summary",
@@ -891,6 +4152,8 @@
       "report_path",
       "baseline_status",
       "safety_contract",
+      "walk_forward",
+      "overfitting",
       "unavailable_metrics"
     ]
   }

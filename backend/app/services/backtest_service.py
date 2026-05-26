@@ -18,7 +18,13 @@ from backend.app.repositories.backtest_repository import BacktestRepository
 from backend.app.repositories.market_repository import MarketRepository
 from backend.app.services.risk_service import RiskService
 from backend.app.services.scoring_service import ScoringService
-from backend.app.services.validation_service import ValidationScaffold
+from backend.app.services.validation_service import (
+    DEFAULT_WALK_FORWARD_STEP_DAYS,
+    DEFAULT_WALK_FORWARD_TEST_DAYS,
+    DEFAULT_WALK_FORWARD_TRAIN_DAYS,
+    ValidationScaffold,
+    WalkForwardRunner,
+)
 from backend.app.strategies.registry import get_available_strategy_registry
 from backend.app.utils.hashing import stable_hash
 
@@ -196,6 +202,10 @@ class BacktestService:
         lookback_days: int = 252,
         baseline_run_id: str | None = None,
         baseline_snapshot: dict[str, object] | None = None,
+        walk_forward_train_days: int = DEFAULT_WALK_FORWARD_TRAIN_DAYS,
+        walk_forward_test_days: int = DEFAULT_WALK_FORWARD_TEST_DAYS,
+        walk_forward_step_days: int = DEFAULT_WALK_FORWARD_STEP_DAYS,
+        walk_forward_rebalance_frequency: str | None = None,
     ) -> dict[str, object]:
         """최근 가용 거래일 기준 전략별 screener/backtest validation summary를 계산한다."""
         from backend.app.services.validation_service import StrategyValidationService
@@ -204,6 +214,29 @@ class BacktestService:
             lookback_days=lookback_days,
             baseline_run_id=baseline_run_id,
             baseline_snapshot=baseline_snapshot,
+            walk_forward_train_days=walk_forward_train_days,
+            walk_forward_test_days=walk_forward_test_days,
+            walk_forward_step_days=walk_forward_step_days,
+            walk_forward_rebalance_frequency=walk_forward_rebalance_frequency,
+        )
+
+    def walk_forward(
+        self,
+        strategy_name: str,
+        trading_dates: list[date],
+        train_window_trading_days: int = DEFAULT_WALK_FORWARD_TRAIN_DAYS,
+        test_window_trading_days: int = DEFAULT_WALK_FORWARD_TEST_DAYS,
+        step_trading_days: int = DEFAULT_WALK_FORWARD_STEP_DAYS,
+        rebalance_frequency: str | None = None,
+    ) -> dict[str, object]:
+        """지정한 trading-day window로 전략의 OOS walk-forward summary를 계산한다."""
+        return WalkForwardRunner(self.db, self).run(
+            strategy_name=strategy_name,
+            trading_dates=trading_dates,
+            train_window_trading_days=train_window_trading_days,
+            test_window_trading_days=test_window_trading_days,
+            step_trading_days=step_trading_days,
+            rebalance_frequency=rebalance_frequency,
         )
 
     def _serialize_run(self, run: BacktestRun, include_trades: bool = False) -> dict[str, object]:

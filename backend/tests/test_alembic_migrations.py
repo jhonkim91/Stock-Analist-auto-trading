@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from backend.app.core.database import Base
 from backend.app.models import tables  # noqa: F401
 
-ALEMBIC_HEAD = "e5f6a7b8c9d0"
+ALEMBIC_HEAD = "f7a8b9c0d1e2"
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -40,8 +40,20 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "paper_orders",
         "backtest_runs",
         "backtest_trade_ledger",
+        "strategy_parameter_snapshots",
         "earnings_events",
     }.issubset(table_names)
+    strategy_parameter_snapshot_columns = {
+        column["name"] for column in inspector.get_columns("strategy_parameter_snapshots")
+    }
+    assert {
+        "strategy_name",
+        "config_hash",
+        "snapshot_date",
+        "effective_date",
+        "parameter_json",
+        "created_at",
+    }.issubset(strategy_parameter_snapshot_columns)
     trade_ledger_columns = {column["name"] for column in inspector.get_columns("backtest_trade_ledger")}
     assert {
         "run_id",

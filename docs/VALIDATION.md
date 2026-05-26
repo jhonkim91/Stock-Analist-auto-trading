@@ -4,25 +4,36 @@
 
 검증 기준일: 2026-05-26
 
-Version: `MVP v0.21.0`
+Version: `MVP v0.24.0`
 
-Checkpoint: `Validation Framework Scaffold`
+Checkpoint: `Factor/Filter Attribution Minimal Integration`
 
 기준 브랜치: `main`
 
-Next recommended phase: `Parameter Snapshot Foundation → Walk-forward/PBO/DSR`
+Next recommended phase: `저장형 후보 선택 및 attribution persistence 고도화`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
-| Validation summary targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q`: 41 passed in 99.84s |
-| Backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 287 passed in 249.61s |
+| factor/filter attribution targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q`: 47 passed in 225.71s |
+| Alembic migration pytest | 미실행 | 이번 변경은 DB schema/migration을 추가하지 않음 |
+| Backend full pytest | 미실행 | 이번 변경은 사용자가 지정한 targeted pytest를 실행함 |
 | Frontend lint/typecheck/build | 미실행 | 이번 변경은 backend service/API/test/docs 범위이며 frontend 파일은 수정하지 않음 |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
-| Documentation cross-reference check | 통과 | `rg` checkpoint/version/phase/pytest count 확인 및 Markdown local link check |
+| Documentation cross-reference check | 통과 | `PROJECT_STATUS.md`, `VALIDATION.md`, `Memory.md` 최신 checkpoint와 검증 결과 반영 |
 
 ## 검증 범위
 
-- `indicator_snapshot` breadth fields SQLAlchemy model과 Alembic head `e5f6a7b8c9d0_add_indicator_breadth_fields`가 테스트 DB에 적용된다.
+- `strategy_parameter_snapshots` SQLAlchemy model과 Alembic head `f7a8b9c0d1e2_add_strategy_parameter_snapshots`가 테스트 DB에 적용된다.
+- strategy parameter snapshot은 `strategy_name`, `config_hash`, `snapshot_date`, `effective_date`, `parameter_json`, `created_at`을 저장한다.
+- `StrategyParameterSnapshotService.save_current_snapshots()`는 현재 config의 `common + strategy` payload를 strategy별 snapshot으로 저장하고, `latest_snapshots()`로 기준일 이전 최신 snapshot을 조회한다.
+- `StrategyParameterSnapshotService.parameter_drift_check()`는 snapshot이 없으면 `not_available_in_current_mvp`, `strategy_parameter_snapshot_not_found`, `comparison_available=false`, `drifted_parameter_count=0`을 반환해 거짓 diff를 만들지 않는다.
+- snapshot이 있으면 현재 config와 snapshot의 parameter path별 diff, changed key 목록, unchanged key count, snapshot/effective date 목록, config hash 변경 요약을 계산한다.
+- Weekly Strategy Review의 `Parameter Drift Check`는 placeholder bullet 대신 `changed_keys`, `unchanged_keys_count`, `snapshot_dates`, `effective_dates`, `config_hash_diff`와 strategy별 diff table을 출력한다.
+- drift가 없으면 Markdown과 detail metadata에 `no_drift_detected`를 명시한다.
+- snapshot이 없는 weekly report는 `parameter_snapshot_status: not_available_in_current_mvp`, `comparison_available: false`, `unavailable_reason: strategy_parameter_snapshot_not_found`를 Markdown에 명시한다.
+- `GET /api/reports/{report_id}`와 `POST /api/reports/weekly` 응답의 `metadata.parameter_drift`는 저장된 Markdown에서 추출한 값이므로 Markdown과 모순되지 않는다.
+- 기존 daily/weekly report API 응답 key, `reports` table, Markdown 다운로드 contract는 변경하지 않았다.
+- `indicator_snapshot` breadth fields SQLAlchemy model과 이전 Alembic head `e5f6a7b8c9d0_add_indicator_breadth_fields`는 새 head의 선행 migration으로 유지된다.
 - `IndicatorService.recompute()`는 full recompute와 `symbol/start_date/end_date` 증분 recompute를 모두 지원하고, 증분 결과가 full recompute changed range와 일치한다.
 - weekly derived field availability flags는 short-history 입력에서 false/not_available 계열로 fail-closed 처리된다.
 - `RegimeService`는 breadth proxy를 제공하고, universe breadth 데이터가 없으면 `breadth_regime="not_available"`로 처리한다.
@@ -41,7 +52,12 @@ Next recommended phase: `Parameter Snapshot Foundation → Walk-forward/PBO/DSR`
 - `GET /api/reports?report_type=daily|weekly`는 기존 `limit` query에 additive filter로 동작한다.
 - `GET /api/reports/{report_id}/markdown`는 daily/weekly 모두 Markdown 다운로드로 동작한다.
 - Weekly Strategy Review는 ledger가 있으면 realized trade count, realized PnL, realized return, win rate, average holding days, setup별 trade hit rate, failed trades review를 계산한다.
-- ledger가 없거나 현재 MVP에 저장 계약이 없는 realized drawdown/exposure/open position risk, regime segment return, realized factor/filter PnL attribution, MAE/MFE, parameter drift 항목은 `not_available_in_current_mvp`로 표기한다.
+- `FactorFilterAttributionService`는 `backtest_trade_ledger.signal_date = screen_results.trade_date`, `symbol`, `strategy_name/strategy_tag`로 ledger와 screen_results를 join한다.
+- realized PnL attribution과 screen filter failure counts는 별도 section으로 계산한다.
+- join 가능한 row만 `strategy_name`, `pass_flags`, `failed_conditions`, `risk_flags`, `sector`, `market_regime` 기준 attribution에 사용하며, join 불가능하거나 저장되지 않은 dimension은 `not_available_in_current_mvp`로 남긴다.
+- sector는 `symbol_master.sector`에서 조회하고, market_regime은 `screen_results.metadata_json.market_regime`처럼 저장된 값이 있을 때만 사용한다. 현재 screen 결과에 저장되지 않은 market regime은 재추정하지 않는다.
+- Weekly Strategy Review의 `Factor/Filter Attribution`은 placeholder bullet 대신 realized PnL attribution table과 screen filter failure counts table을 출력한다.
+- ledger가 없거나 현재 MVP에 저장 계약이 없는 realized drawdown/exposure/open position risk, regime segment return, MAE/MFE 항목은 `not_available_in_current_mvp`로 표기한다.
 - `GET /api/portfolio/risk`는 기존 주요 응답 필드를 유지하면서 `max_open_positions`, gross/sector/symbol/strategy exposure, `daily_loss_budget`, `gap_risk_estimate`, `concentration_warnings`를 additive로 반환한다.
 - portfolio risk summary는 `positions`와 최신 통과 `screen_results`를 함께 활용하되 synthetic/preview 한계를 `warnings`와 `gap_risk_estimate.status`에 남긴다.
 - `MarketSessionService`는 KRX `regular`/`after_hours`, NXT `pre_market`/`main`/`after_market`, 휴장일 또는 세션 외 시간을 판정한다.
@@ -50,18 +66,27 @@ Next recommended phase: `Parameter Snapshot Foundation → Walk-forward/PBO/DSR`
 - 실제 주문, paper order, broker/KIS route, credential/token 저장 경로는 추가하지 않았다.
 - `StrategyValidationService`는 strategy summary 계산을 담당하고, `ValidationReportService`는 JSON artifact 저장을 담당한다. 기존 `BacktestService.strategy_summary()`와 `ReportService.write_strategy_validation_summary()`는 호환 wrapper로 유지한다.
 - baseline 비교는 `ValidationBaselineComparator`가 담당하며 `baseline_run_id`, `baseline_snapshot`, strategy list snapshot, 단일 strategy snapshot shape를 재사용 가능한 metric map으로 정규화한다.
-- `GET /api/backtest/strategy-summary`는 기존 strategy-level `screener`, `backtest`, `delta` payload를 유지하면서 `validation_framework`와 strategy별 `validation` placeholder를 additive로 반환한다.
+- `GET /api/backtest/strategy-summary`는 기존 strategy-level `screener`, `backtest`, `delta` payload를 유지하면서 `validation_framework`와 strategy별 `validation` payload를 additive로 반환한다.
+- `WalkForwardRunner`는 입력받은 train/test/step trading-day window와 rebalance frequency로 rolling window를 만들고, 각 window의 test 구간만 `BacktestService.run(save=False)`로 실행한다.
+- 기본 summary path는 train 126 trading days, test 21 trading days, step 63 trading days, backtest config의 rebalance frequency를 사용한다.
+- strategy별 `validation.walk_forward`는 실제 OOS window metric에서 `oos_trade_count`, `oos_weighted_win_rate`, `oos_total_return`, `oos_average_window_return`, `oos_median_window_return`, `oos_positive_window_rate`, `oos_max_drawdown`, `oos_average_sharpe_ratio`, `oos_average_turnover`를 계산한다.
+- indicator trading day가 train+test보다 부족하면 `calculated=false`, `reason="insufficient_indicator_trading_days"`, `summary=null`, `windows=[]`를 반환해 거짓 OOS 수치를 만들지 않는다.
+- `validation_framework.overfitting.pbo`는 walk-forward window `total_return` 행렬이 strategy 2개 이상, 비교 가능 window 2개 이상일 때 leave-one-window-out CSCV-lite 방식으로 계산한다.
+- `validation_framework.overfitting.deflated_sharpe_ratio`는 strategy 2개 이상, strategy별 OOS return sample 4개 이상, return variance가 있을 때 multiple-testing expected-max Sharpe와 skewness/kurtosis input shape를 포함해 계산한다.
+- strategy별 `validation.overfitting`에도 PBO rank-decay lite와 Deflated Sharpe Ratio payload를 additive로 반환한다.
+- `backend/reports/strategy_validation_252d.json` artifact는 top-level `validation_framework.walk_forward`/`validation_framework.attribution`과 strategy별 `validation.walk_forward`/`validation.attribution` 결과를 함께 저장한다.
 - `POST /api/backtest/run`은 기존 응답 key를 제거하지 않고 `validation_framework`를 additive로 반환한다.
 - backtest metrics에는 `walk_forward`, `pbo`, `probability_of_backtest_overfitting`, `deflated_sharpe_ratio`, `factor_filter_attribution` placeholder가 추가됐다.
-- walk-forward, PBO, Deflated Sharpe Ratio, factor/filter attribution은 아직 계산하지 않는다. 모든 unavailable 항목은 `not_available_in_current_mvp` 문자열과 `calculated=false` metadata로 반환한다.
+- 저장형 backtest run metrics의 `walk_forward` placeholder는 호환을 위해 유지한다. strategy-summary의 validation payload에서만 최소 OOS summary를 계산한다.
+- PBO/Deflated Sharpe Ratio는 표본이 부족하면 `not_available_in_current_mvp`, `calculated=false`, 명확한 `reason`을 유지한다. factor/filter attribution은 저장된 ledger/screen join으로 확인 가능한 값만 계산한다.
 - minimal trade ledger schema는 `validation_framework.trade_ledger_schema`에 문서화한다. 범위는 `backtest_and_report_analysis_only`이며 `orders`, `paper_orders`, broker adapter, KIS order route, live trading과 연결하지 않는다.
 
 ## 재현 명령
 
-Backend:
+Targeted backend:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q
 ```
 
 Frontend:
@@ -94,16 +119,18 @@ git diff --check
 | 기존 backtest run/list/detail 응답 필드 제거 | 없음 |
 | 기존 portfolio risk 응답 주요 필드 제거 | 없음 |
 | 실주문 관련 route 추가 | 없음 |
-| walk-forward/PBO/Deflated Sharpe 추정 수치 생성 | 없음. `not_available_in_current_mvp` placeholder만 반환 |
-| factor/filter attribution 추정 수치 생성 | 없음. `not_available_in_current_mvp` placeholder만 반환 |
-| report schema 변경 | 기존 `reports` 테이블 재사용 |
+| walk-forward 추정 수치 생성 | 없음. OOS test window의 실제 local backtest metric만 집계 |
+| PBO/Deflated Sharpe 허위 precision 생성 | 없음. 충분 표본에서만 계산하고 부족하면 `not_available_in_current_mvp`, `calculated=false`, `reason` 유지 |
+| factor/filter attribution 추정 수치 생성 | 없음. 저장된 ledger/screen join으로 확인되는 값만 계산하고 불완전 join은 `not_available_in_current_mvp`로 표시 |
+| report schema 변경 | 없음. 기존 `reports` 테이블 재사용 |
 | indicator schema 변경 | 이번 변경 없음. 기존 breadth proxy nullable fields와 availability flags 유지 |
-| backtest/report schema 변경 | `backtest_trade_ledger` 유지 |
+| parameter snapshot schema 변경 | `strategy_parameter_snapshots` 추가. report/backtest/order 실행 테이블과 분리 |
+| backtest/report schema 변경 | `backtest_trade_ledger` 유지, 기존 report persistence contract 유지 |
 | trade ledger와 주문 테이블 연결 | 없음. validation scaffold에도 `not_connected_to`로 명시 |
 | weekly_ohlcv migration 추가 | 없음 |
 | `orders_count == 0` 정책 변경 | 없음 |
 
 ## 남은 검증
 
-- frontend lint/typecheck/build는 이번 backend-only 변경에서 재실행하지 않았다.
-- walk-forward/PBO/Deflated Sharpe Ratio/factor attribution은 이번 단계에서 scaffold만 검증했다. 실제 계산식, 표본 분할, multiple-testing 보정, attribution join 계약은 별도 단계에서 정의해야 한다.
+- backend full pytest, Alembic pytest, frontend lint/typecheck/build는 이번 targeted backend 변경에서 재실행하지 않았다.
+- parameter optimization, 저장된 parameter snapshot 기반 후보 선택, attribution persistence/as-of sector contract는 별도 단계에서 정의해야 한다.

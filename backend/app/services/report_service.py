@@ -14,7 +14,11 @@ from backend.app.models.tables import BacktestTradeLedger, Report, ScreenResult
 from backend.app.repositories.report_repository import ReportRepository
 from backend.app.services.regime_service import RegimeService
 from backend.app.services.sector_service import SectorService
-from backend.app.services.validation_service import ValidationReportService
+from backend.app.services.validation_service import (
+    FactorFilterAttributionService,
+    StrategyParameterSnapshotService,
+    ValidationReportService,
+)
 
 
 ReportType = Literal["daily", "weekly"]
@@ -32,6 +36,8 @@ class _ReportContext:
     trade_ledger: list[BacktestTradeLedger]
     regime: dict[str, object]
     sectors: list[dict[str, object]]
+    parameter_drift: dict[str, object]
+    attribution: dict[str, object]
 
 
 class ReportService:
@@ -89,11 +95,13 @@ class ReportService:
         context = self._build_context(target_date)
         content = self._render_report(report_type, context)
         report = self._persist_markdown_report(report_type, target_date, content)
+        metadata = self._extract_metadata(content, report)
         return {
             "report_id": report.report_id,
             "report_type": report.report_type,
             "path": str(report.path),
             "chars": len(content),
+            "metadata": metadata,
         }
 
     def _resolve_report_date(self, report_date: date | None) -> date:
@@ -108,14 +116,22 @@ class ReportService:
         target_results = self._results_for_date(target_date)
         window_dates = self._latest_screen_dates(target_date, WEEKLY_REVIEW_TRADING_DAYS) or [target_date]
         window_results = self._results_for_dates(window_dates)
+        trade_ledger = self._trade_ledger_for_window(window_dates, target_date)
         return _ReportContext(
             report_date=target_date,
             target_results=target_results,
             window_dates=window_dates,
             window_results=window_results,
-            trade_ledger=self._trade_ledger_for_window(window_dates, target_date),
+            trade_ledger=trade_ledger,
             regime=RegimeService(self.db).detect_market_regime(as_of=target_date),
             sectors=SectorService(self.db).latest_rotation(),
+            parameter_drift=StrategyParameterSnapshotService(self.db).parameter_drift_check(as_of=target_date),
+            attribution=FactorFilterAttributionService(self.db).calculate(
+                start_date=window_dates[0] if window_dates else target_date,
+                end_date=window_dates[-1] if window_dates else target_date,
+                trades=trade_ledger,
+                screen_results=window_results,
+            ),
         )
 
     def _render_report(self, report_type: ReportType, context: _ReportContext) -> str:
@@ -205,13 +221,14 @@ class ReportService:
             "report_id": report.report_id,
             "report_date": report.report_date,
             "report_type": report.report_type,
-            "title": metadata["title"],
-            "model_version": metadata["model_version"],
-            "strategy_version": metadata["strategy_version"],
-            "data_timestamp": metadata["data_timestamp"],
+            "title": str(metadata["title"]),
+            "model_version": str(metadata["model_version"]),
+            "strategy_version": str(metadata["strategy_version"]),
+            "data_timestamp": str(metadata["data_timestamp"]),
             "created_at": report.created_at,
             "version": report.version,
             "path": report.path,
+            "metadata": metadata,
         }
         if include_markdown:
             payload["markdown"] = markdown
@@ -225,9 +242,9 @@ class ReportService:
         return path.read_text(encoding="utf-8")
 
     @staticmethod
-    def _extract_metadata(markdown: str, report: Report) -> dict[str, str]:
+    def _extract_metadata(markdown: str, report: Report) -> dict[str, object]:
         title = next((line.removeprefix("#").strip() for line in markdown.splitlines() if line.startswith("# ")), report.report_id)
-        metadata = {
+        metadata: dict[str, object] = {
             "title": title,
             "model_version": report.version,
             "strategy_version": report.version,
@@ -240,7 +257,52 @@ class ReportService:
                 metadata["strategy_version"] = line.split(":", 1)[1].strip()
             elif line.startswith("- data_timestamp:"):
                 metadata["data_timestamp"] = line.split(":", 1)[1].strip()
+        parameter_drift = ReportService._extract_parameter_drift_metadata(markdown)
+        if parameter_drift:
+            metadata["parameter_drift"] = parameter_drift
         return metadata
+
+    @staticmethod
+    def _extract_parameter_drift_metadata(markdown: str) -> dict[str, object]:
+        in_section = False
+        table_headers: list[str] | None = None
+        metadata: dict[str, object] = {}
+        strategy_rows: list[dict[str, str]] = []
+        for line in markdown.splitlines():
+            if line == "## Parameter Drift Check":
+                in_section = True
+                continue
+            if in_section and line.startswith("## "):
+                break
+            if not in_section:
+                continue
+            if line.startswith("- ") and ":" in line:
+                key, value = line[2:].split(":", 1)
+                metadata[key.strip()] = ReportService._parse_metadata_scalar(value.strip())
+                continue
+            if not (line.startswith("|") and line.endswith("|")):
+                continue
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if all(cell and set(cell) <= {"-", ":"} for cell in cells):
+                continue
+            if table_headers is None:
+                table_headers = cells
+                continue
+            if len(cells) == len(table_headers):
+                strategy_rows.append(dict(zip(table_headers, cells, strict=True)))
+        if strategy_rows:
+            metadata["strategies"] = strategy_rows
+        return metadata
+
+    @staticmethod
+    def _parse_metadata_scalar(value: str) -> object:
+        if value == "true":
+            return True
+        if value == "false":
+            return False
+        if value.isdigit() or (value.startswith("-") and value[1:].isdigit()):
+            return int(value)
+        return value
 
     @staticmethod
     def _render_daily(context: _ReportContext) -> str:
@@ -410,32 +472,36 @@ class ReportService:
                 f"- regime_segment_return: {NOT_AVAILABLE}",
                 "",
                 "## Factor/Filter Attribution",
-                f"- realized_factor_pnl_attribution: {NOT_AVAILABLE}",
-                f"- realized_filter_pnl_attribution: {NOT_AVAILABLE}",
-                f"- setup_pnl_attribution_source: {trade_summary['source']}",
-                "| setup | trade_count | pnl | win_rate | avg_return |",
-                "|---|---:|---:|---:|---:|",
+                f"- attribution_status: {context.attribution.get('status', NOT_AVAILABLE)}",
+                f"- attribution_reason: {context.attribution.get('reason') or 'none'}",
+                f"- attribution_scope: {ReportService._attribution_basis_value(context.attribution, 'scope')}",
+                f"- attribution_join_keys: {ReportService._attribution_join_keys(context.attribution)}",
+                f"- joined_trade_count: {context.attribution.get('joined_trade_count', 0)}",
+                f"- unjoined_trade_count: {context.attribution.get('unjoined_trade_count', 0)}",
+                "### Realized PnL Attribution",
+                "| attribution_type | dimension | value | trade_count | pnl | win_rate | avg_return | joined_trade_count | unavailable_count | status |",
+                "|---|---|---|---:|---:|---:|---:|---:|---:|---|",
             ]
         )
-        for row in trade_summary["setup_rows"]:
-            if isinstance(row, dict):
-                lines.append(
-                    f"| {row['setup']} | {row['trade_count']} | {row['pnl']} | {row['win_rate']} | {row['avg_return']} |"
-                )
-        if not trade_summary["setup_rows"]:
-            lines.append(f"| {NOT_AVAILABLE} | 0 | {NOT_AVAILABLE} | {NOT_AVAILABLE} | {NOT_AVAILABLE} |")
+        for row in ReportService._attribution_pnl_rows(context.attribution):
+            lines.append(
+                f"| {row['attribution_type']} | {row['dimension']} | {row['value']} | {row['trade_count']} | "
+                f"{row['pnl']} | {row['win_rate']} | {row['avg_return']} | {row['joined_trade_count']} | "
+                f"{row['unavailable_count']} | {row['status']} |"
+            )
 
         lines.extend(
             [
-                "- screen_filter_failure_counts:",
-                "| filter | failed_count |",
-                "|---|---:|",
+                "### Screen Filter Failure Counts",
+                "| attribution_type | strategy | filter | failed_count | screened_count | status |",
+                "|---|---|---|---:|---:|---|",
             ]
         )
-        for condition, count in ReportService._failed_condition_counts(rows):
-            lines.append(f"| {condition} | {count} |")
-        if not rows:
-            lines.append(f"| {NOT_AVAILABLE} | 0 |")
+        for row in ReportService._attribution_failure_rows(context.attribution):
+            lines.append(
+                f"| {row['attribution_type']} | {row['strategy_name']} | {row['filter']} | "
+                f"{row['failed_count']} | {row['screened_count']} | {row['status']} |"
+            )
 
         lines.extend(
             [
@@ -460,15 +526,10 @@ class ReportService:
             lines.append(f"| {NOT_AVAILABLE} | {NOT_AVAILABLE} | {NOT_AVAILABLE} | {NOT_AVAILABLE} | 0 | 0 | 0 |")
 
         lines.extend(
-            [
-                "",
-                "## Parameter Drift Check",
-                f"- parameter_history_source: {NOT_AVAILABLE}",
-                f"- parameter_snapshot_diff: {NOT_AVAILABLE}",
-                f"- drifted_parameters: {NOT_AVAILABLE}",
-                f"- active_setup_count_in_window: {len({row.strategy_tag for row in rows})}",
-                f"- check_basis: current_mvp_does_not_persist_historical_strategy_parameter_snapshots",
-            ]
+            ReportService._parameter_drift_lines(
+                context.parameter_drift,
+                len({row.strategy_tag for row in rows}),
+            )
         )
 
         lines.extend(ReportService._audit_trail(report_date))
@@ -529,6 +590,198 @@ class ReportService:
             "setup_rows": ReportService._setup_pnl_rows(trades),
             "failed_rows": ReportService._failed_trade_rows(failed),
         }
+
+    @staticmethod
+    def _attribution_basis_value(attribution: dict[str, object], key: str) -> object:
+        basis = attribution.get("basis")
+        if not isinstance(basis, dict):
+            return NOT_AVAILABLE
+        return basis.get(key, NOT_AVAILABLE)
+
+    @staticmethod
+    def _attribution_join_keys(attribution: dict[str, object]) -> str:
+        return ReportService._format_metadata_list(ReportService._attribution_basis_value(attribution, "join_keys"))
+
+    @staticmethod
+    def _attribution_pnl_rows(attribution: dict[str, object]) -> list[dict[str, object]]:
+        section = attribution.get("realized_pnl_attribution")
+        rows = section.get("rows") if isinstance(section, dict) else None
+        parsed_rows = [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+        if not parsed_rows:
+            parsed_rows = [
+                {
+                    "attribution_type": "realized_pnl",
+                    "dimension": "strategy_name",
+                    "value": NOT_AVAILABLE,
+                    "trade_count": 0,
+                    "pnl": NOT_AVAILABLE,
+                    "win_rate": NOT_AVAILABLE,
+                    "avg_return": NOT_AVAILABLE,
+                    "joined_trade_count": 0,
+                    "unavailable_count": 0,
+                    "status": NOT_AVAILABLE,
+                }
+            ]
+        return [ReportService._normalize_attribution_pnl_row(row) for row in parsed_rows[:50]]
+
+    @staticmethod
+    def _normalize_attribution_pnl_row(row: dict[str, object]) -> dict[str, object]:
+        return {
+            "attribution_type": row.get("attribution_type", "realized_pnl"),
+            "dimension": row.get("dimension", NOT_AVAILABLE),
+            "value": row.get("value", NOT_AVAILABLE),
+            "trade_count": row.get("trade_count", 0),
+            "pnl": row.get("pnl", NOT_AVAILABLE),
+            "win_rate": row.get("win_rate", NOT_AVAILABLE),
+            "avg_return": row.get("avg_return", NOT_AVAILABLE),
+            "joined_trade_count": row.get("joined_trade_count", 0),
+            "unavailable_count": row.get("unavailable_count", 0),
+            "status": row.get("status", NOT_AVAILABLE),
+        }
+
+    @staticmethod
+    def _attribution_failure_rows(attribution: dict[str, object]) -> list[dict[str, object]]:
+        section = attribution.get("screen_filter_failure_counts")
+        rows = section.get("rows") if isinstance(section, dict) else None
+        parsed_rows = [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+        if not parsed_rows:
+            parsed_rows = [
+                {
+                    "attribution_type": "screen_filter_failure",
+                    "strategy_name": NOT_AVAILABLE,
+                    "filter": NOT_AVAILABLE,
+                    "failed_count": 0,
+                    "screened_count": 0,
+                    "status": NOT_AVAILABLE,
+                }
+            ]
+        return [ReportService._normalize_attribution_failure_row(row) for row in parsed_rows[:50]]
+
+    @staticmethod
+    def _normalize_attribution_failure_row(row: dict[str, object]) -> dict[str, object]:
+        return {
+            "attribution_type": row.get("attribution_type", "screen_filter_failure"),
+            "strategy_name": row.get("strategy_name", NOT_AVAILABLE),
+            "filter": row.get("filter", NOT_AVAILABLE),
+            "failed_count": row.get("failed_count", 0),
+            "screened_count": row.get("screened_count", 0),
+            "status": row.get("status", NOT_AVAILABLE),
+        }
+
+    @staticmethod
+    def _parameter_drift_lines(parameter_drift: dict[str, object], active_setup_count: int) -> list[str]:
+        status = str(parameter_drift.get("status", NOT_AVAILABLE))
+        reason = parameter_drift.get("reason")
+        no_drift_detected = status == "no_drift"
+        lines = [
+            "",
+            "## Parameter Drift Check",
+            f"- parameter_history_source: {parameter_drift.get('history_source', NOT_AVAILABLE)}",
+            f"- parameter_snapshot_status: {status}",
+            f"- parameter_snapshot_as_of: {parameter_drift.get('as_of', NOT_AVAILABLE)}",
+            f"- comparison_available: {ReportService._bool_text(parameter_drift.get('comparison_available', False))}",
+            f"- compared_strategy_count: {parameter_drift.get('compared_strategy_count', 0)}",
+            f"- missing_snapshot_count: {parameter_drift.get('missing_snapshot_count', 0)}",
+            f"- drifted_strategy_count: {parameter_drift.get('drifted_strategy_count', 0)}",
+            f"- drifted_parameter_count: {parameter_drift.get('drifted_parameter_count', 0)}",
+            f"- changed_keys: {ReportService._format_changed_keys(parameter_drift)}",
+            f"- unchanged_keys_count: {parameter_drift.get('unchanged_keys_count', 0)}",
+            f"- snapshot_dates: {ReportService._format_metadata_list(parameter_drift.get('snapshot_dates'))}",
+            f"- effective_dates: {ReportService._format_metadata_list(parameter_drift.get('effective_dates'))}",
+            f"- current_config_hash: {parameter_drift.get('current_config_hash', NOT_AVAILABLE)}",
+            f"- config_hash_diff: {ReportService._format_config_hash_diff(parameter_drift.get('config_hash_diff'))}",
+            f"- active_setup_count_in_window: {active_setup_count}",
+        ]
+        if no_drift_detected:
+            lines.append("- no_drift_detected: true")
+        if reason:
+            lines.append(f"- unavailable_reason: {reason}")
+        lines.extend(
+            [
+                "| strategy | status | snapshot_date | effective_date | config_hash_diff | current_config_hash | snapshot_config_hash | changed_keys | unchanged_keys_count | change_detail |",
+                "|---|---|---|---|---|---|---|---|---:|---|",
+            ]
+        )
+        strategy_rows = parameter_drift.get("strategies")
+        if not isinstance(strategy_rows, list) or not strategy_rows:
+            lines.append(
+                f"| {NOT_AVAILABLE} | {status} | {NOT_AVAILABLE} | {NOT_AVAILABLE} | "
+                f"{NOT_AVAILABLE} | {NOT_AVAILABLE} | {NOT_AVAILABLE} | {NOT_AVAILABLE} | 0 | {NOT_AVAILABLE} |"
+            )
+            return lines
+        for row in strategy_rows:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                f"| {row.get('strategy_name', NOT_AVAILABLE)} | {row.get('status', NOT_AVAILABLE)} | "
+                f"{row.get('snapshot_date') or NOT_AVAILABLE} | {row.get('effective_date') or NOT_AVAILABLE} | "
+                f"{row.get('config_hash_diff') or NOT_AVAILABLE} | "
+                f"{row.get('current_config_hash') or NOT_AVAILABLE} | {row.get('snapshot_config_hash') or NOT_AVAILABLE} | "
+                f"{ReportService._format_changed_keys(row)} | {row.get('unchanged_keys_count', 0)} | "
+                f"{ReportService._format_drifted_parameters(row)} |"
+            )
+        return lines
+
+    @staticmethod
+    def _format_drifted_parameters(row: dict[str, object]) -> str:
+        diffs = row.get("drifted_parameters")
+        if not isinstance(diffs, list) or not diffs:
+            if row.get("status") == NOT_AVAILABLE:
+                return NOT_AVAILABLE
+            if row.get("status") == "no_drift":
+                return "no_drift_detected"
+            return "none"
+        formatted: list[str] = []
+        for diff in diffs[:10]:
+            if not isinstance(diff, dict):
+                continue
+            formatted.append(
+                f"{diff.get('parameter')}:{ReportService._markdown_value(diff.get('snapshot'))}"
+                f"->{ReportService._markdown_value(diff.get('current'))}"
+            )
+        extra_count = len(diffs) - len(formatted)
+        if extra_count > 0:
+            formatted.append(f"+{extra_count}_more")
+        return "; ".join(formatted) if formatted else "none"
+
+    @staticmethod
+    def _format_changed_keys(row: dict[str, object]) -> str:
+        keys = row.get("changed_keys")
+        if isinstance(keys, list) and keys:
+            return ", ".join(str(key) for key in keys)
+        if row.get("status") == "no_drift":
+            return "no_drift_detected"
+        if row.get("comparison_available") is False or row.get("status") == NOT_AVAILABLE:
+            return NOT_AVAILABLE
+        return "none"
+
+    @staticmethod
+    def _format_metadata_list(value: object) -> str:
+        if isinstance(value, (list, tuple, set)) and value:
+            return ", ".join(str(item) for item in value)
+        return NOT_AVAILABLE
+
+    @staticmethod
+    def _format_config_hash_diff(value: object) -> str:
+        if not isinstance(value, dict):
+            return NOT_AVAILABLE
+        return (
+            f"changed:{value.get('changed_count', 0)}, "
+            f"unchanged:{value.get('unchanged_count', 0)}, "
+            f"unavailable:{value.get('unavailable_count', 0)}"
+        )
+
+    @staticmethod
+    def _bool_text(value: object) -> str:
+        return "true" if bool(value) else "false"
+
+    @staticmethod
+    def _markdown_value(value: object) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+        return str(value)
 
     @staticmethod
     def _hit_rate_rows(rows: list[ScreenResult], trades: list[BacktestTradeLedger]) -> list[dict[str, object]]:
