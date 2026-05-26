@@ -78,6 +78,7 @@ class StageAnalysisWeeklyStrategy(BaseStrategy):
             indicator,
             fundamentals,
             market_regime,
+            include_breadth=True,
         )
         failed = self._failed(flags)
         passed = self._all_flags(flags)
@@ -92,6 +93,7 @@ class StageAnalysisWeeklyStrategy(BaseStrategy):
             "weekly_breakout": weekly_breakout if weekly_breakout_available else None,
             "weekly_volume_ratio": self._round_optional(weekly_volume_ratio) if weekly_volume_ratio_available else None,
             "weekly_rs_score": self._round_optional(weekly_rs_score) if weekly_rs_score_available else None,
+            **self._breadth_metadata(indicator),
         }
         if risk_metadata:
             risk_metadata.update(weekly_metadata)
@@ -180,6 +182,14 @@ class StageAnalysisWeeklyStrategy(BaseStrategy):
             "weekly_breakout_available": bool(getattr(indicator, "weekly_breakout_available", False)),
             "weekly_volume_ratio_available": bool(getattr(indicator, "weekly_volume_ratio_available", False)),
             "weekly_rs_score_available": bool(getattr(indicator, "weekly_rs_score_available", False)),
+            "breadth_score_available": bool(getattr(indicator, "breadth_score_available", False)),
+            "breadth_advance_decline_available": bool(
+                getattr(indicator, "breadth_advance_decline_available", False)
+            ),
+            "breadth_52w_high_low_available": bool(getattr(indicator, "breadth_52w_high_low_available", False)),
+            "breadth_ma50_participation_available": bool(
+                getattr(indicator, "breadth_ma50_participation_available", False)
+            ),
             "sma50_available": indicator.sma50 is not None,
             "sma150_available": indicator.sma150 is not None,
             "sma200_available": indicator.sma200 is not None,

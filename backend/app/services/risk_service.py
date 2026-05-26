@@ -37,14 +37,14 @@ class RiskService:
         entry_price = float(indicator.close)
         stop_price, risk_basis = self._select_stop_price(indicator, entry_price, risk_config, risk_metadata)
         risk_per_share = max(entry_price - stop_price, 1e-9)
-        target_rr = float(risk_config["target_reward_risk"])
-        target_price = entry_price + risk_per_share * target_rr
+        target_rr = max(float(risk_config["target_reward_risk"]), 1e-9)
+        target_price = self._select_target_price(indicator, entry_price, risk_per_share, target_rr, risk_metadata)
         position_risk_budget = equity_value * float(portfolio["risk_fraction"])
         risk_qty = int(position_risk_budget // risk_per_share)
         max_notional_qty = int((equity_value * float(portfolio["max_position_fraction"])) // entry_price)
         qty = max(min(risk_qty, max_notional_qty), 0)
         position_notional = qty * entry_price
-        reward_risk_ratio = (target_price - entry_price) / risk_per_share
+        reward_risk_ratio = max((target_price - entry_price) / risk_per_share, 0.0)
         rr_score = min(reward_risk_ratio / target_rr, 1.0)
         return RiskPlan(
             entry_price=round(entry_price, 4),
@@ -81,6 +81,40 @@ class RiskService:
                 return float(stop_price), risk_basis
 
         return max(entry_price * 0.01, 1e-9), "hard_stop"
+
+    def _select_target_price(
+        self,
+        indicator: IndicatorSnapshot,
+        entry_price: float,
+        risk_per_share: float,
+        target_rr: float,
+        risk_metadata: dict[str, Any] | None,
+    ) -> float:
+        explicit_target = self._metadata_target_price(risk_metadata)
+        if explicit_target is not None:
+            return explicit_target
+
+        indicator_target = self._indicator_target_price(indicator, entry_price)
+        if indicator_target is not None:
+            return indicator_target
+
+        return entry_price + risk_per_share * target_rr
+
+    @classmethod
+    def _metadata_target_price(cls, risk_metadata: dict[str, Any] | None) -> float | None:
+        metadata = risk_metadata or {}
+        for key in ("suggested_target_price", "target_price", "profit_target_price", "take_profit_price"):
+            target_price = cls._as_float(metadata.get(key))
+            if target_price is not None and target_price > 0:
+                return target_price
+        return None
+
+    @classmethod
+    def _indicator_target_price(cls, indicator: IndicatorSnapshot, entry_price: float) -> float | None:
+        target_price = cls._as_float(getattr(indicator, "target_price", None))
+        if target_price is not None and target_price > entry_price:
+            return target_price
+        return None
 
     def _atr_stop(self, indicator: IndicatorSnapshot, entry_price: float, risk_config: dict[str, Any]) -> float:
         atr = (

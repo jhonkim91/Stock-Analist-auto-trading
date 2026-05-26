@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pandas as pd
 import pytest
 from sqlalchemy import select
@@ -7,6 +9,29 @@ from sqlalchemy import select
 from backend.app.models.tables import IndicatorSnapshot
 from backend.app.repositories.market_repository import MarketRepository
 from backend.app.services.indicator_service import IndicatorService
+from backend.app.services.market_data_service import MarketDataService
+
+
+def _snapshot_payloads(db, *, symbol: str, start_date, end_date) -> list[dict[str, object]]:
+    rows = list(
+        db.scalars(
+            select(IndicatorSnapshot)
+            .where(
+                IndicatorSnapshot.symbol == symbol,
+                IndicatorSnapshot.trade_date >= start_date,
+                IndicatorSnapshot.trade_date <= end_date,
+            )
+            .order_by(IndicatorSnapshot.trade_date)
+        ).all()
+    )
+    return [
+        {
+            column.name: getattr(row, column.name)
+            for column in IndicatorSnapshot.__table__.columns
+            if column.name != "id"
+        }
+        for row in rows
+    ]
 
 
 def test_indicator_snapshot_contains_required_fields(seeded_db):
@@ -31,6 +56,44 @@ def test_indicator_snapshot_contains_required_fields(seeded_db):
     assert 0 <= sample.market_score <= 1
     assert 0 <= sample.sector_rs_score <= 1
     assert 0 <= sample.relative_strength_score <= 1
+    assert sample.breadth_score_available is True
+    assert sample.breadth_advance_decline_available is True
+    assert sample.breadth_52w_high_low_available is True
+    assert sample.breadth_ma50_participation_available is True
+    assert 0 <= sample.breadth_score <= 1
+
+
+def test_indicator_incremental_recompute_matches_full_recompute_for_changed_range(db_session):
+    MarketDataService(db_session).seed_sample_data()
+    IndicatorService(db_session).recompute()
+
+    latest_date = db_session.scalar(
+        select(IndicatorSnapshot.trade_date).order_by(IndicatorSnapshot.trade_date.desc()).limit(1)
+    )
+    start_date = latest_date - timedelta(days=30)
+    baseline = _snapshot_payloads(db_session, symbol="KR009", start_date=start_date, end_date=latest_date)
+    assert baseline
+
+    rows = list(
+        db_session.scalars(
+            select(IndicatorSnapshot).where(
+                IndicatorSnapshot.symbol == "KR009",
+                IndicatorSnapshot.trade_date >= start_date,
+                IndicatorSnapshot.trade_date <= latest_date,
+            )
+        ).all()
+    )
+    for row in rows:
+        row.sma20 = -1.0
+        row.breadth_score = -1.0
+    db_session.commit()
+
+    result = IndicatorService(db_session).recompute(symbol="KR009", start_date=start_date, end_date=latest_date)
+    incremental = _snapshot_payloads(db_session, symbol="KR009", start_date=start_date, end_date=latest_date)
+
+    assert result["mode"] == "incremental"
+    assert result["rows"] == len(baseline)
+    assert incremental == baseline
 
 
 def test_indicator_snapshot_contains_exact_ema20_and_low(seeded_db):
@@ -81,6 +144,32 @@ def test_indicator_snapshot_contains_asof_weekly_fields(seeded_db):
     assert latest.weekly_close == pytest.approx(float(weekly_latest["close"]))
     assert latest.weekly_sma30 == pytest.approx(float(weekly_latest["weekly_sma30"]))
     assert latest.weekly_sma30_slope == pytest.approx(float(weekly_latest["weekly_sma30_slope"]))
+
+
+def test_weekly_derived_field_availability_flags_fail_closed_on_short_history():
+    dates = pd.bdate_range(end="2026-05-20", periods=40)
+    df = pd.DataFrame(
+        {
+            "trade_date": [dt.date() for dt in dates],
+            "symbol": "SHORT",
+            "open": [100.0 + index for index in range(len(dates))],
+            "high": [101.0 + index for index in range(len(dates))],
+            "low": [99.0 + index for index in range(len(dates))],
+            "close": [100.0 + index for index in range(len(dates))],
+            "volume": [100000 for _ in dates],
+            "turnover_value": [10_000_000.0 for _ in dates],
+            "venue": "KRX",
+        }
+    )
+    features = IndicatorService._compute_symbol_indicators(df)
+    features = IndicatorService._attach_weekly_relative_strength(features)
+    latest = features.iloc[-1]
+
+    assert pd.isna(latest["weekly_sma30"])
+    assert pd.isna(latest["weekly_sma30_slope"])
+    assert bool(latest["weekly_breakout_available"]) is False
+    assert bool(latest["weekly_volume_ratio_available"]) is False
+    assert bool(latest["weekly_rs_score_available"]) is False
 
 
 def test_indicator_snapshot_contains_asof_pattern_engine_fields(seeded_db):

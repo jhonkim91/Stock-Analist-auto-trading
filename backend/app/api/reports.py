@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
@@ -19,9 +20,21 @@ def generate_daily_report(report_date: date | None = None, db: Session = Depends
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/weekly")
+def generate_weekly_report(report_date: date | None = None, db: Session = Depends(get_db)) -> dict[str, object]:
+    try:
+        return ReportService(db).generate_weekly_report(report_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("")
-def list_reports(limit: int = Query(default=20, ge=1, le=100), db: Session = Depends(get_db)) -> list[dict[str, object]]:
-    return ReportService(db).list_reports(limit=limit)
+def list_reports(
+    limit: int = Query(default=20, ge=1, le=100),
+    report_type: Literal["daily", "weekly"] | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+    return ReportService(db).list_reports(limit=limit, report_type=report_type)
 
 
 @router.get("/latest")

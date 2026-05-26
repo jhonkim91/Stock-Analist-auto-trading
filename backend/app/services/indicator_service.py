@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
@@ -12,6 +13,7 @@ from backend.app.repositories.market_repository import MarketRepository
 
 
 class IndicatorService:
+    INCREMENTAL_LOOKBACK_DAYS = 520
     VCP_PATTERN_LOOKBACK_DAYS = 90
     VCP_MIN_PULLBACK_DEPTH = 0.02
     DARVAS_BOX_WINDOW_DAYS = 20
@@ -24,32 +26,101 @@ class IndicatorService:
         self.db = db
         self.repo = MarketRepository(db)
 
-    def recompute(self) -> dict[str, object]:
+    def recompute(
+        self,
+        *,
+        symbol: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> dict[str, object]:
         """daily_ohlcv 기준 지표 스냅샷을 재계산한다."""
-        daily = self.repo.daily_df()
+        if start_date is not None and end_date is not None and start_date > end_date:
+            raise ValueError("start_date must be before or equal to end_date")
+
+        normalized_symbol = symbol.strip().upper() if symbol else None
+        load_start = start_date - timedelta(days=self.INCREMENTAL_LOOKBACK_DAYS) if start_date else None
+        daily = self.repo.daily_df(start_date=load_start, end_date=end_date)
         if daily.empty:
-            return {"rows": 0, "start_date": None, "end_date": None}
+            return {
+                "rows": 0,
+                "start_date": None,
+                "end_date": None,
+                "mode": "incremental" if any([normalized_symbol, start_date, end_date]) else "full",
+                "symbols": 0,
+            }
 
         symbols = {row.symbol: row.sector for row in self.db.query(SymbolMaster).all()}
+        features = self._build_feature_frame(daily, symbols)
+        target_features = self._target_features(
+            features,
+            symbol=normalized_symbol,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if target_features.empty:
+            return {
+                "rows": 0,
+                "start_date": None,
+                "end_date": None,
+                "mode": "incremental" if any([normalized_symbol, start_date, end_date]) else "full",
+                "symbols": 0,
+            }
+
+        target_symbols = sorted(str(value) for value in target_features["symbol"].dropna().unique())
+        target_start = pd.Timestamp(target_features["trade_date"].min()).date()
+        target_end = pd.Timestamp(target_features["trade_date"].max()).date()
+        deleted_rows = self._delete_snapshot_range(target_symbols, target_start, target_end)
+
+        rows = [self._snapshot_from_row(row) for row in target_features.to_dict("records")]
+        self.db.add_all(rows)
+        self.db.commit()
+
+        return {
+            "rows": len(rows),
+            "start_date": target_start,
+            "end_date": target_end,
+            "mode": "incremental" if any([normalized_symbol, start_date, end_date]) else "full",
+            "symbols": len(target_symbols),
+            "deleted_rows": deleted_rows,
+        }
+
+    def _build_feature_frame(self, daily: pd.DataFrame, symbol_sectors: dict[str, str]) -> pd.DataFrame:
         frames = []
         for symbol, group in daily.groupby("symbol", sort=True):
             frames.append(self._compute_symbol_indicators(group.sort_values("trade_date").copy()))
         features = pd.concat(frames, ignore_index=True)
         features = self._attach_relative_strength(features)
         features = self._attach_weekly_relative_strength(features)
+        features = self._attach_breadth_indicators(features)
         features = self._attach_market_score(features)
-        features = self._attach_sector_score(features, symbols)
+        features = self._attach_sector_score(features, symbol_sectors)
+        return features
 
-        self.db.execute(delete(IndicatorSnapshot))
-        rows = [self._snapshot_from_row(row) for row in features.to_dict("records")]
-        self.db.add_all(rows)
-        self.db.commit()
+    @staticmethod
+    def _target_features(
+        features: pd.DataFrame,
+        *,
+        symbol: str | None,
+        start_date: date | None,
+        end_date: date | None,
+    ) -> pd.DataFrame:
+        target = features
+        if symbol:
+            target = target[target["symbol"] == symbol]
+        if start_date:
+            target = target[pd.to_datetime(target["trade_date"]).dt.date >= start_date]
+        if end_date:
+            target = target[pd.to_datetime(target["trade_date"]).dt.date <= end_date]
+        return target.sort_values(["symbol", "trade_date"]).copy()
 
-        return {
-            "rows": len(rows),
-            "start_date": features["trade_date"].min(),
-            "end_date": features["trade_date"].max(),
-        }
+    def _delete_snapshot_range(self, symbols: list[str], start_date: date, end_date: date) -> int:
+        stmt = delete(IndicatorSnapshot).where(
+            IndicatorSnapshot.symbol.in_(symbols),
+            IndicatorSnapshot.trade_date >= start_date,
+            IndicatorSnapshot.trade_date <= end_date,
+        )
+        result = self.db.execute(stmt)
+        return int(result.rowcount or 0)
 
     @staticmethod
     def _compute_symbol_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -79,6 +150,7 @@ class IndicatorService:
         df["std20"] = close.pct_change().rolling(20, min_periods=20).std()
         df["std60"] = close.pct_change().rolling(60, min_periods=30).std()
         df["high_52w"] = high.rolling(252, min_periods=100).max()
+        df["low_52w"] = low.rolling(252, min_periods=100).min()
         df["distance_from_52w_high"] = (close / df["high_52w"]) - 1
         df["volume_ratio_50"] = volume / df["volume_ma50"]
         df["pivot_high_20_prev"] = high.rolling(20, min_periods=20).max().shift(1)
@@ -138,42 +210,20 @@ class IndicatorService:
                 weekly_highs[-1] = max(weekly_highs[-1], high_float)
                 weekly_volumes[-1] += volume_float
 
-            weekly_sma30 = float(np.mean(weekly_closes[-30:])) if len(weekly_closes) >= 30 else None
-            weekly_sma30_series[-1] = weekly_sma30
-            shifted_sma30 = weekly_sma30_series[-5] if len(weekly_sma30_series) >= 5 else None
-            weekly_sma30_slope = (
-                weekly_sma30 - shifted_sma30
-                if weekly_sma30 is not None and shifted_sma30 is not None
-                else None
+            weekly_fields = IndicatorService._weekly_derived_fields(
+                weekly_closes=weekly_closes,
+                weekly_highs=weekly_highs,
+                weekly_volumes=weekly_volumes,
+                weekly_sma30_series=weekly_sma30_series,
+                close_float=close_float,
             )
-            previous_weekly_high = (
-                max(weekly_highs[-(IndicatorService.WEEKLY_BREAKOUT_LOOKBACK_WEEKS + 1):-1])
-                if len(weekly_highs) > IndicatorService.WEEKLY_BREAKOUT_LOOKBACK_WEEKS
-                else None
-            )
-            weekly_breakout_available = previous_weekly_high is not None
-            weekly_breakout = (
-                weekly_breakout_available
-                and previous_weekly_high is not None
-                and close_float > previous_weekly_high
-            )
-            previous_weekly_volume = (
-                float(np.mean(weekly_volumes[-(IndicatorService.WEEKLY_VOLUME_LOOKBACK_WEEKS + 1):-1]))
-                if len(weekly_volumes) > IndicatorService.WEEKLY_VOLUME_LOOKBACK_WEEKS
-                else None
-            )
-            weekly_volume_ratio_available = previous_weekly_volume is not None and previous_weekly_volume > 0
-            weekly_volume_ratio = (
-                weekly_volumes[-1] / previous_weekly_volume
-                if weekly_volume_ratio_available and previous_weekly_volume is not None
-                else 0.0
-            )
-            weekly_return_13 = (
-                close_float / weekly_closes[-(IndicatorService.WEEKLY_RS_LOOKBACK_WEEKS + 1)] - 1
-                if len(weekly_closes) > IndicatorService.WEEKLY_RS_LOOKBACK_WEEKS
-                and weekly_closes[-(IndicatorService.WEEKLY_RS_LOOKBACK_WEEKS + 1)] > 0
-                else None
-            )
+            weekly_sma30 = weekly_fields["weekly_sma30"]
+            weekly_sma30_slope = weekly_fields["weekly_sma30_slope"]
+            weekly_breakout = weekly_fields["weekly_breakout"]
+            weekly_breakout_available = weekly_fields["weekly_breakout_available"]
+            weekly_volume_ratio = weekly_fields["weekly_volume_ratio"]
+            weekly_volume_ratio_available = weekly_fields["weekly_volume_ratio_available"]
+            weekly_return_13 = weekly_fields["weekly_return_13"]
 
             weekly_close_values.append(close_float)
             weekly_sma30_values.append(weekly_sma30)
@@ -193,6 +243,61 @@ class IndicatorService:
         df["weekly_volume_ratio_available"] = weekly_volume_ratio_available_values
         df["weekly_return_13"] = weekly_return_13_values
         return df
+
+    @staticmethod
+    def _weekly_derived_fields(
+        *,
+        weekly_closes: list[float],
+        weekly_highs: list[float],
+        weekly_volumes: list[float],
+        weekly_sma30_series: list[float | None],
+        close_float: float,
+    ) -> dict[str, float | bool | None]:
+        weekly_sma30 = float(np.mean(weekly_closes[-30:])) if len(weekly_closes) >= 30 else None
+        weekly_sma30_series[-1] = weekly_sma30
+        shifted_sma30 = weekly_sma30_series[-5] if len(weekly_sma30_series) >= 5 else None
+        weekly_sma30_slope = (
+            weekly_sma30 - shifted_sma30
+            if weekly_sma30 is not None and shifted_sma30 is not None
+            else None
+        )
+        previous_weekly_high = (
+            max(weekly_highs[-(IndicatorService.WEEKLY_BREAKOUT_LOOKBACK_WEEKS + 1):-1])
+            if len(weekly_highs) > IndicatorService.WEEKLY_BREAKOUT_LOOKBACK_WEEKS
+            else None
+        )
+        weekly_breakout_available = previous_weekly_high is not None
+        weekly_breakout = (
+            weekly_breakout_available
+            and previous_weekly_high is not None
+            and close_float > previous_weekly_high
+        )
+        previous_weekly_volume = (
+            float(np.mean(weekly_volumes[-(IndicatorService.WEEKLY_VOLUME_LOOKBACK_WEEKS + 1):-1]))
+            if len(weekly_volumes) > IndicatorService.WEEKLY_VOLUME_LOOKBACK_WEEKS
+            else None
+        )
+        weekly_volume_ratio_available = previous_weekly_volume is not None and previous_weekly_volume > 0
+        weekly_volume_ratio = (
+            weekly_volumes[-1] / previous_weekly_volume
+            if weekly_volume_ratio_available and previous_weekly_volume is not None
+            else 0.0
+        )
+        weekly_return_13 = (
+            close_float / weekly_closes[-(IndicatorService.WEEKLY_RS_LOOKBACK_WEEKS + 1)] - 1
+            if len(weekly_closes) > IndicatorService.WEEKLY_RS_LOOKBACK_WEEKS
+            and weekly_closes[-(IndicatorService.WEEKLY_RS_LOOKBACK_WEEKS + 1)] > 0
+            else None
+        )
+        return {
+            "weekly_sma30": weekly_sma30,
+            "weekly_sma30_slope": weekly_sma30_slope,
+            "weekly_breakout": bool(weekly_breakout),
+            "weekly_breakout_available": weekly_breakout_available,
+            "weekly_volume_ratio": float(weekly_volume_ratio),
+            "weekly_volume_ratio_available": weekly_volume_ratio_available,
+            "weekly_return_13": weekly_return_13,
+        }
 
     @staticmethod
     def _attach_pattern_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -341,6 +446,112 @@ class IndicatorService:
         features["weekly_rs_score_available"] = available
         return features
 
+    @classmethod
+    def breadth_frame_from_daily(cls, daily: pd.DataFrame) -> pd.DataFrame:
+        """Return date-level breadth proxies without writing snapshots."""
+        if daily.empty:
+            return pd.DataFrame()
+        frames = [
+            cls._compute_symbol_indicators(group.sort_values("trade_date").copy())
+            for _, group in daily.groupby("symbol", sort=True)
+        ]
+        if not frames:
+            return pd.DataFrame()
+        features = pd.concat(frames, ignore_index=True)
+        features = cls._attach_breadth_indicators(features)
+        columns = [
+            "trade_date",
+            "breadth_advance_decline_ratio",
+            "breadth_advance_decline_available",
+            "breadth_52w_high_low_ratio",
+            "breadth_52w_high_low_available",
+            "breadth_ma50_participation",
+            "breadth_ma50_participation_available",
+            "breadth_score",
+            "breadth_score_available",
+        ]
+        return features[columns].drop_duplicates("trade_date").sort_values("trade_date").reset_index(drop=True)
+
+    @staticmethod
+    def _attach_breadth_indicators(features: pd.DataFrame) -> pd.DataFrame:
+        features = features.sort_values(["symbol", "trade_date"]).copy()
+        features["previous_close"] = features.groupby("symbol")["close"].shift(1)
+
+        metrics_by_date: dict[object, dict[str, object]] = {}
+        for trade_date, group in features.groupby("trade_date", sort=True):
+            comparable = group["previous_close"].notna() & (group["previous_close"].astype(float) > 0)
+            advances = int((group.loc[comparable, "close"].astype(float) > group.loc[comparable, "previous_close"].astype(float)).sum())
+            declines = int((group.loc[comparable, "close"].astype(float) < group.loc[comparable, "previous_close"].astype(float)).sum())
+            changed_count = advances + declines
+            advance_decline_available = changed_count > 0
+            advance_decline_ratio = advances / changed_count if advance_decline_available else None
+
+            high_low_eligible = group["high_52w"].notna() & group["low_52w"].notna()
+            high_count = int(
+                (
+                    group.loc[high_low_eligible, "close"].astype(float)
+                    >= group.loc[high_low_eligible, "high_52w"].astype(float) * 0.99
+                ).sum()
+            )
+            low_count = int(
+                (
+                    group.loc[high_low_eligible, "close"].astype(float)
+                    <= group.loc[high_low_eligible, "low_52w"].astype(float) * 1.01
+                ).sum()
+            )
+            high_low_available = bool(high_low_eligible.any())
+            high_low_total = high_count + low_count
+            high_low_ratio = high_count / high_low_total if high_low_total > 0 else (0.5 if high_low_available else None)
+
+            ma50_eligible = group["sma50"].notna()
+            ma50_participation_available = bool(ma50_eligible.any())
+            ma50_participation = (
+                float((group.loc[ma50_eligible, "close"].astype(float) > group.loc[ma50_eligible, "sma50"].astype(float)).mean())
+                if ma50_participation_available
+                else None
+            )
+
+            breadth_components = [
+                value
+                for value in (advance_decline_ratio, high_low_ratio, ma50_participation)
+                if value is not None
+            ]
+            breadth_score_available = bool(breadth_components)
+            breadth_score = float(np.mean(breadth_components)) if breadth_score_available else None
+            metrics_by_date[trade_date] = {
+                "breadth_advance_decline_ratio": advance_decline_ratio,
+                "breadth_advance_decline_available": advance_decline_available,
+                "breadth_52w_high_low_ratio": high_low_ratio,
+                "breadth_52w_high_low_available": high_low_available,
+                "breadth_ma50_participation": ma50_participation,
+                "breadth_ma50_participation_available": ma50_participation_available,
+                "breadth_score": breadth_score,
+                "breadth_score_available": breadth_score_available,
+            }
+
+        for column in (
+            "breadth_advance_decline_ratio",
+            "breadth_52w_high_low_ratio",
+            "breadth_ma50_participation",
+            "breadth_score",
+        ):
+            features[column] = features["trade_date"].map(
+                {trade_date: values[column] for trade_date, values in metrics_by_date.items()}
+            )
+        for column in (
+            "breadth_advance_decline_available",
+            "breadth_52w_high_low_available",
+            "breadth_ma50_participation_available",
+            "breadth_score_available",
+        ):
+            features[column] = (
+                features["trade_date"]
+                .map({trade_date: values[column] for trade_date, values in metrics_by_date.items()})
+                .fillna(False)
+                .astype(bool)
+            )
+        return features.drop(columns=["previous_close"])
+
     def _attach_market_score(self, features: pd.DataFrame) -> pd.DataFrame:
         index_df = self.repo.index_df()
         if index_df.empty:
@@ -421,6 +632,14 @@ class IndicatorService:
             weekly_volume_ratio_available=bool(row.get("weekly_volume_ratio_available", False)),
             weekly_rs_score=float(row.get("weekly_rs_score") or 0.0),
             weekly_rs_score_available=bool(row.get("weekly_rs_score_available", False)),
+            breadth_advance_decline_ratio=self._clean(row.get("breadth_advance_decline_ratio")),
+            breadth_advance_decline_available=bool(row.get("breadth_advance_decline_available", False)),
+            breadth_52w_high_low_ratio=self._clean(row.get("breadth_52w_high_low_ratio")),
+            breadth_52w_high_low_available=bool(row.get("breadth_52w_high_low_available", False)),
+            breadth_ma50_participation=self._clean(row.get("breadth_ma50_participation")),
+            breadth_ma50_participation_available=bool(row.get("breadth_ma50_participation_available", False)),
+            breadth_score=self._clean(row.get("breadth_score")),
+            breadth_score_available=bool(row.get("breadth_score_available", False)),
             volume_ma20=self._clean(row.get("volume_ma20")),
             volume_ma50=self._clean(row.get("volume_ma50")),
             atr14=self._clean(row.get("atr14")),

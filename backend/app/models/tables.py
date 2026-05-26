@@ -127,6 +127,11 @@ class CorporateAction(Base):
     note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
+    @property
+    def effective_date(self) -> date:
+        """as-of 조회에서 사용하는 corporate action 유효일을 반환한다."""
+        return self.action_date
+
 
 class TradingCalendar(Base):
     __tablename__ = "trading_calendar"
@@ -233,6 +238,14 @@ class IndicatorSnapshot(Base):
     weekly_volume_ratio_available: Mapped[bool] = mapped_column(Boolean, default=False)
     weekly_rs_score: Mapped[float] = mapped_column(Float, default=0.0)
     weekly_rs_score_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    breadth_advance_decline_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    breadth_advance_decline_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    breadth_52w_high_low_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    breadth_52w_high_low_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    breadth_ma50_participation: Mapped[float | None] = mapped_column(Float, nullable=True)
+    breadth_ma50_participation_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    breadth_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    breadth_score_available: Mapped[bool] = mapped_column(Boolean, default=False)
     volume_ma20: Mapped[float | None] = mapped_column(Float, nullable=True)
     volume_ma50: Mapped[float | None] = mapped_column(Float, nullable=True)
     atr14: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -305,6 +318,39 @@ class BacktestRun(Base):
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     metrics_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class BacktestTradeLedger(Base):
+    __tablename__ = "backtest_trade_ledger"
+    __table_args__ = (UniqueConstraint("run_id", "trade_index", name="uq_backtest_trade_ledger_run_index"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(64), index=True)
+    trade_index: Mapped[int] = mapped_column(Integer)
+    strategy_name: Mapped[str] = mapped_column(String(64), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    side: Mapped[str] = mapped_column(String(8), default="long")
+    status: Mapped[str] = mapped_column(String(32), default="closed")
+    signal_date: Mapped[date] = mapped_column(Date, index=True)
+    entry_date: Mapped[date] = mapped_column(Date, index=True)
+    exit_date: Mapped[date] = mapped_column(Date, index=True)
+    qty: Mapped[int] = mapped_column(Integer)
+    raw_entry_price: Mapped[float] = mapped_column(Float)
+    entry_price: Mapped[float] = mapped_column(Float)
+    raw_exit_price: Mapped[float] = mapped_column(Float)
+    exit_price: Mapped[float] = mapped_column(Float)
+    pnl: Mapped[float] = mapped_column(Float)
+    return_pct: Mapped[float] = mapped_column(Float)
+    estimated_cost: Mapped[float] = mapped_column(Float)
+    cost_bps: Mapped[float] = mapped_column(Float)
+    holding_days: Mapped[int] = mapped_column(Integer)
+    exit_reason: Mapped[str] = mapped_column(String(64), index=True)
+    risk_basis: Mapped[str] = mapped_column(String(64), default="")
+    execution_detail_json: Mapped[str] = mapped_column(Text, default="{}")
+    liquidity_detail_json: Mapped[str] = mapped_column(Text, default="{}")
+    price_detail_json: Mapped[str] = mapped_column(Text, default="{}")
+    portfolio_detail_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 

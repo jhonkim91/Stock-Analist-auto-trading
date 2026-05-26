@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.config import get_config
 from backend.app.models.tables import (
     BacktestRun,
+    BacktestTradeLedger,
     DailyOhlcv,
     EarningsEvent,
     ExternalSymbolMapping,
@@ -159,6 +160,7 @@ class MarketDataService:
             "screen_results_count": ScreenResult,
             "reports_count": Report,
             "backtest_runs_count": BacktestRun,
+            "backtest_trade_ledger_count": BacktestTradeLedger,
             "orders_count": Order,
         }
         result: dict[str, object] = {

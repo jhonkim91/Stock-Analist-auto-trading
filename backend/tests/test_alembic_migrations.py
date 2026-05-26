@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from backend.app.core.database import Base
 from backend.app.models import tables  # noqa: F401
 
-ALEMBIC_HEAD = "d9e3f0a1b2c4"
+ALEMBIC_HEAD = "e5f6a7b8c9d0"
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -39,8 +39,26 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "orders",
         "paper_orders",
         "backtest_runs",
+        "backtest_trade_ledger",
         "earnings_events",
     }.issubset(table_names)
+    trade_ledger_columns = {column["name"] for column in inspector.get_columns("backtest_trade_ledger")}
+    assert {
+        "run_id",
+        "trade_index",
+        "strategy_name",
+        "symbol",
+        "signal_date",
+        "entry_date",
+        "exit_date",
+        "qty",
+        "entry_price",
+        "exit_price",
+        "pnl",
+        "return_pct",
+        "exit_reason",
+        "execution_detail_json",
+    }.issubset(trade_ledger_columns)
     indicator_columns = {column["name"] for column in inspector.get_columns("indicator_snapshot")}
     assert {
         "weekly_close",
@@ -64,6 +82,14 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "weekly_volume_ratio_available",
         "weekly_rs_score",
         "weekly_rs_score_available",
+        "breadth_advance_decline_ratio",
+        "breadth_advance_decline_available",
+        "breadth_52w_high_low_ratio",
+        "breadth_52w_high_low_available",
+        "breadth_ma50_participation",
+        "breadth_ma50_participation_available",
+        "breadth_score",
+        "breadth_score_available",
     }.issubset(indicator_columns)
     screen_result_columns = {column["name"] for column in inspector.get_columns("screen_results")}
     assert {

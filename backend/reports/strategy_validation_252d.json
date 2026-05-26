@@ -17,7 +17,149 @@
   "baseline": {
     "status": "unspecified",
     "run_id": null,
-    "snapshot_supplied": false
+    "snapshot_supplied": false,
+    "comparison_metric_keys": [
+      "trade_count",
+      "win_rate",
+      "total_return",
+      "max_drawdown"
+    ]
+  },
+  "validation_framework": {
+    "version": "validation_scaffold_v0.1",
+    "status": "scaffold",
+    "walk_forward": {
+      "status": "not_available_in_current_mvp",
+      "metric": "not_available_in_current_mvp",
+      "strategy_name": null,
+      "reason": "walk_forward_window_engine_not_implemented",
+      "planned_inputs": [
+        "strategy_name",
+        "train_window_trading_days",
+        "test_window_trading_days",
+        "step_trading_days",
+        "baseline_snapshot"
+      ],
+      "calculated": false
+    },
+    "overfitting": {
+      "pbo": {
+        "status": "not_available_in_current_mvp",
+        "value": "not_available_in_current_mvp",
+        "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+        "calculated": false
+      },
+      "deflated_sharpe_ratio": {
+        "status": "not_available_in_current_mvp",
+        "value": "not_available_in_current_mvp",
+        "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+        "calculated": false
+      }
+    },
+    "attribution": {
+      "status": "not_available_in_current_mvp",
+      "value": "not_available_in_current_mvp",
+      "strategy_name": null,
+      "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+      "planned_dimensions": [
+        "market_regime",
+        "sector",
+        "strategy_name",
+        "pass_flags",
+        "failed_conditions",
+        "risk_flags"
+      ],
+      "calculated": false
+    },
+    "trade_ledger_schema": {
+      "status": "available_minimal_backtest_ledger",
+      "table": "backtest_trade_ledger",
+      "scope": "backtest_and_report_analysis_only",
+      "not_connected_to": [
+        "orders",
+        "paper_orders",
+        "broker_adapters",
+        "kis_order_routes",
+        "live_trading"
+      ],
+      "minimum_fields": [
+        {
+          "name": "run_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "trade_index",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "strategy_name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "side",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "signal_date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "entry_date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "exit_date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "qty",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "entry_price",
+          "type": "float",
+          "required": true
+        },
+        {
+          "name": "exit_price",
+          "type": "float",
+          "required": true
+        },
+        {
+          "name": "pnl",
+          "type": "float",
+          "required": true
+        },
+        {
+          "name": "return_pct",
+          "type": "float",
+          "required": true
+        },
+        {
+          "name": "exit_reason",
+          "type": "string",
+          "required": true
+        }
+      ]
+    }
   },
   "strategies": [
     {
@@ -38,7 +180,12 @@
         "trade_count": 0,
         "win_rate": 0.0,
         "total_return": 0.0,
-        "max_drawdown": 0.0
+        "max_drawdown": 0.0,
+        "walk_forward": "not_available_in_current_mvp",
+        "pbo": "not_available_in_current_mvp",
+        "probability_of_backtest_overfitting": "not_available_in_current_mvp",
+        "deflated_sharpe_ratio": "not_available_in_current_mvp",
+        "factor_filter_attribution": "not_available_in_current_mvp"
       },
       "delta": {
         "baseline": "unspecified",
@@ -46,6 +193,52 @@
         "win_rate_delta": null,
         "total_return_delta": null,
         "max_drawdown_delta": null
+      },
+      "validation": {
+        "strategy_name": "trend_breakout",
+        "walk_forward": {
+          "status": "not_available_in_current_mvp",
+          "metric": "not_available_in_current_mvp",
+          "strategy_name": "trend_breakout",
+          "reason": "walk_forward_window_engine_not_implemented",
+          "planned_inputs": [
+            "strategy_name",
+            "train_window_trading_days",
+            "test_window_trading_days",
+            "step_trading_days",
+            "baseline_snapshot"
+          ],
+          "calculated": false
+        },
+        "overfitting": {
+          "pbo": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+            "calculated": false
+          },
+          "deflated_sharpe_ratio": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "calculated": false
+          }
+        },
+        "attribution": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "trend_breakout",
+          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+          "planned_dimensions": [
+            "market_regime",
+            "sector",
+            "strategy_name",
+            "pass_flags",
+            "failed_conditions",
+            "risk_flags"
+          ],
+          "calculated": false
+        }
       }
     },
     {
@@ -66,7 +259,12 @@
         "trade_count": 0,
         "win_rate": 0.0,
         "total_return": 0.0,
-        "max_drawdown": 0.0
+        "max_drawdown": 0.0,
+        "walk_forward": "not_available_in_current_mvp",
+        "pbo": "not_available_in_current_mvp",
+        "probability_of_backtest_overfitting": "not_available_in_current_mvp",
+        "deflated_sharpe_ratio": "not_available_in_current_mvp",
+        "factor_filter_attribution": "not_available_in_current_mvp"
       },
       "delta": {
         "baseline": "unspecified",
@@ -74,6 +272,52 @@
         "win_rate_delta": null,
         "total_return_delta": null,
         "max_drawdown_delta": null
+      },
+      "validation": {
+        "strategy_name": "vcp_breakout",
+        "walk_forward": {
+          "status": "not_available_in_current_mvp",
+          "metric": "not_available_in_current_mvp",
+          "strategy_name": "vcp_breakout",
+          "reason": "walk_forward_window_engine_not_implemented",
+          "planned_inputs": [
+            "strategy_name",
+            "train_window_trading_days",
+            "test_window_trading_days",
+            "step_trading_days",
+            "baseline_snapshot"
+          ],
+          "calculated": false
+        },
+        "overfitting": {
+          "pbo": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+            "calculated": false
+          },
+          "deflated_sharpe_ratio": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "calculated": false
+          }
+        },
+        "attribution": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "vcp_breakout",
+          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+          "planned_dimensions": [
+            "market_regime",
+            "sector",
+            "strategy_name",
+            "pass_flags",
+            "failed_conditions",
+            "risk_flags"
+          ],
+          "calculated": false
+        }
       }
     },
     {
@@ -94,7 +338,12 @@
         "trade_count": 0,
         "win_rate": 0.0,
         "total_return": 0.0,
-        "max_drawdown": 0.0
+        "max_drawdown": 0.0,
+        "walk_forward": "not_available_in_current_mvp",
+        "pbo": "not_available_in_current_mvp",
+        "probability_of_backtest_overfitting": "not_available_in_current_mvp",
+        "deflated_sharpe_ratio": "not_available_in_current_mvp",
+        "factor_filter_attribution": "not_available_in_current_mvp"
       },
       "delta": {
         "baseline": "unspecified",
@@ -102,6 +351,52 @@
         "win_rate_delta": null,
         "total_return_delta": null,
         "max_drawdown_delta": null
+      },
+      "validation": {
+        "strategy_name": "canslim_lite",
+        "walk_forward": {
+          "status": "not_available_in_current_mvp",
+          "metric": "not_available_in_current_mvp",
+          "strategy_name": "canslim_lite",
+          "reason": "walk_forward_window_engine_not_implemented",
+          "planned_inputs": [
+            "strategy_name",
+            "train_window_trading_days",
+            "test_window_trading_days",
+            "step_trading_days",
+            "baseline_snapshot"
+          ],
+          "calculated": false
+        },
+        "overfitting": {
+          "pbo": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+            "calculated": false
+          },
+          "deflated_sharpe_ratio": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "calculated": false
+          }
+        },
+        "attribution": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "canslim_lite",
+          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+          "planned_dimensions": [
+            "market_regime",
+            "sector",
+            "strategy_name",
+            "pass_flags",
+            "failed_conditions",
+            "risk_flags"
+          ],
+          "calculated": false
+        }
       }
     },
     {
@@ -122,7 +417,12 @@
         "trade_count": 0,
         "win_rate": 0.0,
         "total_return": 0.0,
-        "max_drawdown": 0.0
+        "max_drawdown": 0.0,
+        "walk_forward": "not_available_in_current_mvp",
+        "pbo": "not_available_in_current_mvp",
+        "probability_of_backtest_overfitting": "not_available_in_current_mvp",
+        "deflated_sharpe_ratio": "not_available_in_current_mvp",
+        "factor_filter_attribution": "not_available_in_current_mvp"
       },
       "delta": {
         "baseline": "unspecified",
@@ -130,6 +430,52 @@
         "win_rate_delta": null,
         "total_return_delta": null,
         "max_drawdown_delta": null
+      },
+      "validation": {
+        "strategy_name": "new_high_breakout",
+        "walk_forward": {
+          "status": "not_available_in_current_mvp",
+          "metric": "not_available_in_current_mvp",
+          "strategy_name": "new_high_breakout",
+          "reason": "walk_forward_window_engine_not_implemented",
+          "planned_inputs": [
+            "strategy_name",
+            "train_window_trading_days",
+            "test_window_trading_days",
+            "step_trading_days",
+            "baseline_snapshot"
+          ],
+          "calculated": false
+        },
+        "overfitting": {
+          "pbo": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+            "calculated": false
+          },
+          "deflated_sharpe_ratio": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "calculated": false
+          }
+        },
+        "attribution": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "new_high_breakout",
+          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+          "planned_dimensions": [
+            "market_regime",
+            "sector",
+            "strategy_name",
+            "pass_flags",
+            "failed_conditions",
+            "risk_flags"
+          ],
+          "calculated": false
+        }
       }
     },
     {
@@ -147,10 +493,15 @@
       "backtest": {
         "summary_source": "computed_available_window",
         "error": null,
-        "trade_count": 54,
-        "win_rate": 0.5556,
-        "total_return": 0.082043,
-        "max_drawdown": -0.037722
+        "trade_count": 55,
+        "win_rate": 0.5636,
+        "total_return": 0.09043,
+        "max_drawdown": -0.037722,
+        "walk_forward": "not_available_in_current_mvp",
+        "pbo": "not_available_in_current_mvp",
+        "probability_of_backtest_overfitting": "not_available_in_current_mvp",
+        "deflated_sharpe_ratio": "not_available_in_current_mvp",
+        "factor_filter_attribution": "not_available_in_current_mvp"
       },
       "delta": {
         "baseline": "unspecified",
@@ -158,6 +509,52 @@
         "win_rate_delta": null,
         "total_return_delta": null,
         "max_drawdown_delta": null
+      },
+      "validation": {
+        "strategy_name": "pullback_20ema",
+        "walk_forward": {
+          "status": "not_available_in_current_mvp",
+          "metric": "not_available_in_current_mvp",
+          "strategy_name": "pullback_20ema",
+          "reason": "walk_forward_window_engine_not_implemented",
+          "planned_inputs": [
+            "strategy_name",
+            "train_window_trading_days",
+            "test_window_trading_days",
+            "step_trading_days",
+            "baseline_snapshot"
+          ],
+          "calculated": false
+        },
+        "overfitting": {
+          "pbo": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+            "calculated": false
+          },
+          "deflated_sharpe_ratio": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "calculated": false
+          }
+        },
+        "attribution": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "pullback_20ema",
+          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+          "planned_dimensions": [
+            "market_regime",
+            "sector",
+            "strategy_name",
+            "pass_flags",
+            "failed_conditions",
+            "risk_flags"
+          ],
+          "calculated": false
+        }
       }
     },
     {
@@ -176,9 +573,14 @@
         "summary_source": "computed_available_window",
         "error": null,
         "trade_count": 16,
-        "win_rate": 0.6875,
-        "total_return": 0.061753,
-        "max_drawdown": -0.008953
+        "win_rate": 0.75,
+        "total_return": 0.048331,
+        "max_drawdown": -0.008945,
+        "walk_forward": "not_available_in_current_mvp",
+        "pbo": "not_available_in_current_mvp",
+        "probability_of_backtest_overfitting": "not_available_in_current_mvp",
+        "deflated_sharpe_ratio": "not_available_in_current_mvp",
+        "factor_filter_attribution": "not_available_in_current_mvp"
       },
       "delta": {
         "baseline": "unspecified",
@@ -186,6 +588,52 @@
         "win_rate_delta": null,
         "total_return_delta": null,
         "max_drawdown_delta": null
+      },
+      "validation": {
+        "strategy_name": "momentum_rank",
+        "walk_forward": {
+          "status": "not_available_in_current_mvp",
+          "metric": "not_available_in_current_mvp",
+          "strategy_name": "momentum_rank",
+          "reason": "walk_forward_window_engine_not_implemented",
+          "planned_inputs": [
+            "strategy_name",
+            "train_window_trading_days",
+            "test_window_trading_days",
+            "step_trading_days",
+            "baseline_snapshot"
+          ],
+          "calculated": false
+        },
+        "overfitting": {
+          "pbo": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+            "calculated": false
+          },
+          "deflated_sharpe_ratio": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "calculated": false
+          }
+        },
+        "attribution": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "momentum_rank",
+          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+          "planned_dimensions": [
+            "market_regime",
+            "sector",
+            "strategy_name",
+            "pass_flags",
+            "failed_conditions",
+            "risk_flags"
+          ],
+          "calculated": false
+        }
       }
     },
     {
@@ -205,8 +653,13 @@
         "error": null,
         "trade_count": 8,
         "win_rate": 0.875,
-        "total_return": 0.051686,
-        "max_drawdown": -0.000743
+        "total_return": 0.051139,
+        "max_drawdown": -0.000737,
+        "walk_forward": "not_available_in_current_mvp",
+        "pbo": "not_available_in_current_mvp",
+        "probability_of_backtest_overfitting": "not_available_in_current_mvp",
+        "deflated_sharpe_ratio": "not_available_in_current_mvp",
+        "factor_filter_attribution": "not_available_in_current_mvp"
       },
       "delta": {
         "baseline": "unspecified",
@@ -214,6 +667,52 @@
         "win_rate_delta": null,
         "total_return_delta": null,
         "max_drawdown_delta": null
+      },
+      "validation": {
+        "strategy_name": "relative_strength_leader",
+        "walk_forward": {
+          "status": "not_available_in_current_mvp",
+          "metric": "not_available_in_current_mvp",
+          "strategy_name": "relative_strength_leader",
+          "reason": "walk_forward_window_engine_not_implemented",
+          "planned_inputs": [
+            "strategy_name",
+            "train_window_trading_days",
+            "test_window_trading_days",
+            "step_trading_days",
+            "baseline_snapshot"
+          ],
+          "calculated": false
+        },
+        "overfitting": {
+          "pbo": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+            "calculated": false
+          },
+          "deflated_sharpe_ratio": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "calculated": false
+          }
+        },
+        "attribution": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "relative_strength_leader",
+          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+          "planned_dimensions": [
+            "market_regime",
+            "sector",
+            "strategy_name",
+            "pass_flags",
+            "failed_conditions",
+            "risk_flags"
+          ],
+          "calculated": false
+        }
       }
     },
     {
@@ -234,7 +733,12 @@
         "trade_count": 0,
         "win_rate": 0.0,
         "total_return": 0.0,
-        "max_drawdown": 0.0
+        "max_drawdown": 0.0,
+        "walk_forward": "not_available_in_current_mvp",
+        "pbo": "not_available_in_current_mvp",
+        "probability_of_backtest_overfitting": "not_available_in_current_mvp",
+        "deflated_sharpe_ratio": "not_available_in_current_mvp",
+        "factor_filter_attribution": "not_available_in_current_mvp"
       },
       "delta": {
         "baseline": "unspecified",
@@ -242,6 +746,52 @@
         "win_rate_delta": null,
         "total_return_delta": null,
         "max_drawdown_delta": null
+      },
+      "validation": {
+        "strategy_name": "darvas_box",
+        "walk_forward": {
+          "status": "not_available_in_current_mvp",
+          "metric": "not_available_in_current_mvp",
+          "strategy_name": "darvas_box",
+          "reason": "walk_forward_window_engine_not_implemented",
+          "planned_inputs": [
+            "strategy_name",
+            "train_window_trading_days",
+            "test_window_trading_days",
+            "step_trading_days",
+            "baseline_snapshot"
+          ],
+          "calculated": false
+        },
+        "overfitting": {
+          "pbo": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+            "calculated": false
+          },
+          "deflated_sharpe_ratio": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "calculated": false
+          }
+        },
+        "attribution": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "darvas_box",
+          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+          "planned_dimensions": [
+            "market_regime",
+            "sector",
+            "strategy_name",
+            "pass_flags",
+            "failed_conditions",
+            "risk_flags"
+          ],
+          "calculated": false
+        }
       }
     },
     {
@@ -262,7 +812,12 @@
         "trade_count": 13,
         "win_rate": 1.0,
         "total_return": 0.020907,
-        "max_drawdown": 0.0
+        "max_drawdown": 0.0,
+        "walk_forward": "not_available_in_current_mvp",
+        "pbo": "not_available_in_current_mvp",
+        "probability_of_backtest_overfitting": "not_available_in_current_mvp",
+        "deflated_sharpe_ratio": "not_available_in_current_mvp",
+        "factor_filter_attribution": "not_available_in_current_mvp"
       },
       "delta": {
         "baseline": "unspecified",
@@ -270,12 +825,59 @@
         "win_rate_delta": null,
         "total_return_delta": null,
         "max_drawdown_delta": null
+      },
+      "validation": {
+        "strategy_name": "stage_analysis_weekly",
+        "walk_forward": {
+          "status": "not_available_in_current_mvp",
+          "metric": "not_available_in_current_mvp",
+          "strategy_name": "stage_analysis_weekly",
+          "reason": "walk_forward_window_engine_not_implemented",
+          "planned_inputs": [
+            "strategy_name",
+            "train_window_trading_days",
+            "test_window_trading_days",
+            "step_trading_days",
+            "baseline_snapshot"
+          ],
+          "calculated": false
+        },
+        "overfitting": {
+          "pbo": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "combinatorially_symmetric_cross_validation_not_implemented",
+            "calculated": false
+          },
+          "deflated_sharpe_ratio": {
+            "status": "not_available_in_current_mvp",
+            "value": "not_available_in_current_mvp",
+            "reason": "multiple_testing_and_non_normal_return_adjustment_not_implemented",
+            "calculated": false
+          }
+        },
+        "attribution": {
+          "status": "not_available_in_current_mvp",
+          "value": "not_available_in_current_mvp",
+          "strategy_name": "stage_analysis_weekly",
+          "reason": "trade_outcome_to_factor_filter_join_not_implemented",
+          "planned_dimensions": [
+            "market_regime",
+            "sector",
+            "strategy_name",
+            "pass_flags",
+            "failed_conditions",
+            "risk_flags"
+          ],
+          "calculated": false
+        }
       }
     }
   ],
-  "generated_at": "2026-05-26T04:00:06.473637+00:00",
+  "generated_at": "2026-05-26T09:41:15.573545+00:00",
   "report": {
     "format": "json",
+    "kind": "strategy_validation_summary",
     "path": "C:\\Users\\demon\\Desktop\\Stock-Analist-auto trading\\backend\\reports\\strategy_validation_252d.json",
     "filename": "strategy_validation_252d.json"
   },
@@ -288,7 +890,8 @@
       "summary_endpoint",
       "report_path",
       "baseline_status",
-      "safety_contract"
+      "safety_contract",
+      "unavailable_metrics"
     ]
   }
 }

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.database import get_db
 from backend.app.models.schemas import BacktestRunRequest
 from backend.app.services.backtest_service import BacktestService
-from backend.app.services.report_service import ReportService
+from backend.app.services.validation_service import StrategyValidationService, ValidationReportService
 
 router = APIRouter(prefix="/api/backtest", tags=["backtest"])
 
@@ -45,12 +45,12 @@ def strategy_summary(
             if not isinstance(loaded_snapshot, dict):
                 raise ValueError("baseline_snapshot은 JSON object여야 합니다.")
             parsed_snapshot = loaded_snapshot
-        summary = BacktestService(db).strategy_summary(
+        summary = StrategyValidationService(db).strategy_summary(
             lookback_days=lookback_days,
             baseline_run_id=baseline_run_id,
             baseline_snapshot=parsed_snapshot,
         )
-        return ReportService(db).write_strategy_validation_summary(summary, lookback_days=lookback_days)
+        return ValidationReportService().write_strategy_validation_summary(summary, lookback_days=lookback_days)
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="baseline_snapshot JSON 파싱에 실패했습니다.") from exc
     except ValueError as exc:
@@ -68,5 +68,13 @@ def list_backtest_runs(
 def backtest_run_detail(run_id: str, db: Session = Depends(get_db)) -> dict[str, object]:
     try:
         return BacktestService(db).get_run(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/runs/{run_id}/trades")
+def backtest_run_trades(run_id: str, db: Session = Depends(get_db)) -> list[dict[str, object]]:
+    try:
+        return BacktestService(db).get_run_trades(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

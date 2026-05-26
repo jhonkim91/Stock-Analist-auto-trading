@@ -74,6 +74,14 @@ def _passing_indicator(**overrides):
         "weekly_volume_ratio_available": True,
         "weekly_rs_score": 0.90,
         "weekly_rs_score_available": True,
+        "breadth_advance_decline_ratio": 0.70,
+        "breadth_advance_decline_available": True,
+        "breadth_52w_high_low_ratio": 0.80,
+        "breadth_52w_high_low_available": True,
+        "breadth_ma50_participation": 0.75,
+        "breadth_ma50_participation_available": True,
+        "breadth_score": 0.75,
+        "breadth_score_available": True,
         "volume_ma20": 250000.0,
         "volume_ma50": 100000.0,
         "volume_ratio_50": 1.1,
@@ -376,6 +384,40 @@ def test_canslim_missing_earnings_event_fails_closed_with_metadata():
     assert "earnings_blackout_clear" in result.failed_conditions
     assert result.metadata["earnings_blackout_status"] == "earnings_event_missing_fail_closed"
     assert result.metadata["data_quality_flags"]["earnings_event_available"] is False
+
+
+@pytest.mark.parametrize(
+    ("event_overrides", "expected_status", "expected_flag"),
+    [
+        ({"release_ts": None, "session": "after_close"}, "earnings_release_ts_unavailable_fail_closed", "earnings_release_ts_available"),
+        (
+            {"release_ts": datetime(2026, 5, 14, 15, 30), "session": None},
+            "earnings_session_unavailable_fail_closed",
+            "earnings_session_available",
+        ),
+        (
+            {"release_ts": datetime(2026, 5, 14, 15, 30), "session": "unknown"},
+            "earnings_session_unavailable_fail_closed",
+            "earnings_session_recognized",
+        ),
+    ],
+)
+def test_canslim_missing_earnings_timestamp_or_session_fails_closed(event_overrides, expected_status, expected_flag):
+    event = _earnings_event(days_to_earnings=-6)
+    for key, value in event_overrides.items():
+        setattr(event, key, value)
+
+    result = CanslimLiteStrategy(_strategy_config("canslim_lite", earnings_blackout_days=5)).evaluate(
+        _passing_indicator(earnings_event=event),
+        _passing_fundamentals(),
+        "bull",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["earnings_blackout_clear"] is False
+    assert result.metadata["earnings_blackout_status"] == expected_status
+    assert result.metadata["data_quality_flags"][expected_flag] is False
+    assert result.metadata["data_quality_flags"]["earnings_blackout_evaluated"] is False
 
 
 def test_canslim_institutional_proxy_is_optional_and_config_gated():
@@ -1443,6 +1485,45 @@ def test_stage_analysis_weekly_rejects_low_market_score_when_filter_enabled():
     assert result.metadata["data_quality_flags"]["market_score_available"] is True
 
 
+def test_stage_analysis_weekly_applies_breadth_filter_only_when_enabled():
+    config = get_config("strategies")
+    disabled = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
+        _passing_indicator(breadth_score=0.10, breadth_score_available=True),
+        _passing_fundamentals(),
+        "neutral",
+    )
+    enabled = StageAnalysisWeeklyStrategy(
+        {**config["stage_analysis_weekly"], "breadth_score_filter_enabled": True, "breadth_score_min": 0.50}
+    ).evaluate(
+        _passing_indicator(breadth_score=0.49, breadth_score_available=True),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert disabled.passed is True
+    assert "breadth_score_min" not in disabled.pass_flags
+    assert enabled.passed is False
+    assert enabled.pass_flags["breadth_score_min"] is False
+    assert "breadth_score_min" in enabled.failed_conditions
+    assert "breadth_score_min" in enabled.metadata["optional_conditions"]
+    assert enabled.metadata["data_quality_flags"]["breadth_score_available"] is True
+
+
+def test_stage_analysis_weekly_fails_closed_when_enabled_breadth_is_missing():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(
+        {**config["stage_analysis_weekly"], "breadth_score_filter_enabled": True, "breadth_score_min": 0.50}
+    ).evaluate(
+        _passing_indicator(breadth_score=None, breadth_score_available=False),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["breadth_score_min"] is False
+    assert result.metadata["data_quality_flags"]["breadth_score_available"] is False
+
+
 def test_stage_analysis_weekly_allows_missing_fundamentals_when_quality_filter_disabled():
     config = get_config("strategies")
     result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
@@ -1530,6 +1611,31 @@ def test_momentum_rank_keeps_atr_and_volume_filters_optional_by_default():
     assert "volume_ratio_50_min" not in result.pass_flags
     assert result.metadata["risk_flags"]["atr20_pct_too_high"] is True
     assert result.metadata["risk_flags"]["volume_ratio_50_too_low"] is True
+
+
+def test_momentum_rank_applies_breadth_filter_only_when_enabled():
+    config = get_config("strategies")
+    disabled = MomentumRankStrategy(config["momentum_rank"]).evaluate(
+        _passing_indicator(breadth_score=0.10, breadth_score_available=True),
+        _passing_fundamentals(),
+        "neutral",
+    )
+    enabled = MomentumRankStrategy(
+        {**config["momentum_rank"], "breadth_score_filter_enabled": True, "breadth_score_min": 0.50}
+    ).evaluate(
+        _passing_indicator(breadth_score=0.49, breadth_score_available=True),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert disabled.passed is True
+    assert "breadth_score_min" not in disabled.pass_flags
+    assert disabled.metadata["breadth_score"] == pytest.approx(0.10)
+    assert enabled.passed is False
+    assert enabled.pass_flags["breadth_score_min"] is False
+    assert "breadth_score_min" in enabled.failed_conditions
+    assert "breadth_score_min" in enabled.metadata["optional_conditions"]
+    assert enabled.metadata["data_quality_flags"]["breadth_score_available"] is True
 
 
 def test_momentum_rank_rejects_high_atr20_pct_when_filter_enabled():

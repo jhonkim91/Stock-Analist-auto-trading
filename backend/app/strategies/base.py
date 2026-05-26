@@ -98,6 +98,7 @@ class BaseStrategy:
         include_near_high: bool = False,
         include_fundamental_quality: bool = False,
         include_earnings_quality: bool = False,
+        include_breadth: bool = False,
     ) -> None:
         if bool(self.config.get("market_regime_not_bear_enabled", False)) and "market_regime_not_bear" not in flags:
             flags["market_regime_not_bear"] = market_regime != "bear"
@@ -135,6 +136,58 @@ class BaseStrategy:
         if include_earnings_quality and bool(self.config.get("optional_earnings_quality_enabled", False)):
             flags["optional_earnings_quality"] = self._optional_earnings_quality(fundamentals)
             optional_conditions.append("optional_earnings_quality")
+        if include_breadth:
+            self._apply_optional_breadth_hardening_flags(flags, optional_conditions, indicator)
+
+    def _apply_optional_breadth_hardening_flags(
+        self,
+        flags: dict[str, bool],
+        optional_conditions: list[str],
+        indicator: IndicatorSnapshot,
+    ) -> None:
+        breadth_filters = (
+            (
+                "breadth_score_min",
+                "breadth_score",
+                "breadth_score_available",
+                ("breadth_score_filter_enabled", "breadth_score_min_enabled"),
+            ),
+            (
+                "breadth_advance_decline_ratio_min",
+                "breadth_advance_decline_ratio",
+                "breadth_advance_decline_available",
+                (
+                    "breadth_advance_decline_filter_enabled",
+                    "breadth_advance_decline_ratio_min_enabled",
+                ),
+            ),
+            (
+                "breadth_52w_high_low_ratio_min",
+                "breadth_52w_high_low_ratio",
+                "breadth_52w_high_low_available",
+                (
+                    "breadth_52w_high_low_filter_enabled",
+                    "breadth_52w_high_low_ratio_min_enabled",
+                ),
+            ),
+            (
+                "breadth_ma50_participation_min",
+                "breadth_ma50_participation",
+                "breadth_ma50_participation_available",
+                (
+                    "breadth_ma50_participation_filter_enabled",
+                    "breadth_ma50_participation_min_enabled",
+                ),
+            ),
+        )
+        for condition, value_field, available_field, enabled_fields in breadth_filters:
+            if condition in flags or not any(bool(self.config.get(field, False)) for field in enabled_fields):
+                continue
+            threshold = self._as_float(self.config.get(condition, self.config.get(f"min_{value_field}")))
+            value = self._as_float(getattr(indicator, value_field, None))
+            available = bool(getattr(indicator, available_field, False))
+            flags[condition] = available and threshold is not None and value is not None and value >= threshold
+            optional_conditions.append(condition)
 
     def _hardening_data_quality_flags(
         self,
@@ -164,9 +217,32 @@ class BaseStrategy:
                 and getattr(fundamentals, "quarterly_eps_growth", None) is not None
                 and getattr(fundamentals, "sales_growth", None) is not None
             ),
+            "breadth_score_available": bool(getattr(indicator, "breadth_score_available", False)),
+            "breadth_advance_decline_available": bool(
+                getattr(indicator, "breadth_advance_decline_available", False)
+            ),
+            "breadth_52w_high_low_available": bool(getattr(indicator, "breadth_52w_high_low_available", False)),
+            "breadth_ma50_participation_available": bool(
+                getattr(indicator, "breadth_ma50_participation_available", False)
+            ),
             "suggested_stop_price_available": risk_metadata.get("suggested_stop_price") is not None,
             "risk_per_share_available": risk_metadata.get("risk_per_share") is not None,
             "entry_chase_reference_available": risk_metadata.get("entry_chase_reference") is not None,
+        }
+
+    def _breadth_metadata(self, indicator: IndicatorSnapshot) -> dict[str, Any]:
+        return {
+            "breadth_score": self._round_float(getattr(indicator, "breadth_score", None)),
+            "breadth_advance_decline_ratio": self._round_float(
+                getattr(indicator, "breadth_advance_decline_ratio", None)
+            ),
+            "breadth_52w_high_low_ratio": self._round_float(
+                getattr(indicator, "breadth_52w_high_low_ratio", None)
+            ),
+            "breadth_ma50_participation": self._round_float(
+                getattr(indicator, "breadth_ma50_participation", None)
+            ),
+            "breadth_score_available": bool(getattr(indicator, "breadth_score_available", False)),
         }
 
     def _risk_metadata(
@@ -293,3 +369,7 @@ class BaseStrategy:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    def _round_float(self, value: Any) -> float | None:
+        number = self._as_float(value)
+        return round(number, 6) if number is not None else None

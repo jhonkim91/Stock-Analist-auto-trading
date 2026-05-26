@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `Strategy Validation 252d Summary`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
+현재 기준선은 `Data Reliability 2`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -10,12 +10,12 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.16.4` |
-| Phase | `Strategy Validation 252d Summary` |
+| Version | `MVP v0.20.0` |
+| Phase | `Data Reliability 2` |
 | Branch | `main` |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | Trading state | fail-closed, preview-only, real order 미구현 |
-| Next recommended phase | `Phase 3I Weekly Review Report` |
+| Next recommended phase | `Parameter Snapshot Foundation for Drift Check` |
 
 ## Implemented Scope
 
@@ -32,8 +32,14 @@
 - Phase C-1 to C-6: `momentum_rank`, `relative_strength_leader`, `new_high_breakout`, `darvas_box`, `stage_analysis_weekly`, `pullback_20ema`.
 - Phase C Strategy Hardening Foundation: 9개 전략의 optional hardening 조건 기반, `data_quality_flags`, additive `risk_metadata`.
 - Strategy validation summary: 최근 252 trading days 기준 strategy별 screener/backtest 요약과 baseline delta contract.
+- Backtest integrity hardening: RR 목표가 의미, `rank_portfolio` realized-equity 회계, 평균 활성 포지션 range 집계 보강.
+- Weekly strategy review: `POST /api/reports/weekly`, `report_type="weekly"` persistence, daily/weekly report filtering, ledger-backed realized metrics.
+- Backtest trade ledger: `backtest_trade_ledger` table, `GET /api/backtest/runs/{run_id}/trades`, weekly realized PnL/win rate/failed trades review.
+- Venue-aware session preview layer: KRX/NXT session window service, `/api/market/session`, `/api/market/sessions`, `/api/market/calendar`, broker/paper preview `session_metadata`.
+- Indicator incremental + breadth-aware regime: `/api/indicators/recompute`는 full recompute와 `symbol`, `start_date`, `end_date` 범위 recompute를 지원하고, `RegimeService`는 advance/decline, 52-week high/low, MA50 participation breadth proxy를 함께 반환한다.
+- Data Reliability 2: earnings event timestamp/session 기반 blackout 판단, corporate action effective-date as-of 조회, adjusted/raw price 선택 계약을 보강했다.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
-- Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration.
+- Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration.
 
 ## Strategy Behavior
 
@@ -56,10 +62,10 @@
 | `canslim_lite` | sector RS, earnings quality | technical trend, volume confirmation |
 | `new_high_breakout` | common hardening 기반 sector RS, ATR risk | 52주 고점/근접 고점, breakout, volume surge |
 | `pullback_20ema` | sector RS, near-high 52w, fundamentals quality | EMA20 touch/reclaim, ATR cap, market regime |
-| `momentum_rank` | ATR risk, volume confirmation | RS percentile, RS score, trend score, sector/market score |
+| `momentum_rank` | ATR risk, volume confirmation, breadth score | RS percentile, RS score, trend score, sector/market score |
 | `relative_strength_leader` | market score, ATR risk, fundamentals quality | RS leadership, sector RS, near-high 52w, market regime |
 | `darvas_box` | sector RS, ATR risk | box range, close above box, risk per share, long trend |
-| `stage_analysis_weekly` | sector RS, market score, fundamentals quality | weekly close/SMA30/slope availability, Stage 2 trend, market regime |
+| `stage_analysis_weekly` | sector RS, market score, fundamentals quality, breadth score | weekly close/SMA30/slope availability, Stage 2 trend, market regime |
 
 ## Strategy Config
 
@@ -75,11 +81,36 @@ common:
     atr20_pct_max_enabled: false
     volume_ratio_50_min_enabled: false
     near_high_52w_threshold_enabled: false
+    breadth_score_filter_enabled: false
+    breadth_advance_decline_filter_enabled: false
+    breadth_52w_high_low_filter_enabled: false
+    breadth_ma50_participation_filter_enabled: false
     optional_fundamental_quality_enabled: false
     optional_earnings_quality_enabled: false
 ```
 
 전략별 핵심 설정은 같은 파일의 각 strategy key에서 관리합니다.
+
+## Indicators And Regime
+
+- `IndicatorService.recompute()`는 기본 전체 재계산을 유지하면서 `symbol`, `start_date`, `end_date`를 받는 증분 경로를 제공합니다.
+- 증분 경로는 요청 시작일보다 앞선 warm-up 윈도우를 읽어 rolling/weekly/RS 파생값을 계산하고, snapshot 쓰기 전 요청된 symbol/date 범위만 삭제 후 재삽입합니다.
+- 주봉 파생값은 기존 `indicator_snapshot` nullable fields 패턴을 유지하며 helper로 분리했습니다. 별도 `weekly_ohlcv` 물리 테이블은 만들지 않았습니다. 현재 필요한 값은 daily OHLCV에서 as-of로 재계산 가능하고, 저장 계약을 늘리면 migration/운영 부담이 커지기 때문입니다.
+- breadth proxy는 `indicator_snapshot`에 날짜별 동일 값으로 저장합니다: `breadth_advance_decline_ratio`, `breadth_52w_high_low_ratio`, `breadth_ma50_participation`, `breadth_score`.
+- `RegimeService`는 기존 index/weekly 조건에 breadth 진단을 더합니다. breadth가 약하면 bull 판정을 neutral로 낮추고, breadth 입력이 없으면 `breadth_regime="not_available"` 및 availability flag false로 처리합니다.
+- `momentum_rank`, `stage_analysis_weekly`는 breadth hardening을 optional config flag가 켜진 경우에만 적용합니다. 데이터가 없고 filter가 켜져 있으면 fail-closed로 탈락합니다.
+
+## Data Reliability Rules
+
+| 영역 | 규약 |
+|---|---|
+| Earnings event | `earnings_events.earnings_date`, `release_ts`, `session`을 함께 사용한다. CANSLIM Lite는 `release_ts.date()` 기준 blackout window를 계산하고, event/date/timestamp/session이 없거나 session이 미인식이면 `earnings_blackout_clear=false`로 fail-closed 처리한다. |
+| Earnings lookup | `MarketRepository.earnings_event_asof()`는 blackout 판단용 event-calendar 조회다. 예정 이벤트도 위험 요인이므로 lookahead window를 허용하지만, timestamp/session 품질 판단은 strategy metadata와 `data_quality_flags`에 남긴다. |
+| Corporate action effective-date | 현재 DB의 `corporate_actions.action_date`를 effective-date로 해석한다. `MarketRepository.corporate_actions_asof()`는 항상 `action_date <= trade_date` row만 반환하며 future action은 조정가 계산에 사용하지 않는다. |
+| Adjusted/raw price | daily import는 raw OHLCV와 `adj_close`를 저장할 뿐 가격 선택을 결정하지 않는다. Backtest execution의 `use_adjusted_price=true`일 때도 해당 bar의 `trade_date`까지 유효한 corporate action이 있어야 `adj_close / close` factor를 적용한다. 조건이 없으면 raw OHLC로 실행하고 `price_detail`에 사유를 남긴다. |
+| Import warning | CSV/external daily OHLCV preview에서 `adj_close != close`인데 effective corporate action이 없으면 `ADJUSTED_CLOSE_WITHOUT_EFFECTIVE_CORPORATE_ACTION` warning을 남긴다. 이는 preview 품질 신호이며 confirm 자체를 막는 error는 아니다. |
+| Weekly OHLCV | 별도 `weekly_ohlcv` migration은 추가하지 않는다. 현재 전략이 필요한 주봉 파생값은 daily OHLCV에서 as-of로 계산해 `indicator_snapshot` nullable fields와 availability flags에 저장한다. |
+| Fixture scope | KRX corporate action fixture는 schema/normalize contract와 as-of 규칙을 검증한다. 실제 KIS/KRX/yfinance network fetch, live corporate action loader, earnings calendar 실데이터 연동은 구현하지 않는다. |
 
 ## Strategy Validation Summary
 
@@ -93,6 +124,87 @@ common:
 | Artifact | `backend/reports/strategy_validation_252d.json` |
 
 기존 `/api/backtest/run`, `/api/backtest/runs`, `/api/backtest/runs/{run_id}` contract는 변경하지 않습니다.
+
+## Reports
+
+`ReportService`는 daily와 weekly Markdown report를 같은 저장 계약으로 관리합니다. 두 report 모두 `reports` 테이블, `backend/reports/*.md`, `GET /api/reports/{report_id}`, `GET /api/reports/{report_id}/markdown`을 재사용합니다.
+
+| 구분 | 생성 API | `report_type` | 목적 | 계산 기준 |
+|---|---|---|---|---|
+| Daily Market Report | `POST /api/reports/daily` | `daily` | 당일 screener 결과, market regime, sector rotation, mock order review | `screen_results.trade_date` 단일 기준일 |
+| Weekly Strategy Review | `POST /api/reports/weekly` | `weekly` | 주간 성과/리스크 리뷰, setup별 screening/trade hit rate, regime/filter diagnostics | 최근 available `screen_results.trade_date` 최대 5개 + `backtest_trade_ledger.exit_date` |
+
+목록 API는 기존 계약을 유지하면서 유형 필터를 추가로 지원합니다.
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/api/reports?report_type=daily&limit=20"
+Invoke-RestMethod "http://127.0.0.1:8000/api/reports?report_type=weekly&limit=20"
+```
+
+Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `realized_pnl`, `realized_return`, `win_rate`, `average_holding_days`, setup별 trade hit rate, failed trades review를 계산합니다. ledger가 없거나 현재 MVP에 데이터 계약이 없는 항목은 거짓 수치로 채우지 않고 `not_available_in_current_mvp`로 표기합니다.
+
+| 항목 | 사유 |
+|---|---|
+| `realized_drawdown`, `realized_exposure`, `open_position_risk` | portfolio state와 position ledger 미구현 |
+| `regime_segment_return`, realized factor/filter PnL attribution | regime/factor별 성과 연결 계약 미구현 |
+| `max_adverse_excursion_review` | MAE/MFE 경로별 adverse excursion 저장 계약 미구현 |
+| `parameter_snapshot_diff`, `drifted_parameters` | historical strategy parameter snapshot 미저장 |
+
+## Portfolio Risk Guard v2
+
+`GET /api/portfolio/risk`는 기존 Phase 2 응답 필드를 제거하지 않고, 현재 `positions`와 최신 통과 `screen_results`를 함께 읽어 노출 구조를 additive로 반환합니다. 핵심 원칙은 포지션 개수보다 총 노출, 섹터, 종목, 전략별 집중도를 먼저 보는 것입니다.
+
+| 항목 | 계산 기준 |
+|---|---|
+| `max_open_positions` | `backend/config/risk.yaml`의 `portfolio.max_open_positions` |
+| `gross_exposure`, `combined_gross_exposure` | 현재 position notional, 현재+제안 notional |
+| `sector_exposure`, `symbol_exposure`, `strategy_exposure` | current/proposed/combined bucket별 notional, equity 대비 비중, symbol 목록 |
+| `daily_loss_budget` | `equity * max_daily_loss_fraction`, 현재/제안 open risk 차감 후 잔여 예산 |
+| `gap_risk_estimate` | configured adverse gap fraction을 notional에 적용한 preview 추정치 |
+| `concentration_warnings` | symbol/sector/strategy 한도와 `max_open_positions` 초과 경고 |
+
+현재 summary는 synthetic/preview 성격입니다. `positions` 테이블은 실제 broker position sync가 아니며, `screen_results`는 주문 의사가 아니라 조건검색 통과 후보입니다. 따라서 실제 trade ledger 기반 계산처럼 체결가, 부분체결, 현금 잠금, 실현/미실현 PnL, 포지션 상태 전이를 완전히 반영하지 않습니다. 데이터가 부족한 gap risk는 거짓 0으로 채우지 않고 `not_available` 또는 warning으로 남깁니다.
+
+아직 구현하지 않은 항목은 broker position sync, paper/live position mutation, cash lock, open position state machine, realized exposure/drawdown, MAE/MFE, 실제 event risk hold입니다. 이 기능은 `orders`, `paper_orders`, broker/KIS route와 연결되지 않으며 preview-only 안전 경계를 유지합니다.
+
+## Venue-Aware Execution Assumptions
+
+`MarketSessionService`는 KRX와 NXT를 단일 한국 주식 세션으로 보지 않고 venue별 세션 window를 로컬 정적 규칙으로 판정합니다. 이 계층은 future order preview와 paper simulator가 같은 기준을 재사용하도록 만든 운영 메타데이터 계층이며, 실제 주문, token 발급, 호출량 차감, websocket 연결은 수행하지 않습니다.
+
+| Venue | 세션 | 주문 접수 | 거래 시간 | 현재 처리 |
+|---|---|---|---|---|
+| KRX | `pre_hours` | 07:30-09:00 | 07:30-09:00 | preview metadata only |
+| KRX | `regular` | 08:00-15:30 | 09:00-15:30 | preview metadata only |
+| KRX | `after_hours` | 15:30-18:00 | 15:40-18:00 | preview metadata only |
+| NXT | `pre_market` | 08:00-08:50 | 08:00-08:50 | preview metadata only |
+| NXT | `main` | 09:00:30-15:20 | 09:00:30-15:20 | preview metadata only |
+| NXT | `after_market` | 15:30-20:00 | 15:40-20:00 | preview metadata only |
+
+단일 `next_open` 또는 단일 정규장 가정만으로는 부족합니다. KRX와 NXT는 세션 이름, 주문 접수 시작, 실제 거래 시작, 마감 시간이 다르고, NXT는 KRX 정규장 전후로 더 긴 pre/after market을 제공합니다. 따라서 future order engine은 venue, session, 현재 세션 허용 여부, 다음 order window, token lifecycle, 호출량 예산을 하나의 운영 계층에서 함께 확인해야 합니다.
+
+현재 구현은 `session_metadata`를 `/api/broker/orders/preview`와 `/api/paper/orders/preview`에 additive로 노출할 뿐입니다. `operational_layer.live_submit_allowed=false`, `paper_submit_allowed=false`, `network_call_allowed=false`, `token_issued=false`를 유지하며, broker/paper preview는 계속 deny/fail-closed입니다.
+
+## Backtest Trade Ledger
+
+저장형 backtest run은 closed trade 전체를 `backtest_trade_ledger`에 저장합니다. 이 ledger는 backtest/report 분석용 산출물이며 실제 주문, paper order, broker adapter와 연결되지 않습니다.
+
+| 계약 | 내용 |
+|---|---|
+| 생성 | `POST /api/backtest/run`에서 `save=True` 기본값일 때 `backtest_runs`와 함께 저장 |
+| 식별 | `run_id + trade_index` unique |
+| 핵심 필드 | `strategy_name`, `symbol`, `signal_date`, `entry_date`, `exit_date`, `qty`, `entry_price`, `exit_price`, `pnl`, `return_pct`, `exit_reason` |
+| 상세 JSON | `execution_detail_json`, `liquidity_detail_json`, `price_detail_json`, `portfolio_detail_json` |
+| 조회 | `GET /api/backtest/runs/{run_id}`의 `trades`, `GET /api/backtest/runs/{run_id}/trades` |
+| 안전 경계 | `orders`, `paper_orders`, broker/KIS route를 생성하거나 호출하지 않음 |
+
+## Backtest Accounting Rules
+
+- `RiskService.calculate()`는 명시적 `suggested_target_price`/`target_price` 계열 값이 있으면 해당 목표가로 `reward_risk_ratio`를 계산한다.
+- `rr_score`는 `actual_reward_risk_ratio / configured_target_rr`를 1.0으로 clamp한 값이다.
+- `rr_ok`는 `actual_reward_risk_ratio >= configured_target_rr`일 때만 true이며, 정상 trade라도 목표가가 낮으면 false가 될 수 있다.
+- `rank_portfolio`는 각 `signal_date` 시작 시 `exit_date <= signal_date`인 trade PnL만 realized equity에 반영한다.
+- 같은 `rebalance_date`의 선택 종목은 모두 동일한 rebalance equity snapshot으로 sizing하며, future PnL은 exit_date 전 sizing에 반영하지 않는다.
+- `average_active_positions`는 `entry_date..exit_date` inclusive holding range를 sweep-line 방식으로 집계한다.
 
 ## Main APIs
 
@@ -110,17 +222,51 @@ common:
 | `GET` | `/api/kis/status` | KIS read-only status |
 | `GET` | `/api/kis/config` | KIS redacted config |
 | `POST` | `/api/kis/config/validate` | KIS env configured boolean 검증 |
+| `GET` | `/api/market/session` | venue/as_of 기준 현재 세션과 다음 window |
+| `GET` | `/api/market/sessions` | venue별 session window 목록 |
+| `GET` | `/api/market/calendar` | 정적 거래일 calendar preview |
 | `GET` | `/api/broker/status` | broker safety status |
-| `POST` | `/api/broker/orders/preview` | dry-run preview only |
+| `POST` | `/api/broker/orders/preview` | venue/session metadata 포함 dry-run preview only |
 | `GET` | `/api/paper/status` | paper disabled safety status |
-| `POST` | `/api/paper/orders/preview` | paper deny preview only |
+| `POST` | `/api/paper/orders/preview` | venue/session metadata 포함 paper deny preview only |
 | `POST` | `/api/screener/run` | rule-based screener run |
 | `GET` | `/api/screener/strategies` | frontend strategy selector metadata |
 | `GET` | `/api/screener/results` | screener result list with explanation contract |
+| `GET` | `/api/portfolio/risk` | Portfolio Risk Guard v2 synthetic exposure summary |
 | `POST` | `/api/backtest/run` | strategy backtest run |
 | `GET` | `/api/backtest/strategy-summary` | 최근 252 trading days strategy validation summary |
 | `GET` | `/api/backtest/runs` | backtest run 목록 |
 | `GET` | `/api/backtest/runs/{run_id}` | backtest run 상세 |
+| `GET` | `/api/backtest/runs/{run_id}/trades` | 저장된 backtest trade ledger |
+| `POST` | `/api/reports/daily` | daily market report 생성 |
+| `POST` | `/api/reports/weekly` | weekly strategy review 생성 |
+| `GET` | `/api/reports?report_type=daily` 또는 `/api/reports?report_type=weekly` | report 목록과 유형 필터 |
+| `GET` | `/api/reports/{report_id}/markdown` | daily/weekly Markdown 다운로드 |
+
+## Single PC Launcher
+
+Windows 단일 PC 실행은 기존 FastAPI backend와 Next.js frontend 구조를 유지한 채 launcher가 두 프로세스를 함께 관리한다.
+
+```powershell
+py launcher.py check
+py launcher.py setup
+py launcher.py run
+```
+
+더블클릭 실행은 프로젝트 루트의 `start_stock_analyst.cmd`를 사용한다. 실행이 완료되면 `http://127.0.0.1:3000/dashboard`가 기본 화면이며, backend는 `http://127.0.0.1:8000`에서 동작한다.
+
+종료:
+
+```powershell
+py launcher.py stop
+```
+
+주의 사항:
+
+- launcher는 기본 포트 `8000`과 `3000`만 사용한다.
+- 해당 포트가 launcher가 띄운 프로세스가 아닌 다른 프로세스에 의해 점유되어 있으면 stale server 위험 때문에 실행을 중단한다.
+- `setup`은 `.env.local`을 수정하지 않고 `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000` 환경 변수로 Next.js production build를 수행한다.
+- 실주문, 체결, paper mutation, KIS broker/order route는 추가하지 않는다.
 
 ## Run Locally
 
@@ -144,6 +290,25 @@ npm.cmd run start -- --hostname 127.0.0.1 --port 3000
 backend 포트가 `8001` 등으로 바뀌면 `frontend/.env.local`의 `NEXT_PUBLIC_API_BASE_URL`을 맞춘 뒤 다시 build/start 해야 합니다.
 
 ## Verification Commands
+
+Launcher:
+
+```powershell
+py launcher.py check
+py launcher.py setup
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_local_launcher.py -q
+py launcher.py run --no-browser
+Invoke-RestMethod http://127.0.0.1:8000/health
+Invoke-RestMethod http://127.0.0.1:8000/api/data/status
+Invoke-WebRequest http://127.0.0.1:3000/dashboard -UseBasicParsing
+py launcher.py stop
+```
+
+Backtest integrity targeted suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_risk.py backend/tests/test_backtest.py backend/tests/test_phase3g_backtest_execution_model.py -q
+```
 
 Backend full suite:
 
@@ -183,9 +348,10 @@ npm.cmd run build
 - `orders_count == 0` 유지.
 - `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` row count 0 유지.
 - `/api/broker/status`는 `can_submit=false`, `preview_only=true`, `token_issued=false`, `network_call_performed=false`를 반환.
-- `/api/broker/orders/preview`는 실제 주문, token 발급, network call, adapter order call 없이 deny preview만 반환.
+- `/api/broker/orders/preview`는 실제 주문, token 발급, network call, adapter order call 없이 deny preview만 반환하며, `session_metadata`는 additive metadata다.
 - `/api/paper/status`는 `enabled=false`, `can_create=false`, `can_simulate_fills=false`, `preview_only=true`를 반환.
-- `/api/paper/orders/preview`는 paper order/fill/position/audit mutation 없이 deny preview만 반환.
+- `/api/paper/orders/preview`는 paper order/fill/position/audit mutation 없이 deny preview만 반환하며, `session_metadata.operational_layer.paper_submit_allowed=false`를 유지한다.
+- KRX/NXT session window 판정은 로컬 정적 metadata이며 실제 거래소, KIS token, 호출량 API와 통신하지 않는다.
 - `POST /api/paper/orders`, `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*` route는 미등록 404 상태를 유지.
 - `.cache/kis/token.json`은 생성하지 않음.
 - API key, secret, token, password, account/header/raw credential 값을 저장하거나 출력하지 않음.

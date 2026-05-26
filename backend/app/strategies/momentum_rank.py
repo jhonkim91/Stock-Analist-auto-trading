@@ -47,6 +47,7 @@ class MomentumRankStrategy(BaseStrategy):
             fundamentals,
             market_regime,
             include_near_high=True,
+            include_breadth=True,
         )
         failed = self._failed(flags)
         passed = self._all_flags(flags)
@@ -74,6 +75,7 @@ class MomentumRankStrategy(BaseStrategy):
             "market_score": self._round_optional(getattr(indicator, "market_score", None)),
             "atr20_pct": self._round_optional(getattr(indicator, "atr20_pct", None)),
             "volume_ratio_50": self._round_optional(getattr(indicator, "volume_ratio_50", None)),
+            **self._breadth_metadata(indicator),
         }
         ranking_metadata = {
             "signal_type": "ranking_candidate",
@@ -146,6 +148,14 @@ class MomentumRankStrategy(BaseStrategy):
             "market_score_available": indicator.market_score is not None,
             "atr20_pct_available": getattr(indicator, "atr20_pct", None) is not None,
             "volume_ratio_50_available": getattr(indicator, "volume_ratio_50", None) is not None,
+            "breadth_score_available": bool(getattr(indicator, "breadth_score_available", False)),
+            "breadth_advance_decline_available": bool(
+                getattr(indicator, "breadth_advance_decline_available", False)
+            ),
+            "breadth_52w_high_low_available": bool(getattr(indicator, "breadth_52w_high_low_available", False)),
+            "breadth_ma50_participation_available": bool(
+                getattr(indicator, "breadth_ma50_participation_available", False)
+            ),
             "close_available": indicator.close is not None,
             "sma50_available": indicator.sma50 is not None,
             "sma150_available": indicator.sma150 is not None,

@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from datetime import date
 from types import SimpleNamespace
 
 import pandas as pd
 import pytest
+from sqlalchemy import select
 
 from backend.app.core.config import get_config
+from backend.app.models.tables import BacktestRun, BacktestTradeLedger, CorporateAction, SymbolMaster
+from backend.app.repositories.market_repository import MarketRepository
 from backend.app.services.backtest_service import BacktestService
 from backend.app.services.risk_service import RiskService
 from backend.app.services.scoring_service import ScoringService
+from backend.app.services.validation_service import NOT_AVAILABLE, StrategyValidationService, ValidationScaffold
 from backend.app.strategies.registry import get_available_strategy_registry
 
 
@@ -118,7 +123,7 @@ def _strategy_trade_service(indicator: SimpleNamespace) -> BacktestService:
         index_df=lambda: pd.DataFrame(),
         get_symbol=lambda _symbol: None,
     )
-    service.backtest_repo = SimpleNamespace(save=lambda _run: None)
+    service.backtest_repo = SimpleNamespace(save=lambda _run, _trades=None: None)
     service.risk_service = RiskService()
     service.scoring_service = ScoringService()
     service.strategy_config = strategy_config
@@ -169,7 +174,7 @@ def _rank_portfolio_service(
         index_df=lambda: pd.DataFrame(),
         get_symbol=lambda _symbol: None,
     )
-    service.backtest_repo = SimpleNamespace(save=lambda _run: None)
+    service.backtest_repo = SimpleNamespace(save=lambda _run, _trades=None: None)
     service.risk_service = RiskService()
     service.scoring_service = ScoringService()
     service.strategy_config = strategy_config
@@ -224,7 +229,7 @@ def test_backtest_runs_and_reports_required_metrics(seeded_db):
     result = BacktestService(seeded_db).run("trend_breakout", start_date=date(2026, 5, 1))
     metrics = result["metrics"]
 
-    assert {"run_id", "strategy_name", "metrics", "trades"}.issubset(result)
+    assert {"run_id", "strategy_name", "metrics", "trades", "trade_ledger"}.issubset(result)
     for key in (
         "trade_count",
         "trades",
@@ -251,6 +256,11 @@ def test_backtest_runs_and_reports_required_metrics(seeded_db):
         "average_active_positions",
         "rebalance_count",
         "portfolio_constructor_used",
+        "walk_forward",
+        "pbo",
+        "probability_of_backtest_overfitting",
+        "deflated_sharpe_ratio",
+        "factor_filter_attribution",
     ):
         assert key in metrics
     for key in (
@@ -263,7 +273,46 @@ def test_backtest_runs_and_reports_required_metrics(seeded_db):
     ):
         assert key in metrics
     assert metrics["regime_segment_return"] == "not_available_in_current_mvp"
+    assert metrics["walk_forward"] == NOT_AVAILABLE
+    assert metrics["pbo"] == NOT_AVAILABLE
+    assert metrics["deflated_sharpe_ratio"] == NOT_AVAILABLE
+    assert metrics["factor_filter_attribution"] == NOT_AVAILABLE
     assert metrics["trade_count"] >= 0
+    assert result["trade_ledger"]["persisted"] is True
+    assert result["trade_ledger"]["table"] == "backtest_trade_ledger"
+    assert result["trade_ledger"]["rows"] == metrics["trade_count"]
+    assert result["validation_framework"]["walk_forward"]["status"] == NOT_AVAILABLE
+    assert result["validation_framework"]["overfitting"]["pbo"]["value"] == NOT_AVAILABLE
+    assert result["validation_framework"]["trade_ledger_schema"]["scope"] == "backtest_and_report_analysis_only"
+
+
+def test_backtest_persists_trade_ledger_contract(seeded_db):
+    result = BacktestService(seeded_db).run("trend_breakout", start_date=date(2026, 5, 1))
+    run_id = result["run_id"]
+    rows = list(
+        seeded_db.scalars(
+            select(BacktestTradeLedger)
+            .where(BacktestTradeLedger.run_id == run_id)
+            .order_by(BacktestTradeLedger.trade_index)
+        ).all()
+    )
+
+    assert len(rows) == result["metrics"]["trade_count"]
+    assert [row.trade_index for row in rows] == list(range(1, len(rows) + 1))
+    if rows:
+        first = rows[0]
+        assert first.strategy_name == "trend_breakout"
+        assert first.status == "closed"
+        assert first.qty > 0
+        assert first.entry_date >= first.signal_date
+        assert first.exit_date >= first.entry_date
+        assert first.execution_detail_json.startswith("{")
+        assert first.liquidity_detail_json.startswith("{")
+
+    detail = BacktestService(seeded_db).get_run(run_id)
+    assert detail["trade_ledger_count"] == len(rows)
+    assert detail["trade_ledger"]["rows"] == len(rows)
+    assert len(detail["trades"]) == len(rows)
 
 
 def test_strategy_summary_uses_available_window_and_unspecified_baseline(seeded_db, monkeypatch):
@@ -278,14 +327,100 @@ def test_strategy_summary_uses_available_window_and_unspecified_baseline(seeded_
     assert summary["window"]["available_trading_days"] == len(limited_dates)
     assert summary["window"]["available_trading_days"] < summary["window"]["requested_trading_days"]
     assert summary["baseline"]["status"] == "unspecified"
+    assert summary["validation_framework"]["walk_forward"]["metric"] == NOT_AVAILABLE
+    assert summary["validation_framework"]["overfitting"]["pbo"]["value"] == NOT_AVAILABLE
+    assert summary["validation_framework"]["overfitting"]["deflated_sharpe_ratio"]["value"] == NOT_AVAILABLE
+    assert summary["validation_framework"]["attribution"]["value"] == NOT_AVAILABLE
+    assert "orders" in summary["validation_framework"]["trade_ledger_schema"]["not_connected_to"]
     assert summary["strategies"]
 
     first = summary["strategies"][0]
-    assert {"strategy_name", "screener", "backtest", "delta"}.issubset(first)
+    assert {"strategy_name", "screener", "backtest", "delta", "validation"}.issubset(first)
     assert first["delta"]["baseline"] == "unspecified"
     assert first["delta"]["total_return_delta"] is None
     assert first["backtest"]["summary_source"] == "computed_available_window"
     assert {"trade_count", "win_rate", "total_return", "max_drawdown"}.issubset(first["backtest"])
+    assert first["backtest"]["pbo"] == NOT_AVAILABLE
+    assert first["backtest"]["deflated_sharpe_ratio"] == NOT_AVAILABLE
+    assert first["validation"]["walk_forward"]["status"] == NOT_AVAILABLE
+    assert first["validation"]["attribution"]["value"] == NOT_AVAILABLE
+
+
+def test_strategy_validation_summary_supports_baseline_run_id_and_snapshot(seeded_db, monkeypatch):
+    service = StrategyValidationService(seeded_db)
+    limited_dates = [date(2026, 5, 19), date(2026, 5, 20)]
+    current_metrics = {
+        "summary_source": "computed_available_window",
+        "error": None,
+        "trade_count": 10,
+        "win_rate": 0.5,
+        "total_return": 0.12,
+        "max_drawdown": -0.08,
+        **ValidationScaffold.metric_placeholders(),
+    }
+    monkeypatch.setattr(service, "_latest_indicator_dates", lambda _lookback_days: limited_dates)
+    monkeypatch.setattr(
+        service,
+        "_strategy_backtest_summary",
+        lambda **_kwargs: dict(current_metrics),
+    )
+
+    seeded_db.add(
+        BacktestRun(
+            run_id="bt-baseline-unit",
+            strategy_name="trend_breakout",
+            config_hash="unit",
+            start_date=limited_dates[0],
+            end_date=limited_dates[-1],
+            metrics_json=json.dumps(
+                {
+                    "trade_count": 8,
+                    "win_rate": 0.25,
+                    "total_return": 0.02,
+                    "max_drawdown": -0.10,
+                }
+            ),
+        )
+    )
+    seeded_db.commit()
+
+    run_id_summary = service.strategy_summary(lookback_days=252, baseline_run_id="bt-baseline-unit")
+    trend = next(row for row in run_id_summary["strategies"] if row["strategy_name"] == "trend_breakout")
+    unavailable = next(row for row in run_id_summary["strategies"] if row["strategy_name"] != "trend_breakout")
+
+    assert run_id_summary["baseline"]["status"] == "run_id"
+    assert trend["delta"]["baseline"] == "run_id"
+    assert trend["delta"]["trade_count_delta"] == 2
+    assert trend["delta"]["win_rate_delta"] == 0.25
+    assert trend["delta"]["total_return_delta"] == 0.10
+    assert trend["delta"]["max_drawdown_delta"] == 0.02
+    assert unavailable["delta"]["baseline"] == "unavailable_for_strategy"
+
+    snapshot_summary = service.strategy_summary(
+        lookback_days=252,
+        baseline_snapshot={
+            "strategies": [
+                {
+                    "strategy_name": "trend_breakout",
+                    "backtest": {
+                        "trade_count": 7,
+                        "win_rate": 0.4,
+                        "total_return": 0.10,
+                        "max_drawdown": -0.09,
+                    },
+                }
+            ]
+        },
+    )
+    snapshot_trend = next(row for row in snapshot_summary["strategies"] if row["strategy_name"] == "trend_breakout")
+
+    assert snapshot_summary["baseline"]["status"] == "snapshot"
+    assert snapshot_summary["baseline"]["snapshot_supplied"] is True
+    assert snapshot_trend["delta"]["baseline"] == "snapshot"
+    assert snapshot_trend["delta"]["trade_count_delta"] == 3
+    assert snapshot_trend["delta"]["win_rate_delta"] == 0.1
+    assert snapshot_trend["backtest"]["pbo"] == NOT_AVAILABLE
+    assert snapshot_trend["backtest"]["deflated_sharpe_ratio"] == NOT_AVAILABLE
 
 
 def test_backtest_metrics_cost_bps_uses_execution_config_override(seeded_db):
@@ -343,6 +478,152 @@ def test_rank_portfolio_top_n_holds_multiple_symbols_at_once():
     assert metrics["rebalance_count"] == 1
     assert metrics["average_active_positions"] == pytest.approx(2.0)
     assert metrics["execution_requires_portfolio_constructor_signal_count"] == 2
+
+
+def test_rank_portfolio_sizing_uses_rebalance_snapshot_without_future_pnl(monkeypatch):
+    service = _simulation_service()
+    first_signal_date = date(2026, 1, 1)
+    second_signal_date = date(2026, 1, 2)
+    first_rebalance_candidates = [
+        {
+            "score": 2.0,
+            "indicator": SimpleNamespace(symbol="AAA", close=100.0),
+            "risk": SimpleNamespace(
+                entry_price=100.0,
+                stop_price=95.0,
+                target_price=112.5,
+                risk_per_share=5.0,
+                position_size=100,
+                position_notional=10000.0,
+                risk_basis="unit_test",
+            ),
+            "metadata": {"execution_requires_portfolio_constructor": True},
+        },
+        {
+            "score": 1.5,
+            "indicator": SimpleNamespace(symbol="BBB", close=100.0),
+            "risk": SimpleNamespace(
+                entry_price=100.0,
+                stop_price=95.0,
+                target_price=112.5,
+                risk_per_share=5.0,
+                position_size=100,
+                position_notional=10000.0,
+                risk_basis="unit_test",
+            ),
+            "metadata": {"execution_requires_portfolio_constructor": True},
+        },
+    ]
+    second_rebalance_candidates = [
+        {
+            "score": 1.0,
+            "indicator": SimpleNamespace(symbol="CCC", close=100.0),
+            "risk": SimpleNamespace(
+                entry_price=100.0,
+                stop_price=95.0,
+                target_price=112.5,
+                risk_per_share=5.0,
+                position_size=100,
+                position_notional=10000.0,
+                risk_basis="unit_test",
+            ),
+            "metadata": {"execution_requires_portfolio_constructor": True},
+        },
+    ]
+
+    def fake_candidates(**kwargs):
+        if kwargs["signal_date"] == first_signal_date:
+            return first_rebalance_candidates
+        if kwargs["signal_date"] == second_signal_date:
+            return second_rebalance_candidates
+        return []
+
+    monkeypatch.setattr(service, "_rank_portfolio_candidates", fake_candidates)
+
+    def fake_simulate_trade(symbol, _signal_date, risk, _price_by_symbol, _liquidity_stats, _realism_stats):
+        entry_dates = {
+            "AAA": date(2026, 1, 2),
+            "BBB": date(2026, 1, 2),
+            "CCC": date(2026, 1, 3),
+        }
+        exit_dates = {
+            "AAA": date(2026, 1, 5),
+            "BBB": date(2026, 1, 5),
+            "CCC": date(2026, 1, 6),
+        }
+        return {
+            "symbol": symbol,
+            "signal_date": _signal_date,
+            "entry_date": entry_dates[symbol],
+            "exit_date": exit_dates[symbol],
+            "raw_entry_price": 100.0,
+            "entry_price": 100.0,
+            "raw_exit_price": 100.0,
+            "exit_price": 100.0,
+            "exit_reason": "max_holding",
+            "qty": int(risk.position_size),
+            "pnl": 1000.0 if symbol == "AAA" else 0.0,
+            "estimated_cost": 0.0,
+            "cost_bps": 0.0,
+            "risk_basis": "unit_test",
+            "return_pct": 0.0,
+            "holding_days": 1,
+            "execution_detail": {},
+            "liquidity_detail": {},
+            "price_detail": {},
+        }
+
+    monkeypatch.setattr(service, "_simulate_trade", fake_simulate_trade)
+
+    trades, equity_curve, equity, exposure_days, portfolio_stats = service._run_rank_portfolio_backtest(
+        strategy_name="momentum_rank",
+        dates=[first_signal_date, second_signal_date],
+        rows_by_date={first_signal_date: [], second_signal_date: []},
+        market_regime_cache={first_signal_date: "neutral", second_signal_date: "neutral"},
+        price_by_symbol={},
+        equity=1000.0,
+        portfolio_config={
+            "max_positions": 3,
+            "top_n": 2,
+            "weighting": "equal_weight",
+            "rebalance_frequency": "daily",
+            "allow_overlap_positions": False,
+        },
+        liquidity_stats={"partial_fill_count": 0, "no_fill_count": 0, "total_unfilled_qty": 0},
+        realism_stats={
+            "adjusted_price_trade_count": 0,
+            "forced_exit_count": 0,
+            "delisted_exit_count": 0,
+            "missing_data_exit_count": 0,
+        },
+    )
+
+    assert [trade["symbol"] for trade in trades] == ["AAA", "BBB", "CCC"]
+    assert [trade["qty"] for trade in trades] == [5, 5, 10]
+    assert [row["date"] for row in equity_curve] == [
+        first_signal_date,
+        date(2026, 1, 5),
+        date(2026, 1, 5),
+        date(2026, 1, 6),
+    ]
+    assert equity == pytest.approx(2000.0)
+    assert exposure_days == 3
+    assert portfolio_stats["execution_requires_portfolio_constructor_signal_count"] == 3
+
+
+def test_average_active_positions_sweep_counts_overlapping_ranges_more_accurately_than_endpoints():
+    trades = [
+        {"symbol": "AAA", "entry_date": date(2026, 1, 5), "exit_date": date(2026, 1, 10)},
+        {"symbol": "BBB", "entry_date": date(2026, 1, 6), "exit_date": date(2026, 1, 9)},
+    ]
+    endpoint_dates = sorted({trade_date for trade in trades for trade_date in (trade["entry_date"], trade["exit_date"])})
+    endpoint_average = (
+        sum(BacktestService._active_position_count(trades, trade_date) for trade_date in endpoint_dates)
+        / len(endpoint_dates)
+    )
+
+    assert BacktestService._average_active_positions(trades) == pytest.approx(1.6667)
+    assert BacktestService._average_active_positions(trades) > endpoint_average
 
 
 def test_rank_strategy_single_position_selection_mode_keeps_legacy_fallback():
@@ -600,9 +881,36 @@ def test_max_holding_exit_still_uses_close():
     assert trade["execution_detail"]["exit_assumption"] == "max_holding_close_exit"
 
 
-def test_adjusted_price_option_uses_adj_close_factor_without_changing_default():
+def test_market_repository_corporate_actions_asof_excludes_future_actions(db_session):
+    db_session.add(SymbolMaster(symbol="CA001", name="CA One", sector="Technology"))
+    db_session.add_all(
+        [
+            CorporateAction(symbol="CA001", action_date=date(2026, 1, 3), action_type="SPLIT", value=0.5),
+            CorporateAction(symbol="CA001", action_date=date(2026, 1, 10), action_type="DIVIDEND", value=100.0),
+        ]
+    )
+    db_session.commit()
+
+    repo = MarketRepository(db_session)
+
+    assert repo.corporate_actions_asof("CA001", date(2026, 1, 2)) == []
+    actions = repo.corporate_actions_asof("CA001", date(2026, 1, 3))
+    assert len(actions) == 1
+    assert actions[0].effective_date == date(2026, 1, 3)
+    assert actions[0].action_type == "SPLIT"
+
+
+def test_adjusted_price_option_uses_adj_close_factor_after_corporate_action_effective_date():
     raw_service = _simulation_service(max_holding_days=1, use_adjusted_price=False)
     adjusted_service = _simulation_service(max_holding_days=1, use_adjusted_price=True)
+    adjusted_service.repo = SimpleNamespace(
+        get_symbol=lambda _symbol: None,
+        corporate_actions_asof=lambda _symbol, trade_date: [
+            SimpleNamespace(action_date=date(2026, 1, 2), action_type="SPLIT", id=1)
+        ]
+        if trade_date >= date(2026, 1, 2)
+        else [],
+    )
     risk = SimpleNamespace(stop_price=90.0, position_size=10)
     price_by_symbol = _price_df(
         [
@@ -628,8 +936,55 @@ def test_adjusted_price_option_uses_adj_close_factor_without_changing_default():
     assert adjusted_trade["raw_entry_price"] == 50.0
     assert adjusted_trade["raw_exit_price"] == 51.0
     assert adjusted_trade["price_detail"]["use_adjusted_price"] is True
+    assert adjusted_trade["price_detail"]["adjusted_price_used"] is True
     assert adjusted_trade["price_detail"]["entry_adjustment_factor"] == 0.5
+    assert adjusted_trade["price_detail"]["entry_corporate_action_effective_date"] == "2026-01-02"
     assert adjusted_trade["execution_detail"]["stop_price"] == 45.0
+
+
+def test_adjusted_price_option_does_not_apply_future_corporate_action():
+    service = _simulation_service(max_holding_days=2, use_adjusted_price=True)
+    service.repo = SimpleNamespace(
+        get_symbol=lambda _symbol: None,
+        corporate_actions_asof=lambda _symbol, trade_date: [
+            SimpleNamespace(action_date=date(2026, 1, 3), action_type="SPLIT", id=1)
+        ]
+        if trade_date >= date(2026, 1, 3)
+        else [],
+    )
+    risk = SimpleNamespace(stop_price=40.0, position_size=10)
+    price_by_symbol = _price_df(
+        [
+            {
+                "trade_date": date(2026, 1, 2),
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 100.0,
+                "adj_close": 50.0,
+            },
+            {
+                "trade_date": date(2026, 1, 3),
+                "open": 100.0,
+                "high": 110.0,
+                "low": 99.0,
+                "close": 104.0,
+                "adj_close": 52.0,
+            },
+        ]
+    )
+
+    trade = service._simulate_trade("TEST", date(2026, 1, 1), risk, price_by_symbol)
+
+    assert trade is not None
+    assert trade["raw_entry_price"] == 100.0
+    assert trade["raw_exit_price"] == 52.0
+    assert trade["price_detail"]["entry_price_basis"] == "raw_ohlc"
+    assert trade["price_detail"]["exit_price_basis"] == "adjusted_ohlc_from_adj_close_asof_corporate_action"
+    assert trade["price_detail"]["entry_adjustment_applied"] is False
+    assert trade["price_detail"]["exit_adjustment_applied"] is True
+    assert trade["price_detail"]["entry_corporate_action_status"] == "no_effective_corporate_action_raw_price"
+    assert trade["price_detail"]["exit_corporate_action_effective_date"] == "2026-01-03"
 
 
 def test_delisted_policy_forces_last_available_close_exit():

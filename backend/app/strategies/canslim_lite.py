@@ -9,6 +9,14 @@ from backend.app.strategies.base import BaseStrategy, StrategyResult
 
 class CanslimLiteStrategy(BaseStrategy):
     name = "canslim_lite"
+    KNOWN_EARNINGS_SESSIONS = {
+        "before_open",
+        "pre_market",
+        "regular",
+        "during_market",
+        "after_close",
+        "after_market",
+    }
 
     def evaluate(
         self,
@@ -90,6 +98,9 @@ class CanslimLiteStrategy(BaseStrategy):
                 "earnings_event_available": bool(earnings_context["event_available"]),
                 "earnings_date_available": bool(earnings_context["earnings_date_available"]),
                 "earnings_release_ts_available": bool(earnings_context["release_ts_available"]),
+                "earnings_session_available": bool(earnings_context["session_available"]),
+                "earnings_session_recognized": bool(earnings_context["session_recognized"]),
+                "earnings_timing_available": bool(earnings_context["timing_available"]),
                 "earnings_blackout_evaluated": bool(earnings_context["evaluated"]),
                 "sales_growth_available": (
                     fundamentals_available and getattr(fundamentals, "sales_growth", None) is not None
@@ -150,20 +161,33 @@ class CanslimLiteStrategy(BaseStrategy):
         event_date = self._as_date(getattr(event, "earnings_date", None)) if event is not None else None
         release_ts = getattr(event, "release_ts", None) if event is not None else None
         session = getattr(event, "session", None) if event is not None else None
+        release_dt = release_ts if isinstance(release_ts, datetime) else None
+        normalized_session = str(session or "").strip().lower()
+        session_available = bool(normalized_session)
+        session_recognized = normalized_session in self.KNOWN_EARNINGS_SESSIONS
+        release_date = release_dt.date() if release_dt is not None else event_date
         blackout_days = max(int(self.config.get("earnings_blackout_days", 0)), 0)
         event_payload = {
             "symbol": getattr(event, "symbol", getattr(indicator, "symbol", None)) if event is not None else getattr(indicator, "symbol", None),
             "earnings_date": event_date.isoformat() if event_date is not None else None,
-            "release_ts": release_ts.isoformat() if hasattr(release_ts, "isoformat") else None,
-            "session": session,
+            "release_ts": release_dt.isoformat() if release_dt is not None else None,
+            "release_date": release_date.isoformat() if release_date is not None else None,
+            "session": normalized_session or None,
+            "session_recognized": session_recognized,
             "days_to_earnings": None,
+            "days_to_release": None,
             "in_blackout_window": None,
+            "blackout_window_start": None,
+            "blackout_window_end": None,
         }
         if trade_date is None or event_date is None:
             return {
                 "event_available": event is not None,
                 "earnings_date_available": event_date is not None,
-                "release_ts_available": release_ts is not None,
+                "release_ts_available": release_dt is not None,
+                "session_available": session_available,
+                "session_recognized": session_recognized,
+                "timing_available": False,
                 "evaluated": False,
                 "blackout_clear": False,
                 "blackout_days": blackout_days,
@@ -172,17 +196,56 @@ class CanslimLiteStrategy(BaseStrategy):
             }
 
         days_to_earnings = (event_date - trade_date).days
-        in_blackout = abs(days_to_earnings) <= blackout_days
+        days_to_release = (release_date - trade_date).days if release_date is not None else days_to_earnings
+        in_blackout = abs(days_to_release) <= blackout_days
         event_payload.update(
             {
                 "days_to_earnings": days_to_earnings,
+                "days_to_release": days_to_release,
                 "in_blackout_window": in_blackout,
+                "blackout_window_start": (release_date - date.resolution * blackout_days).isoformat()
+                if release_date is not None
+                else None,
+                "blackout_window_end": (release_date + date.resolution * blackout_days).isoformat()
+                if release_date is not None
+                else None,
             }
         )
+        if release_dt is None:
+            return {
+                "event_available": True,
+                "earnings_date_available": True,
+                "release_ts_available": False,
+                "session_available": session_available,
+                "session_recognized": session_recognized,
+                "timing_available": False,
+                "evaluated": False,
+                "blackout_clear": False,
+                "blackout_days": blackout_days,
+                "status": "earnings_release_ts_unavailable_fail_closed",
+                "event": event_payload,
+            }
+        if not session_available or not session_recognized:
+            return {
+                "event_available": True,
+                "earnings_date_available": True,
+                "release_ts_available": True,
+                "session_available": session_available,
+                "session_recognized": session_recognized,
+                "timing_available": False,
+                "evaluated": False,
+                "blackout_clear": False,
+                "blackout_days": blackout_days,
+                "status": "earnings_session_unavailable_fail_closed",
+                "event": event_payload,
+            }
         return {
             "event_available": True,
             "earnings_date_available": True,
-            "release_ts_available": release_ts is not None,
+            "release_ts_available": True,
+            "session_available": True,
+            "session_recognized": True,
+            "timing_available": True,
             "evaluated": True,
             "blackout_clear": not in_blackout,
             "blackout_days": blackout_days,

@@ -1,5 +1,11 @@
 # DB Migration
 
+## Current Head
+
+- Current Alembic head: `e5f6a7b8c9d0_add_indicator_breadth_fields`.
+- Latest schema addition: breadth proxy fields on `indicator_snapshot`.
+- The ledger is a backtest/report artifact only and is not connected to live orders, paper orders, broker adapters, KIS routes, or `orders` rows.
+
 ## 현재 정책
 
 현재 DB 기준은 `MVP v0.11 / Phase 3G-2` 모델 스키마이며, Alembic revision `da9ab5998e36_initial_schema`가 초기 schema snapshot이다.

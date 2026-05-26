@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 from bisect import bisect_right
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from types import SimpleNamespace
 from uuid import uuid4
@@ -12,17 +13,26 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_config
-from backend.app.models.tables import BacktestRun, IndicatorSnapshot
+from backend.app.models.tables import BacktestRun, BacktestTradeLedger, IndicatorSnapshot
 from backend.app.repositories.backtest_repository import BacktestRepository
 from backend.app.repositories.market_repository import MarketRepository
 from backend.app.services.risk_service import RiskService
 from backend.app.services.scoring_service import ScoringService
+from backend.app.services.validation_service import ValidationScaffold
 from backend.app.strategies.registry import get_available_strategy_registry
 from backend.app.utils.hashing import stable_hash
 
 
 RANK_PORTFOLIO_STRATEGIES = {"momentum_rank", "relative_strength_leader"}
 SUMMARY_METRIC_KEYS = ("trade_count", "win_rate", "total_return", "max_drawdown")
+
+
+@dataclass
+class _RankPortfolioAccounting:
+    realized_equity: float
+    equity_curve: list[dict[str, object]]
+    pending_closures: list[dict[str, object]] = field(default_factory=list)
+    exposure_days: int = 0
 
 
 class BacktestService:
@@ -129,12 +139,14 @@ class BacktestService:
             portfolio_stats=portfolio_stats,
         )
         run_id = "unsaved"
+        persisted_ledger_rows = 0
         if save:
             run_id = f"bt-{uuid4().hex[:12]}"
             effective_backtest_config = {**self.backtest_config, "portfolio": portfolio_config}
             config_hash = stable_hash(
                 {"strategy": strategy_name, "backtest": effective_backtest_config, "risk": get_config("risk")}
             )
+            ledger_rows = self._trade_ledger_rows(run_id, strategy_name, trades)
             self.backtest_repo.save(
                 BacktestRun(
                     run_id=run_id,
@@ -143,9 +155,22 @@ class BacktestService:
                     start_date=start_date,
                     end_date=end_date,
                     metrics_json=json.dumps(metrics, ensure_ascii=False, default=str),
-                )
+                ),
+                ledger_rows,
             )
-        return {"run_id": run_id, "strategy_name": strategy_name, "metrics": metrics, "trades": trades[:20]}
+            persisted_ledger_rows = len(ledger_rows)
+        return {
+            "run_id": run_id,
+            "strategy_name": strategy_name,
+            "metrics": metrics,
+            "trade_ledger": {
+                "persisted": save,
+                "table": "backtest_trade_ledger" if save else None,
+                "rows": persisted_ledger_rows if save else len(trades),
+            },
+            "validation_framework": ValidationScaffold.framework_summary(),
+            "trades": trades[:20],
+        }
 
     def list_runs(self, limit: int = 20) -> list[dict[str, object]]:
         """최근 백테스트 run 목록을 반환한다."""
@@ -157,7 +182,14 @@ class BacktestService:
         run = self.db.get(BacktestRun, run_id)
         if run is None:
             raise ValueError("백테스트 run을 찾을 수 없습니다.")
-        return self._serialize_run(run)
+        return self._serialize_run(run, include_trades=True)
+
+    def get_run_trades(self, run_id: str) -> list[dict[str, object]]:
+        """저장된 단일 백테스트 run의 trade ledger를 반환한다."""
+        run = self.db.get(BacktestRun, run_id)
+        if run is None:
+            raise ValueError("백테스트 run을 찾을 수 없습니다.")
+        return [self._serialize_trade_ledger(row) for row in self.backtest_repo.trades_for_run(run_id)]
 
     def strategy_summary(
         self,
@@ -166,87 +198,104 @@ class BacktestService:
         baseline_snapshot: dict[str, object] | None = None,
     ) -> dict[str, object]:
         """최근 가용 거래일 기준 전략별 screener/backtest validation summary를 계산한다."""
-        from backend.app.services.screener_service import ScreenerService
+        from backend.app.services.validation_service import StrategyValidationService
 
-        requested_days = max(int(lookback_days), 1)
-        strategy_names = list(self.strategies)
-        indicator_dates = self._latest_indicator_dates(requested_days)
-        window_start = indicator_dates[0] if indicator_dates else None
-        window_end = indicator_dates[-1] if indicator_dates else None
-        screener_summary = ScreenerService(self.db).strategy_pass_rate_summary(
-            lookback_days=requested_days,
-            strategy_names=strategy_names,
+        return StrategyValidationService(self.db, backtest_service=self).strategy_summary(
+            lookback_days=lookback_days,
+            baseline_run_id=baseline_run_id,
+            baseline_snapshot=baseline_snapshot,
         )
-        screener_by_strategy = {
-            str(row["strategy_name"]): row for row in screener_summary["strategies"]  # type: ignore[index]
-        }
-        baseline = self._baseline_metrics_by_strategy(baseline_run_id, baseline_snapshot)
 
-        strategy_summaries: list[dict[str, object]] = []
-        for strategy_name in strategy_names:
-            backtest_summary = self._strategy_backtest_summary(
-                strategy_name=strategy_name,
-                start_date=window_start,
-                end_date=window_end,
-            )
-            baseline_metrics = baseline["metrics_by_strategy"].get(strategy_name)
-            baseline_status = str(baseline["status"])
-            if baseline_metrics is None and baseline_status in {"run_id", "snapshot"}:
-                baseline_status = "unavailable_for_strategy"
-            strategy_summaries.append(
-                {
-                    "strategy_name": strategy_name,
-                    "screener": screener_by_strategy.get(
-                        strategy_name,
-                        {
-                            "strategy_name": strategy_name,
-                            "evaluated_count": 0,
-                            "pass_count": 0,
-                            "pass_rate": None,
-                            "evaluated_trading_days": 0,
-                            "window_trading_days": 0,
-                            "window_start": None,
-                            "window_end": None,
-                        },
-                    ),
-                    "backtest": backtest_summary,
-                    "delta": self._metric_deltas(backtest_summary, baseline_metrics, baseline_status),
-                }
-            )
-
-        return {
-            "lookback_days": requested_days,
-            "window": {
-                "requested_trading_days": requested_days,
-                "available_trading_days": len(indicator_dates),
-                "start_date": window_start,
-                "end_date": window_end,
-                "basis": "indicator_snapshot.trade_date",
-            },
-            "screener_window": {
-                key: value
-                for key, value in screener_summary.items()
-                if key != "strategies"
-            },
-            "baseline": {
-                "status": baseline["status"],
-                "run_id": baseline_run_id,
-                "snapshot_supplied": baseline_snapshot is not None,
-            },
-            "strategies": strategy_summaries,
-        }
-
-    @staticmethod
-    def _serialize_run(run: BacktestRun) -> dict[str, object]:
+    def _serialize_run(self, run: BacktestRun, include_trades: bool = False) -> dict[str, object]:
         metrics = json.loads(run.metrics_json)
-        return {
+        trade_count = self.backtest_repo.trade_count_for_run(run.run_id)
+        payload: dict[str, object] = {
             "run_id": run.run_id,
             "strategy_name": run.strategy_name,
             "config_hash": run.config_hash,
             "start_date": run.start_date,
             "end_date": run.end_date,
             "metrics": metrics,
+            "trade_ledger_count": trade_count,
+            "trade_ledger": {
+                "persisted": True,
+                "table": "backtest_trade_ledger",
+                "rows": trade_count,
+            },
             "created_at": run.created_at,
+        }
+        if include_trades:
+            payload["trades"] = [self._serialize_trade_ledger(row) for row in self.backtest_repo.trades_for_run(run.run_id)]
+        return payload
+
+    @classmethod
+    def _trade_ledger_rows(
+        cls,
+        run_id: str,
+        strategy_name: str,
+        trades: list[dict[str, object]],
+    ) -> list[BacktestTradeLedger]:
+        return [
+            BacktestTradeLedger(
+                run_id=run_id,
+                trade_index=index,
+                strategy_name=strategy_name,
+                symbol=str(trade["symbol"]),
+                side="long",
+                status="closed",
+                signal_date=cls._required_date(trade.get("signal_date"), "signal_date"),
+                entry_date=cls._required_date(trade.get("entry_date"), "entry_date"),
+                exit_date=cls._required_date(trade.get("exit_date"), "exit_date"),
+                qty=cls._required_int(trade.get("qty"), "qty"),
+                raw_entry_price=cls._required_float(trade.get("raw_entry_price"), "raw_entry_price"),
+                entry_price=cls._required_float(trade.get("entry_price"), "entry_price"),
+                raw_exit_price=cls._required_float(trade.get("raw_exit_price"), "raw_exit_price"),
+                exit_price=cls._required_float(trade.get("exit_price"), "exit_price"),
+                pnl=cls._required_float(trade.get("pnl"), "pnl"),
+                return_pct=cls._required_float(trade.get("return_pct"), "return_pct"),
+                estimated_cost=cls._required_float(trade.get("estimated_cost"), "estimated_cost"),
+                cost_bps=cls._required_float(trade.get("cost_bps"), "cost_bps"),
+                holding_days=cls._required_int(trade.get("holding_days"), "holding_days"),
+                exit_reason=str(trade.get("exit_reason") or "unknown"),
+                risk_basis=str(trade.get("risk_basis") or ""),
+                execution_detail_json=cls._json_object_string(trade.get("execution_detail")),
+                liquidity_detail_json=cls._json_object_string(trade.get("liquidity_detail")),
+                price_detail_json=cls._json_object_string(trade.get("price_detail")),
+                portfolio_detail_json=cls._json_object_string(trade.get("portfolio_detail")),
+            )
+            for index, trade in enumerate(trades, start=1)
+        ]
+
+    @staticmethod
+    def _serialize_trade_ledger(row: BacktestTradeLedger) -> dict[str, object]:
+        return {
+            "id": row.id,
+            "run_id": row.run_id,
+            "trade_index": row.trade_index,
+            "strategy_name": row.strategy_name,
+            "symbol": row.symbol,
+            "side": row.side,
+            "status": row.status,
+            "signal_date": row.signal_date,
+            "entry_date": row.entry_date,
+            "exit_date": row.exit_date,
+            "qty": row.qty,
+            "raw_entry_price": row.raw_entry_price,
+            "entry_price": row.entry_price,
+            "raw_exit_price": row.raw_exit_price,
+            "exit_price": row.exit_price,
+            "pnl": row.pnl,
+            "return_pct": row.return_pct,
+            "estimated_cost": row.estimated_cost,
+            "cost_bps": row.cost_bps,
+            "holding_days": row.holding_days,
+            "exit_reason": row.exit_reason,
+            "risk_basis": row.risk_basis,
+            "execution_detail": BacktestService._json_object(row.execution_detail_json),
+            "liquidity_detail": BacktestService._json_object(row.liquidity_detail_json),
+            "price_detail": BacktestService._json_object(row.price_detail_json),
+            "portfolio_detail": BacktestService._json_object(row.portfolio_detail_json),
+            "created_at": row.created_at,
         }
 
     def _latest_indicator_dates(self, lookback_days: int) -> list[date]:
@@ -416,8 +465,10 @@ class BacktestService:
         realism_stats: dict[str, int],
     ) -> tuple[list[dict[str, object]], list[dict[str, object]], float, int, dict[str, object]]:
         trades: list[dict[str, object]] = []
-        equity_curve = [{"date": dates[0], "equity": equity}]
-        exposure_days = 0
+        accounting = _RankPortfolioAccounting(
+            realized_equity=equity,
+            equity_curve=[{"date": dates[0], "equity": equity}],
+        )
         previous_weights: dict[str, float] = {}
         portfolio_turnovers: list[float] = []
         rebalance_count = 0
@@ -429,6 +480,7 @@ class BacktestService:
         allow_overlap_positions = bool(portfolio_config["allow_overlap_positions"])
 
         for signal_date in dates:
+            self._realize_due_rank_portfolio_closures(accounting, signal_date)
             if not self._is_rebalance_date(signal_date, last_rebalance_date, str(portfolio_config["rebalance_frequency"])):
                 continue
             last_rebalance_date = signal_date
@@ -437,12 +489,13 @@ class BacktestService:
             available_slots = max(max_positions - active_count, 0)
             if available_slots <= 0:
                 continue
+            rebalance_equity = self._rebalance_equity_snapshot(accounting)
             candidates = self._rank_portfolio_candidates(
                 strategy_name=strategy_name,
                 signal_date=signal_date,
                 rows=rows_by_date.get(signal_date, []),
                 market_regime=market_regime_cache.get(signal_date, "neutral"),
-                equity=equity,
+                equity=rebalance_equity,
                 active_symbols=active_symbols,
                 allow_overlap_positions=allow_overlap_positions,
             )
@@ -460,63 +513,31 @@ class BacktestService:
                 1 for candidate in selected if bool(candidate["metadata"].get("execution_requires_portfolio_constructor"))
             )
 
-            for rank, candidate in enumerate(selected, start=1):
-                indicator = candidate["indicator"]
-                target_weight = weights[rank - 1]
-                risk = self._portfolio_sized_risk(
-                    candidate["risk"],
-                    indicator,
-                    equity=equity,
-                    target_weight=target_weight,
-                    selected_count=len(selected),
-                    weighting=weighting,
-                )
-                if int(risk.position_size) <= 0:
-                    continue
-                trade = self._simulate_trade(
-                    indicator.symbol,
-                    signal_date,
-                    risk,
-                    price_by_symbol,
-                    liquidity_stats,
-                    realism_stats,
-                )
-                if trade is None:
-                    continue
-                trade["portfolio_detail"] = {
-                    "portfolio_constructor_used": True,
-                    "selection_mode": "rank_portfolio",
-                    "rebalance_date": signal_date,
-                    "rank": rank,
-                    "rank_score": candidate["score"],
-                    "target_weight": round(target_weight, 6),
-                    "top_n": top_n,
-                    "max_positions": max_positions,
-                    "weighting": weighting,
-                    "allow_overlap_positions": allow_overlap_positions,
-                }
-                trade["execution_detail"]["portfolio_constructor_used"] = True
-                equity += float(trade["pnl"])
-                exposure_days += int(trade["holding_days"])
-                equity_curve.append({"date": trade["exit_date"], "equity": equity})
-                trades.append(trade)
+            opened_trades = self._open_rank_portfolio_positions(
+                selected=selected,
+                weights=weights,
+                signal_date=signal_date,
+                rebalance_equity=rebalance_equity,
+                price_by_symbol=price_by_symbol,
+                liquidity_stats=liquidity_stats,
+                realism_stats=realism_stats,
+                top_n=top_n,
+                max_positions=max_positions,
+                weighting=weighting,
+                allow_overlap_positions=allow_overlap_positions,
+            )
+            trades.extend(opened_trades)
+            self._track_rank_portfolio_lifecycle(accounting, opened_trades)
 
-        portfolio_stats = {
-            "portfolio_constructor_used": True,
-            "portfolio_selection_mode": "rank_portfolio",
-            "portfolio_top_n": top_n,
-            "portfolio_max_positions": max_positions,
-            "portfolio_weighting": weighting,
-            "portfolio_rebalance_frequency": str(portfolio_config["rebalance_frequency"]),
-            "portfolio_allow_overlap_positions": allow_overlap_positions,
-            "portfolio_turnover": round(sum(portfolio_turnovers) / len(portfolio_turnovers), 6)
-            if portfolio_turnovers
-            else 0.0,
-            "average_active_positions": self._average_active_positions(trades),
-            "rebalance_count": rebalance_count,
-            "execution_requires_portfolio_constructor_signal_count": constructor_required_signal_count,
-        }
-        return trades, equity_curve, equity, exposure_days, portfolio_stats
+        self._realize_due_rank_portfolio_closures(accounting, None)
+        portfolio_stats = self._rank_portfolio_stats(
+            trades=trades,
+            portfolio_config=portfolio_config,
+            portfolio_turnovers=portfolio_turnovers,
+            rebalance_count=rebalance_count,
+            constructor_required_signal_count=constructor_required_signal_count,
+        )
+        return trades, accounting.equity_curve, accounting.realized_equity, accounting.exposure_days, portfolio_stats
 
     def _rank_portfolio_candidates(
         self,
@@ -561,6 +582,116 @@ class BacktestService:
                 }
             )
         return sorted(candidates, key=lambda candidate: (-float(candidate["score"]), str(candidate["indicator"].symbol)))
+
+    def _open_rank_portfolio_positions(
+        self,
+        selected: list[dict[str, object]],
+        weights: list[float],
+        signal_date: date,
+        rebalance_equity: float,
+        price_by_symbol: dict[str, pd.DataFrame],
+        liquidity_stats: dict[str, int],
+        realism_stats: dict[str, int],
+        top_n: int,
+        max_positions: int,
+        weighting: str,
+        allow_overlap_positions: bool,
+    ) -> list[dict[str, object]]:
+        opened_trades: list[dict[str, object]] = []
+        for rank, candidate in enumerate(selected, start=1):
+            indicator = candidate["indicator"]
+            target_weight = weights[rank - 1]
+            risk = self._portfolio_sized_risk(
+                candidate["risk"],
+                indicator,
+                equity=rebalance_equity,
+                target_weight=target_weight,
+                selected_count=len(selected),
+                weighting=weighting,
+            )
+            if int(risk.position_size) <= 0:
+                continue
+            trade = self._simulate_trade(
+                indicator.symbol,
+                signal_date,
+                risk,
+                price_by_symbol,
+                liquidity_stats,
+                realism_stats,
+            )
+            if trade is None:
+                continue
+            trade["portfolio_detail"] = {
+                "portfolio_constructor_used": True,
+                "selection_mode": "rank_portfolio",
+                "rebalance_date": signal_date,
+                "rank": rank,
+                "rank_score": candidate["score"],
+                "target_weight": round(target_weight, 6),
+                "top_n": top_n,
+                "max_positions": max_positions,
+                "weighting": weighting,
+                "allow_overlap_positions": allow_overlap_positions,
+            }
+            trade["execution_detail"]["portfolio_constructor_used"] = True
+            opened_trades.append(trade)
+        return opened_trades
+
+    @staticmethod
+    def _rebalance_equity_snapshot(accounting: _RankPortfolioAccounting) -> float:
+        return float(accounting.realized_equity)
+
+    @staticmethod
+    def _track_rank_portfolio_lifecycle(
+        accounting: _RankPortfolioAccounting,
+        opened_trades: list[dict[str, object]],
+    ) -> None:
+        accounting.pending_closures.extend(opened_trades)
+
+    @staticmethod
+    def _realize_due_rank_portfolio_closures(
+        accounting: _RankPortfolioAccounting,
+        through_date: date | None,
+    ) -> None:
+        due_trades: list[dict[str, object]] = []
+        pending_trades: list[dict[str, object]] = []
+        for trade in accounting.pending_closures:
+            exit_date = BacktestService._optional_date(trade.get("exit_date"))
+            is_due = through_date is None or (exit_date is not None and exit_date <= through_date)
+            if is_due:
+                due_trades.append(trade)
+            else:
+                pending_trades.append(trade)
+
+        for trade in sorted(due_trades, key=BacktestService._trade_closure_sort_key):
+            accounting.realized_equity += float(trade["pnl"])
+            accounting.exposure_days += int(trade["holding_days"])
+            accounting.equity_curve.append({"date": trade["exit_date"], "equity": accounting.realized_equity})
+        accounting.pending_closures = pending_trades
+
+    def _rank_portfolio_stats(
+        self,
+        trades: list[dict[str, object]],
+        portfolio_config: dict[str, object],
+        portfolio_turnovers: list[float],
+        rebalance_count: int,
+        constructor_required_signal_count: int,
+    ) -> dict[str, object]:
+        return {
+            "portfolio_constructor_used": True,
+            "portfolio_selection_mode": "rank_portfolio",
+            "portfolio_top_n": int(portfolio_config["top_n"]),
+            "portfolio_max_positions": int(portfolio_config["max_positions"]),
+            "portfolio_weighting": str(portfolio_config["weighting"]),
+            "portfolio_rebalance_frequency": str(portfolio_config["rebalance_frequency"]),
+            "portfolio_allow_overlap_positions": bool(portfolio_config["allow_overlap_positions"]),
+            "portfolio_turnover": round(sum(portfolio_turnovers) / len(portfolio_turnovers), 6)
+            if portfolio_turnovers
+            else 0.0,
+            "average_active_positions": self._average_active_positions(trades),
+            "rebalance_count": rebalance_count,
+            "execution_requires_portfolio_constructor_signal_count": constructor_required_signal_count,
+        }
 
     def _selection_mode(self, strategy_name: str) -> str:
         if strategy_name not in RANK_PORTFOLIO_STRATEGIES:
@@ -658,11 +789,41 @@ class BacktestService:
 
     @staticmethod
     def _average_active_positions(trades: list[dict[str, object]]) -> float:
-        active_dates = sorted({trade_date for trade in trades for trade_date in (trade["entry_date"], trade["exit_date"])})
-        if not active_dates:
+        events: dict[date, int] = {}
+        for trade in trades:
+            entry_date = BacktestService._optional_date(trade.get("entry_date"))
+            exit_date = BacktestService._optional_date(trade.get("exit_date"))
+            if entry_date is None or exit_date is None or exit_date < entry_date:
+                continue
+            events[entry_date] = events.get(entry_date, 0) + 1
+            if exit_date < date.max:
+                exit_after = date.fromordinal(exit_date.toordinal() + 1)
+                events[exit_after] = events.get(exit_after, 0) - 1
+
+        if not events:
             return 0.0
-        active_counts = [BacktestService._active_position_count(trades, active_date) for active_date in active_dates]
-        return round(sum(active_counts) / len(active_counts), 4)
+        weighted_active_days = 0
+        active_span_days = 0
+        active_count = 0
+        previous_date: date | None = None
+        for event_date in sorted(events):
+            if previous_date is not None and active_count > 0:
+                days = (event_date - previous_date).days
+                if days > 0:
+                    weighted_active_days += active_count * days
+                    active_span_days += days
+            active_count += events[event_date]
+            previous_date = event_date
+        if active_span_days <= 0:
+            return 0.0
+        return round(weighted_active_days / active_span_days, 4)
+
+    @staticmethod
+    def _trade_closure_sort_key(trade: dict[str, object]) -> tuple[date, int, str]:
+        exit_date = BacktestService._optional_date(trade.get("exit_date")) or date.max
+        portfolio_detail = trade.get("portfolio_detail")
+        rank = int(portfolio_detail.get("rank", 0) if isinstance(portfolio_detail, dict) else 0)
+        return exit_date, rank, str(trade.get("symbol", ""))
 
     @staticmethod
     def _portfolio_sized_risk(
@@ -716,11 +877,15 @@ class BacktestService:
         bps = cost_bps / 10000
         same_bar_stop_first = bool(execution_config.get("same_bar_stop_first", True))
         use_adjusted_price = bool(execution_config.get("use_adjusted_price", False))
-        entry_price_view = self._bar_price_view(entry_bar, use_adjusted_price)
+        entry_price_view = self._bar_price_view(
+            entry_bar,
+            use_adjusted_price,
+            self._corporate_action_price_context(symbol, entry_bar["trade_date"], use_adjusted_price),
+        )
         raw_entry_price = float(entry_price_view["open"])
         entry_price = raw_entry_price * (1 + bps)
         stop_price = float(risk.stop_price) * float(entry_price_view["adjustment_factor"])
-        target_price = entry_price + (entry_price - stop_price) * float(self.strategy_config["common"]["target_reward_risk"])
+        target_price = self._trade_target_price(risk, entry_price, stop_price, float(entry_price_view["adjustment_factor"]))
         planned_qty = int(risk.position_size)
         liquidity_detail = self._liquidity_detail(entry_bar, raw_entry_price, planned_qty, execution_config)
         filled_qty = int(liquidity_detail["filled_qty"])
@@ -735,7 +900,11 @@ class BacktestService:
         exit_bar_index = 0
         exit_price_view: dict[str, object] | None = None
         for index, bar in future.iloc[:max_holding_days].iterrows():
-            current_price_view = self._bar_price_view(bar, use_adjusted_price)
+            current_price_view = self._bar_price_view(
+                bar,
+                use_adjusted_price,
+                self._corporate_action_price_context(symbol, bar["trade_date"], use_adjusted_price),
+            )
             exit_decision = self._exit_decision(
                 bar=current_price_view,
                 bar_index=int(index),
@@ -772,9 +941,10 @@ class BacktestService:
         estimated_cost = ((raw_entry_price * bps) + (raw_exit_price * bps)) * filled_qty
         if unfilled_qty > 0:
             self._record_partial_fill(liquidity_stats, unfilled_qty)
-        self._record_realism_stats(realism_stats, use_adjusted_price, exit_decision)
         assert exit_bar is not None
         assert exit_price_view is not None
+        adjusted_price_used = bool(entry_price_view["adjustment_applied"] or exit_price_view["adjustment_applied"])
+        self._record_realism_stats(realism_stats, adjusted_price_used, exit_decision)
         return {
             "symbol": symbol,
             "signal_date": signal_date,
@@ -815,16 +985,33 @@ class BacktestService:
             "liquidity_detail": liquidity_detail,
             "price_detail": {
                 "use_adjusted_price": use_adjusted_price,
+                "adjusted_price_requested": use_adjusted_price,
+                "adjusted_price_used": adjusted_price_used,
                 "entry_price_basis": entry_price_view["price_basis"],
                 "exit_price_basis": exit_price_view["price_basis"],
                 "entry_adjustment_factor": entry_price_view["adjustment_factor"],
                 "exit_adjustment_factor": exit_price_view["adjustment_factor"],
+                "entry_adjustment_applied": entry_price_view["adjustment_applied"],
+                "exit_adjustment_applied": exit_price_view["adjustment_applied"],
                 "entry_raw_close": entry_price_view["source_close"],
                 "entry_adj_close": entry_price_view["source_adj_close"],
                 "exit_raw_close": exit_price_view["source_close"],
                 "exit_adj_close": exit_price_view["source_adj_close"],
+                "corporate_action_asof_rule": "corporate_actions.action_date <= trade_date",
+                "entry_corporate_action_status": entry_price_view["corporate_action_status"],
+                "exit_corporate_action_status": exit_price_view["corporate_action_status"],
+                "entry_corporate_action_effective_date": entry_price_view["corporate_action_effective_date"],
+                "exit_corporate_action_effective_date": exit_price_view["corporate_action_effective_date"],
+                "entry_corporate_action_type": entry_price_view["corporate_action_type"],
+                "exit_corporate_action_type": exit_price_view["corporate_action_type"],
             },
         }
+
+    def _trade_target_price(self, risk, entry_price: float, stop_price: float, adjustment_factor: float) -> float:
+        target_price = self._positive_float(getattr(risk, "target_price", 0.0)) * adjustment_factor
+        if target_price > entry_price:
+            return target_price
+        return entry_price + (entry_price - stop_price) * float(self.strategy_config["common"]["target_reward_risk"])
 
     def _forced_exit(
         self,
@@ -854,7 +1041,11 @@ class BacktestService:
             exit_reason = "missing_data"
             exit_assumption = "missing_data_last_available_close_exit"
 
-        price_view = self._bar_price_view(last_bar, use_adjusted_price)
+        price_view = self._bar_price_view(
+            last_bar,
+            use_adjusted_price,
+            self._corporate_action_price_context(symbol, last_bar["trade_date"], use_adjusted_price),
+        )
         return {
             "bar": last_bar,
             "bar_index": int(holding_window.index[-1]),
@@ -891,20 +1082,111 @@ class BacktestService:
         symbol_row = self.repo.get_symbol(symbol)
         return symbol_row.delist_date if symbol_row is not None else None
 
+    def _corporate_action_price_context(self, symbol: str, trade_date_value: object, use_adjusted_price: bool) -> dict[str, object]:
+        """조정가 사용 여부를 corporate action as-of 계약으로 제한한다."""
+        if not use_adjusted_price:
+            return self._corporate_action_context(
+                adjustment_allowed=False,
+                status="raw_price_requested",
+            )
+        trade_date = self._optional_date(trade_date_value)
+        if trade_date is None:
+            return self._corporate_action_context(
+                adjustment_allowed=False,
+                status="trade_date_unavailable_raw_price",
+            )
+        corporate_actions_asof = getattr(self.repo, "corporate_actions_asof", None)
+        if not callable(corporate_actions_asof):
+            return self._corporate_action_context(
+                adjustment_allowed=False,
+                status="corporate_action_lookup_unavailable_raw_price",
+            )
+        actions = list(corporate_actions_asof(symbol, trade_date))
+        effective_actions = [
+            action
+            for action in actions
+            if (self._corporate_action_effective_date(action) is not None)
+            and (self._corporate_action_effective_date(action) <= trade_date)
+        ]
+        if not effective_actions:
+            return self._corporate_action_context(
+                adjustment_allowed=False,
+                status="no_effective_corporate_action_raw_price",
+                action_count_asof=len(actions),
+            )
+        latest_action = max(
+            effective_actions,
+            key=lambda action: (
+                self._corporate_action_effective_date(action) or date.min,
+                int(getattr(action, "id", 0) or 0),
+            ),
+        )
+        effective_date = self._corporate_action_effective_date(latest_action)
+        return self._corporate_action_context(
+            adjustment_allowed=True,
+            status="effective_corporate_action_adjusted_price",
+            effective_date=effective_date,
+            action_type=str(getattr(latest_action, "action_type", "")),
+            action_count_asof=len(effective_actions),
+        )
+
+    @staticmethod
+    def _corporate_action_context(
+        *,
+        adjustment_allowed: bool,
+        status: str,
+        effective_date: date | None = None,
+        action_type: str | None = None,
+        action_count_asof: int = 0,
+    ) -> dict[str, object]:
+        return {
+            "adjustment_allowed": adjustment_allowed,
+            "status": status,
+            "effective_date": effective_date,
+            "action_type": action_type,
+            "action_count_asof": action_count_asof,
+        }
+
     @classmethod
-    def _bar_price_view(cls, bar: pd.Series, use_adjusted_price: bool) -> dict[str, object]:
+    def _corporate_action_effective_date(cls, action: object) -> date | None:
+        return cls._optional_date(getattr(action, "effective_date", None) or getattr(action, "action_date", None))
+
+    @classmethod
+    def _bar_price_view(
+        cls,
+        bar: pd.Series,
+        use_adjusted_price: bool,
+        corporate_action_context: dict[str, object] | None = None,
+    ) -> dict[str, object]:
         close = float(bar["close"])
         adj_close = cls._optional_positive_float(bar.get("adj_close"))
-        factor = adj_close / close if use_adjusted_price and close > 0 and adj_close is not None else 1.0
+        context = corporate_action_context or cls._corporate_action_context(
+            adjustment_allowed=False,
+            status="corporate_action_context_unavailable_raw_price",
+        )
+        adjustment_applied = (
+            use_adjusted_price
+            and bool(context["adjustment_allowed"])
+            and close > 0
+            and adj_close is not None
+            and abs(adj_close - close) > 1e-9
+        )
+        factor = adj_close / close if adjustment_applied else 1.0
+        effective_date = cls._optional_date(context.get("effective_date"))
         return {
             "open": float(bar["open"]) * factor,
             "high": float(bar["high"]) * factor,
             "low": float(bar["low"]) * factor,
             "close": close * factor,
             "adjustment_factor": round(factor, 8),
-            "price_basis": "adjusted_ohlc_from_adj_close" if use_adjusted_price and factor != 1.0 else "raw_ohlc",
+            "price_basis": "adjusted_ohlc_from_adj_close_asof_corporate_action" if adjustment_applied else "raw_ohlc",
+            "adjustment_applied": adjustment_applied,
             "source_close": close,
             "source_adj_close": adj_close,
+            "corporate_action_status": str(context["status"]),
+            "corporate_action_effective_date": effective_date.isoformat() if effective_date else None,
+            "corporate_action_type": context.get("action_type"),
+            "corporate_action_count_asof": int(context.get("action_count_asof", 0) or 0),
         }
 
     @staticmethod
@@ -927,6 +1209,46 @@ class BacktestService:
         if pd.isna(parsed):
             return None
         return parsed.date()
+
+    @classmethod
+    def _required_date(cls, value: object, field_name: str) -> date:
+        parsed = cls._optional_date(value)
+        if parsed is None:
+            raise ValueError(f"trade ledger field is required: {field_name}")
+        return parsed
+
+    @staticmethod
+    def _required_float(value: object, field_name: str) -> float:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"trade ledger field is required: {field_name}") from exc
+        if pd.isna(numeric):
+            raise ValueError(f"trade ledger field is required: {field_name}")
+        return numeric
+
+    @staticmethod
+    def _required_int(value: object, field_name: str) -> int:
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"trade ledger field is required: {field_name}") from exc
+        return numeric
+
+    @staticmethod
+    def _json_object_string(value: object) -> str:
+        payload = value if isinstance(value, dict) else {}
+        return json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+
+    @staticmethod
+    def _json_object(value: str | None) -> dict[str, object]:
+        if not value:
+            return {}
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
     @classmethod
     def _liquidity_detail(
@@ -1009,12 +1331,12 @@ class BacktestService:
     @staticmethod
     def _record_realism_stats(
         realism_stats: dict[str, int] | None,
-        use_adjusted_price: bool,
+        adjusted_price_used: bool,
         exit_decision: dict[str, object],
     ) -> None:
         if realism_stats is None:
             return
-        if use_adjusted_price:
+        if adjusted_price_used:
             realism_stats["adjusted_price_trade_count"] = int(realism_stats.get("adjusted_price_trade_count", 0)) + 1
         if bool(exit_decision.get("forced_exit", False)):
             realism_stats["forced_exit_count"] = int(realism_stats.get("forced_exit_count", 0)) + 1
@@ -1295,6 +1617,7 @@ class BacktestService:
             "execution_requires_portfolio_constructor_signal_count": int(
                 portfolio_stats.get("execution_requires_portfolio_constructor_signal_count", 0) or 0
             ),
+            **ValidationScaffold.metric_placeholders(),
             "regime_segment_return": "not_available_in_current_mvp",
             "partial_fill_count": int((liquidity_stats or {}).get("partial_fill_count", 0)),
             "no_fill_count": int((liquidity_stats or {}).get("no_fill_count", 0)),

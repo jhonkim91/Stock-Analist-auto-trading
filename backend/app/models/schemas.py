@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -20,18 +20,32 @@ class IndicatorResponse(BaseModel):
     rows: int
     start_date: date | None = None
     end_date: date | None = None
+    mode: str | None = None
+    symbols: int | None = None
+    deleted_rows: int | None = None
 
 
 class RegimeResponse(BaseModel):
     benchmark: str
     trade_date: date
     regime: str
+    index_regime: str | None = None
     market_score: float
     close_vs_200dma: float | None
     sma50_vs_200dma: float | None
     weekly_close: float | None
     weekly_sma30: float | None
     weekly_sma30_slope: float | None
+    breadth_trade_date: date | None = None
+    breadth_regime: str | None = None
+    breadth_score: float | None = None
+    breadth_score_available: bool = False
+    breadth_advance_decline_ratio: float | None = None
+    breadth_advance_decline_available: bool = False
+    breadth_52w_high_low_ratio: float | None = None
+    breadth_52w_high_low_available: bool = False
+    breadth_ma50_participation: float | None = None
+    breadth_ma50_participation_available: bool = False
 
 
 class ScreenerRunRequest(BaseModel):
@@ -102,6 +116,8 @@ class BrokerPreviewRequest(BaseModel):
     limit_price: float | None = None
     stop_price: float | None = None
     strategy_tag: str | None = None
+    venue: str | None = None
+    as_of: datetime | None = None
 
 
 class PaperOrderPreviewRequest(BaseModel):
@@ -111,6 +127,8 @@ class PaperOrderPreviewRequest(BaseModel):
     limit_price: float | None = None
     stop_price: float | None = None
     strategy_tag: str | None = None
+    venue: str | None = None
+    as_of: datetime | None = None
 
 
 class ImportConfirmRequest(BaseModel):

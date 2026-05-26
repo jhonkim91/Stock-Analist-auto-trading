@@ -18,6 +18,14 @@ common:
     volume_ratio_50_min: 1.0
     near_high_52w_threshold_enabled: false
     near_high_52w_threshold: 0.90
+    breadth_score_filter_enabled: false
+    breadth_score_min: 0.50
+    breadth_advance_decline_filter_enabled: false
+    breadth_advance_decline_ratio_min: 0.50
+    breadth_52w_high_low_filter_enabled: false
+    breadth_52w_high_low_ratio_min: 0.50
+    breadth_ma50_participation_filter_enabled: false
+    breadth_ma50_participation_min: 0.50
     optional_fundamental_quality_enabled: false
     optional_earnings_quality_enabled: false
     min_roe: 0.15
@@ -91,6 +99,8 @@ momentum_rank:
   max_atr20_pct: 0.08
   volume_confirmation_enabled: false
   min_volume_ratio_50: 0.8
+  breadth_score_filter_enabled: false
+  breadth_score_min: 0.50
 relative_strength_leader:
   selection_mode: "rank_portfolio"
   rs_percentile_min: 90
@@ -127,3 +137,5 @@ stage_analysis_weekly:
   market_score_min: 0.50
   fundamentals_quality_enabled: false
   min_roe: 0.15
+  breadth_score_filter_enabled: false
+  breadth_score_min: 0.50

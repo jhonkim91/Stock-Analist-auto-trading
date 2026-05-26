@@ -160,6 +160,44 @@ def test_reports_list_detail_and_markdown_api(full_flow_client):
     assert "# Daily Market Report" in markdown.text
 
 
+def test_reports_api_supports_weekly_generation_filtering_and_markdown(client):
+    assert client.post("/api/data/seed").status_code == 200
+    assert client.post("/api/indicators/recompute").status_code == 200
+    assert client.post("/api/screener/run", json={}).status_code == 200
+
+    daily = client.post("/api/reports/daily")
+    weekly = client.post("/api/reports/weekly")
+
+    assert daily.status_code == 200
+    assert weekly.status_code == 200
+    daily_id = daily.json()["report_id"]
+    weekly_id = weekly.json()["report_id"]
+    assert daily.json()["report_type"] == "daily"
+    assert weekly.json()["report_type"] == "weekly"
+
+    daily_reports = client.get("/api/reports?report_type=daily&limit=20")
+    weekly_reports = client.get("/api/reports?report_type=weekly&limit=20")
+
+    assert daily_reports.status_code == 200
+    assert weekly_reports.status_code == 200
+    assert {report["report_type"] for report in daily_reports.json()} == {"daily"}
+    assert {report["report_type"] for report in weekly_reports.json()} == {"weekly"}
+    assert daily_id in {report["id"] for report in daily_reports.json()}
+    assert weekly_id in {report["id"] for report in weekly_reports.json()}
+
+    daily_markdown = client.get(f"/api/reports/{daily_id}/markdown")
+    weekly_markdown = client.get(f"/api/reports/{weekly_id}/markdown")
+
+    assert daily_markdown.status_code == 200
+    assert weekly_markdown.status_code == 200
+    assert daily_markdown.text.startswith("# Daily Market Report")
+    assert weekly_markdown.text.startswith("# Weekly Strategy Review")
+    assert f'report-{daily_id}.md' in daily_markdown.headers["content-disposition"]
+    assert f'report-{weekly_id}.md' in weekly_markdown.headers["content-disposition"]
+    assert "- win_rate: not_available_in_current_mvp" in weekly_markdown.text
+    assert "- realized_pnl: 0" not in weekly_markdown.text
+
+
 def test_backtest_runs_list_and_detail_api(full_flow_client):
     client = full_flow_client
 
@@ -186,6 +224,15 @@ def test_backtest_runs_list_and_detail_api(full_flow_client):
     assert detail.status_code == 200
     assert detail.json()["run_id"] == run["run_id"]
     assert detail.json()["metrics"]["trade_count"] == run["metrics"]["trade_count"]
+    assert detail.json()["trade_ledger_count"] == run["metrics"]["trade_count"]
+    assert detail.json()["trade_ledger"]["table"] == "backtest_trade_ledger"
+
+    trades = client.get(f"/api/backtest/runs/{run['run_id']}/trades")
+    assert trades.status_code == 200
+    assert len(trades.json()) == run["metrics"]["trade_count"]
+    if trades.json():
+        first_trade = trades.json()[0]
+        assert {"run_id", "strategy_name", "symbol", "entry_date", "exit_date", "pnl", "return_pct"}.issubset(first_trade)
 
 
 def test_strategy_summary_endpoint_shape_and_unspecified_baseline(full_flow_client):
@@ -201,13 +248,20 @@ def test_strategy_summary_endpoint_shape_and_unspecified_baseline(full_flow_clie
     assert payload["window"]["available_trading_days"] <= 252
     assert payload["screener_window"]["available_trading_days"] <= 252
     assert payload["report"]["filename"] == "strategy_validation_252d.json"
+    assert payload["report"]["kind"] == "strategy_validation_summary"
     assert Path(payload["report"]["path"]).exists()
     assert payload["validation_documentation_format"]["docs_file"] == "docs/VALIDATION.md"
+    assert "unavailable_metrics" in payload["validation_documentation_format"]["required_fields"]
+    assert payload["validation_framework"]["walk_forward"]["status"] == "not_available_in_current_mvp"
+    assert payload["validation_framework"]["overfitting"]["pbo"]["value"] == "not_available_in_current_mvp"
+    assert payload["validation_framework"]["overfitting"]["deflated_sharpe_ratio"]["value"] == "not_available_in_current_mvp"
+    assert payload["validation_framework"]["attribution"]["value"] == "not_available_in_current_mvp"
+    assert "orders" in payload["validation_framework"]["trade_ledger_schema"]["not_connected_to"]
 
     rows = payload["strategies"]
     assert rows
     first = rows[0]
-    assert {"strategy_name", "screener", "backtest", "delta"}.issubset(first)
+    assert {"strategy_name", "screener", "backtest", "delta", "validation"}.issubset(first)
     assert {
         "evaluated_count",
         "pass_count",
@@ -221,6 +275,13 @@ def test_strategy_summary_endpoint_shape_and_unspecified_baseline(full_flow_clie
     assert first["delta"]["win_rate_delta"] is None
     assert first["delta"]["total_return_delta"] is None
     assert first["delta"]["max_drawdown_delta"] is None
+    assert first["backtest"]["pbo"] == "not_available_in_current_mvp"
+    assert first["backtest"]["deflated_sharpe_ratio"] == "not_available_in_current_mvp"
+    assert first["validation"]["walk_forward"]["metric"] == "not_available_in_current_mvp"
+
+    status = client.get("/api/data/status")
+    assert status.status_code == 200
+    assert status.json()["orders_count"] == 0
 
 
 def test_settings_read_api_and_secret_key_redaction(client, tmp_path):

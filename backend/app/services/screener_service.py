@@ -39,7 +39,7 @@ class ScreenerService:
         if not indicators:
             raise ValueError(f"{target_date} 지표 스냅샷이 없습니다.")
 
-        regime = RegimeService(self.db).detect_market_regime()["regime"]
+        regime = RegimeService(self.db).detect_market_regime(as_of=target_date)["regime"]
         common = self.strategy_config["common"]
         self.screen_repo.clear_results(target_date)
 

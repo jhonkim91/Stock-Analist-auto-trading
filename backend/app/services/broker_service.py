@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -14,6 +15,7 @@ from backend.app.core.paths import CONFIG_DIR
 from backend.app.models.tables import Position
 from backend.app.services.kis_service import KIS_APP_KEY_ENV, KIS_APP_SECRET_ENV, KisReadOnlyService
 from backend.app.services.market_data_import_service import DataSourceService
+from backend.app.services.market_session_service import MarketSessionService
 
 BROKER_CONFIG_NAME = "broker.yaml"
 DEFAULT_SOURCE_ID = "kis_openapi"
@@ -230,12 +232,14 @@ class BrokerService:
         *,
         config_dir: Path = CONFIG_DIR,
         source_service: DataSourceService | None = None,
+        market_session_service: MarketSessionService | None = None,
     ) -> None:
         self.db = db
         self.config_service = BrokerConfigService(config_dir)
         self.source_service = source_service or DataSourceService()
         self.token_service = TokenLifecycleService()
         self.audit_service = BrokerAuditService()
+        self.market_session_service = market_session_service or MarketSessionService()
 
     def status(self) -> dict[str, object]:
         """Phase 3D broker safety scaffold 상태를 secret 없이 반환한다."""
@@ -286,11 +290,14 @@ class BrokerService:
         limit_price: float | None = None,
         stop_price: float | None = None,
         strategy_tag: str | None = None,
+        venue: str | None = None,
+        as_of: datetime | None = None,
     ) -> dict[str, object]:
         """실제 주문 없이 broker safety scaffold용 dry-run preview만 생성한다."""
         config, config_reasons = self.config_service.load()
         source, source_reasons = self._broker_source(config)
         token_status = self.token_service.status()
+        session_metadata = self.market_session_service.preview_metadata(venue=venue, as_of=as_of)
         adapter_selected = source is not None and "PROVIDER_SOURCE_MISMATCH" not in source_reasons
         risk_gate = OrderRiskGate(self.db).evaluate(
             config=config,
@@ -328,6 +335,9 @@ class BrokerService:
             "symbol": symbol,
             "side": side.strip().lower(),
             "qty": qty,
+            "venue": session_metadata["venue"],
+            "session": session_metadata["session"],
+            "session_metadata": session_metadata,
             "limit_price": limit_price,
             "stop_price": stop_price,
             "strategy_tag": strategy_tag,

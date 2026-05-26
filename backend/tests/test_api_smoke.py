@@ -34,6 +34,8 @@ def test_full_backend_api_smoke_flow_asserts_core_fields(client):
     assert regime_payload["regime"] in {"bull", "neutral", "bear"}
     assert regime_payload["market_score"] in {0.0, 0.5, 1.0}
     assert "weekly_sma30" in regime_payload
+    assert "breadth_score" in regime_payload
+    assert "breadth_regime" in regime_payload
 
     instruments = client.get("/api/instruments")
     assert instruments.status_code == 200

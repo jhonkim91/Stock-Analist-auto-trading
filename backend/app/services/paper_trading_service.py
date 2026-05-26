@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.paths import CONFIG_DIR
 from backend.app.models.tables import Order, PaperAuditEvent, PaperFill, PaperOrder, PaperPosition
 from backend.app.services.broker_service import TokenLifecycleService
+from backend.app.services.market_session_service import MarketSessionService
 
 PAPER_CONFIG_NAME = "paper.yaml"
 
@@ -174,11 +176,18 @@ class PaperRiskGate:
 
 
 class PaperTradingService:
-    def __init__(self, db: Session | None = None, *, config_dir: Path = CONFIG_DIR) -> None:
+    def __init__(
+        self,
+        db: Session | None = None,
+        *,
+        config_dir: Path = CONFIG_DIR,
+        market_session_service: MarketSessionService | None = None,
+    ) -> None:
         self.db = db
         self.config_service = PaperConfigService(config_dir)
         self.token_service = TokenLifecycleService()
         self.simulator = LocalPaperSimulator()
+        self.market_session_service = market_session_service or MarketSessionService()
 
     def status(self) -> dict[str, object]:
         """Paper trading scaffold 상태를 secret이나 외부 호출 없이 반환한다."""
@@ -223,10 +232,13 @@ class PaperTradingService:
         limit_price: float | None = None,
         stop_price: float | None = None,
         strategy_tag: str | None = None,
+        venue: str | None = None,
+        as_of: datetime | None = None,
     ) -> dict[str, object]:
         """DB write 없이 paper order preview deny 응답만 생성한다."""
         config, config_reasons = self.config_service.load()
         token_status = self.token_service.status()
+        session_metadata = self.market_session_service.preview_metadata(venue=venue, as_of=as_of)
         risk_gate = PaperRiskGate(self.db).evaluate(
             config=config,
             symbol=symbol,
@@ -265,6 +277,9 @@ class PaperTradingService:
             "symbol": symbol,
             "side": side.strip().lower(),
             "qty": qty,
+            "venue": session_metadata["venue"],
+            "session": session_metadata["session"],
+            "session_metadata": session_metadata,
             "limit_price": limit_price,
             "stop_price": stop_price,
             "strategy_tag": strategy_tag,

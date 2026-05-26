@@ -12,7 +12,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import get_config
-from backend.app.models.tables import DailyOhlcv, DataQualityCheck, ExternalSymbolMapping, ImportRun, SymbolMaster, TradingCalendar
+from backend.app.models.tables import (
+    CorporateAction,
+    DailyOhlcv,
+    DataQualityCheck,
+    ExternalSymbolMapping,
+    ImportRun,
+    SymbolMaster,
+    TradingCalendar,
+)
 from backend.app.services.data_providers import (
     ExternalDailyRequest,
     ExternalProviderError,
@@ -773,6 +781,20 @@ class MarketDataImportService:
             if symbol and self.db.get(SymbolMaster, symbol) is None:
                 row_issues.append(self._issue(index, symbol, parsed_date, "symbol", "UNKNOWN_SYMBOL", "warning", "symbol_master에 없는 symbol입니다. confirm 시 기본값으로 생성됩니다."))
 
+            if parsed_date is not None and symbol and numeric is not None and self._adjusted_close_differs(numeric):
+                if not self._corporate_action_known_asof(symbol, parsed_date):
+                    row_issues.append(
+                        self._issue(
+                            index,
+                            symbol,
+                            parsed_date,
+                            "adj_close",
+                            "ADJUSTED_CLOSE_WITHOUT_EFFECTIVE_CORPORATE_ACTION",
+                            "warning",
+                            "adj_close가 close와 다르지만 trade_date까지 유효한 corporate action이 없습니다.",
+                        )
+                    )
+
             if parsed_date is not None and symbol:
                 key = (symbol, parsed_date, venue)
                 if key in seen_keys:
@@ -893,6 +915,20 @@ class MarketDataImportService:
             )
             or 0
         ) > 0
+
+    def _corporate_action_known_asof(self, symbol: str, target_date: date) -> bool:
+        return (
+            self.db.scalar(
+                select(func.count())
+                .select_from(CorporateAction)
+                .where(CorporateAction.symbol == symbol, CorporateAction.action_date <= target_date)
+            )
+            or 0
+        ) > 0
+
+    @staticmethod
+    def _adjusted_close_differs(numeric: dict[str, float | int]) -> bool:
+        return abs(float(numeric["adj_close"]) - float(numeric["close"])) > 1e-9
 
     @staticmethod
     def _is_missing(value: object) -> bool:

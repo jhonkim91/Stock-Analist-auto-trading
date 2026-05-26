@@ -24,4 +24,6 @@ def preview_paper_order(payload: PaperOrderPreviewRequest, db: Session = Depends
         limit_price=payload.limit_price,
         stop_price=payload.stop_price,
         strategy_tag=payload.strategy_tag,
+        venue=payload.venue,
+        as_of=payload.as_of,
     )

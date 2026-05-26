@@ -155,6 +155,19 @@ def test_validate_csv_zero_volume_unknown_symbol_adjusted_close_and_turnover_war
     assert {"ZERO_VOLUME", "UNKNOWN_SYMBOL", "MISSING_ADJ_CLOSE", "MISSING_TURNOVER_VALUE"}.issubset(codes)
 
 
+def test_validate_csv_warns_adjusted_close_without_effective_corporate_action(client):
+    response = _post_validate(
+        client,
+        "trade_date,symbol,open,high,low,close,volume,adj_close,turnover_value\n"
+        "2026-05-20,ADJWARN,10,12,9,10,1000,5,10000\n",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "validated"
+    assert "ADJUSTED_CLOSE_WITHOUT_EFFECTIVE_CORPORATE_ACTION" in _quality_codes(payload["run_id"])
+
+
 def test_validate_csv_batch_duplicate_provider_mismatch_and_weekend_errors(client):
     duplicate = _post_validate(
         client,

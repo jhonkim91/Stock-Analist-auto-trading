@@ -105,12 +105,16 @@ STRATEGY_METADATA: dict[str, StrategyMetadata] = {
         required_fields=(
             "quarterly_eps_growth",
             "sales_growth",
+            "earnings_date",
+            "release_ts",
+            "session",
             "rs_percentile",
             "breakout",
             "market_regime",
         ),
         limitations=(
             "Uses only fundamentals with effective_date less than or equal to the trade date.",
+            "Earnings blackout fails closed when earnings event timestamp/session is missing or unrecognized.",
             "Requires the configured bull market regime condition to pass.",
         ),
     ),
@@ -158,13 +162,14 @@ STRATEGY_METADATA: dict[str, StrategyMetadata] = {
     "momentum_rank": StrategyMetadata(
         name="momentum_rank",
         display_name="Momentum Rank",
-        description="Available-only momentum candidate using relative-strength percentile, RS score, trend score, sector RS, market score, and trend stack.",
+        description="Available-only momentum candidate using relative-strength percentile, RS score, trend score, sector RS, market score, trend stack, and optional breadth hardening.",
         required_fields=(
             "rs_percentile",
             "relative_strength_score",
             "trend_score",
             "sector_rs_score",
             "market_score",
+            "breadth_score",
             "close",
             "sma50",
             "sma150",
@@ -173,7 +178,7 @@ STRATEGY_METADATA: dict[str, StrategyMetadata] = {
         ),
         limitations=(
             "Available-only; it is not part of the default screener run unless explicitly selected.",
-            "Uses indicator snapshot ranks only and does not alter scoring weights.",
+            "Breadth hardening is config-gated and disabled by default.",
         ),
     ),
     "relative_strength_leader": StrategyMetadata(
@@ -219,7 +224,7 @@ STRATEGY_METADATA: dict[str, StrategyMetadata] = {
     "stage_analysis_weekly": StrategyMetadata(
         name="stage_analysis_weekly",
         display_name="Stage Analysis Weekly",
-        description="Available-only Stage 2 approximation using weekly close/SMA30 slope plus daily trend, relative strength, volume, and regime filter.",
+        description="Available-only Stage 2 approximation using weekly close/SMA30 slope plus daily trend, relative strength, volume, regime, and optional breadth hardening.",
         required_fields=(
             "weekly_close",
             "weekly_sma30",
@@ -231,10 +236,11 @@ STRATEGY_METADATA: dict[str, StrategyMetadata] = {
             "rs_percentile",
             "volume_ratio_50",
             "market_regime",
+            "breadth_score",
         ),
         limitations=(
             "Available-only; it must be explicitly selected.",
-            "Fails closed when weekly indicator fields are unavailable.",
+            "Fails closed when weekly indicator fields are unavailable; breadth filters are opt-in.",
         ),
     ),
 }
