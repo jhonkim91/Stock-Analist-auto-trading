@@ -2,10 +2,10 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel`
+- [x] 현재 상태명: `KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync`
 - [x] 현재 version: `MVP v0.24.0`
 - [x] 현재 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
-- [x] 최신 targeted backend pytest: Phase 4 order lifecycle `9 passed`
+- [x] 최신 targeted backend pytest: Phase 5 sync/portfolio `6 passed`
 - [x] 최신 backend full pytest: `293 passed`
 - [x] 최신 frontend 검증: Node `v24.15.0`에서 `npm ci`, lint, typecheck, build 통과
 - [x] 최신 Alembic pytest: `4 passed`
@@ -37,6 +37,7 @@
 - [x] KIS Paper Broker Phase 2 KIS Paper Broker Contract 완료
 - [x] KIS Paper Broker Phase 3 Paper Trading Persistence 완료
 - [x] KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel 완료
+- [x] KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync 완료
 
 ## 현재 프로젝트 상태
 
@@ -64,6 +65,7 @@
 - KIS paper broker Phase 2 산출물: `backend/app/brokers/base.py`, `backend/app/brokers/kis_paper.py`, `backend/app/brokers/kis_live.py`, `backend/app/services/token_manager.py`.
 - KIS paper broker Phase 3 산출물: `backend/alembic/versions/a8b9c0d1e2f3_paper_trading_persistence.py`, `backend/tests/test_paper_persistence_migration.py`, paper persistence SQLAlchemy models.
 - KIS paper broker Phase 4 산출물: `backend/app/services/paper_order_service.py`, `/api/paper/orders/submit`, `/api/paper/orders/cancel`, `/api/paper/orders` local list API, `backend/tests/test_paper_order_api.py`, `backend/tests/test_paper_order_service.py`.
+- KIS paper broker Phase 5 산출물: `backend/app/services/paper_sync_service.py`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio`, `/api/paper/sync`, `backend/tests/test_paper_sync.py`, `backend/tests/test_paper_portfolio_api.py`.
 
 ## 최근 변경 요약
 
@@ -83,12 +85,20 @@
 - `backend/app/services/paper_order_service.py`, `backend/app/api/paper.py`: local-only paper order submit/list lifecycle 추가. submit은 `confirm=true`, `idempotency_key`, canonical request hash, kill-switch/config gate를 모두 통과해야 `paper_orders`에 저장한다.
 - `backend/app/brokers/kis_paper.py`: 공식 KIS cancel payload 확인 전 cancel은 `KIS_PAPER_CANCEL_CONFIRMATION_REQUIRED`로 fail-closed 유지.
 - `backend/tests/test_paper_order_api.py`, `backend/tests/test_paper_order_service.py`, `backend/tests/test_no_live_trading_regression.py`: Phase 4 confirm/idempotency/kill-switch/no-live 회귀 검증 추가.
+- `backend/app/services/paper_sync_service.py`, `backend/app/api/paper.py`: paper fill/position/portfolio snapshot 조회 API와 공식 KIS sync contract 확인 전 fail-closed/idempotent sync no-op 추가.
+- `backend/app/services/portfolio_service.py`: synthetic `positions`와 `paper_positions`/`paper_portfolio_snapshots` 분리 contract 추가.
+- `backend/tests/test_paper_sync.py`, `backend/tests/test_paper_portfolio_api.py`: sync no-op idempotency, paper table 전용 views, synthetic position 미혼합 검증 추가.
 
 ## 최신 검증 결과
 
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_no_live_trading_regression.py -q`: 9 passed in 0.79s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`: 4 passed in 0.59s.
 - 2026-05-27 related regression: `backend/tests/test_phase3f_readonly_provider_contract.py backend/tests/test_phase3f2_kis_daily_ohlcv_adapter.py backend/tests/test_phase3f3_krx_fixture_contract.py backend/tests/test_phase3f4_data_quality_summary.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 21 passed in 39.73s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q`: 6 passed in 0.76s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py -q`: 5 passed in 0.63s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py -q`: 3 passed in 0.03s.
+- 2026-05-27 Phase 5 secret exposure scan: `NO_PHASE5_SECRET_FINDINGS`.
+- 2026-05-27 Phase 5 live trading enable static scan: `NO_PHASE5_LIVE_TRADING_ENABLE_FINDINGS`.
 - 2026-05-27 Phase 4 secret exposure scan: `NO_PHASE4_SECRET_FINDINGS`.
 - 2026-05-27 Phase 4 live trading enable static scan: `NO_PHASE4_LIVE_TRADING_ENABLE_FINDINGS`.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_persistence_migration.py backend/tests/test_alembic_migrations.py -q`: 4 passed in 4.17s.
@@ -133,7 +143,7 @@
 ## 미구현 항목
 
 - 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker.
-- KIS/broker paper submit, KIS/broker cancel, paper fill simulator, paper position mutation.
+- KIS/broker paper submit, KIS/broker cancel, KIS/broker sync fetch, paper fill simulator, paper position mutation via simulator.
 - KIS credential/token 저장, token 발급/refresh/cache, 실제 KIS API 호출.
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.
@@ -141,11 +151,11 @@
 - 저장된 parameter snapshot 기반 train-window 후보 선택과 OOS window persistence.
 - walk-forward parameter optimization, multiple-testing 보정, 저장된 parameter snapshot 기반 후보 선택.
 - parameter snapshot을 자동 생성하는 scheduler 또는 API route.
-- KIS paper broker submit/cancel/sync implementation, report notification, paper bot scheduler.
+- KIS paper broker submit/cancel network implementation, report notification, paper bot scheduler.
 
 ## 다음 작업
 
-- [ ] KIS paper broker Phase 5 Fill/Position/Portfolio Sync는 paper-only mirror로 진행하되 synthetic `positions`와 paper tables를 섞지 않는다.
+- [ ] KIS paper broker Phase 6 Report Notification은 notification failure가 report/paper state를 rollback하지 않도록 진행한다.
 - [ ] `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` endpoint/path/TR-ID/request field를 공식 문서로 보강한다.
 - [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 - [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.

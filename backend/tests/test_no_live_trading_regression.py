@@ -98,3 +98,16 @@ def test_paper_submit_cancel_endpoints_remain_local_fail_closed(client):
     assert cancel_payload["live_order_created"] is False
     assert cancel_payload["broker_order_created"] is False
     assert cancel_payload["network_call_performed"] is False
+
+
+def test_paper_sync_endpoint_remains_noop_without_network_or_live_path(client):
+    response = client.post("/api/paper/sync", json={"scope": "all"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "sync_disabled"
+    assert payload["sync_performed"] is False
+    assert payload["live_order_created"] is False
+    assert payload["broker_order_created"] is False
+    assert payload["network_call_performed"] is False
+    assert payload["synthetic_positions_touched"] is False

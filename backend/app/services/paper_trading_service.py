@@ -383,6 +383,53 @@ class PaperTradingService:
 
         return PaperOrderService(self.db, config_dir=self.config_service.config_dir).list_orders(status=status)
 
+    def list_fills(self, *, symbol: str | None = None) -> dict[str, object]:
+        """저장된 paper fill 목록을 반환한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("fills")
+        from backend.app.services.paper_sync_service import PaperSyncService
+
+        return PaperSyncService(self.db).list_fills(symbol=symbol)
+
+    def list_positions(self, *, symbol: str | None = None) -> dict[str, object]:
+        """저장된 paper position 목록을 반환한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("positions")
+        from backend.app.services.paper_sync_service import PaperSyncService
+
+        return PaperSyncService(self.db).list_positions(symbol=symbol)
+
+    def portfolio(self) -> dict[str, object]:
+        """저장된 paper portfolio snapshot과 paper position 요약을 반환한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("portfolio")
+        from backend.app.services.paper_sync_service import PaperSyncService
+
+        return PaperSyncService(self.db).portfolio()
+
+    def sync(self, *, scope: str = "all") -> dict[str, object]:
+        """공식 KIS sync contract 확인 전에는 no-op sync 응답을 반환한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload(scope)
+        from backend.app.services.paper_sync_service import PaperSyncService
+
+        return PaperSyncService(self.db).sync(scope=scope)
+
+    def _paper_sync_unavailable_payload(self, scope: str) -> dict[str, object]:
+        return {
+            "ok": False,
+            "status": "blocked",
+            "scope": scope,
+            "sync_performed": False,
+            "reason": "PAPER_DB_SESSION_REQUIRED",
+            "reason_codes": ["PAPER_DB_SESSION_REQUIRED"],
+            "counts": self._counts(),
+            "live_order_created": False,
+            "broker_order_created": False,
+            "network_call_performed": False,
+            "synthetic_positions_touched": False,
+        }
+
     def _base_reason_codes(
         self,
         config: dict[str, object],

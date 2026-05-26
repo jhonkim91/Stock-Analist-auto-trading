@@ -4,7 +4,12 @@ import pytest
 
 from backend.app.brokers.base import BrokerAdapter, BrokerCapabilityError, BrokerOrderRequest
 from backend.app.brokers.kis_live import KisLiveBrokerAdapter
-from backend.app.brokers.kis_paper import CONFIRMATION_REQUIRED, KisPaperBrokerAdapter
+from backend.app.brokers.kis_paper import (
+    CANCEL_CONFIRMATION_REQUIRED,
+    CONFIRMATION_REQUIRED,
+    SYNC_CONFIRMATION_REQUIRED,
+    KisPaperBrokerAdapter,
+)
 
 
 def test_kis_paper_adapter_implements_contract_as_disabled_skeleton():
@@ -30,11 +35,11 @@ def test_kis_paper_adapter_blocks_unconfirmed_capabilities():
         adapter.preview_order(order)
     with pytest.raises(BrokerCapabilityError, match=CONFIRMATION_REQUIRED):
         adapter.submit_order(order)
-    with pytest.raises(BrokerCapabilityError, match=CONFIRMATION_REQUIRED):
+    with pytest.raises(BrokerCapabilityError, match=CANCEL_CONFIRMATION_REQUIRED):
         adapter.cancel_order(broker_order_id="paper-1", confirm=True)
     with pytest.raises(BrokerCapabilityError, match=CONFIRMATION_REQUIRED):
         adapter.list_orders(status="open")
-    with pytest.raises(BrokerCapabilityError, match=CONFIRMATION_REQUIRED):
+    with pytest.raises(BrokerCapabilityError, match=SYNC_CONFIRMATION_REQUIRED):
         adapter.sync(scope="all")
 
 

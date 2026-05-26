@@ -142,6 +142,10 @@ class PaperOrderCancelRequest(BaseModel):
     idempotency_key: str | None = None
 
 
+class PaperSyncRequest(BaseModel):
+    scope: Literal["orders", "fills", "positions", "portfolio", "all"] = "all"
+
+
 class ImportConfirmRequest(BaseModel):
     run_id: str
 

@@ -6,11 +6,11 @@
 
 Version: `MVP v0.24.0`
 
-Checkpoint: `KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel`
+Checkpoint: `KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync`
 
 기준 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
 
-Next recommended phase: `KIS paper broker Phase 5 Fill/Position/Portfolio Sync`
+Next recommended phase: `KIS paper broker Phase 6 Report Notification`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -37,6 +37,11 @@ Next recommended phase: `KIS paper broker Phase 5 Fill/Position/Portfolio Sync`
 | Phase 4 related regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f_readonly_provider_contract.py backend/tests/test_phase3f2_kis_daily_ohlcv_adapter.py backend/tests/test_phase3f3_krx_fixture_contract.py backend/tests/test_phase3f4_data_quality_summary.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 21 passed in 39.73s |
 | Phase 4 secret exposure scan | 통과 | changed/untracked Phase 4 scope scan: `NO_PHASE4_SECRET_FINDINGS` |
 | Phase 4 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE4_LIVE_TRADING_ENABLE_FINDINGS` |
+| Phase 5 paper sync/portfolio pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q`: 6 passed in 0.76s |
+| Phase 5 no-live regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py -q`: 5 passed in 0.63s |
+| Phase 5 KIS adapter regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py -q`: 3 passed in 0.03s |
+| Phase 5 secret exposure scan | 통과 | changed/untracked Phase 5 scope scan: `NO_PHASE5_SECRET_FINDINGS` |
+| Phase 5 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE5_LIVE_TRADING_ENABLE_FINDINGS` |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
 | Documentation cross-reference check | 통과 | `README.md`, `docs/PROJECT_STATUS.md`, `docs/DB_MIGRATION.md`, `docs/plans/README.md`, `docs/VALIDATION.md`, `Memory.md` Phase 0 기준선 반영 |
 | 직전 backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
@@ -148,6 +153,13 @@ Phase 4 paper order lifecycle:
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q
 ```
 
+Phase 5 paper sync/portfolio:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py -q
+```
+
 Phase 0 safety:
 
 ```powershell
@@ -202,9 +214,10 @@ git diff --check
 | trade ledger와 주문 테이블 연결 | 없음. validation scaffold에도 `not_connected_to`로 명시 |
 | weekly_ohlcv migration 추가 | 없음 |
 | `orders_count == 0` 정책 변경 | 없음 |
+| paper sync network/fetch | 없음. `POST /api/paper/sync`는 공식 KIS sync contract 확인 전 `KIS_PAPER_SYNC_CONFIRMATION_REQUIRED` no-op |
 
 ## 남은 검증
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
-- Phase 5 Fill/Position/Portfolio Sync, report notification, paper bot scheduler는 이후 순차 진행 대상이다.
+- Phase 6 Report Notification, paper bot scheduler는 이후 순차 진행 대상이다.
 - KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.

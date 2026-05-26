@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.models.schemas import PaperOrderCancelRequest, PaperOrderPreviewRequest, PaperOrderSubmitRequest
+from backend.app.models.schemas import (
+    PaperOrderCancelRequest,
+    PaperOrderPreviewRequest,
+    PaperOrderSubmitRequest,
+    PaperSyncRequest,
+)
 from backend.app.services.paper_trading_service import PaperTradingService
 
 router = APIRouter(prefix="/api/paper", tags=["paper"])
@@ -57,3 +62,23 @@ def cancel_paper_order(payload: PaperOrderCancelRequest, db: Session = Depends(g
 @router.get("/orders")
 def list_paper_orders(status: str | None = None, db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).list_orders(status=status)
+
+
+@router.get("/fills")
+def list_paper_fills(symbol: str | None = None, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).list_fills(symbol=symbol)
+
+
+@router.get("/positions")
+def list_paper_positions(symbol: str | None = None, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).list_positions(symbol=symbol)
+
+
+@router.get("/portfolio")
+def paper_portfolio(db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).portfolio()
+
+
+@router.post("/sync")
+def sync_paper(payload: PaperSyncRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).sync(scope=payload.scope)

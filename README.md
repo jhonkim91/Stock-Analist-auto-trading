@@ -11,13 +11,13 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.24.0` |
-| Phase | `KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel` |
+| Phase | `KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
-| Trading state | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; real/live order 미구현 |
-| Latest backend pytest | Phase 4 targeted `9 passed`, Phase 3E safety `4 passed`, related regression `21 passed`; full backend `293 passed` |
-| Latest Phase 4 order pytest | `9 passed` |
-| Next recommended phase | `KIS paper broker Phase 5 Fill/Position/Portfolio Sync` |
+| Trading state | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; sync fail-closed/no-network; real/live order 미구현 |
+| Latest backend pytest | Phase 5 sync/portfolio `6 passed`, no-live regression `5 passed`, KIS adapter `3 passed`; full backend `293 passed` |
+| Latest Phase 5 sync pytest | `6 passed` |
+| Next recommended phase | `KIS paper broker Phase 6 Report Notification` |
 
 ## Implemented Scope
 
@@ -51,6 +51,7 @@
 - KIS Paper Broker Phase 2 KIS Paper Broker Contract: `BrokerAdapter` contract, disabled `KisPaperBrokerAdapter`, disabled `KisLiveBrokerAdapter`, in-memory-only `KisTokenManager`.
 - KIS Paper Broker Phase 3 Paper Trading Persistence: additive paper table extension, portfolio snapshot, broker audit, notification outbox/delivery log, KIS token status metadata tables.
 - KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel: `POST /api/paper/orders/submit`, `POST /api/paper/orders/cancel`, `GET /api/paper/orders`, confirm/idempotency/kill-switch gated local paper order lifecycle.
+- KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync: `GET /api/paper/fills`, `GET /api/paper/positions`, `GET /api/paper/portfolio`, `POST /api/paper/sync` fail-closed/idempotent no-op until official KIS sync contract is confirmed.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
 - Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration, strategy parameter snapshot migration, paper trading persistence migration.
 

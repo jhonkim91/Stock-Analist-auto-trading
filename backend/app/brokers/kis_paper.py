@@ -6,6 +6,7 @@ from backend.app.brokers.base import BrokerAdapter, BrokerCapabilityError, Broke
 
 CONFIRMATION_REQUIRED = "KIS_PAPER_OFFICIAL_ENDPOINT_CONFIRMATION_REQUIRED"
 CANCEL_CONFIRMATION_REQUIRED = "KIS_PAPER_CANCEL_CONFIRMATION_REQUIRED"
+SYNC_CONFIRMATION_REQUIRED = "KIS_PAPER_SYNC_CONFIRMATION_REQUIRED"
 
 
 class KisPaperBrokerAdapter(BrokerAdapter):
@@ -51,4 +52,4 @@ class KisPaperBrokerAdapter(BrokerAdapter):
 
     def sync(self, *, scope: str = "all") -> dict[str, Any]:
         """공식 sync 조회 contract 확인 전 sync를 실행하지 않는다."""
-        raise BrokerCapabilityError(CONFIRMATION_REQUIRED)
+        raise BrokerCapabilityError(SYNC_CONFIRMATION_REQUIRED)

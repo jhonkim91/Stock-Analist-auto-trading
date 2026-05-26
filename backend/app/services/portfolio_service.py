@@ -40,6 +40,15 @@ class PortfolioService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def paper_state_separation_contract(self) -> dict[str, object]:
+        """paper account mirror와 synthetic portfolio baseline의 분리 contract를 반환한다."""
+        return {
+            "synthetic_positions_table": "positions",
+            "paper_positions_table": "paper_positions",
+            "paper_snapshots_table": "paper_portfolio_snapshots",
+            "mixed": False,
+        }
+
     def risk_summary(self) -> dict[str, object]:
         """현재 포지션과 최신 통과 후보의 preview-only 리스크 요약을 반환한다."""
         positions = self._load_current_positions()

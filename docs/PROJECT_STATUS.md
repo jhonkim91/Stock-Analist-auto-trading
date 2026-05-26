@@ -5,12 +5,12 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.24.0` |
-| Phase | `KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel` |
+| Phase | `KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
-| 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; live/real order disabled |
-| 최신 backend pytest | Phase 4 targeted `9 passed`, Phase 3E safety `4 passed`, related regression `21 passed`, full `293 passed` |
-| 다음 권장 Phase | `KIS paper broker Phase 5 Fill/Position/Portfolio Sync` |
+| 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; sync fail-closed/no-network; live/real order disabled |
+| 최신 backend pytest | Phase 5 sync/portfolio `6 passed`, no-live regression `5 passed`, KIS adapter `3 passed`, full `293 passed` |
+| 다음 권장 Phase | `KIS paper broker Phase 6 Report Notification` |
 
 ## 구현 완료 항목
 
@@ -51,6 +51,7 @@
 - KIS Paper Broker Phase 2 KIS Paper Broker Contract: `BrokerAdapter` contract, KIS paper/live adapter skeleton, in-memory-only token manager, no-live regression tests.
 - KIS Paper Broker Phase 3 Paper Trading Persistence: `paper_*` table additive extension, `paper_portfolio_snapshots`, `broker_audit_events`, `notification_events`, `notification_delivery_logs`, `kis_token_status_metadata`.
 - KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel: local `paper_orders` submit/list lifecycle, explicit `confirm=true`, required idempotency key + canonical request hash, kill-switch/config gate, cancel disabled until official KIS cancel payload is confirmed.
+- KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync: `paper_fills`, `paper_positions`, `paper_portfolio_snapshots` read APIs and fail-closed/idempotent `POST /api/paper/sync`; synthetic `positions` remains separate.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -212,6 +213,7 @@
 - Phase 2 KIS Paper Broker Contract는 완료했다. KIS paper/live adapter는 모두 fail-closed skeleton이며 endpoint/TR-ID/request field 추정 구현은 없다.
 - Phase 3 Paper Trading Persistence는 완료했다. schema 변경은 additive-only이며 raw token/account/webhook/chat_id column을 만들지 않았다.
 - Phase 4 Paper Order Preview/Submit/Cancel은 완료했다. local paper order submit/list만 추가됐고 KIS/live submit/cancel은 여전히 비활성이다.
+- Phase 5 Fill/Position/Portfolio Sync는 완료했다. KIS sync endpoint는 공식 확인 전 disabled no-op이고, views는 paper_* tables만 조회한다.
 
 ## 검증 명령
 
@@ -275,4 +277,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-다음 단계에서는 Phase 5 Fill/Position/Portfolio Sync를 paper-only mirror로 구현하되, synthetic `positions`와 paper mirror를 분리하고 no-live safety contract를 유지한다.
+다음 단계에서는 Phase 6 Report Notification을 notification failure가 report/paper state transition을 막지 않는 방식으로 구현한다.
