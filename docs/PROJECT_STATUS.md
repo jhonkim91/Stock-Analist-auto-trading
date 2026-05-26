@@ -30,6 +30,7 @@
 - Phase C-5: `stage_analysis_weekly` available-only strategy and nullable weekly indicator fields.
 - Phase C-6: `pullback_20ema` default and available strategy, nullable `low`/`ema20` indicator fields.
 - Phase C hardening foundation: 9개 전략의 optional hardening 조건, `data_quality_flags`, additive `risk_metadata`.
+- Phase C Strategy Hardening: 9개 전략 suite validation 완료.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields.
@@ -64,6 +65,7 @@
 - 신규 조건의 사용 가능 여부는 `metadata.data_quality_flags`에 남긴다.
 - `metadata.risk_metadata`는 `suggested_stop_price`, `risk_per_share`, `risk_basis`, `entry_chase_warning`을 additive로 제공한다.
 - strategy registry order, `DEFAULT_STRATEGY_NAMES`, `AVAILABLE_STRATEGY_NAMES`, `StrategyResult` 기존 필드는 변경하지 않는다.
+- 2026-05-26 suite validation 기준 `test_strategies.py`, `test_indicators.py`, KIS/broker/paper safety suite, 전체 backend pytest가 통과했다.
 
 ## 미구현 항목
 

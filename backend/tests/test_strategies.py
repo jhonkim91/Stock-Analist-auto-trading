@@ -550,9 +550,81 @@ def test_pullback_20ema_passes_after_ema_touch_and_close_reclaim():
     assert result.failed_conditions == []
     assert result.pass_flags["low_touch_ema20"] is True
     assert result.pass_flags["close_gte_ema20"] is True
+    assert result.pass_flags["market_regime_not_bear"] is True
+    assert "sector_rs_score_min" not in result.pass_flags
+    assert "near_high_52w" not in result.pass_flags
+    assert "roe_min" not in result.pass_flags
     assert result.metadata["data_quality_flags"]["ema20_available"] is True
     assert result.metadata["data_quality_flags"]["low_available"] is True
+    assert result.metadata["low_to_ema20_pct"] == pytest.approx(0.005102)
+    assert result.metadata["close_to_ema20_pct"] == pytest.approx(0.020408)
+    assert result.metadata["volume_ratio_50"] == pytest.approx(1.1)
+    assert result.metadata["atr20_pct"] == pytest.approx(0.02)
+    assert result.metadata["pullback_quality"] == "valid"
     assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation"}.issubset(result.metadata)
+
+
+def test_pullback_20ema_rejects_bear_market_regime():
+    config = get_config("strategies")
+    result = Pullback20EmaStrategy(config["pullback_20ema"]).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "bear",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["market_regime_not_bear"] is False
+    assert "market_regime_not_bear" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["market_regime_available"] is True
+
+
+def test_pullback_20ema_rejects_low_sector_rs_when_filter_enabled():
+    config = get_config("strategies")
+    result = Pullback20EmaStrategy(
+        {**config["pullback_20ema"], "sector_rs_filter_enabled": True, "sector_rs_score_min": 0.60}
+    ).evaluate(
+        _passing_indicator(sector_rs_score=0.59),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["sector_rs_score_min"] is False
+    assert "sector_rs_score_min" in result.failed_conditions
+    assert "sector_rs_score_min" in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"]["sector_rs_score_available"] is True
+
+
+def test_pullback_20ema_rejects_missing_high_52w_when_near_high_filter_enabled():
+    config = get_config("strategies")
+    result = Pullback20EmaStrategy(
+        {**config["pullback_20ema"], "near_high_52w_filter_enabled": True, "near_high_52w_threshold": 0.85}
+    ).evaluate(
+        _passing_indicator(high_52w=None),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["near_high_52w"] is False
+    assert "near_high_52w" in result.failed_conditions
+    assert "near_high_52w" in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"]["high_52w_available"] is False
+    assert result.metadata["data_quality_flags"]["near_high_52w_available"] is False
+
+
+def test_pullback_20ema_allows_missing_fundamentals_when_quality_filter_disabled():
+    config = get_config("strategies")
+    result = Pullback20EmaStrategy(config["pullback_20ema"]).evaluate(
+        _passing_indicator(),
+        None,
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert "roe_min" not in result.pass_flags
+    assert result.metadata["data_quality_flags"]["fundamentals_available"] is False
+    assert result.metadata["data_quality_flags"]["roe_available"] is False
 
 
 def test_pullback_20ema_rejects_missing_ema20_with_quality_flag():
@@ -568,6 +640,9 @@ def test_pullback_20ema_rejects_missing_ema20_with_quality_flag():
     assert "low_touch_ema20" in result.failed_conditions
     assert "close_gte_ema20" in result.failed_conditions
     assert result.metadata["data_quality_flags"]["ema20_available"] is False
+    assert result.metadata["low_to_ema20_pct"] is None
+    assert result.metadata["close_to_ema20_pct"] is None
+    assert result.metadata["pullback_quality"] == "too_deep_or_missing"
 
 
 def test_pullback_20ema_rejects_broken_trend_alignment():
@@ -592,6 +667,7 @@ def test_pullback_20ema_rejects_excessive_pullback_volume():
 
     assert result.passed is False
     assert "volume_ratio_50_max" in result.failed_conditions
+    assert result.metadata["pullback_quality"] == "volume_too_high"
 
 
 def test_pullback_20ema_rejects_high_atr20_pct():
@@ -604,6 +680,7 @@ def test_pullback_20ema_rejects_high_atr20_pct():
 
     assert result.passed is False
     assert "atr20_pct_max" in result.failed_conditions
+    assert result.metadata["pullback_quality"] == "atr_too_high"
 
 
 def test_new_high_breakout_passes_with_near_high_breakout_fixture():
@@ -691,11 +768,73 @@ def test_darvas_box_passes_with_box_breakout_fixture():
     assert result.pass_flags["valid_box_range"] is True
     assert result.pass_flags["box_height_pct_max"] is True
     assert result.pass_flags["close_gt_box_top"] is True
+    assert result.pass_flags["box_bottom_lt_close"] is True
+    assert result.pass_flags["risk_per_share_positive"] is True
+    assert result.pass_flags["market_regime_not_bear"] is True
+    assert result.pass_flags["sma150_gt_sma200"] is True
+    assert result.pass_flags["sma200_slope_positive"] is True
+    assert "sector_rs_score_min" not in result.pass_flags
+    assert "atr20_pct_max" not in result.pass_flags
     assert result.metadata["box_top"] == 95.0
     assert result.metadata["box_bottom"] == 80.0
     assert result.metadata["box_height_pct"] == 0.1875
+    assert result.metadata["suggested_stop_price"] == 80.0
+    assert result.metadata["risk_per_share"] == 20.0
+    assert result.metadata["risk_basis"] == "darvas_box_bottom"
+    assert result.metadata["risk_metadata"]["suggested_stop_price"] == 80.0
+    assert result.metadata["risk_metadata"]["risk_per_share"] == 20.0
+    assert result.metadata["risk_metadata"]["risk_basis"] == "darvas_box_bottom"
     assert result.metadata["score_breakdown"]["box_height_pct"] == 0.1875
+    assert result.metadata["score_breakdown"]["box_top"] == 95.0
+    assert result.metadata["score_breakdown"]["box_bottom"] == 80.0
     assert result.metadata["data_quality_flags"]["box_height_pct_available"] is True
+
+
+def test_darvas_box_rejects_bear_market_regime():
+    config = get_config("strategies")
+    result = DarvasBoxStrategy(config["darvas_box"]).evaluate(
+        _passing_indicator(close=100.0, pivot_high_20_prev=95.0, pivot_low_20_prev=80.0),
+        _passing_fundamentals(),
+        "bear",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["market_regime_not_bear"] is False
+    assert "market_regime_not_bear" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["market_regime_available"] is True
+
+
+def test_darvas_box_rejects_broken_long_trend_when_enabled():
+    config = get_config("strategies")
+    result = DarvasBoxStrategy(config["darvas_box"]).evaluate(
+        _passing_indicator(close=100.0, pivot_high_20_prev=95.0, pivot_low_20_prev=80.0, sma150=70.0, sma200=80.0),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["sma150_gt_sma200"] is False
+    assert "sma150_gt_sma200" in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["sma150_available"] is True
+    assert result.metadata["data_quality_flags"]["sma200_available"] is True
+
+
+def test_darvas_box_rejects_invalid_box_bottom_risk():
+    config = get_config("strategies")
+    result = DarvasBoxStrategy(config["darvas_box"]).evaluate(
+        _passing_indicator(close=100.0, pivot_high_20_prev=95.0, pivot_low_20_prev=100.0),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["box_bottom_lt_close"] is False
+    assert result.pass_flags["risk_per_share_positive"] is False
+    assert "box_bottom_lt_close" in result.failed_conditions
+    assert "risk_per_share_positive" in result.failed_conditions
+    assert result.metadata["suggested_stop_price"] == 100.0
+    assert result.metadata["risk_per_share"] == 0.0
+    assert result.metadata["risk_basis"] == "darvas_box_bottom"
 
 
 def test_darvas_box_rejects_tall_box_height():
@@ -741,6 +880,40 @@ def test_darvas_box_rejects_low_volume_surge():
     assert "volume_surge" in result.failed_conditions
 
 
+def test_darvas_box_rejects_low_sector_rs_when_filter_enabled():
+    config = get_config("strategies")
+    result = DarvasBoxStrategy(
+        {**config["darvas_box"], "sector_rs_filter_enabled": True, "sector_rs_score_min": 0.60}
+    ).evaluate(
+        _passing_indicator(close=100.0, pivot_high_20_prev=95.0, pivot_low_20_prev=80.0, sector_rs_score=0.59),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["sector_rs_score_min"] is False
+    assert "sector_rs_score_min" in result.failed_conditions
+    assert "sector_rs_score_min" in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"]["sector_rs_score_available"] is True
+
+
+def test_darvas_box_rejects_high_atr20_pct_when_filter_enabled():
+    config = get_config("strategies")
+    result = DarvasBoxStrategy(
+        {**config["darvas_box"], "atr_risk_filter_enabled": True, "max_atr20_pct": 0.08}
+    ).evaluate(
+        _passing_indicator(close=100.0, pivot_high_20_prev=95.0, pivot_low_20_prev=80.0, atr20_pct=0.081),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["atr20_pct_max"] is False
+    assert "atr20_pct_max" in result.failed_conditions
+    assert "atr20_pct_max" in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"]["atr20_pct_available"] is True
+
+
 def test_stage_analysis_weekly_passes_with_stage2_fixture():
     config = get_config("strategies")
     result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
@@ -755,7 +928,20 @@ def test_stage_analysis_weekly_passes_with_stage2_fixture():
     assert result.pass_flags["weekly_close_gt_sma30"] is True
     assert result.pass_flags["weekly_sma30_slope_positive"] is True
     assert result.pass_flags["market_regime_not_bear"] is True
+    assert "sector_rs_score_min" not in result.pass_flags
+    assert "market_score_min" not in result.pass_flags
+    assert "roe_min" not in result.pass_flags
+    assert result.metadata["suggested_stop_basis"] == "weekly_sma30_or_stage_base_required"
+    assert result.metadata["weekly_close_to_sma30_pct"] == pytest.approx(0.111111)
+    assert result.metadata["weekly_sma30_slope"] == pytest.approx(2.0)
+    assert result.metadata["weekly_data_available"] is True
+    assert result.metadata["risk_metadata"]["suggested_stop_basis"] == "weekly_sma30_or_stage_base_required"
+    assert result.metadata["risk_metadata"]["weekly_close_to_sma30_pct"] == pytest.approx(0.111111)
     assert result.metadata["data_quality_flags"]["weekly_data_available"] is True
+    assert result.metadata["data_quality_flags"]["sector_rs_score_available"] is True
+    assert result.metadata["data_quality_flags"]["market_score_available"] is True
+    assert result.metadata["data_quality_flags"]["fundamentals_available"] is True
+    assert result.metadata["data_quality_flags"]["roe_available"] is True
     assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation"}.issubset(result.metadata)
 
 
@@ -795,6 +981,29 @@ def test_stage_analysis_weekly_rejects_bear_market_regime():
     assert "market_regime_not_bear" in result.failed_conditions
 
 
+@pytest.mark.parametrize(
+    ("missing_field", "expected_condition"),
+    [
+        ("weekly_close", "weekly_close_available"),
+        ("weekly_sma30", "weekly_sma30_available"),
+        ("weekly_sma30_slope", "weekly_sma30_slope_available"),
+    ],
+)
+def test_stage_analysis_weekly_rejects_any_missing_weekly_field(missing_field, expected_condition):
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
+        _passing_indicator(**{missing_field: None}),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert "weekly_data_available" in result.failed_conditions
+    assert expected_condition in result.failed_conditions
+    assert result.metadata["data_quality_flags"]["weekly_data_available"] is False
+    assert result.metadata["data_quality_flags"][expected_condition] is False
+
+
 def test_stage_analysis_weekly_rejects_missing_weekly_data_with_quality_flag():
     config = get_config("strategies")
     result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
@@ -804,12 +1013,84 @@ def test_stage_analysis_weekly_rejects_missing_weekly_data_with_quality_flag():
     )
 
     assert result.passed is False
+    assert "weekly_close_available" in result.failed_conditions
+    assert "weekly_sma30_available" in result.failed_conditions
+    assert "weekly_sma30_slope_available" in result.failed_conditions
     assert "weekly_data_available" in result.failed_conditions
     assert "weekly_close_gt_sma30" in result.failed_conditions
+    assert "weekly_sma30_slope_positive" in result.failed_conditions
+    assert result.metadata["weekly_close_to_sma30_pct"] is None
+    assert result.metadata["weekly_sma30_slope"] is None
     assert result.metadata["data_quality_flags"]["weekly_data_available"] is False
     assert result.metadata["data_quality_flags"]["weekly_close_available"] is False
     assert result.metadata["data_quality_flags"]["weekly_sma30_available"] is False
     assert result.metadata["data_quality_flags"]["weekly_sma30_slope_available"] is False
+
+
+def test_stage_analysis_weekly_rejects_low_sector_rs_when_filter_enabled():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(
+        {**config["stage_analysis_weekly"], "sector_rs_filter_enabled": True, "sector_rs_score_min": 0.60}
+    ).evaluate(
+        _passing_indicator(sector_rs_score=0.59),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["sector_rs_score_min"] is False
+    assert "sector_rs_score_min" in result.failed_conditions
+    assert "sector_rs_score_min" in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"]["sector_rs_score_available"] is True
+
+
+def test_stage_analysis_weekly_rejects_low_market_score_when_filter_enabled():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(
+        {**config["stage_analysis_weekly"], "market_score_filter_enabled": True, "market_score_min": 0.50}
+    ).evaluate(
+        _passing_indicator(market_score=0.49),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["market_score_min"] is False
+    assert "market_score_min" in result.failed_conditions
+    assert "market_score_min" in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"]["market_score_available"] is True
+
+
+def test_stage_analysis_weekly_allows_missing_fundamentals_when_quality_filter_disabled():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(config["stage_analysis_weekly"]).evaluate(
+        _passing_indicator(),
+        None,
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert "roe_min" not in result.pass_flags
+    assert result.metadata["data_quality_flags"]["fundamentals_available"] is False
+    assert result.metadata["data_quality_flags"]["roe_available"] is False
+
+
+def test_stage_analysis_weekly_rejects_low_roe_when_quality_filter_enabled():
+    config = get_config("strategies")
+    result = StageAnalysisWeeklyStrategy(
+        {**config["stage_analysis_weekly"], "fundamentals_quality_enabled": True, "min_roe": 0.15}
+    ).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(roe=0.14),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["roe_min"] is False
+    assert "roe_min" in result.failed_conditions
+    assert "roe_min" in result.metadata["optional_conditions"]
+    assert result.metadata["data_quality_flags"]["fundamentals_available"] is True
+    assert result.metadata["data_quality_flags"]["roe_available"] is True
 
 
 def test_momentum_rank_passes_with_strong_relative_strength_fixture():
@@ -825,6 +1106,77 @@ def test_momentum_rank_passes_with_strong_relative_strength_fixture():
     assert result.failed_conditions == []
     assert result.pass_flags["relative_strength_score_min"] is True
     assert result.metadata["data_quality_flags"]["sector_rs_score_available"] is True
+    assert result.metadata["momentum_quality_score"] == pytest.approx(0.725)
+    assert result.metadata["score_breakdown"]["momentum_quality_score"] == pytest.approx(0.725)
+    assert result.metadata["relative_strength_score"] == pytest.approx(0.90)
+    assert result.metadata["trend_score"] == pytest.approx(0.80)
+    assert result.metadata["sector_rs_score"] == pytest.approx(0.70)
+    assert result.metadata["market_score"] == pytest.approx(0.50)
+    assert result.metadata["atr20_pct"] == pytest.approx(0.02)
+    assert result.metadata["signal_type"] == "ranking_candidate"
+    assert result.metadata["execution_requires_portfolio_constructor"] is True
+    assert result.metadata["rebalance_rule_not_available_in_current_mvp"] is True
+    assert result.metadata["risk_flags"]["execution_requires_portfolio_constructor"] is True
+    assert result.metadata["risk_flags"]["rebalance_rule_not_available_in_current_mvp"] is True
+    assert result.metadata["risk_flags"]["atr20_pct_too_high"] is False
+    assert result.metadata["risk_flags"]["volume_ratio_50_too_low"] is False
+    assert result.metadata["data_quality_flags"]["atr20_pct_available"] is True
+    assert result.metadata["data_quality_flags"]["volume_ratio_50_available"] is True
+    assert result.metadata["data_quality_flags"]["close_available"] is True
+    assert result.metadata["data_quality_flags"]["sma50_available"] is True
+    assert result.metadata["data_quality_flags"]["sma150_available"] is True
+    assert result.metadata["data_quality_flags"]["sma200_available"] is True
+
+
+def test_momentum_rank_keeps_atr_and_volume_filters_optional_by_default():
+    config = get_config("strategies")
+    result = MomentumRankStrategy(config["momentum_rank"]).evaluate(
+        _passing_indicator(atr20_pct=0.20, volume_ratio_50=0.20),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert "atr20_pct_max" not in result.pass_flags
+    assert "volume_ratio_50_min" not in result.pass_flags
+    assert result.metadata["risk_flags"]["atr20_pct_too_high"] is True
+    assert result.metadata["risk_flags"]["volume_ratio_50_too_low"] is True
+
+
+def test_momentum_rank_rejects_high_atr20_pct_when_filter_enabled():
+    config = get_config("strategies")
+    result = MomentumRankStrategy(
+        {**config["momentum_rank"], "atr_risk_filter_enabled": True, "max_atr20_pct": 0.08}
+    ).evaluate(
+        _passing_indicator(atr20_pct=0.081),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["atr20_pct_max"] is False
+    assert "atr20_pct_max" in result.failed_conditions
+    assert "atr20_pct_max" in result.metadata["optional_conditions"]
+    assert result.metadata["risk_flags"]["atr20_pct_too_high"] is True
+    assert result.metadata["data_quality_flags"]["atr20_pct_available"] is True
+
+
+def test_momentum_rank_rejects_low_volume_ratio_50_when_confirmation_enabled():
+    config = get_config("strategies")
+    result = MomentumRankStrategy(
+        {**config["momentum_rank"], "volume_confirmation_enabled": True, "min_volume_ratio_50": 0.8}
+    ).evaluate(
+        _passing_indicator(volume_ratio_50=0.79),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["volume_ratio_50_min"] is False
+    assert "volume_ratio_50_min" in result.failed_conditions
+    assert "volume_ratio_50_min" in result.metadata["optional_conditions"]
+    assert result.metadata["risk_flags"]["volume_ratio_50_too_low"] is True
+    assert result.metadata["data_quality_flags"]["volume_ratio_50_available"] is True
 
 
 def test_momentum_rank_rejects_low_rs_percentile():
@@ -875,8 +1227,110 @@ def test_relative_strength_leader_passes_with_strong_leadership_fixture():
     assert result.strategy_tag == "relative_strength_leader"
     assert result.failed_conditions == []
     assert result.pass_flags["near_high_52w"] is True
+    assert result.pass_flags["market_regime_not_bear"] is True
+    assert "market_score_min" not in result.pass_flags
+    assert "atr20_pct_max" not in result.pass_flags
+    assert "roe_min" not in result.pass_flags
+    assert result.metadata["leadership_score"] == pytest.approx(0.875)
+    assert result.metadata["score_breakdown"]["leadership_score"] == pytest.approx(0.875)
+    assert result.metadata["rs_percentile"] == pytest.approx(90.0)
+    assert result.metadata["relative_strength_score"] == pytest.approx(0.90)
+    assert result.metadata["sector_rs_score"] == pytest.approx(0.70)
+    assert result.metadata["near_high_52w"] is True
+    assert "risk_flags" in result.metadata
+    assert result.metadata["risk_flags"]["bear_market"] is False
+    assert result.metadata["risk_flags"]["atr20_pct_too_high"] is False
     assert result.metadata["data_quality_flags"]["high_52w_available"] is True
+    assert result.metadata["data_quality_flags"]["market_score_available"] is True
+    assert result.metadata["data_quality_flags"]["atr20_pct_available"] is True
+    assert result.metadata["data_quality_flags"]["fundamentals_available"] is True
+    assert result.metadata["data_quality_flags"]["roe_available"] is True
     assert {"triggered_conditions", "score_breakdown", "data_quality_flags", "explanation"}.issubset(result.metadata)
+
+
+def test_relative_strength_leader_rejects_bear_market_regime():
+    config = get_config("strategies")
+    result = RelativeStrengthLeaderStrategy(config["relative_strength_leader"]).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(),
+        "bear",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["market_regime_not_bear"] is False
+    assert "market_regime_not_bear" in result.failed_conditions
+    assert result.metadata["risk_flags"]["bear_market"] is True
+    assert result.metadata["data_quality_flags"]["market_regime_available"] is True
+
+
+def test_relative_strength_leader_rejects_low_market_score_when_filter_enabled():
+    config = get_config("strategies")
+    result = RelativeStrengthLeaderStrategy(
+        {**config["relative_strength_leader"], "market_score_filter_enabled": True, "market_score_min": 0.50}
+    ).evaluate(
+        _passing_indicator(market_score=0.49),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["market_score_min"] is False
+    assert "market_score_min" in result.failed_conditions
+    assert "market_score_min" in result.metadata["optional_conditions"]
+    assert result.metadata["risk_flags"]["market_score_below_min"] is True
+    assert result.metadata["data_quality_flags"]["market_score_available"] is True
+
+
+def test_relative_strength_leader_rejects_high_atr20_pct_when_filter_enabled():
+    config = get_config("strategies")
+    result = RelativeStrengthLeaderStrategy(
+        {**config["relative_strength_leader"], "atr_risk_filter_enabled": True, "max_atr20_pct": 0.08}
+    ).evaluate(
+        _passing_indicator(atr20_pct=0.081),
+        _passing_fundamentals(),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["atr20_pct_max"] is False
+    assert "atr20_pct_max" in result.failed_conditions
+    assert "atr20_pct_max" in result.metadata["optional_conditions"]
+    assert result.metadata["risk_flags"]["atr20_pct_too_high"] is True
+    assert result.metadata["data_quality_flags"]["atr20_pct_available"] is True
+
+
+def test_relative_strength_leader_allows_missing_fundamentals_when_quality_filter_disabled():
+    config = get_config("strategies")
+    result = RelativeStrengthLeaderStrategy(config["relative_strength_leader"]).evaluate(
+        _passing_indicator(),
+        None,
+        "neutral",
+    )
+
+    assert result.passed is True
+    assert "roe_min" not in result.pass_flags
+    assert result.metadata["risk_flags"]["fundamentals_missing"] is True
+    assert result.metadata["data_quality_flags"]["fundamentals_available"] is False
+    assert result.metadata["data_quality_flags"]["roe_available"] is False
+
+
+def test_relative_strength_leader_rejects_low_roe_when_quality_filter_enabled():
+    config = get_config("strategies")
+    result = RelativeStrengthLeaderStrategy(
+        {**config["relative_strength_leader"], "fundamentals_quality_enabled": True, "min_roe": 0.15}
+    ).evaluate(
+        _passing_indicator(),
+        _passing_fundamentals(roe=0.14),
+        "neutral",
+    )
+
+    assert result.passed is False
+    assert result.pass_flags["roe_min"] is False
+    assert "roe_min" in result.failed_conditions
+    assert "roe_min" in result.metadata["optional_conditions"]
+    assert result.metadata["risk_flags"]["roe_below_min"] is True
+    assert result.metadata["data_quality_flags"]["fundamentals_available"] is True
+    assert result.metadata["data_quality_flags"]["roe_available"] is True
 
 
 def test_relative_strength_leader_rejects_low_rs_percentile():

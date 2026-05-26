@@ -65,22 +65,49 @@ pullback_20ema:
   rs_percentile_min: 70
   max_pullback_volume_ratio: 1.2
   max_atr20_pct: 0.08
+  sector_rs_filter_enabled: false
+  sector_rs_score_min: 0.60
+  near_high_52w_filter_enabled: false
+  near_high_52w_threshold: 0.85
+  fundamentals_quality_enabled: false
+  min_roe: 0.15
 momentum_rank:
   rs_percentile_min: 85
   relative_strength_score_min: 0.85
   trend_score_min: 0.75
   sector_rs_score_min: 0.60
   market_score_min: 0.50
+  atr_risk_filter_enabled: false
+  max_atr20_pct: 0.08
+  volume_confirmation_enabled: false
+  min_volume_ratio_50: 0.8
 relative_strength_leader:
   rs_percentile_min: 90
   relative_strength_score_min: 0.90
   sector_rs_score_min: 0.70
   near_high_52w_threshold: 0.90
   min_volume_ratio_50: 1.0
+  market_score_filter_enabled: false
+  market_score_min: 0.50
+  atr_risk_filter_enabled: false
+  max_atr20_pct: 0.08
+  fundamentals_quality_enabled: false
+  min_roe: 0.15
 darvas_box:
   max_box_height_pct: 0.25
   volume_surge_multiple: 1.5
   rs_percentile_min: 75
+  long_trend_filter_enabled: true
+  sector_rs_filter_enabled: false
+  sector_rs_score_min: 0.60
+  atr_risk_filter_enabled: false
+  max_atr20_pct: 0.08
 stage_analysis_weekly:
   rs_percentile_min: 70
   min_volume_ratio_50: 1.0
+  sector_rs_filter_enabled: false
+  sector_rs_score_min: 0.60
+  market_score_filter_enabled: false
+  market_score_min: 0.50
+  fundamentals_quality_enabled: false
+  min_roe: 0.15

@@ -16,12 +16,18 @@ class StageAnalysisWeeklyStrategy(BaseStrategy):
         market_regime: str,
     ) -> StrategyResult:
         """Return a pass/fail result for Weinstein-style Stage 2 conditions."""
+        weekly_close_available = indicator.weekly_close is not None
+        weekly_sma30_available = indicator.weekly_sma30 is not None
+        weekly_sma30_slope_available = indicator.weekly_sma30_slope is not None
         weekly_data_available = (
-            indicator.weekly_close is not None
-            and indicator.weekly_sma30 is not None
-            and indicator.weekly_sma30_slope is not None
+            weekly_close_available
+            and weekly_sma30_available
+            and weekly_sma30_slope_available
         )
         flags = {
+            "weekly_close_available": weekly_close_available,
+            "weekly_sma30_available": weekly_sma30_available,
+            "weekly_sma30_slope_available": weekly_sma30_slope_available,
             "weekly_data_available": weekly_data_available,
             "weekly_close_gt_sma30": self._gt(indicator.weekly_close, indicator.weekly_sma30),
             "weekly_sma30_slope_positive": self._gt(indicator.weekly_sma30_slope, 0),
@@ -33,6 +39,21 @@ class StageAnalysisWeeklyStrategy(BaseStrategy):
             "market_regime_not_bear": market_regime != "bear",
         }
         optional_conditions = []
+        if self._sector_rs_filter_enabled():
+            flags["sector_rs_score_min"] = self._gte(
+                getattr(indicator, "sector_rs_score", None),
+                self.config["sector_rs_score_min"],
+            )
+            optional_conditions.append("sector_rs_score_min")
+        if self._market_score_filter_enabled():
+            flags["market_score_min"] = self._gte(
+                getattr(indicator, "market_score", None),
+                self.config["market_score_min"],
+            )
+            optional_conditions.append("market_score_min")
+        if self._fundamentals_quality_enabled():
+            flags["roe_min"] = self._gte(getattr(fundamentals, "roe", None), self.config["min_roe"])
+            optional_conditions.append("roe_min")
         self._apply_optional_hardening_flags(
             flags,
             optional_conditions,
@@ -44,28 +65,69 @@ class StageAnalysisWeeklyStrategy(BaseStrategy):
         passed = self._all_flags(flags)
         summary = self._summary(self.name, passed, failed)
         risk_metadata = self._risk_metadata(indicator, entry_chase_reference=indicator.weekly_sma30)
+        weekly_close_to_sma30_pct = self._weekly_close_to_sma30_pct(indicator)
+        weekly_metadata = {
+            "suggested_stop_basis": "weekly_sma30_or_stage_base_required",
+            "weekly_close_to_sma30_pct": self._round_optional(weekly_close_to_sma30_pct),
+            "weekly_sma30_slope": self._round_optional(indicator.weekly_sma30_slope),
+            "weekly_data_available": weekly_data_available,
+        }
+        if risk_metadata:
+            risk_metadata.update(weekly_metadata)
+        metadata = self._metadata(
+            flags,
+            failed,
+            summary,
+            data_quality_flags={
+                **self._data_quality_flags(indicator, fundamentals, weekly_data_available),
+                **self._hardening_data_quality_flags(indicator, fundamentals, market_regime, risk_metadata),
+            },
+            optional_conditions=optional_conditions,
+            risk_metadata=risk_metadata,
+        )
+        metadata["score_breakdown"].update(
+            {
+                "weekly_close_to_sma30_pct": weekly_metadata["weekly_close_to_sma30_pct"],
+                "weekly_sma30_slope": weekly_metadata["weekly_sma30_slope"],
+                "weekly_data_available": weekly_data_available,
+            }
+        )
+        metadata.update(weekly_metadata)
         return StrategyResult(
             strategy_tag=self.name,
             passed=passed,
             pass_flags=flags,
             failed_conditions=failed,
             reason_summary=summary,
-            metadata=self._metadata(
-                flags,
-                failed,
-                summary,
-                data_quality_flags={
-                    **self._data_quality_flags(indicator, weekly_data_available),
-                    **self._hardening_data_quality_flags(indicator, fundamentals, market_regime, risk_metadata),
-                },
-                optional_conditions=optional_conditions,
-                risk_metadata=risk_metadata,
-            ),
+            metadata=metadata,
         )
+
+    def _sector_rs_filter_enabled(self) -> bool:
+        return bool(self.config.get("sector_rs_filter_enabled", False)) or bool(
+            self.config.get("sector_rs_score_min_enabled", False)
+        )
+
+    def _market_score_filter_enabled(self) -> bool:
+        return bool(self.config.get("market_score_filter_enabled", False)) or bool(
+            self.config.get("market_score_min_enabled", False)
+        )
+
+    def _fundamentals_quality_enabled(self) -> bool:
+        return bool(self.config.get("fundamentals_quality_enabled", False)) or bool(
+            self.config.get("optional_fundamental_quality_enabled", False)
+        )
+
+    def _weekly_close_to_sma30_pct(self, indicator: IndicatorSnapshot) -> float | None:
+        weekly_close = self._as_float(indicator.weekly_close)
+        weekly_sma30 = self._as_float(indicator.weekly_sma30)
+        if weekly_close is None or weekly_sma30 is None or weekly_sma30 <= 0:
+            return None
+        return (weekly_close / weekly_sma30) - 1
 
     @staticmethod
     def _data_quality_flags(
         indicator: IndicatorSnapshot,
+        fundamentals: FundamentalsPti | None,
         weekly_data_available: bool,
     ) -> dict[str, bool]:
         return {
@@ -78,4 +140,12 @@ class StageAnalysisWeeklyStrategy(BaseStrategy):
             "sma200_available": indicator.sma200 is not None,
             "rs_percentile_available": indicator.rs_percentile is not None,
             "volume_ratio_50_available": indicator.volume_ratio_50 is not None,
+            "sector_rs_score_available": getattr(indicator, "sector_rs_score", None) is not None,
+            "market_score_available": getattr(indicator, "market_score", None) is not None,
+            "fundamentals_available": fundamentals is not None,
+            "roe_available": fundamentals is not None and getattr(fundamentals, "roe", None) is not None,
         }
+
+    @staticmethod
+    def _round_optional(value: float | None) -> float | None:
+        return round(float(value), 6) if value is not None else None

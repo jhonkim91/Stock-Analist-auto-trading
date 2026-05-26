@@ -46,6 +46,20 @@
 - `metadata.risk_metadata`는 `suggested_stop_price`, `risk_per_share`, `risk_basis`, `entry_chase_warning`을 additive로 제공합니다.
 - Screener result 응답은 `triggered_conditions`, `score_breakdown`, `risk_flags`, `data_quality_flags`, `explanation`, `rationale`를 유지합니다.
 
+신규 optional filters 요약:
+
+| 전략 | 기본 off optional filters | 기본 on 또는 필수 의미 조건 |
+|---|---|---|
+| `trend_breakout` | sector RS, ATR risk | market regime, trend, 52주 고점, volume surge |
+| `vcp_breakout` | sector RS, pivot distance limit, ATR risk | trend, contraction, dry-up, breakout, volume surge |
+| `canslim_lite` | sector RS, earnings quality | technical trend, volume confirmation |
+| `new_high_breakout` | common hardening 기반 sector RS, ATR risk | 52주 고점/근접 고점, breakout, volume surge |
+| `pullback_20ema` | sector RS, near-high 52w, fundamentals quality | EMA20 touch/reclaim, ATR cap, market regime |
+| `momentum_rank` | ATR risk, volume confirmation | RS percentile, RS score, trend score, sector/market score |
+| `relative_strength_leader` | market score, ATR risk, fundamentals quality | RS leadership, sector RS, near-high 52w, market regime |
+| `darvas_box` | sector RS, ATR risk | box range, close above box, risk per share, long trend |
+| `stage_analysis_weekly` | sector RS, market score, fundamentals quality | weekly close/SMA30/slope availability, Stage 2 trend, market regime |
+
 ## Strategy Config
 
 공통 hardening key는 `backend/config/strategies.yaml`의 `common.hardening`에서 관리합니다.
