@@ -189,29 +189,73 @@ class BaseStrategy:
                 "entry_chase_reference": reference,
             }
 
-        candidates: list[tuple[float, str]] = []
+        candidates: list[tuple[float | None, str]] = []
+        pivot_low = self._as_float(getattr(indicator, "pivot_low_20_prev", None))
+        if pivot_low is not None:
+            candidates.append((pivot_low, "pivot_low_20_prev"))
+
         atr20 = self._as_float(getattr(indicator, "atr20", None))
         atr20_pct = self._as_float(getattr(indicator, "atr20_pct", None))
         if atr20 is None and atr20_pct is not None:
             atr20 = close * atr20_pct
         if atr20 is not None and atr20 > 0:
-            candidates.append((close - atr20 * float(self.config.get("risk_stop_atr_multiple", 2.0)), "atr20"))
+            candidates.append((close - atr20 * float(self.config.get("risk_stop_atr_multiple", 2.0)), "atr_stop"))
 
         hard_stop = close * (1 - float(self.config.get("risk_hard_stop_pct", 0.08)))
-        candidates.append((hard_stop, "hard_stop_pct"))
+        candidates.append((hard_stop, "hard_stop"))
 
-        pivot_low = self._as_float(getattr(indicator, "pivot_low_20_prev", None))
-        if pivot_low is not None and 0 < pivot_low < close:
-            candidates.append((pivot_low, "pivot_low_20_prev"))
-
-        valid_candidates = [(price, basis) for price, basis in candidates if 0 < price < close]
-        suggested_stop_price, risk_basis = max(valid_candidates, default=(None, "unavailable"), key=lambda item: item[0])
+        suggested_stop_price, risk_basis = next(
+            ((price, basis) for price, basis in candidates if price is not None and 0 < price < close),
+            (None, "unavailable"),
+        )
         risk_per_share = close - suggested_stop_price if suggested_stop_price is not None else None
         chase_threshold = float(self.config.get("entry_chase_warning_threshold_pct", 0.03))
         entry_chase_warning = reference is not None and reference > 0 and close > reference * (1 + chase_threshold)
         return {
             "suggested_stop_price": round(suggested_stop_price, 4) if suggested_stop_price is not None else None,
             "risk_per_share": round(risk_per_share, 4) if risk_per_share is not None else None,
+            "risk_basis": risk_basis,
+            "entry_chase_warning": entry_chase_warning,
+            "entry_chase_reference": round(reference, 4) if reference is not None else None,
+        }
+
+    def _risk_metadata_from_stop(
+        self,
+        close: float | None,
+        suggested_stop_price: float | None,
+        risk_basis: str,
+        *,
+        entry_chase_reference: float | None = None,
+        fallback_policy: str | None = None,
+    ) -> dict[str, Any]:
+        if not bool(self.config.get("risk_metadata_enabled", True)):
+            return {}
+
+        close_value = self._as_float(close)
+        stop_value = self._as_float(suggested_stop_price)
+        reference = self._as_float(entry_chase_reference)
+        chase_threshold = float(self.config.get("entry_chase_warning_threshold_pct", 0.03))
+        entry_chase_warning = (
+            close_value is not None
+            and reference is not None
+            and reference > 0
+            and close_value > reference * (1 + chase_threshold)
+        )
+        if close_value is None or close_value <= 0 or stop_value is None or not (0 < stop_value < close_value):
+            metadata: dict[str, Any] = {
+                "suggested_stop_price": None,
+                "risk_per_share": None,
+                "risk_basis": "unavailable",
+                "entry_chase_warning": entry_chase_warning,
+                "entry_chase_reference": round(reference, 4) if reference is not None else None,
+            }
+            if fallback_policy:
+                metadata["fallback_policy"] = fallback_policy
+            return metadata
+
+        return {
+            "suggested_stop_price": round(stop_value, 4),
+            "risk_per_share": round(close_value - stop_value, 4),
             "risk_basis": risk_basis,
             "entry_chase_warning": entry_chase_warning,
             "entry_chase_reference": round(reference, 4) if reference is not None else None,

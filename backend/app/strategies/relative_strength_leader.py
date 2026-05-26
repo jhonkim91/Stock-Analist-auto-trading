@@ -63,6 +63,10 @@ class RelativeStrengthLeaderStrategy(BaseStrategy):
             "sector_rs_score": self._round_optional(getattr(indicator, "sector_rs_score", None)),
             "near_high_52w": flags["near_high_52w"],
         }
+        ranking_metadata = {
+            "signal_type": "ranking_candidate",
+            "execution_requires_portfolio_constructor": True,
+        }
         metadata = self._metadata(
             flags,
             failed,
@@ -76,7 +80,7 @@ class RelativeStrengthLeaderStrategy(BaseStrategy):
             risk_metadata=risk_metadata,
         )
         metadata["score_breakdown"].update(leadership_metadata)
-        metadata.update(leadership_metadata)
+        metadata.update({**leadership_metadata, **ranking_metadata})
         return StrategyResult(
             strategy_tag=self.name,
             passed=passed,
@@ -145,6 +149,7 @@ class RelativeStrengthLeaderStrategy(BaseStrategy):
             "fundamentals_missing": fundamentals is None,
             "roe_below_min": roe is not None and min_roe is not None and roe < min_roe,
             "leadership_score_unavailable": self._leadership_score(indicator) is None,
+            "execution_requires_portfolio_constructor": True,
         }
 
     def _near_high_52w(self, close: float | None, high_52w: float | None) -> bool:

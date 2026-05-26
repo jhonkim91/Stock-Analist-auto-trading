@@ -4,6 +4,7 @@ import json
 import math
 from bisect import bisect_right
 from datetime import date, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pandas as pd
@@ -18,6 +19,10 @@ from backend.app.services.risk_service import RiskService
 from backend.app.services.scoring_service import ScoringService
 from backend.app.strategies.registry import get_available_strategy_registry
 from backend.app.utils.hashing import stable_hash
+
+
+RANK_PORTFOLIO_STRATEGIES = {"momentum_rank", "relative_strength_leader"}
+SUMMARY_METRIC_KEYS = ("trade_count", "win_rate", "total_return", "max_drawdown")
 
 
 class BacktestService:
@@ -37,11 +42,18 @@ class BacktestService:
         start_date: date | None = None,
         end_date: date | None = None,
         initial_equity: float | None = None,
+        top_n: int | None = None,
+        max_positions: int | None = None,
+        rebalance_frequency: str | None = None,
+        weighting: str | None = None,
+        allow_overlap_positions: bool | None = None,
+        save: bool = True,
     ) -> dict[str, object]:
         """종가 신호 후 다음 거래일 시가 체결 가정으로 기본 백테스트를 수행한다."""
         if strategy_name not in self.strategies:
             raise ValueError(f"지원하지 않는 전략입니다: {strategy_name}")
         equity = float(initial_equity or get_config("risk")["portfolio"]["equity"])
+        initial_equity_value = equity
         indicators = self._load_indicators(start_date, end_date)
         if not indicators:
             raise ValueError("indicator_snapshot 데이터가 없습니다.")
@@ -58,59 +70,81 @@ class BacktestService:
         execution_cost_bps = self._execution_cost_bps(execution_config)
         annual_trading_days = int(self.backtest_config.get("metrics", {}).get("annual_trading_days", 252))
 
-        trades: list[dict[str, object]] = []
         liquidity_stats = {"partial_fill_count": 0, "no_fill_count": 0, "total_unfilled_qty": 0}
         realism_stats = {"adjusted_price_trade_count": 0, "forced_exit_count": 0, "delisted_exit_count": 0, "missing_data_exit_count": 0}
-        equity_curve = [{"date": dates[0], "equity": equity}]
-        exposure_days = 0
         total_days = max((dates[-1] - dates[0]).days, 1)
+        selection_mode = self._selection_mode(strategy_name)
+        portfolio_config = self._portfolio_config(
+            top_n=top_n,
+            max_positions=max_positions,
+            rebalance_frequency=rebalance_frequency,
+            weighting=weighting,
+            allow_overlap_positions=allow_overlap_positions,
+        )
 
-        for signal_date in dates:
-            candidates = []
-            market_regime = market_regime_cache.get(signal_date, "neutral")
-            for indicator in rows_by_date.get(signal_date, []):
-                fundamentals = self.repo.fundamentals_asof(indicator.symbol, signal_date)
-                strategy_result = self.strategies[strategy_name].evaluate(indicator, fundamentals, market_regime)
-                risk = self.risk_service.calculate(indicator, equity)
-                liquidity_ok = indicator.turnover_value >= float(self.strategy_config["common"]["min_turnover_value"])
-                rr_ok = risk.reward_risk_ratio >= float(self.strategy_config["common"]["target_reward_risk"])
-                if strategy_result.passed and liquidity_ok and rr_ok and risk.position_size > 0:
-                    candidates.append((self.scoring_service.score(indicator, fundamentals, risk.rr_score), indicator, risk))
-            if not candidates:
-                continue
-            _, indicator, risk = sorted(candidates, key=lambda item: item[0], reverse=True)[0]
-            trade = self._simulate_trade(indicator.symbol, signal_date, risk, price_by_symbol, liquidity_stats, realism_stats)
-            if trade is None:
-                continue
-            equity += float(trade["pnl"])
-            exposure_days += int(trade["holding_days"])
-            equity_curve.append({"date": trade["exit_date"], "equity": equity})
-            trades.append(trade)
+        if strategy_name in RANK_PORTFOLIO_STRATEGIES and selection_mode == "rank_portfolio":
+            trades, equity_curve, equity, exposure_days, portfolio_stats = self._run_rank_portfolio_backtest(
+                strategy_name=strategy_name,
+                dates=dates,
+                rows_by_date=rows_by_date,
+                market_regime_cache=market_regime_cache,
+                price_by_symbol=price_by_symbol,
+                equity=equity,
+                portfolio_config=portfolio_config,
+                liquidity_stats=liquidity_stats,
+                realism_stats=realism_stats,
+            )
+        else:
+            trades, equity_curve, equity, exposure_days = self._run_single_position_backtest(
+                strategy_name=strategy_name,
+                dates=dates,
+                rows_by_date=rows_by_date,
+                market_regime_cache=market_regime_cache,
+                price_by_symbol=price_by_symbol,
+                equity=equity,
+                liquidity_stats=liquidity_stats,
+                realism_stats=realism_stats,
+            )
+            portfolio_stats = {
+                "portfolio_constructor_used": False,
+                "portfolio_selection_mode": selection_mode,
+                "portfolio_top_n": int(portfolio_config["top_n"]),
+                "portfolio_max_positions": int(portfolio_config["max_positions"]),
+                "portfolio_weighting": str(portfolio_config["weighting"]),
+                "portfolio_rebalance_frequency": str(portfolio_config["rebalance_frequency"]),
+                "portfolio_allow_overlap_positions": bool(portfolio_config["allow_overlap_positions"]),
+            }
 
         metrics = self._metrics(
             trades,
             equity_curve,
             equity,
-            initial_equity or get_config("risk")["portfolio"]["equity"],
+            initial_equity_value,
             exposure_days,
             total_days,
             liquidity_stats,
             realism_stats,
             execution_cost_bps=execution_cost_bps,
             annual_trading_days=annual_trading_days,
+            portfolio_stats=portfolio_stats,
         )
-        run_id = f"bt-{uuid4().hex[:12]}"
-        config_hash = stable_hash({"strategy": strategy_name, "backtest": self.backtest_config, "risk": get_config("risk")})
-        self.backtest_repo.save(
-            BacktestRun(
-                run_id=run_id,
-                strategy_name=strategy_name,
-                config_hash=config_hash,
-                start_date=start_date,
-                end_date=end_date,
-                metrics_json=json.dumps(metrics, ensure_ascii=False, default=str),
+        run_id = "unsaved"
+        if save:
+            run_id = f"bt-{uuid4().hex[:12]}"
+            effective_backtest_config = {**self.backtest_config, "portfolio": portfolio_config}
+            config_hash = stable_hash(
+                {"strategy": strategy_name, "backtest": effective_backtest_config, "risk": get_config("risk")}
             )
-        )
+            self.backtest_repo.save(
+                BacktestRun(
+                    run_id=run_id,
+                    strategy_name=strategy_name,
+                    config_hash=config_hash,
+                    start_date=start_date,
+                    end_date=end_date,
+                    metrics_json=json.dumps(metrics, ensure_ascii=False, default=str),
+                )
+            )
         return {"run_id": run_id, "strategy_name": strategy_name, "metrics": metrics, "trades": trades[:20]}
 
     def list_runs(self, limit: int = 20) -> list[dict[str, object]]:
@@ -125,6 +159,83 @@ class BacktestService:
             raise ValueError("백테스트 run을 찾을 수 없습니다.")
         return self._serialize_run(run)
 
+    def strategy_summary(
+        self,
+        lookback_days: int = 252,
+        baseline_run_id: str | None = None,
+        baseline_snapshot: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        """최근 가용 거래일 기준 전략별 screener/backtest validation summary를 계산한다."""
+        from backend.app.services.screener_service import ScreenerService
+
+        requested_days = max(int(lookback_days), 1)
+        strategy_names = list(self.strategies)
+        indicator_dates = self._latest_indicator_dates(requested_days)
+        window_start = indicator_dates[0] if indicator_dates else None
+        window_end = indicator_dates[-1] if indicator_dates else None
+        screener_summary = ScreenerService(self.db).strategy_pass_rate_summary(
+            lookback_days=requested_days,
+            strategy_names=strategy_names,
+        )
+        screener_by_strategy = {
+            str(row["strategy_name"]): row for row in screener_summary["strategies"]  # type: ignore[index]
+        }
+        baseline = self._baseline_metrics_by_strategy(baseline_run_id, baseline_snapshot)
+
+        strategy_summaries: list[dict[str, object]] = []
+        for strategy_name in strategy_names:
+            backtest_summary = self._strategy_backtest_summary(
+                strategy_name=strategy_name,
+                start_date=window_start,
+                end_date=window_end,
+            )
+            baseline_metrics = baseline["metrics_by_strategy"].get(strategy_name)
+            baseline_status = str(baseline["status"])
+            if baseline_metrics is None and baseline_status in {"run_id", "snapshot"}:
+                baseline_status = "unavailable_for_strategy"
+            strategy_summaries.append(
+                {
+                    "strategy_name": strategy_name,
+                    "screener": screener_by_strategy.get(
+                        strategy_name,
+                        {
+                            "strategy_name": strategy_name,
+                            "evaluated_count": 0,
+                            "pass_count": 0,
+                            "pass_rate": None,
+                            "evaluated_trading_days": 0,
+                            "window_trading_days": 0,
+                            "window_start": None,
+                            "window_end": None,
+                        },
+                    ),
+                    "backtest": backtest_summary,
+                    "delta": self._metric_deltas(backtest_summary, baseline_metrics, baseline_status),
+                }
+            )
+
+        return {
+            "lookback_days": requested_days,
+            "window": {
+                "requested_trading_days": requested_days,
+                "available_trading_days": len(indicator_dates),
+                "start_date": window_start,
+                "end_date": window_end,
+                "basis": "indicator_snapshot.trade_date",
+            },
+            "screener_window": {
+                key: value
+                for key, value in screener_summary.items()
+                if key != "strategies"
+            },
+            "baseline": {
+                "status": baseline["status"],
+                "run_id": baseline_run_id,
+                "snapshot_supplied": baseline_snapshot is not None,
+            },
+            "strategies": strategy_summaries,
+        }
+
     @staticmethod
     def _serialize_run(run: BacktestRun) -> dict[str, object]:
         metrics = json.loads(run.metrics_json)
@@ -138,6 +249,109 @@ class BacktestService:
             "created_at": run.created_at,
         }
 
+    def _latest_indicator_dates(self, lookback_days: int) -> list[date]:
+        dates_desc = list(
+            self.db.scalars(
+                select(IndicatorSnapshot.trade_date)
+                .distinct()
+                .order_by(IndicatorSnapshot.trade_date.desc())
+                .limit(max(int(lookback_days), 1))
+            ).all()
+        )
+        return sorted(dates_desc)
+
+    def _strategy_backtest_summary(
+        self,
+        strategy_name: str,
+        start_date: date | None,
+        end_date: date | None,
+    ) -> dict[str, object]:
+        if start_date is None or end_date is None:
+            return {
+                "summary_source": "computed_available_window",
+                "error": "indicator_window_unavailable",
+                **{metric: None for metric in SUMMARY_METRIC_KEYS},
+            }
+        try:
+            result = self.run(strategy_name, start_date=start_date, end_date=end_date, save=False)
+        except ValueError as exc:
+            return {
+                "summary_source": "computed_available_window",
+                "error": str(exc),
+                **{metric: None for metric in SUMMARY_METRIC_KEYS},
+            }
+        metrics = result["metrics"]
+        return {
+            "summary_source": "computed_available_window",
+            "error": None,
+            **{metric: metrics.get(metric) for metric in SUMMARY_METRIC_KEYS},  # type: ignore[union-attr]
+        }
+
+    def _baseline_metrics_by_strategy(
+        self,
+        baseline_run_id: str | None,
+        baseline_snapshot: dict[str, object] | None,
+    ) -> dict[str, object]:
+        if baseline_run_id:
+            run = self.db.get(BacktestRun, baseline_run_id)
+            if run is None:
+                return {"status": "missing", "metrics_by_strategy": {}}
+            return {
+                "status": "run_id",
+                "metrics_by_strategy": {run.strategy_name: json.loads(run.metrics_json)},
+            }
+        if baseline_snapshot is not None:
+            return {
+                "status": "snapshot",
+                "metrics_by_strategy": self._baseline_snapshot_metrics(baseline_snapshot),
+            }
+        return {"status": "unspecified", "metrics_by_strategy": {}}
+
+    @staticmethod
+    def _baseline_snapshot_metrics(snapshot: dict[str, object]) -> dict[str, dict[str, object]]:
+        metrics_by_strategy: dict[str, dict[str, object]] = {}
+        strategies = snapshot.get("strategies")
+        if isinstance(strategies, list):
+            for row in strategies:
+                if not isinstance(row, dict):
+                    continue
+                strategy_name = row.get("strategy_name")
+                metrics = row.get("backtest") or row.get("metrics")
+                if isinstance(strategy_name, str) and isinstance(metrics, dict):
+                    metrics_by_strategy[strategy_name] = metrics
+            return metrics_by_strategy
+
+        strategy_name = snapshot.get("strategy_name")
+        if isinstance(strategy_name, str):
+            metrics = snapshot.get("backtest") or snapshot.get("metrics") or snapshot
+            if isinstance(metrics, dict):
+                return {strategy_name: metrics}
+
+        for key, value in snapshot.items():
+            if not isinstance(value, dict):
+                continue
+            metrics = value.get("backtest") or value.get("metrics") or value
+            if isinstance(metrics, dict):
+                metrics_by_strategy[str(key)] = metrics
+        return metrics_by_strategy
+
+    @staticmethod
+    def _metric_deltas(
+        current_metrics: dict[str, object],
+        baseline_metrics: dict[str, object] | None,
+        baseline_status: str,
+    ) -> dict[str, object]:
+        deltas: dict[str, object] = {"baseline": baseline_status}
+        for metric in SUMMARY_METRIC_KEYS:
+            current_value = current_metrics.get(metric)
+            baseline_value = baseline_metrics.get(metric) if baseline_metrics else None
+            deltas[f"{metric}_delta"] = (
+                round(float(current_value) - float(baseline_value), 6)
+                if isinstance(current_value, (int, float)) and isinstance(baseline_value, (int, float))
+                else None
+            )
+        return deltas
+
     def _load_indicators(self, start_date: date | None, end_date: date | None) -> list[IndicatorSnapshot]:
         stmt = select(IndicatorSnapshot)
         if start_date:
@@ -145,6 +359,339 @@ class BacktestService:
         if end_date:
             stmt = stmt.where(IndicatorSnapshot.trade_date <= end_date)
         return list(self.db.scalars(stmt.order_by(IndicatorSnapshot.trade_date, IndicatorSnapshot.symbol)).all())
+
+    def _run_single_position_backtest(
+        self,
+        strategy_name: str,
+        dates: list[date],
+        rows_by_date: dict[date, list[IndicatorSnapshot]],
+        market_regime_cache: dict[date, str],
+        price_by_symbol: dict[str, pd.DataFrame],
+        equity: float,
+        liquidity_stats: dict[str, int],
+        realism_stats: dict[str, int],
+    ) -> tuple[list[dict[str, object]], list[dict[str, object]], float, int]:
+        trades: list[dict[str, object]] = []
+        equity_curve = [{"date": dates[0], "equity": equity}]
+        exposure_days = 0
+        for signal_date in dates:
+            candidates = []
+            market_regime = market_regime_cache.get(signal_date, "neutral")
+            for indicator in rows_by_date.get(signal_date, []):
+                fundamentals = self.repo.fundamentals_asof(indicator.symbol, signal_date)
+                self._attach_earnings_event(indicator, signal_date)
+                strategy_result = self.strategies[strategy_name].evaluate(indicator, fundamentals, market_regime)
+                risk_metadata = strategy_result.metadata.get("risk_metadata")
+                risk = self.risk_service.calculate(
+                    indicator,
+                    equity,
+                    risk_metadata=risk_metadata if isinstance(risk_metadata, dict) else None,
+                )
+                liquidity_ok = indicator.turnover_value >= float(self.strategy_config["common"]["min_turnover_value"])
+                rr_ok = risk.reward_risk_ratio >= float(self.strategy_config["common"]["target_reward_risk"])
+                if strategy_result.passed and liquidity_ok and rr_ok and risk.position_size > 0:
+                    candidates.append((self.scoring_service.score(indicator, fundamentals, risk.rr_score), indicator, risk))
+            if not candidates:
+                continue
+            _, indicator, risk = sorted(candidates, key=lambda item: item[0], reverse=True)[0]
+            trade = self._simulate_trade(indicator.symbol, signal_date, risk, price_by_symbol, liquidity_stats, realism_stats)
+            if trade is None:
+                continue
+            equity += float(trade["pnl"])
+            exposure_days += int(trade["holding_days"])
+            equity_curve.append({"date": trade["exit_date"], "equity": equity})
+            trades.append(trade)
+        return trades, equity_curve, equity, exposure_days
+
+    def _run_rank_portfolio_backtest(
+        self,
+        strategy_name: str,
+        dates: list[date],
+        rows_by_date: dict[date, list[IndicatorSnapshot]],
+        market_regime_cache: dict[date, str],
+        price_by_symbol: dict[str, pd.DataFrame],
+        equity: float,
+        portfolio_config: dict[str, object],
+        liquidity_stats: dict[str, int],
+        realism_stats: dict[str, int],
+    ) -> tuple[list[dict[str, object]], list[dict[str, object]], float, int, dict[str, object]]:
+        trades: list[dict[str, object]] = []
+        equity_curve = [{"date": dates[0], "equity": equity}]
+        exposure_days = 0
+        previous_weights: dict[str, float] = {}
+        portfolio_turnovers: list[float] = []
+        rebalance_count = 0
+        constructor_required_signal_count = 0
+        last_rebalance_date: date | None = None
+        max_positions = int(portfolio_config["max_positions"])
+        top_n = int(portfolio_config["top_n"])
+        weighting = str(portfolio_config["weighting"])
+        allow_overlap_positions = bool(portfolio_config["allow_overlap_positions"])
+
+        for signal_date in dates:
+            if not self._is_rebalance_date(signal_date, last_rebalance_date, str(portfolio_config["rebalance_frequency"])):
+                continue
+            last_rebalance_date = signal_date
+            active_symbols = self._active_symbols(trades, signal_date)
+            active_count = self._active_position_count(trades, signal_date)
+            available_slots = max(max_positions - active_count, 0)
+            if available_slots <= 0:
+                continue
+            candidates = self._rank_portfolio_candidates(
+                strategy_name=strategy_name,
+                signal_date=signal_date,
+                rows=rows_by_date.get(signal_date, []),
+                market_regime=market_regime_cache.get(signal_date, "neutral"),
+                equity=equity,
+                active_symbols=active_symbols,
+                allow_overlap_positions=allow_overlap_positions,
+            )
+            if not candidates:
+                continue
+            selected = candidates[: min(top_n, available_slots)]
+            if not selected:
+                continue
+            weights = self._candidate_weights(selected, weighting)
+            selected_weights = {str(candidate["indicator"].symbol): weights[index] for index, candidate in enumerate(selected)}
+            portfolio_turnovers.append(self._portfolio_turnover(previous_weights, selected_weights))
+            previous_weights = selected_weights
+            rebalance_count += 1
+            constructor_required_signal_count += sum(
+                1 for candidate in selected if bool(candidate["metadata"].get("execution_requires_portfolio_constructor"))
+            )
+
+            for rank, candidate in enumerate(selected, start=1):
+                indicator = candidate["indicator"]
+                target_weight = weights[rank - 1]
+                risk = self._portfolio_sized_risk(
+                    candidate["risk"],
+                    indicator,
+                    equity=equity,
+                    target_weight=target_weight,
+                    selected_count=len(selected),
+                    weighting=weighting,
+                )
+                if int(risk.position_size) <= 0:
+                    continue
+                trade = self._simulate_trade(
+                    indicator.symbol,
+                    signal_date,
+                    risk,
+                    price_by_symbol,
+                    liquidity_stats,
+                    realism_stats,
+                )
+                if trade is None:
+                    continue
+                trade["portfolio_detail"] = {
+                    "portfolio_constructor_used": True,
+                    "selection_mode": "rank_portfolio",
+                    "rebalance_date": signal_date,
+                    "rank": rank,
+                    "rank_score": candidate["score"],
+                    "target_weight": round(target_weight, 6),
+                    "top_n": top_n,
+                    "max_positions": max_positions,
+                    "weighting": weighting,
+                    "allow_overlap_positions": allow_overlap_positions,
+                }
+                trade["execution_detail"]["portfolio_constructor_used"] = True
+                equity += float(trade["pnl"])
+                exposure_days += int(trade["holding_days"])
+                equity_curve.append({"date": trade["exit_date"], "equity": equity})
+                trades.append(trade)
+
+        portfolio_stats = {
+            "portfolio_constructor_used": True,
+            "portfolio_selection_mode": "rank_portfolio",
+            "portfolio_top_n": top_n,
+            "portfolio_max_positions": max_positions,
+            "portfolio_weighting": weighting,
+            "portfolio_rebalance_frequency": str(portfolio_config["rebalance_frequency"]),
+            "portfolio_allow_overlap_positions": allow_overlap_positions,
+            "portfolio_turnover": round(sum(portfolio_turnovers) / len(portfolio_turnovers), 6)
+            if portfolio_turnovers
+            else 0.0,
+            "average_active_positions": self._average_active_positions(trades),
+            "rebalance_count": rebalance_count,
+            "execution_requires_portfolio_constructor_signal_count": constructor_required_signal_count,
+        }
+        return trades, equity_curve, equity, exposure_days, portfolio_stats
+
+    def _rank_portfolio_candidates(
+        self,
+        strategy_name: str,
+        signal_date: date,
+        rows: list[IndicatorSnapshot],
+        market_regime: str,
+        equity: float,
+        active_symbols: set[str],
+        allow_overlap_positions: bool,
+    ) -> list[dict[str, object]]:
+        candidates: list[dict[str, object]] = []
+        for indicator in rows:
+            if not allow_overlap_positions and str(indicator.symbol) in active_symbols:
+                continue
+            fundamentals = self.repo.fundamentals_asof(indicator.symbol, signal_date)
+            self._attach_earnings_event(indicator, signal_date)
+            strategy_result = self.strategies[strategy_name].evaluate(indicator, fundamentals, market_regime)
+            risk_metadata = strategy_result.metadata.get("risk_metadata")
+            risk = self.risk_service.calculate(
+                indicator,
+                equity,
+                risk_metadata=risk_metadata if isinstance(risk_metadata, dict) else None,
+            )
+            liquidity_ok = indicator.turnover_value >= float(self.strategy_config["common"]["min_turnover_value"])
+            rr_ok = risk.reward_risk_ratio >= float(self.strategy_config["common"]["target_reward_risk"])
+            if not (strategy_result.passed and liquidity_ok and rr_ok and risk.position_size > 0):
+                continue
+            score = self.scoring_service.rank_score(
+                strategy_name,
+                indicator,
+                fundamentals,
+                risk.rr_score,
+                strategy_result.metadata,
+            )
+            candidates.append(
+                {
+                    "score": score,
+                    "indicator": indicator,
+                    "risk": risk,
+                    "metadata": strategy_result.metadata,
+                }
+            )
+        return sorted(candidates, key=lambda candidate: (-float(candidate["score"]), str(candidate["indicator"].symbol)))
+
+    def _selection_mode(self, strategy_name: str) -> str:
+        if strategy_name not in RANK_PORTFOLIO_STRATEGIES:
+            return "single_position"
+        strategy_config = self.strategy_config.get(strategy_name, {})
+        selection_mode = str(strategy_config.get("selection_mode") or "rank_portfolio")
+        if selection_mode not in {"rank_portfolio", "single_position"}:
+            raise ValueError(f"지원하지 않는 selection_mode입니다: {selection_mode}")
+        return selection_mode
+
+    def _attach_earnings_event(self, indicator: IndicatorSnapshot, signal_date: date) -> None:
+        earnings_event_asof = getattr(self.repo, "earnings_event_asof", None)
+        event = earnings_event_asof(indicator.symbol, signal_date) if callable(earnings_event_asof) else None
+        setattr(indicator, "earnings_event", event)
+
+    def _portfolio_config(
+        self,
+        top_n: int | None = None,
+        max_positions: int | None = None,
+        rebalance_frequency: str | None = None,
+        weighting: str | None = None,
+        allow_overlap_positions: bool | None = None,
+    ) -> dict[str, object]:
+        config = dict(self.backtest_config.get("portfolio", {}))
+        if top_n is not None:
+            config["top_n"] = top_n
+        if max_positions is not None:
+            config["max_positions"] = max_positions
+        if rebalance_frequency is not None:
+            config["rebalance_frequency"] = rebalance_frequency
+        if weighting is not None:
+            config["weighting"] = weighting
+        if allow_overlap_positions is not None:
+            config["allow_overlap_positions"] = allow_overlap_positions
+
+        parsed_top_n = max(int(config.get("top_n", 5)), 1)
+        parsed_max_positions = max(int(config.get("max_positions", parsed_top_n)), 1)
+        parsed_weighting = str(config.get("weighting", "equal_risk"))
+        parsed_rebalance_frequency = str(config.get("rebalance_frequency", "daily"))
+        if parsed_weighting not in {"equal_risk", "equal_weight"}:
+            raise ValueError(f"지원하지 않는 portfolio.weighting입니다: {parsed_weighting}")
+        if parsed_rebalance_frequency not in {"daily", "weekly", "monthly"}:
+            raise ValueError(f"지원하지 않는 rebalance_frequency입니다: {parsed_rebalance_frequency}")
+        return {
+            "top_n": min(parsed_top_n, parsed_max_positions),
+            "max_positions": parsed_max_positions,
+            "rebalance_frequency": parsed_rebalance_frequency,
+            "weighting": parsed_weighting,
+            "allow_overlap_positions": bool(config.get("allow_overlap_positions", False)),
+        }
+
+    @staticmethod
+    def _is_rebalance_date(signal_date: date, last_rebalance_date: date | None, frequency: str) -> bool:
+        if last_rebalance_date is None or frequency == "daily":
+            return True
+        if frequency == "weekly":
+            return signal_date.isocalendar()[:2] != last_rebalance_date.isocalendar()[:2]
+        if frequency == "monthly":
+            return (signal_date.year, signal_date.month) != (last_rebalance_date.year, last_rebalance_date.month)
+        return False
+
+    @staticmethod
+    def _active_symbols(trades: list[dict[str, object]], signal_date: date) -> set[str]:
+        return {
+            str(trade["symbol"])
+            for trade in trades
+            if trade["entry_date"] <= signal_date <= trade["exit_date"]
+        }
+
+    @staticmethod
+    def _active_position_count(trades: list[dict[str, object]], signal_date: date) -> int:
+        return sum(1 for trade in trades if trade["entry_date"] <= signal_date <= trade["exit_date"])
+
+    @staticmethod
+    def _candidate_weights(candidates: list[dict[str, object]], weighting: str) -> list[float]:
+        if not candidates:
+            return []
+        if weighting == "equal_weight":
+            return [1 / len(candidates)] * len(candidates)
+        inverse_risks = [
+            1 / max(float(getattr(candidate["risk"], "risk_per_share", 0.0) or 0.0), 1e-9)
+            for candidate in candidates
+        ]
+        total = sum(inverse_risks)
+        if total <= 0:
+            return [1 / len(candidates)] * len(candidates)
+        return [value / total for value in inverse_risks]
+
+    @staticmethod
+    def _portfolio_turnover(previous_weights: dict[str, float], next_weights: dict[str, float]) -> float:
+        if not previous_weights:
+            return round(sum(next_weights.values()), 6)
+        symbols = set(previous_weights) | set(next_weights)
+        return round(sum(abs(next_weights.get(symbol, 0.0) - previous_weights.get(symbol, 0.0)) for symbol in symbols) / 2, 6)
+
+    @staticmethod
+    def _average_active_positions(trades: list[dict[str, object]]) -> float:
+        active_dates = sorted({trade_date for trade in trades for trade_date in (trade["entry_date"], trade["exit_date"])})
+        if not active_dates:
+            return 0.0
+        active_counts = [BacktestService._active_position_count(trades, active_date) for active_date in active_dates]
+        return round(sum(active_counts) / len(active_counts), 4)
+
+    @staticmethod
+    def _portfolio_sized_risk(
+        risk,
+        indicator: IndicatorSnapshot,
+        equity: float,
+        target_weight: float,
+        selected_count: int,
+        weighting: str,
+    ):
+        entry_price = float(getattr(risk, "entry_price", getattr(indicator, "close", 0.0)))
+        if entry_price <= 0:
+            return BacktestService._copy_risk_with_position_size(risk, 0, entry_price)
+        original_qty = int(getattr(risk, "position_size", 0) or 0)
+        target_notional_qty = int((equity * target_weight) // entry_price)
+        position_size = min(original_qty, target_notional_qty)
+        if weighting == "equal_risk":
+            risk_per_share = max(float(getattr(risk, "risk_per_share", 0.0) or 0.0), 1e-9)
+            risk_fraction = float(get_config("risk")["portfolio"]["risk_fraction"])
+            target_risk_qty = int(((equity * risk_fraction) / max(selected_count, 1)) // risk_per_share)
+            position_size = min(position_size, target_risk_qty)
+        return BacktestService._copy_risk_with_position_size(risk, max(position_size, 0), entry_price)
+
+    @staticmethod
+    def _copy_risk_with_position_size(risk, position_size: int, entry_price: float):
+        values = dict(getattr(risk, "__dict__", {}))
+        values["position_size"] = int(position_size)
+        values["position_notional"] = round(int(position_size) * float(entry_price), 2) if entry_price > 0 else 0.0
+        return SimpleNamespace(**values)
 
     def _simulate_trade(
         self,
@@ -242,6 +789,7 @@ class BacktestService:
             "pnl": round(pnl, 2),
             "estimated_cost": round(estimated_cost, 2),
             "cost_bps": round(cost_bps, 4),
+            "risk_basis": str(getattr(risk, "risk_basis", "unavailable")),
             "return_pct": round((exit_price / entry_price) - 1, 6),
             "holding_days": exit_bar_index + 1,
             "execution_detail": {
@@ -255,6 +803,7 @@ class BacktestService:
                 "gap_target": exit_decision["gap_target"],
                 "stop_price": round(stop_price, 4),
                 "target_price": round(target_price, 4),
+                "risk_basis": str(getattr(risk, "risk_basis", "unavailable")),
                 "commission_bps": commission_bps,
                 "slippage_bps": slippage_bps,
                 "forced_exit": bool(exit_decision.get("forced_exit", False)),
@@ -671,6 +1220,7 @@ class BacktestService:
         realism_stats: dict[str, int] | None = None,
         execution_cost_bps: float = 0.0,
         annual_trading_days: int = 252,
+        portfolio_stats: dict[str, object] | None = None,
     ) -> dict[str, object]:
         pnls = [float(trade["pnl"]) for trade in trades]
         wins = [pnl for pnl in pnls if pnl > 0]
@@ -709,6 +1259,7 @@ class BacktestService:
             for trade in trades
         )
         turnover = traded_notional / initial_equity if initial_equity > 0 else 0.0
+        portfolio_stats = portfolio_stats or {}
         return {
             "trade_count": len(trades),
             "trades": len(trades),
@@ -729,6 +1280,21 @@ class BacktestService:
             "sortino_ratio": round(sortino_ratio, 6) if sortino_ratio is not None else None,
             "calmar_ratio": round(calmar_ratio, 6) if calmar_ratio is not None else None,
             "turnover": round(turnover, 6),
+            "portfolio_turnover": round(float(portfolio_stats.get("portfolio_turnover", 0.0) or 0.0), 6),
+            "average_active_positions": round(float(portfolio_stats.get("average_active_positions", 0.0) or 0.0), 4),
+            "rebalance_count": int(portfolio_stats.get("rebalance_count", 0) or 0),
+            "portfolio_constructor_used": bool(portfolio_stats.get("portfolio_constructor_used", False)),
+            "portfolio_selection_mode": str(portfolio_stats.get("portfolio_selection_mode", "single_position")),
+            "portfolio_top_n": int(portfolio_stats.get("portfolio_top_n", 0) or 0),
+            "portfolio_max_positions": int(portfolio_stats.get("portfolio_max_positions", 0) or 0),
+            "portfolio_weighting": str(portfolio_stats.get("portfolio_weighting", "not_applicable")),
+            "portfolio_rebalance_frequency": str(portfolio_stats.get("portfolio_rebalance_frequency", "not_applicable")),
+            "portfolio_allow_overlap_positions": bool(
+                portfolio_stats.get("portfolio_allow_overlap_positions", False)
+            ),
+            "execution_requires_portfolio_constructor_signal_count": int(
+                portfolio_stats.get("execution_requires_portfolio_constructor_signal_count", 0) or 0
+            ),
             "regime_segment_return": "not_available_in_current_mvp",
             "partial_fill_count": int((liquidity_stats or {}).get("partial_fill_count", 0)),
             "no_fill_count": int((liquidity_stats or {}).get("no_fill_count", 0)),

@@ -12,3 +12,9 @@ execution:
   missing_data_policy: "ignore"
 metrics:
   annual_trading_days: 252
+portfolio:
+  max_positions: 5
+  top_n: 5
+  rebalance_frequency: "daily"
+  weighting: "equal_risk"
+  allow_overlap_positions: false

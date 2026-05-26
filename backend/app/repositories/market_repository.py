@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.tables import DailyOhlcv, FundamentalsPti, IndexOhlcv, SectorOhlcv, SymbolMaster
+from backend.app.models.tables import DailyOhlcv, EarningsEvent, FundamentalsPti, IndexOhlcv, SectorOhlcv, SymbolMaster
 
 
 class MarketRepository:
@@ -23,7 +23,7 @@ class MarketRepository:
         return self.db.get(SymbolMaster, symbol)
 
     def clear_market_data(self) -> None:
-        for table in (FundamentalsPti, SectorOhlcv, IndexOhlcv, DailyOhlcv, SymbolMaster):
+        for table in (EarningsEvent, FundamentalsPti, SectorOhlcv, IndexOhlcv, DailyOhlcv, SymbolMaster):
             self.db.execute(delete(table))
         self.db.commit()
 
@@ -94,3 +94,35 @@ class MarketRepository:
             .limit(1)
         )
         return self.db.scalar(stmt)
+
+    def earnings_event_asof(
+        self,
+        symbol: str,
+        trade_date: date,
+        *,
+        lookback_days: int = 120,
+        lookahead_days: int = 120,
+    ) -> EarningsEvent | None:
+        """Return the nearest fixture/import earnings event around the trade date."""
+        start_date = trade_date - timedelta(days=max(int(lookback_days), 0))
+        end_date = trade_date + timedelta(days=max(int(lookahead_days), 0))
+        stmt = (
+            select(EarningsEvent)
+            .where(
+                EarningsEvent.symbol == symbol,
+                EarningsEvent.earnings_date >= start_date,
+                EarningsEvent.earnings_date <= end_date,
+            )
+            .order_by(EarningsEvent.earnings_date)
+        )
+        rows = list(self.db.scalars(stmt).all())
+        if not rows:
+            return None
+        return min(
+            rows,
+            key=lambda row: (
+                abs((row.earnings_date - trade_date).days),
+                0 if row.earnings_date >= trade_date else 1,
+                row.earnings_date,
+            ),
+        )

@@ -186,6 +186,17 @@ class FundamentalsPti(Base):
     sales_growth: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+class EarningsEvent(Base):
+    __tablename__ = "earnings_events"
+    __table_args__ = (UniqueConstraint("symbol", "earnings_date", "session", name="uq_earnings_symbol_date_session"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    earnings_date: Mapped[date] = mapped_column(Date, index=True)
+    release_ts: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    session: Mapped[str] = mapped_column(String(32), default="unknown")
+
+
 class IndicatorSnapshot(Base):
     __tablename__ = "indicator_snapshot"
     __table_args__ = (UniqueConstraint("trade_date", "symbol", name="uq_indicator_symbol_date"),)
@@ -206,6 +217,22 @@ class IndicatorSnapshot(Base):
     weekly_close: Mapped[float | None] = mapped_column(Float, nullable=True)
     weekly_sma30: Mapped[float | None] = mapped_column(Float, nullable=True)
     weekly_sma30_slope: Mapped[float | None] = mapped_column(Float, nullable=True)
+    contraction_count: Mapped[int] = mapped_column(Integer, default=0)
+    contraction_count_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    pullback_depth_last: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pullback_depth_last_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    pullback_depth_prev: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pullback_depth_prev_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    box_age_days: Mapped[int] = mapped_column(Integer, default=0)
+    box_age_days_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    box_redefinition_count: Mapped[int] = mapped_column(Integer, default=0)
+    box_redefinition_count_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    weekly_breakout: Mapped[bool] = mapped_column(Boolean, default=False)
+    weekly_breakout_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    weekly_volume_ratio: Mapped[float] = mapped_column(Float, default=0.0)
+    weekly_volume_ratio_available: Mapped[bool] = mapped_column(Boolean, default=False)
+    weekly_rs_score: Mapped[float] = mapped_column(Float, default=0.0)
+    weekly_rs_score_available: Mapped[bool] = mapped_column(Boolean, default=False)
     volume_ma20: Mapped[float | None] = mapped_column(Float, nullable=True)
     volume_ma50: Mapped[float | None] = mapped_column(Float, nullable=True)
     atr14: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -243,6 +270,10 @@ class ScreenResult(Base):
     pass_flags: Mapped[str] = mapped_column(Text)
     failed_conditions: Mapped[str] = mapped_column(Text)
     reason_summary: Mapped[str] = mapped_column(Text)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    risk_flags_json: Mapped[str] = mapped_column(Text, default="{}")
+    score_breakdown_json: Mapped[str] = mapped_column(Text, default="{}")
+    data_quality_flags_json: Mapped[str] = mapped_column(Text, default="{}")
     total_score: Mapped[float] = mapped_column(Float, default=0.0)
     entry_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     stop_price: Mapped[float | None] = mapped_column(Float, nullable=True)

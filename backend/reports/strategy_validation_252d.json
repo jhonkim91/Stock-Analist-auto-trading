@@ -1,0 +1,294 @@
+{
+  "lookback_days": 252,
+  "window": {
+    "requested_trading_days": 252,
+    "available_trading_days": 252,
+    "start_date": "2025-06-03",
+    "end_date": "2026-05-20",
+    "basis": "indicator_snapshot.trade_date"
+  },
+  "screener_window": {
+    "requested_trading_days": 252,
+    "available_trading_days": 1,
+    "window_start": "2026-05-20",
+    "window_end": "2026-05-20",
+    "basis": "screen_results.trade_date"
+  },
+  "baseline": {
+    "status": "unspecified",
+    "run_id": null,
+    "snapshot_supplied": false
+  },
+  "strategies": [
+    {
+      "strategy_name": "trend_breakout",
+      "screener": {
+        "strategy_name": "trend_breakout",
+        "evaluated_count": 15,
+        "pass_count": 2,
+        "pass_rate": 0.133333,
+        "evaluated_trading_days": 1,
+        "window_trading_days": 1,
+        "window_start": "2026-05-20",
+        "window_end": "2026-05-20"
+      },
+      "backtest": {
+        "summary_source": "computed_available_window",
+        "error": null,
+        "trade_count": 0,
+        "win_rate": 0.0,
+        "total_return": 0.0,
+        "max_drawdown": 0.0
+      },
+      "delta": {
+        "baseline": "unspecified",
+        "trade_count_delta": null,
+        "win_rate_delta": null,
+        "total_return_delta": null,
+        "max_drawdown_delta": null
+      }
+    },
+    {
+      "strategy_name": "vcp_breakout",
+      "screener": {
+        "strategy_name": "vcp_breakout",
+        "evaluated_count": 15,
+        "pass_count": 0,
+        "pass_rate": 0.0,
+        "evaluated_trading_days": 1,
+        "window_trading_days": 1,
+        "window_start": "2026-05-20",
+        "window_end": "2026-05-20"
+      },
+      "backtest": {
+        "summary_source": "computed_available_window",
+        "error": null,
+        "trade_count": 0,
+        "win_rate": 0.0,
+        "total_return": 0.0,
+        "max_drawdown": 0.0
+      },
+      "delta": {
+        "baseline": "unspecified",
+        "trade_count_delta": null,
+        "win_rate_delta": null,
+        "total_return_delta": null,
+        "max_drawdown_delta": null
+      }
+    },
+    {
+      "strategy_name": "canslim_lite",
+      "screener": {
+        "strategy_name": "canslim_lite",
+        "evaluated_count": 15,
+        "pass_count": 1,
+        "pass_rate": 0.066667,
+        "evaluated_trading_days": 1,
+        "window_trading_days": 1,
+        "window_start": "2026-05-20",
+        "window_end": "2026-05-20"
+      },
+      "backtest": {
+        "summary_source": "computed_available_window",
+        "error": null,
+        "trade_count": 0,
+        "win_rate": 0.0,
+        "total_return": 0.0,
+        "max_drawdown": 0.0
+      },
+      "delta": {
+        "baseline": "unspecified",
+        "trade_count_delta": null,
+        "win_rate_delta": null,
+        "total_return_delta": null,
+        "max_drawdown_delta": null
+      }
+    },
+    {
+      "strategy_name": "new_high_breakout",
+      "screener": {
+        "strategy_name": "new_high_breakout",
+        "evaluated_count": 15,
+        "pass_count": 0,
+        "pass_rate": 0.0,
+        "evaluated_trading_days": 1,
+        "window_trading_days": 1,
+        "window_start": "2026-05-20",
+        "window_end": "2026-05-20"
+      },
+      "backtest": {
+        "summary_source": "computed_available_window",
+        "error": null,
+        "trade_count": 0,
+        "win_rate": 0.0,
+        "total_return": 0.0,
+        "max_drawdown": 0.0
+      },
+      "delta": {
+        "baseline": "unspecified",
+        "trade_count_delta": null,
+        "win_rate_delta": null,
+        "total_return_delta": null,
+        "max_drawdown_delta": null
+      }
+    },
+    {
+      "strategy_name": "pullback_20ema",
+      "screener": {
+        "strategy_name": "pullback_20ema",
+        "evaluated_count": 15,
+        "pass_count": 0,
+        "pass_rate": 0.0,
+        "evaluated_trading_days": 1,
+        "window_trading_days": 1,
+        "window_start": "2026-05-20",
+        "window_end": "2026-05-20"
+      },
+      "backtest": {
+        "summary_source": "computed_available_window",
+        "error": null,
+        "trade_count": 54,
+        "win_rate": 0.5556,
+        "total_return": 0.082043,
+        "max_drawdown": -0.037722
+      },
+      "delta": {
+        "baseline": "unspecified",
+        "trade_count_delta": null,
+        "win_rate_delta": null,
+        "total_return_delta": null,
+        "max_drawdown_delta": null
+      }
+    },
+    {
+      "strategy_name": "momentum_rank",
+      "screener": {
+        "strategy_name": "momentum_rank",
+        "evaluated_count": 0,
+        "pass_count": 0,
+        "pass_rate": null,
+        "evaluated_trading_days": 0,
+        "window_trading_days": 1,
+        "window_start": "2026-05-20",
+        "window_end": "2026-05-20"
+      },
+      "backtest": {
+        "summary_source": "computed_available_window",
+        "error": null,
+        "trade_count": 16,
+        "win_rate": 0.6875,
+        "total_return": 0.061753,
+        "max_drawdown": -0.008953
+      },
+      "delta": {
+        "baseline": "unspecified",
+        "trade_count_delta": null,
+        "win_rate_delta": null,
+        "total_return_delta": null,
+        "max_drawdown_delta": null
+      }
+    },
+    {
+      "strategy_name": "relative_strength_leader",
+      "screener": {
+        "strategy_name": "relative_strength_leader",
+        "evaluated_count": 0,
+        "pass_count": 0,
+        "pass_rate": null,
+        "evaluated_trading_days": 0,
+        "window_trading_days": 1,
+        "window_start": "2026-05-20",
+        "window_end": "2026-05-20"
+      },
+      "backtest": {
+        "summary_source": "computed_available_window",
+        "error": null,
+        "trade_count": 8,
+        "win_rate": 0.875,
+        "total_return": 0.051686,
+        "max_drawdown": -0.000743
+      },
+      "delta": {
+        "baseline": "unspecified",
+        "trade_count_delta": null,
+        "win_rate_delta": null,
+        "total_return_delta": null,
+        "max_drawdown_delta": null
+      }
+    },
+    {
+      "strategy_name": "darvas_box",
+      "screener": {
+        "strategy_name": "darvas_box",
+        "evaluated_count": 0,
+        "pass_count": 0,
+        "pass_rate": null,
+        "evaluated_trading_days": 0,
+        "window_trading_days": 1,
+        "window_start": "2026-05-20",
+        "window_end": "2026-05-20"
+      },
+      "backtest": {
+        "summary_source": "computed_available_window",
+        "error": null,
+        "trade_count": 0,
+        "win_rate": 0.0,
+        "total_return": 0.0,
+        "max_drawdown": 0.0
+      },
+      "delta": {
+        "baseline": "unspecified",
+        "trade_count_delta": null,
+        "win_rate_delta": null,
+        "total_return_delta": null,
+        "max_drawdown_delta": null
+      }
+    },
+    {
+      "strategy_name": "stage_analysis_weekly",
+      "screener": {
+        "strategy_name": "stage_analysis_weekly",
+        "evaluated_count": 0,
+        "pass_count": 0,
+        "pass_rate": null,
+        "evaluated_trading_days": 0,
+        "window_trading_days": 1,
+        "window_start": "2026-05-20",
+        "window_end": "2026-05-20"
+      },
+      "backtest": {
+        "summary_source": "computed_available_window",
+        "error": null,
+        "trade_count": 13,
+        "win_rate": 1.0,
+        "total_return": 0.020907,
+        "max_drawdown": 0.0
+      },
+      "delta": {
+        "baseline": "unspecified",
+        "trade_count_delta": null,
+        "win_rate_delta": null,
+        "total_return_delta": null,
+        "max_drawdown_delta": null
+      }
+    }
+  ],
+  "generated_at": "2026-05-26T04:00:06.473637+00:00",
+  "report": {
+    "format": "json",
+    "path": "C:\\Users\\demon\\Desktop\\Stock-Analist-auto trading\\backend\\reports\\strategy_validation_252d.json",
+    "filename": "strategy_validation_252d.json"
+  },
+  "validation_documentation_format": {
+    "docs_file": "docs/VALIDATION.md",
+    "required_fields": [
+      "checkpoint",
+      "command",
+      "result",
+      "summary_endpoint",
+      "report_path",
+      "baseline_status",
+      "safety_contract"
+    ]
+  }
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from backend.app.core.config import get_config
 from backend.app.models.tables import IndicatorSnapshot
@@ -16,26 +17,25 @@ class RiskPlan:
     position_size: int
     position_notional: float
     rr_score: float
+    risk_basis: str
 
 
 class RiskService:
     def __init__(self) -> None:
         self.config = get_config("risk")
 
-    def calculate(self, indicator: IndicatorSnapshot, equity: float | None = None) -> RiskPlan:
+    def calculate(
+        self,
+        indicator: IndicatorSnapshot,
+        equity: float | None = None,
+        risk_metadata: dict[str, Any] | None = None,
+    ) -> RiskPlan:
         """손절가, 목표가, 손익비, 포지션 크기를 계산한다."""
         portfolio = self.config["portfolio"]
         risk_config = self.config["risk"]
         equity_value = float(equity or portfolio["equity"])
         entry_price = float(indicator.close)
-        atr_stop = entry_price - float(indicator.atr20 or indicator.atr14 or entry_price * 0.03) * float(
-            risk_config["atr_stop_multiple"]
-        )
-        hard_stop = entry_price * (1 - float(risk_config["hard_stop_pct"]))
-        pivot_stop = float(indicator.pivot_low_20_prev or 0)
-        stop_price = max(price for price in (atr_stop, hard_stop, pivot_stop) if price > 0)
-        if stop_price >= entry_price:
-            stop_price = min(atr_stop, hard_stop)
+        stop_price, risk_basis = self._select_stop_price(indicator, entry_price, risk_config, risk_metadata)
         risk_per_share = max(entry_price - stop_price, 1e-9)
         target_rr = float(risk_config["target_reward_risk"])
         target_price = entry_price + risk_per_share * target_rr
@@ -55,4 +55,54 @@ class RiskService:
             position_size=qty,
             position_notional=round(position_notional, 2),
             rr_score=round(rr_score, 4),
+            risk_basis=risk_basis,
         )
+
+    def _select_stop_price(
+        self,
+        indicator: IndicatorSnapshot,
+        entry_price: float,
+        risk_config: dict[str, Any],
+        risk_metadata: dict[str, Any] | None,
+    ) -> tuple[float, str]:
+        strategy_stop = self._as_float((risk_metadata or {}).get("suggested_stop_price"))
+        strategy_basis = str((risk_metadata or {}).get("risk_basis") or "strategy_suggested_stop_price")
+        pivot_stop = self._as_float(getattr(indicator, "pivot_low_20_prev", None))
+        atr_stop = self._atr_stop(indicator, entry_price, risk_config)
+        hard_stop = entry_price * (1 - float(risk_config["hard_stop_pct"]))
+
+        for stop_price, risk_basis in (
+            (strategy_stop, strategy_basis),
+            (pivot_stop, "pivot_low_20_prev"),
+            (atr_stop, "atr_stop"),
+            (hard_stop, "hard_stop"),
+        ):
+            if stop_price is not None and 0 < stop_price < entry_price:
+                return float(stop_price), risk_basis
+
+        return max(entry_price * 0.01, 1e-9), "hard_stop"
+
+    def _atr_stop(self, indicator: IndicatorSnapshot, entry_price: float, risk_config: dict[str, Any]) -> float:
+        atr = (
+            self._as_float(getattr(indicator, "atr20", None))
+            or self._as_float(getattr(indicator, "atr14", None))
+            or self._atr_from_pct(indicator, entry_price)
+            or entry_price * 0.03
+        )
+        return entry_price - atr * float(risk_config["atr_stop_multiple"])
+
+    @staticmethod
+    def _atr_from_pct(indicator: IndicatorSnapshot, entry_price: float) -> float | None:
+        atr20_pct = RiskService._as_float(getattr(indicator, "atr20_pct", None))
+        if atr20_pct is None or atr20_pct <= 0:
+            return None
+        return entry_price * atr20_pct
+
+    @staticmethod
+    def _as_float(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None

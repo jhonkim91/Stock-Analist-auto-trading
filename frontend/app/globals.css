@@ -213,6 +213,47 @@ h3 {
   margin-top: 8px;
 }
 
+.strategyDescription {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.strategyMetaGroup {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.inlineList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.metadataRows {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.metadataRows > div {
+  display: grid;
+  gap: 6px;
+}
+
+.metadataRows span:first-child {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

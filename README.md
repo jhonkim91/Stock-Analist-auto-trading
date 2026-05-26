@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `Phase C Strategy Hardening Foundation`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
+현재 기준선은 `Strategy Validation 252d Summary`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -10,8 +10,8 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.16.3` |
-| Phase | `Phase C Strategy Hardening Foundation` |
+| Version | `MVP v0.16.4` |
+| Phase | `Strategy Validation 252d Summary` |
 | Branch | `main` |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | Trading state | fail-closed, preview-only, real order 미구현 |
@@ -31,6 +31,7 @@
 - Phase 3H: strategy explanation contract, conservative optional filters, strategy registry.
 - Phase C-1 to C-6: `momentum_rank`, `relative_strength_leader`, `new_high_breakout`, `darvas_box`, `stage_analysis_weekly`, `pullback_20ema`.
 - Phase C Strategy Hardening Foundation: 9개 전략의 optional hardening 조건 기반, `data_quality_flags`, additive `risk_metadata`.
+- Strategy validation summary: 최근 252 trading days 기준 strategy별 screener/backtest 요약과 baseline delta contract.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
 - Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration.
 
@@ -80,6 +81,19 @@ common:
 
 전략별 핵심 설정은 같은 파일의 각 strategy key에서 관리합니다.
 
+## Strategy Validation Summary
+
+`GET /api/backtest/strategy-summary?lookback_days=252`는 strategy별 validation summary를 반환합니다.
+
+| 항목 | 내용 |
+|---|---|
+| Screener | 최근 available `screen_results.trade_date` 기준 `pass_rate`, `pass_count`, `evaluated_count` |
+| Backtest | 최근 available `indicator_snapshot.trade_date` 기준 `trade_count`, `win_rate`, `total_return`, `max_drawdown` |
+| Baseline | `baseline_run_id` 또는 JSON `baseline_snapshot`이 없으면 `baseline.status="unspecified"`, delta는 `null` |
+| Artifact | `backend/reports/strategy_validation_252d.json` |
+
+기존 `/api/backtest/run`, `/api/backtest/runs`, `/api/backtest/runs/{run_id}` contract는 변경하지 않습니다.
+
 ## Main APIs
 
 | Method | Path | 목적 |
@@ -104,6 +118,7 @@ common:
 | `GET` | `/api/screener/strategies` | frontend strategy selector metadata |
 | `GET` | `/api/screener/results` | screener result list with explanation contract |
 | `POST` | `/api/backtest/run` | strategy backtest run |
+| `GET` | `/api/backtest/strategy-summary` | 최근 252 trading days strategy validation summary |
 | `GET` | `/api/backtest/runs` | backtest run 목록 |
 | `GET` | `/api/backtest/runs/{run_id}` | backtest run 상세 |
 
@@ -140,6 +155,12 @@ Strategy hardening targeted suite:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_strategies.py -q
+```
+
+Strategy validation summary targeted suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q
 ```
 
 Diff check:

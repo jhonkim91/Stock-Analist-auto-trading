@@ -14,6 +14,13 @@ class VcpBreakoutStrategy(BaseStrategy):
         market_regime: str,
     ) -> StrategyResult:
         pivot_distance_pct = self._pivot_distance_pct(indicator.close, indicator.pivot_high_20_prev)
+        contraction_count_available = self._availability(indicator, "contraction_count_available")
+        pullback_depth_last_available = self._availability(indicator, "pullback_depth_last_available")
+        pullback_depth_prev_available = self._availability(indicator, "pullback_depth_prev_available")
+        contraction_count = int(getattr(indicator, "contraction_count", 0) or 0)
+        pullback_depth_last = self._as_float(getattr(indicator, "pullback_depth_last", None))
+        pullback_depth_prev = self._as_float(getattr(indicator, "pullback_depth_prev", None))
+        require_decreasing_pullback_depth = bool(self.config.get("require_decreasing_pullback_depth", True))
         trend_ok = (
             self._gt(indicator.close, indicator.sma50)
             and self._gt(indicator.sma50, indicator.sma150)
@@ -22,14 +29,26 @@ class VcpBreakoutStrategy(BaseStrategy):
         )
         flags = {
             "trend_ok": trend_ok,
-            "atr20_pct_contracting": self._gt(indicator.atr20_pct_ma60, indicator.atr20_pct),
-            "std20_lt_std60": self._gt(indicator.std60, indicator.std20),
+            "contraction_count_available": contraction_count_available,
+            "contraction_count_min": (
+                contraction_count_available
+                and contraction_count >= int(self.config.get("min_contraction_count", 2))
+            ),
             "volume_dry_up": bool(indicator.volume_dry_up),
             "pivot_breakout": bool(indicator.breakout),
             "volume_surge": self._gte(indicator.volume, (indicator.volume_ma50 or 0) * self.config["volume_surge_multiple"]),
             "rs_percentile_min": self._gte(indicator.rs_percentile, self.config["rs_percentile_min"]),
             "market_regime_not_bear": self._market_regime_allowed(market_regime),
         }
+        if require_decreasing_pullback_depth:
+            flags["pullback_depth_available"] = pullback_depth_last_available and pullback_depth_prev_available
+            flags["pullback_depth_decreasing"] = (
+                pullback_depth_last_available
+                and pullback_depth_prev_available
+                and pullback_depth_last is not None
+                and pullback_depth_prev is not None
+                and pullback_depth_last < pullback_depth_prev
+            )
         optional_conditions = []
         if bool(self.config.get("pivot_distance_limit_enabled", False)):
             flags["pivot_distance_limit"] = self._lte(pivot_distance_pct, self.config["max_pivot_distance_pct"])
@@ -62,6 +81,11 @@ class VcpBreakoutStrategy(BaseStrategy):
             data_quality_flags={
                 "atr20_pct_available": indicator.atr20_pct is not None,
                 "atr20_pct_ma60_available": indicator.atr20_pct_ma60 is not None,
+                "std20_available": indicator.std20 is not None,
+                "std60_available": indicator.std60 is not None,
+                "contraction_count_available": contraction_count_available,
+                "pullback_depth_last_available": pullback_depth_last_available,
+                "pullback_depth_prev_available": pullback_depth_prev_available,
                 "pivot_high_20_prev_available": indicator.pivot_high_20_prev is not None,
                 "pivot_distance_pct_available": pivot_distance_pct is not None,
                 **self._hardening_data_quality_flags(indicator, fundamentals, market_regime, risk_metadata),
@@ -72,7 +96,13 @@ class VcpBreakoutStrategy(BaseStrategy):
         metadata.update(
             {
                 "pivot_distance_pct": self._round_optional(pivot_distance_pct),
-                "contraction_confirmed": flags["atr20_pct_contracting"] and flags["std20_lt_std60"],
+                "contraction_count": contraction_count,
+                "pullback_depth_last": self._round_optional(pullback_depth_last),
+                "pullback_depth_prev": self._round_optional(pullback_depth_prev),
+                "contraction_confirmed": (
+                    flags["contraction_count_min"]
+                    and (not require_decreasing_pullback_depth or flags["pullback_depth_decreasing"])
+                ),
                 "volume_dry_up_confirmed": flags["volume_dry_up"],
                 "breakout_volume_confirmed": flags["pivot_breakout"] and flags["volume_surge"],
             }
@@ -110,6 +140,10 @@ class VcpBreakoutStrategy(BaseStrategy):
         if close_value is None or pivot_high_value is None or pivot_high_value <= 0:
             return None
         return (close_value - pivot_high_value) / pivot_high_value
+
+    @staticmethod
+    def _availability(indicator: IndicatorSnapshot, field_name: str) -> bool:
+        return bool(getattr(indicator, field_name, False))
 
     @staticmethod
     def _round_optional(value: float | None) -> float | None:

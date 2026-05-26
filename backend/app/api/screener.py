@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.models.schemas import ScreenerRunRequest, ScreenerStrategyResponse
+from backend.app.models.schemas import ScreenerResultResponse, ScreenerRunRequest, ScreenerStrategyResponse
 from backend.app.services.screener_service import ScreenerService
 from backend.app.strategies.registry import list_strategy_metadata
 
@@ -25,7 +25,7 @@ def run_screener(payload: ScreenerRunRequest, db: Session = Depends(get_db)) -> 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.get("/results")
+@router.get("/results", response_model=list[ScreenerResultResponse])
 def list_results(
     trade_date: str | None = Query(default=None),
     strategy_name: str | None = Query(default=None),

@@ -4,8 +4,8 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.16.3` |
-| Phase | `Phase C Strategy Hardening Foundation` |
+| Version | `MVP v0.16.4` |
+| Phase | `Strategy Validation 252d Summary` |
 | Branch | `main` |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | 실거래 미구현, fail-closed, preview-only |
@@ -31,9 +31,11 @@
 - Phase C-6: `pullback_20ema` default and available strategy, nullable `low`/`ema20` indicator fields.
 - Phase C hardening foundation: 9개 전략의 optional hardening 조건, `data_quality_flags`, additive `risk_metadata`.
 - Phase C Strategy Hardening: 9개 전략 suite validation 완료.
+- Phase C Growth Context Hardening: `canslim_lite` earnings blackout/recent high/institutional proxy, `new_high_breakout` breakout buffer/volume quality, `pullback_20ema` pullback count/volume dry-up context.
+- Strategy validation summary: `/api/backtest/strategy-summary?lookback_days=252`, `backend/reports/strategy_validation_252d.json`, baseline 미지정 `unspecified/null delta` contract.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
-- Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields.
+- Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table.
 
 ## BacktestService 상태
 
@@ -41,6 +43,8 @@
 - trade-level `cost_bps`와 metrics-level `cost_bps`는 동일 execution 설정값을 사용한다.
 - `run()`은 시작 시 `index_df` 기반 market regime cache를 1회 생성하고 signal date별로 조회한다.
 - 기존 `/api/backtest/run`, `/api/backtest/runs`, `/api/backtest/runs/{run_id}` 응답 key는 제거하지 않는다.
+- `/api/backtest/strategy-summary`는 최근 available trading window 기준 strategy별 screener pass rate와 backtest metric subset을 additive로 제공한다.
+- summary endpoint는 저장형 `backtest_runs` row를 만들지 않고 JSON report artifact만 갱신한다.
 - Metrics에는 `annualized_volatility`, `sharpe_ratio`, `sortino_ratio`, `calmar_ratio`, `turnover`, `regime_segment_return`을 additive로 제공한다.
 - `regime_segment_return`은 현재 MVP 데이터/portfolio-state 부족으로 `not_available_in_current_mvp`를 반환한다.
 - portfolio-state backtest, cash lock, open_positions 상태머신, walk-forward/PBO/Deflated Sharpe 계산은 구현하지 않았다.
@@ -53,7 +57,7 @@
 - `/screener`는 기본 전략 5개를 기본 선택하고, available-only 전략은 사용자가 명시 체크한 경우에만 실행 요청에 포함한다.
 - `/dashboard`와 `/backtest`의 단일 전략 실행 UI는 backend metadata를 사용한다.
 - `IndicatorService`는 EMA20, weekly fields, ATR, volume ratio, 52주 고점, pivot, RS/sector/market score를 `indicator_snapshot`에 저장한다.
-- 최신 Alembic head는 `f6d4a2c9e8b1_add_indicator_pullback_ema_fields`다.
+- 최신 Alembic head는 `d9e3f0a1b2c4_add_earnings_events`다.
 - Screener 응답은 기존 explanation contract 필드를 제거하지 않는다.
 
 ## Phase C Hardening Foundation
@@ -61,11 +65,14 @@
 - `backend/config/strategies.yaml`의 `common.hardening`은 신규 조건 enable flag와 threshold를 관리한다.
 - 기본 신규 조건 enable flag는 false다.
 - 신규 조건 후보는 `market_regime_not_bear`, `sector_rs_score_min`, `market_score_min`, `atr20_pct_max`, `volume_ratio_50_min`, `near_high_52w_threshold`, `optional_fundamental_quality`, `optional_earnings_quality`다.
+- `canslim_lite`는 `earnings_blackout_days`, `require_recent_new_high`, `require_institutional_proxy`를 strategy metadata에 남긴다.
+- `new_high_breakout`은 `breakout_buffer_pct`와 `require_breakout_day_volume_ratio`를 분리 평가하고 `breakout_context` metadata를 남긴다.
+- `pullback_20ema`는 `max_pullback_count`와 `require_volume_dry_up_vs_ma20` 기준으로 first/second pullback 및 volume dry-up context를 평가한다.
 - 신규 조건은 `pass_flags`와 `failed_conditions`에 additive로만 추가한다.
 - 신규 조건의 사용 가능 여부는 `metadata.data_quality_flags`에 남긴다.
 - `metadata.risk_metadata`는 `suggested_stop_price`, `risk_per_share`, `risk_basis`, `entry_chase_warning`을 additive로 제공한다.
 - strategy registry order, `DEFAULT_STRATEGY_NAMES`, `AVAILABLE_STRATEGY_NAMES`, `StrategyResult` 기존 필드는 변경하지 않는다.
-- 2026-05-26 suite validation 기준 `test_strategies.py`, `test_indicators.py`, KIS/broker/paper safety suite, 전체 backend pytest가 통과했다.
+- 2026-05-26 strategy validation summary 기준 `test_backtest.py` + `test_phase2_api.py` targeted suite 34 passed, full backend suite 252 passed, frontend lint/typecheck/build 통과를 확인했다.
 
 ## 미구현 항목
 
@@ -91,6 +98,12 @@ Backend:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend/tests -q
+```
+
+Strategy validation summary:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q
 ```
 
 Strategy hardening:

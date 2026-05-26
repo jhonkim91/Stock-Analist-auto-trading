@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { callApi, formatNumber, formatPercent, type ApiStatus, type BacktestRun, type StrategyMetadata } from "../../lib/api";
+import {
+  callApi,
+  formatNumber,
+  formatPercent,
+  type ApiStatus,
+  type BacktestRun,
+  type BacktestRunRequest,
+  type PortfolioWeighting,
+  type StrategyValidationSummary,
+  type StrategyMetadata
+} from "../../lib/api";
 
 const metricLabels: Array<[keyof BacktestRun["metrics"], string, "percent" | "number"]> = [
   ["total_return", "total_return", "percent"],
@@ -16,12 +26,23 @@ const metricLabels: Array<[keyof BacktestRun["metrics"], string, "percent" | "nu
   ["expectancy", "expectancy", "number"],
   ["average_holding_days", "average_holding_days", "number"],
   ["trade_count", "trade_count", "number"],
-  ["exposure", "exposure", "percent"]
+  ["exposure", "exposure", "percent"],
+  ["portfolio_turnover", "portfolio_turnover", "percent"],
+  ["average_active_positions", "average_active_positions", "number"],
+  ["rebalance_count", "rebalance_count", "number"]
 ];
 
-function formatMetric(value: number | string | null | undefined, type: "percent" | "number") {
+const rankingStrategyNames = new Set(["momentum_rank", "relative_strength_leader"]);
+const weightingOptions: PortfolioWeighting[] = ["equal_risk", "equal_weight"];
+
+function positiveInteger(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function formatMetric(value: number | string | boolean | null | undefined, type: "percent" | "number") {
   if (typeof value !== "number") {
-    return value ?? "-";
+    return typeof value === "boolean" ? String(value) : value ?? "-";
   }
   return type === "percent" ? formatPercent(value) : formatNumber(value, 4);
 }
@@ -32,7 +53,14 @@ export default function BacktestPage() {
   const [runs, setRuns] = useState<BacktestRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<BacktestRun | null>(null);
   const [strategyCatalog, setStrategyCatalog] = useState<StrategyMetadata[]>([]);
+  const [strategySummary, setStrategySummary] = useState<StrategyValidationSummary | null>(null);
+  const [summaryMessage, setSummaryMessage] = useState("summary 조회 중");
   const [strategyName, setStrategyName] = useState("");
+  const [topN, setTopN] = useState(5);
+  const [maxPositions, setMaxPositions] = useState(5);
+  const [weighting, setWeighting] = useState<PortfolioWeighting>("equal_risk");
+
+  const isRankingStrategy = rankingStrategyNames.has(strategyName);
 
   const strategyNames = useMemo(() => {
     const names = new Set(strategyCatalog.map((strategy) => strategy.name));
@@ -69,6 +97,17 @@ export default function BacktestPage() {
     }
   }, []);
 
+  const loadStrategySummary = useCallback(async () => {
+    try {
+      const data = await callApi<StrategyValidationSummary>("/api/backtest/strategy-summary?lookback_days=252");
+      setStrategySummary(data);
+      setSummaryMessage(`summary ${data.window.available_trading_days}/${data.lookback_days} trading days`);
+    } catch (error) {
+      setStrategySummary(null);
+      setSummaryMessage(error instanceof Error ? error.message : "summary 조회 실패");
+    }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadRuns(false);
@@ -83,6 +122,13 @@ export default function BacktestPage() {
     return () => window.clearTimeout(timer);
   }, [loadStrategies]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadStrategySummary();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadStrategySummary]);
+
   async function runBacktest() {
     if (!strategyName) {
       setStatus("error");
@@ -92,11 +138,18 @@ export default function BacktestPage() {
     setStatus("loading");
     setMessage("백테스트 실행 중");
     try {
+      const payload: BacktestRunRequest = { strategy_name: strategyName };
+      if (isRankingStrategy) {
+        payload.top_n = topN;
+        payload.max_positions = maxPositions;
+        payload.weighting = weighting;
+      }
       await callApi<{ run_id: string }>("/api/backtest/run", {
         method: "POST",
-        body: JSON.stringify({ strategy_name: strategyName })
+        body: JSON.stringify(payload)
       });
       await loadRuns(false);
+      await loadStrategySummary();
       setStatus("ok");
       setMessage("백테스트 실행 완료");
     } catch (error) {
@@ -136,6 +189,38 @@ export default function BacktestPage() {
               ))}
             </select>
           </label>
+          {isRankingStrategy ? (
+            <>
+              <label>
+                top_n
+                <input
+                  min={1}
+                  type="number"
+                  value={topN}
+                  onChange={(event) => setTopN(positiveInteger(event.target.value, topN))}
+                />
+              </label>
+              <label>
+                max_positions
+                <input
+                  min={1}
+                  type="number"
+                  value={maxPositions}
+                  onChange={(event) => setMaxPositions(positiveInteger(event.target.value, maxPositions))}
+                />
+              </label>
+              <label>
+                weighting
+                <select value={weighting} onChange={(event) => setWeighting(event.target.value as PortfolioWeighting)}>
+                  {weightingOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          ) : null}
           <button type="button" onClick={runBacktest} disabled={!strategyName}>
             Run Backtest
           </button>
@@ -200,6 +285,35 @@ export default function BacktestPage() {
         </div>
 
         <aside className="detailPanel">
+          <h2>252D Validation Summary</h2>
+          <p className="muted">
+            baseline: {strategySummary?.baseline.status ?? "unspecified"} · {summaryMessage}
+          </p>
+          <table className="miniTable">
+            <thead>
+              <tr>
+                <th>strategy</th>
+                <th>pass_rate</th>
+                <th>trades</th>
+                <th>win_rate</th>
+                <th>return</th>
+                <th>mdd</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(strategySummary?.strategies ?? []).map((row) => (
+                <tr key={row.strategy_name}>
+                  <td>{row.strategy_name}</td>
+                  <td>{formatPercent(row.screener.pass_rate)}</td>
+                  <td>{formatNumber(row.backtest.trade_count)}</td>
+                  <td>{formatPercent(row.backtest.win_rate)}</td>
+                  <td>{formatPercent(row.backtest.total_return)}</td>
+                  <td>{formatPercent(row.backtest.max_drawdown)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
           <h2>Strategy Comparison</h2>
           <table className="miniTable">
             <thead>

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+from typing import Any
+
 from backend.app.models.tables import FundamentalsPti, IndicatorSnapshot
 from backend.app.strategies.base import BaseStrategy, StrategyResult
 
@@ -18,8 +21,10 @@ class CanslimLiteStrategy(BaseStrategy):
         fundamentals_effective_date_available = (
             fundamentals_available and getattr(fundamentals, "effective_date", None) is not None
         )
+        earnings_context = self._earnings_context(indicator)
         flags = {
             "fundamentals_available_asof": fundamentals_available,
+            "earnings_blackout_clear": bool(earnings_context["blackout_clear"]),
             "quarterly_eps_growth_min": self._gte(
                 getattr(fundamentals, "quarterly_eps_growth", None),
                 self.config["quarterly_eps_growth_min"],
@@ -32,6 +37,10 @@ class CanslimLiteStrategy(BaseStrategy):
             "breakout": bool(indicator.breakout),
             "market_regime_bull": market_regime == self.config["required_market_regime"],
         }
+        if bool(self.config.get("require_recent_new_high", False)):
+            flags["recent_new_high"] = self._recent_new_high(indicator)
+        if bool(self.config.get("require_institutional_proxy", False)):
+            flags["institutional_proxy"] = self._institutional_proxy(indicator)
         if bool(self.config.get("technical_trend_filter_enabled", False)):
             flags.update(
                 {
@@ -78,6 +87,10 @@ class CanslimLiteStrategy(BaseStrategy):
                 "quarterly_eps_growth_available": (
                     fundamentals_available and getattr(fundamentals, "quarterly_eps_growth", None) is not None
                 ),
+                "earnings_event_available": bool(earnings_context["event_available"]),
+                "earnings_date_available": bool(earnings_context["earnings_date_available"]),
+                "earnings_release_ts_available": bool(earnings_context["release_ts_available"]),
+                "earnings_blackout_evaluated": bool(earnings_context["evaluated"]),
                 "sales_growth_available": (
                     fundamentals_available and getattr(fundamentals, "sales_growth", None) is not None
                 ),
@@ -91,6 +104,8 @@ class CanslimLiteStrategy(BaseStrategy):
                 "sma200_slope_available": indicator.sma200_slope is not None,
                 "volume_available": indicator.volume is not None,
                 "volume_ma50_available": indicator.volume_ma50 is not None,
+                "recent_new_high_available": self._recent_new_high_available(indicator),
+                "institutional_proxy_available": self._institutional_proxy_available(indicator),
                 "technical_trend_available": self._technical_trend_available(indicator),
                 "pti_validation_not_available_in_current_mvp": True,
                 **self._hardening_data_quality_flags(indicator, fundamentals, market_regime, risk_metadata),
@@ -103,6 +118,11 @@ class CanslimLiteStrategy(BaseStrategy):
                 "fundamentals_available_asof": fundamentals_available,
                 "fundamentals_effective_date_available": fundamentals_effective_date_available,
                 "pti_validation_status": "pti_validation_not_available_in_current_mvp",
+                "earnings_blackout_status": earnings_context["status"],
+                "earnings_blackout_days": earnings_context["blackout_days"],
+                "earnings_event": earnings_context["event"],
+                "recent_new_high": self._recent_new_high(indicator),
+                "institutional_proxy": self._institutional_proxy(indicator),
             }
         )
         return StrategyResult(
@@ -123,6 +143,94 @@ class CanslimLiteStrategy(BaseStrategy):
             and volume_ma50 > 0
             and volume >= volume_ma50 * float(self.config["volume_surge_multiple"])
         )
+
+    def _earnings_context(self, indicator: IndicatorSnapshot) -> dict[str, Any]:
+        event = getattr(indicator, "earnings_event", None)
+        trade_date = self._as_date(getattr(indicator, "trade_date", None))
+        event_date = self._as_date(getattr(event, "earnings_date", None)) if event is not None else None
+        release_ts = getattr(event, "release_ts", None) if event is not None else None
+        session = getattr(event, "session", None) if event is not None else None
+        blackout_days = max(int(self.config.get("earnings_blackout_days", 0)), 0)
+        event_payload = {
+            "symbol": getattr(event, "symbol", getattr(indicator, "symbol", None)) if event is not None else getattr(indicator, "symbol", None),
+            "earnings_date": event_date.isoformat() if event_date is not None else None,
+            "release_ts": release_ts.isoformat() if hasattr(release_ts, "isoformat") else None,
+            "session": session,
+            "days_to_earnings": None,
+            "in_blackout_window": None,
+        }
+        if trade_date is None or event_date is None:
+            return {
+                "event_available": event is not None,
+                "earnings_date_available": event_date is not None,
+                "release_ts_available": release_ts is not None,
+                "evaluated": False,
+                "blackout_clear": False,
+                "blackout_days": blackout_days,
+                "status": "earnings_event_missing_fail_closed",
+                "event": event_payload,
+            }
+
+        days_to_earnings = (event_date - trade_date).days
+        in_blackout = abs(days_to_earnings) <= blackout_days
+        event_payload.update(
+            {
+                "days_to_earnings": days_to_earnings,
+                "in_blackout_window": in_blackout,
+            }
+        )
+        return {
+            "event_available": True,
+            "earnings_date_available": True,
+            "release_ts_available": release_ts is not None,
+            "evaluated": True,
+            "blackout_clear": not in_blackout,
+            "blackout_days": blackout_days,
+            "status": "clear" if not in_blackout else "earnings_blackout_fail_closed",
+            "event": event_payload,
+        }
+
+    def _recent_new_high(self, indicator: IndicatorSnapshot) -> bool:
+        distance = self._as_float(getattr(indicator, "distance_from_52w_high", None))
+        if distance is not None:
+            return distance >= -0.03
+        close = self._as_float(getattr(indicator, "close", None))
+        high_52w = self._as_float(getattr(indicator, "high_52w", None))
+        return close is not None and high_52w is not None and high_52w > 0 and close >= high_52w * 0.97
+
+    @staticmethod
+    def _recent_new_high_available(indicator: IndicatorSnapshot) -> bool:
+        return (
+            getattr(indicator, "distance_from_52w_high", None) is not None
+            or (getattr(indicator, "close", None) is not None and getattr(indicator, "high_52w", None) is not None)
+        )
+
+    def _institutional_proxy(self, indicator: IndicatorSnapshot) -> bool:
+        volume_ratio = self._as_float(getattr(indicator, "volume_ratio_50", None))
+        turnover = self._as_float(getattr(indicator, "turnover_value", None))
+        sector_rs_score = self._as_float(getattr(indicator, "sector_rs_score", None))
+        return (
+            volume_ratio is not None
+            and volume_ratio >= 1.0
+            and turnover is not None
+            and turnover > 0
+            and (sector_rs_score is None or sector_rs_score >= 0.50)
+        )
+
+    @staticmethod
+    def _institutional_proxy_available(indicator: IndicatorSnapshot) -> bool:
+        return (
+            getattr(indicator, "volume_ratio_50", None) is not None
+            and getattr(indicator, "turnover_value", None) is not None
+        )
+
+    @staticmethod
+    def _as_date(value: object) -> date | None:
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        return None
 
     @staticmethod
     def _technical_trend_available(indicator: IndicatorSnapshot) -> bool:

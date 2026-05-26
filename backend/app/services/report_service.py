@@ -57,6 +57,42 @@ class ReportService:
             raise ValueError("생성된 리포트가 없습니다.")
         return self.get_report(report.report_id, include_markdown=True)
 
+    def write_strategy_validation_summary(
+        self,
+        summary: dict[str, object],
+        lookback_days: int = 252,
+    ) -> dict[str, object]:
+        """전략별 validation summary를 JSON 산출물로 저장하고 API payload를 반환한다."""
+        path = REPORT_DIR / f"strategy_validation_{int(lookback_days)}d.json"
+        payload = {
+            **summary,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "report": {
+                "format": "json",
+                "path": str(path),
+                "filename": path.name,
+            },
+            "validation_documentation_format": {
+                "docs_file": "docs/VALIDATION.md",
+                "required_fields": [
+                    "checkpoint",
+                    "command",
+                    "result",
+                    "summary_endpoint",
+                    "report_path",
+                    "baseline_status",
+                    "safety_contract",
+                ],
+            },
+        }
+        content = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+        path.write_text(content + "\n", encoding="utf-8")
+        payload["report"] = {
+            **payload["report"],  # type: ignore[arg-type]
+            "bytes": len(content.encode("utf-8")),
+        }
+        return payload
+
     def list_reports(self, limit: int = 20) -> list[dict[str, object]]:
         """저장된 리포트 목록을 최신순으로 반환한다."""
         reports = list(self.db.scalars(select(Report).order_by(Report.created_at.desc()).limit(limit)).all())

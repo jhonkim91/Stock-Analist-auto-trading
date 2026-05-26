@@ -71,6 +71,8 @@ def test_screener_results_filtering_sorting_and_limit(full_flow_client):
         "score_breakdown",
         "risk_flags",
         "data_quality_flags",
+        "metadata",
+        "risk_metadata",
         "explanation",
         "rationale",
     ):
@@ -104,6 +106,26 @@ def test_screener_results_filtering_sorting_and_limit(full_flow_client):
     assert rr_desc.status_code == 200
     rr_values = [row["reward_risk_ratio"] for row in rr_desc.json()]
     assert rr_values == sorted(rr_values, reverse=True)
+
+
+def test_screener_results_return_execution_time_strategy_metadata(seeded_client):
+    client = seeded_client
+
+    run = client.post("/api/screener/run", json={"strategies": ["canslim_lite"]})
+    assert run.status_code == 200
+    assert run.json()["strategies"] == ["canslim_lite"]
+
+    response = client.get("/api/screener/results?strategy_name=canslim_lite&q=KR009&limit=20")
+    assert response.status_code == 200
+    rows = response.json()
+    assert rows
+    first = next(row for row in rows if row["symbol"] == "KR009")
+
+    assert first["metadata"]["fundamentals_available_asof"] is True
+    assert first["metadata"]["data_quality_flags"]["fundamentals_available"] is True
+    assert first["data_quality_flags"] == first["metadata"]["data_quality_flags"]
+    assert first["score_breakdown"] == first["metadata"]["score_breakdown"]
+    assert first["explanation"] == first["metadata"]["explanation"]
 
 
 def test_reports_list_detail_and_markdown_api(full_flow_client):
@@ -164,6 +186,41 @@ def test_backtest_runs_list_and_detail_api(full_flow_client):
     assert detail.status_code == 200
     assert detail.json()["run_id"] == run["run_id"]
     assert detail.json()["metrics"]["trade_count"] == run["metrics"]["trade_count"]
+
+
+def test_strategy_summary_endpoint_shape_and_unspecified_baseline(full_flow_client):
+    client = full_flow_client
+
+    response = client.get("/api/backtest/strategy-summary?lookback_days=252")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lookback_days"] == 252
+    assert payload["baseline"]["status"] == "unspecified"
+    assert payload["baseline"]["snapshot_supplied"] is False
+    assert payload["window"]["available_trading_days"] <= 252
+    assert payload["screener_window"]["available_trading_days"] <= 252
+    assert payload["report"]["filename"] == "strategy_validation_252d.json"
+    assert Path(payload["report"]["path"]).exists()
+    assert payload["validation_documentation_format"]["docs_file"] == "docs/VALIDATION.md"
+
+    rows = payload["strategies"]
+    assert rows
+    first = rows[0]
+    assert {"strategy_name", "screener", "backtest", "delta"}.issubset(first)
+    assert {
+        "evaluated_count",
+        "pass_count",
+        "pass_rate",
+        "evaluated_trading_days",
+        "window_trading_days",
+    }.issubset(first["screener"])
+    assert {"trade_count", "win_rate", "total_return", "max_drawdown"}.issubset(first["backtest"])
+    assert first["delta"]["baseline"] == "unspecified"
+    assert first["delta"]["trade_count_delta"] is None
+    assert first["delta"]["win_rate_delta"] is None
+    assert first["delta"]["total_return_delta"] is None
+    assert first["delta"]["max_drawdown_delta"] is None
 
 
 def test_settings_read_api_and_secret_key_redaction(client, tmp_path):

@@ -8,6 +8,10 @@ export type AsyncState<T> = {
   data?: T;
 };
 
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonRecord = Record<string, JsonValue>;
+export type PortfolioWeighting = "equal_risk" | "equal_weight";
+
 export type DataStatus = {
   symbol_count: number;
   daily_ohlcv_count: number;
@@ -55,6 +59,14 @@ export type ScreenerResult = {
   failed_conditions_json: string[];
   score_details_json: Record<string, number | string | null>;
   risk_details_json: Record<string, number | string | null>;
+  triggered_conditions: string[];
+  score_breakdown: JsonRecord;
+  risk_flags: JsonRecord;
+  data_quality_flags: JsonRecord;
+  metadata: JsonRecord;
+  risk_metadata: JsonRecord;
+  explanation: string;
+  rationale: string;
   pass_flags?: Record<string, boolean>;
   failed_conditions?: string[];
   risk_per_share?: number | null;
@@ -101,7 +113,27 @@ export type BacktestMetrics = {
   average_holding_days: number;
   trade_count: number;
   exposure: number;
-  [key: string]: number | string | null;
+  portfolio_turnover: number;
+  average_active_positions: number;
+  rebalance_count: number;
+  portfolio_constructor_used: boolean;
+  portfolio_selection_mode: string;
+  portfolio_top_n: number;
+  portfolio_max_positions: number;
+  portfolio_weighting: string;
+  [key: string]: number | string | boolean | null;
+};
+
+export type BacktestRunRequest = {
+  strategy_name: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  initial_equity?: number | null;
+  top_n?: number;
+  max_positions?: number;
+  rebalance_frequency?: "daily" | "weekly" | "monthly";
+  weighting?: PortfolioWeighting;
+  allow_overlap_positions?: boolean;
 };
 
 export type BacktestRun = {
@@ -112,6 +144,71 @@ export type BacktestRun = {
   end_date: string | null;
   metrics: BacktestMetrics;
   created_at: string;
+};
+
+export type StrategyValidationMetricSummary = {
+  summary_source: string;
+  error: string | null;
+  trade_count: number | null;
+  win_rate: number | null;
+  total_return: number | null;
+  max_drawdown: number | null;
+};
+
+export type StrategyValidationDelta = {
+  baseline: string;
+  trade_count_delta: number | null;
+  win_rate_delta: number | null;
+  total_return_delta: number | null;
+  max_drawdown_delta: number | null;
+};
+
+export type StrategyValidationRow = {
+  strategy_name: string;
+  screener: {
+    strategy_name: string;
+    evaluated_count: number;
+    pass_count: number;
+    pass_rate: number | null;
+    evaluated_trading_days: number;
+    window_trading_days: number;
+    window_start: string | null;
+    window_end: string | null;
+  };
+  backtest: StrategyValidationMetricSummary;
+  delta: StrategyValidationDelta;
+};
+
+export type StrategyValidationSummary = {
+  lookback_days: number;
+  generated_at: string;
+  window: {
+    requested_trading_days: number;
+    available_trading_days: number;
+    start_date: string | null;
+    end_date: string | null;
+    basis: string;
+  };
+  screener_window: {
+    requested_trading_days: number;
+    available_trading_days: number;
+    window_start: string | null;
+    window_end: string | null;
+    basis: string;
+  };
+  baseline: {
+    status: string;
+    run_id: string | null;
+    snapshot_supplied: boolean;
+  };
+  report: {
+    format: string;
+    path: string;
+    filename: string;
+    bytes?: number;
+  };
+  validation_documentation_format: JsonRecord;
+  strategies: StrategyValidationRow[];
 };
 
 export type BrokerStatus = {

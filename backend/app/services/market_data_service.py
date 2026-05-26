@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,7 @@ from backend.app.core.config import get_config
 from backend.app.models.tables import (
     BacktestRun,
     DailyOhlcv,
+    EarningsEvent,
     ExternalSymbolMapping,
     FundamentalsPti,
     IndexOhlcv,
@@ -128,6 +129,8 @@ class MarketDataService:
         self.db.add_all(sector_rows)
         fundamental_rows = self._build_fundamental_rows(profiles, dates[-1].date())
         self.db.add_all(fundamental_rows)
+        earnings_event_rows = self._build_earnings_event_rows(profiles, dates[-1].date())
+        self.db.add_all(earnings_event_rows)
         self.db.commit()
 
         return {
@@ -136,6 +139,7 @@ class MarketDataService:
             "index_rows": len(index_rows),
             "sector_rows": len(sector_rows),
             "fundamental_rows": len(fundamental_rows),
+            "earnings_event_rows": len(earnings_event_rows),
         }
 
     def import_daily_ohlcv_csv(self, content: bytes) -> dict[str, int]:
@@ -150,6 +154,7 @@ class MarketDataService:
             "index_ohlcv_count": IndexOhlcv,
             "sector_ohlcv_count": SectorOhlcv,
             "fundamentals_count": FundamentalsPti,
+            "earnings_events_count": EarningsEvent,
             "indicator_snapshot_count": IndicatorSnapshot,
             "screen_results_count": ScreenResult,
             "reports_count": Report,
@@ -279,6 +284,19 @@ class MarketDataService:
                 for i, dt in enumerate(dates)
             )
         return rows
+
+    @staticmethod
+    def _build_earnings_event_rows(profiles: dict[str, dict[str, object]], latest_date: date) -> list[EarningsEvent]:
+        event_date = latest_date - timedelta(days=30)
+        return [
+            EarningsEvent(
+                symbol=symbol,
+                earnings_date=event_date,
+                release_ts=datetime(event_date.year, event_date.month, event_date.day, 15, 30),
+                session="after_close",
+            )
+            for symbol in profiles
+        ]
 
     @staticmethod
     def _build_fundamental_rows(profiles: dict[str, dict[str, object]], latest_date: date) -> list[FundamentalsPti]:

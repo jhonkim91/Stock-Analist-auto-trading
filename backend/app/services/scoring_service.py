@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from backend.app.models.tables import FundamentalsPti, IndicatorSnapshot
 
 
@@ -22,3 +25,31 @@ class ScoringService:
             + 0.05 * rr_score
         )
         return round(float(total), 4)
+
+    def rank_score(
+        self,
+        strategy_name: str,
+        indicator: IndicatorSnapshot,
+        fundamentals: FundamentalsPti | None,
+        rr_score: float,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> float:
+        """Ranking 전략의 포트폴리오 후보 정렬 점수를 계산한다."""
+        metadata = metadata or {}
+        metadata_key = {
+            "momentum_rank": "momentum_quality_score",
+            "relative_strength_leader": "leadership_score",
+        }.get(strategy_name)
+        if metadata_key:
+            metadata_score = self._numeric_metadata_score(metadata.get(metadata_key))
+            if metadata_score is not None:
+                return metadata_score
+        return self.score(indicator, fundamentals, rr_score)
+
+    @staticmethod
+    def _numeric_metadata_score(value: Any) -> float | None:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return round(number, 4)

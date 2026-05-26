@@ -63,6 +63,16 @@ def _ensure_sqlite_columns() -> None:
             statements.append("ALTER TABLE import_runs ADD COLUMN source_config_snapshot_json TEXT DEFAULT '{}'")
         if "provider_metadata_json" not in import_run_columns:
             statements.append("ALTER TABLE import_runs ADD COLUMN provider_metadata_json TEXT DEFAULT '{}'")
+    if "screen_results" in table_names:
+        screen_result_columns = {column["name"] for column in inspector.get_columns("screen_results")}
+        for column_name in (
+            "metadata_json",
+            "risk_flags_json",
+            "score_breakdown_json",
+            "data_quality_flags_json",
+        ):
+            if column_name not in screen_result_columns:
+                statements.append(f"ALTER TABLE screen_results ADD COLUMN {column_name} TEXT DEFAULT '{{}}'")
     if not statements:
         return
     with engine.begin() as connection:

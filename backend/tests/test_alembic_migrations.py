@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from backend.app.core.database import Base
 from backend.app.models import tables  # noqa: F401
 
-ALEMBIC_HEAD = "f6d4a2c9e8b1"
+ALEMBIC_HEAD = "d9e3f0a1b2c4"
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -39,9 +39,39 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "orders",
         "paper_orders",
         "backtest_runs",
+        "earnings_events",
     }.issubset(table_names)
     indicator_columns = {column["name"] for column in inspector.get_columns("indicator_snapshot")}
-    assert {"weekly_close", "weekly_sma30", "weekly_sma30_slope", "low", "ema20"}.issubset(indicator_columns)
+    assert {
+        "weekly_close",
+        "weekly_sma30",
+        "weekly_sma30_slope",
+        "low",
+        "ema20",
+        "contraction_count",
+        "contraction_count_available",
+        "pullback_depth_last",
+        "pullback_depth_last_available",
+        "pullback_depth_prev",
+        "pullback_depth_prev_available",
+        "box_age_days",
+        "box_age_days_available",
+        "box_redefinition_count",
+        "box_redefinition_count_available",
+        "weekly_breakout",
+        "weekly_breakout_available",
+        "weekly_volume_ratio",
+        "weekly_volume_ratio_available",
+        "weekly_rs_score",
+        "weekly_rs_score_available",
+    }.issubset(indicator_columns)
+    screen_result_columns = {column["name"] for column in inspector.get_columns("screen_results")}
+    assert {
+        "metadata_json",
+        "risk_flags_json",
+        "score_breakdown_json",
+        "data_quality_flags_json",
+    }.issubset(screen_result_columns)
     with engine.connect() as connection:
         assert connection.scalar(text("select version_num from alembic_version")) == ALEMBIC_HEAD
 

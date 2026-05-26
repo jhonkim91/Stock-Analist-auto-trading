@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import date
 from types import SimpleNamespace
 
@@ -8,6 +9,9 @@ import pytest
 
 from backend.app.core.config import get_config
 from backend.app.services.backtest_service import BacktestService
+from backend.app.services.risk_service import RiskService
+from backend.app.services.scoring_service import ScoringService
+from backend.app.strategies.registry import get_available_strategy_registry
 
 
 def _service_with_execution(seeded_db, **execution_overrides) -> BacktestService:
@@ -27,6 +31,162 @@ def _simulation_service(**execution_overrides) -> BacktestService:
     }
     service.strategy_config = get_config("strategies")
     service.repo = SimpleNamespace(get_symbol=lambda _symbol: None)
+    return service
+
+
+def _strategy_indicator(**overrides) -> SimpleNamespace:
+    values = {
+        "trade_date": date(2026, 1, 1),
+        "symbol": "TEST",
+        "close": 100.0,
+        "low": 98.5,
+        "volume": 200000,
+        "turnover_value": 2_000_000_000.0,
+        "ema20": 98.0,
+        "sma50": 90.0,
+        "sma150": 80.0,
+        "sma200": 70.0,
+        "sma200_slope": 1.0,
+        "weekly_close": 100.0,
+        "weekly_sma30": 90.0,
+        "weekly_sma30_slope": 2.0,
+        "weekly_breakout": True,
+        "weekly_breakout_available": True,
+        "weekly_volume_ratio": 1.2,
+        "weekly_volume_ratio_available": True,
+        "weekly_rs_score": 0.80,
+        "weekly_rs_score_available": True,
+        "volume_ma20": 300000.0,
+        "volume_ma50": 100000.0,
+        "volume_ratio_50": 1.1,
+        "atr20_pct": 0.02,
+        "atr20_pct_ma60": 0.04,
+        "std20": 0.01,
+        "std60": 0.02,
+        "high_52w": 100.0,
+        "distance_from_52w_high": 0.0,
+        "pivot_high_20_prev": 98.0,
+        "pivot_low_20_prev": 94.0,
+        "pullback_count": 1,
+        "pullback_count_available": True,
+        "contraction_count": 1,
+        "contraction_count_available": True,
+        "box_age_days": 10,
+        "box_age_days_available": True,
+        "box_redefinition_count": 1,
+        "box_redefinition_count_available": True,
+        "volume_dry_up": True,
+        "breakout": True,
+        "rs_percentile": 90.0,
+        "relative_strength_score": 0.90,
+        "trend_score": 0.80,
+        "volume_score": 0.75,
+        "pattern_score": 0.80,
+        "sector_rs_score": 0.70,
+        "market_score": 0.50,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _strategy_trade_service(indicator: SimpleNamespace) -> BacktestService:
+    service = BacktestService.__new__(BacktestService)
+    strategy_config = get_config("strategies")
+    service.db = SimpleNamespace()
+    service.repo = SimpleNamespace(
+        daily_df=lambda _start_date=None, _end_date=None: pd.DataFrame(
+            [
+                {
+                    "trade_date": date(2026, 1, 2),
+                    "symbol": indicator.symbol,
+                    "open": 100.0,
+                    "high": 105.0,
+                    "low": 99.0,
+                    "close": 101.0,
+                    "volume": 1000000,
+                    "turnover_value": 1_000_000_000.0,
+                }
+            ]
+        ),
+        fundamentals_asof=lambda _symbol, _trade_date: SimpleNamespace(
+            effective_date=date(2025, 12, 31),
+            quarterly_eps_growth=0.30,
+            sales_growth=0.25,
+            roe=0.20,
+            gross_profitability=0.25,
+        ),
+        index_df=lambda: pd.DataFrame(),
+        get_symbol=lambda _symbol: None,
+    )
+    service.backtest_repo = SimpleNamespace(save=lambda _run: None)
+    service.risk_service = RiskService()
+    service.scoring_service = ScoringService()
+    service.strategy_config = strategy_config
+    service.backtest_config = {
+        **get_config("backtest"),
+        "execution": {**get_config("backtest")["execution"], "max_holding_days": 1},
+    }
+    service.strategies = get_available_strategy_registry(strategy_config)
+    service._load_indicators = lambda _start_date=None, _end_date=None: [indicator]
+    return service
+
+
+def _rank_portfolio_service(
+    indicators: list[SimpleNamespace],
+    *,
+    strategy_name: str = "momentum_rank",
+    selection_mode: str = "rank_portfolio",
+    top_n: int = 2,
+    max_positions: int = 3,
+    weighting: str = "equal_weight",
+) -> BacktestService:
+    strategy_config = deepcopy(get_config("strategies"))
+    strategy_config[strategy_name] = {**strategy_config[strategy_name], "selection_mode": selection_mode}
+    daily_rows = [
+        {
+            "trade_date": date(2026, 1, 2),
+            "symbol": indicator.symbol,
+            "open": 100.0,
+            "high": 101.0,
+            "low": 99.0,
+            "close": 101.0,
+            "volume": 1000000,
+            "turnover_value": 1_000_000_000.0,
+        }
+        for indicator in indicators
+    ]
+    service = BacktestService.__new__(BacktestService)
+    service.db = SimpleNamespace()
+    service.repo = SimpleNamespace(
+        daily_df=lambda _start_date=None, _end_date=None: pd.DataFrame(daily_rows),
+        fundamentals_asof=lambda _symbol, _trade_date: SimpleNamespace(
+            effective_date=date(2025, 12, 31),
+            quarterly_eps_growth=0.30,
+            sales_growth=0.25,
+            roe=0.20,
+            gross_profitability=0.25,
+        ),
+        index_df=lambda: pd.DataFrame(),
+        get_symbol=lambda _symbol: None,
+    )
+    service.backtest_repo = SimpleNamespace(save=lambda _run: None)
+    service.risk_service = RiskService()
+    service.scoring_service = ScoringService()
+    service.strategy_config = strategy_config
+    service.backtest_config = {
+        **deepcopy(get_config("backtest")),
+        "execution": {**get_config("backtest")["execution"], "max_holding_days": 1},
+        "portfolio": {
+            **get_config("backtest")["portfolio"],
+            "top_n": top_n,
+            "max_positions": max_positions,
+            "rebalance_frequency": "daily",
+            "weighting": weighting,
+            "allow_overlap_positions": False,
+        },
+    }
+    service.strategies = get_available_strategy_registry(strategy_config)
+    service._load_indicators = lambda _start_date=None, _end_date=None: indicators
     return service
 
 
@@ -87,6 +247,10 @@ def test_backtest_runs_and_reports_required_metrics(seeded_db):
         "forced_exit_count",
         "delisted_exit_count",
         "missing_data_exit_count",
+        "portfolio_turnover",
+        "average_active_positions",
+        "rebalance_count",
+        "portfolio_constructor_used",
     ):
         assert key in metrics
     for key in (
@@ -102,6 +266,28 @@ def test_backtest_runs_and_reports_required_metrics(seeded_db):
     assert metrics["trade_count"] >= 0
 
 
+def test_strategy_summary_uses_available_window_and_unspecified_baseline(seeded_db, monkeypatch):
+    service = BacktestService(seeded_db)
+    limited_dates = service._latest_indicator_dates(2)
+    assert limited_dates
+    monkeypatch.setattr(service, "_latest_indicator_dates", lambda _lookback_days: limited_dates)
+
+    summary = service.strategy_summary(lookback_days=252)
+
+    assert summary["lookback_days"] == 252
+    assert summary["window"]["available_trading_days"] == len(limited_dates)
+    assert summary["window"]["available_trading_days"] < summary["window"]["requested_trading_days"]
+    assert summary["baseline"]["status"] == "unspecified"
+    assert summary["strategies"]
+
+    first = summary["strategies"][0]
+    assert {"strategy_name", "screener", "backtest", "delta"}.issubset(first)
+    assert first["delta"]["baseline"] == "unspecified"
+    assert first["delta"]["total_return_delta"] is None
+    assert first["backtest"]["summary_source"] == "computed_available_window"
+    assert {"trade_count", "win_rate", "total_return", "max_drawdown"}.issubset(first["backtest"])
+
+
 def test_backtest_metrics_cost_bps_uses_execution_config_override(seeded_db):
     service = _service_with_execution(seeded_db, commission_bps=3.25, slippage_bps=4.75)
 
@@ -110,6 +296,109 @@ def test_backtest_metrics_cost_bps_uses_execution_config_override(seeded_db):
     assert result["metrics"]["cost_bps"] == 8.0
     for trade in result["trades"]:
         assert trade["cost_bps"] == 8.0
+
+
+def test_rank_portfolio_top_n_holds_multiple_symbols_at_once():
+    indicators = [
+        _strategy_indicator(
+            symbol="AAA",
+            rs_percentile=99.0,
+            relative_strength_score=0.98,
+            trend_score=0.92,
+            sector_rs_score=0.88,
+            market_score=0.80,
+        ),
+        _strategy_indicator(
+            symbol="BBB",
+            rs_percentile=97.0,
+            relative_strength_score=0.95,
+            trend_score=0.89,
+            sector_rs_score=0.84,
+            market_score=0.74,
+        ),
+        _strategy_indicator(
+            symbol="CCC",
+            rs_percentile=86.0,
+            relative_strength_score=0.86,
+            trend_score=0.76,
+            sector_rs_score=0.62,
+            market_score=0.55,
+        ),
+    ]
+    service = _rank_portfolio_service(indicators, top_n=2, max_positions=3, weighting="equal_weight")
+
+    result = service.run("momentum_rank", start_date=date(2026, 1, 1), end_date=date(2026, 1, 2))
+
+    trades = result["trades"]
+    metrics = result["metrics"]
+    assert len(trades) == 2
+    assert {trade["symbol"] for trade in trades} == {"AAA", "BBB"}
+    assert {trade["entry_date"] for trade in trades} == {date(2026, 1, 2)}
+    assert all(trade["portfolio_detail"]["portfolio_constructor_used"] is True for trade in trades)
+    assert metrics["portfolio_constructor_used"] is True
+    assert metrics["portfolio_selection_mode"] == "rank_portfolio"
+    assert metrics["portfolio_top_n"] == 2
+    assert metrics["portfolio_max_positions"] == 3
+    assert metrics["portfolio_weighting"] == "equal_weight"
+    assert metrics["rebalance_count"] == 1
+    assert metrics["average_active_positions"] == pytest.approx(2.0)
+    assert metrics["execution_requires_portfolio_constructor_signal_count"] == 2
+
+
+def test_rank_strategy_single_position_selection_mode_keeps_legacy_fallback():
+    indicators = [
+        _strategy_indicator(
+            symbol="AAA",
+            rs_percentile=99.0,
+            relative_strength_score=0.98,
+            trend_score=0.92,
+            sector_rs_score=0.88,
+            market_score=0.80,
+        ),
+        _strategy_indicator(
+            symbol="BBB",
+            rs_percentile=97.0,
+            relative_strength_score=0.95,
+            trend_score=0.89,
+            sector_rs_score=0.84,
+            market_score=0.74,
+        ),
+    ]
+    service = _rank_portfolio_service(indicators, selection_mode="single_position", top_n=2, max_positions=2)
+
+    result = service.run("momentum_rank", start_date=date(2026, 1, 1), end_date=date(2026, 1, 2))
+
+    assert len(result["trades"]) == 1
+    assert result["trades"][0]["symbol"] == "AAA"
+    assert result["metrics"]["portfolio_constructor_used"] is False
+    assert result["metrics"]["portfolio_selection_mode"] == "single_position"
+    assert result["metrics"]["rebalance_count"] == 0
+
+
+@pytest.mark.parametrize(
+    ("strategy_name", "indicator_overrides", "expected_basis", "expected_stop"),
+    [
+        ("new_high_breakout", {}, "pivot_low_20_prev", 94.0),
+        ("pullback_20ema", {"pivot_low_20_prev": 96.0}, "swing_low", 96.0),
+        ("darvas_box", {"pivot_high_20_prev": 95.0, "pivot_low_20_prev": 80.0}, "darvas_box_bottom", 80.0),
+        ("stage_analysis_weekly", {"weekly_sma30": 90.0}, "weekly_sma30", 90.0),
+    ],
+)
+def test_backtest_trade_payload_reflects_strategy_risk_basis(
+    strategy_name,
+    indicator_overrides,
+    expected_basis,
+    expected_stop,
+):
+    service = _strategy_trade_service(_strategy_indicator(**indicator_overrides))
+
+    result = service.run(strategy_name, start_date=date(2026, 1, 1), end_date=date(2026, 1, 2))
+
+    assert result["trades"]
+    trade = result["trades"][0]
+    assert trade["risk_basis"] == expected_basis
+    assert trade["execution_detail"]["risk_basis"] == expected_basis
+    assert trade["execution_detail"]["stop_price"] == pytest.approx(expected_stop)
 
 
 def test_regime_cache_loads_index_once_and_matches_legacy_asof(seeded_db, monkeypatch):

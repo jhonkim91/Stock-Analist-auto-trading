@@ -36,6 +36,19 @@ function JsonDetails({ title, data }: { title: string; data: unknown }) {
   );
 }
 
+function InlineList({ items }: { items: string[] }) {
+  if (items.length === 0) {
+    return <span className="muted">none</span>;
+  }
+  return (
+    <span className="inlineList">
+      {items.map((item) => (
+        <Badge key={item}>{item}</Badge>
+      ))}
+    </span>
+  );
+}
+
 export default function ScreenerPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [message, setMessage] = useState("조회 중");
@@ -55,6 +68,10 @@ export default function ScreenerPage() {
     results.forEach((result) => names.add(result.strategy_name));
     return Array.from(names);
   }, [results, strategyCatalog]);
+  const selectedStrategy = useMemo(
+    () => strategyCatalog.find((strategy) => strategy.name === selected?.strategy_name),
+    [selected, strategyCatalog]
+  );
 
   const buildPath = useCallback(() => {
     const params = new URLSearchParams({ limit: "100" });
@@ -232,6 +249,15 @@ export default function ScreenerPage() {
               <span className="strategyMetaLine">
                 <Badge tone={strategy.is_default ? "pass" : undefined}>{strategy.is_default ? "default" : "available-only"}</Badge>
               </span>
+              <span className="strategyDescription">{strategy.description}</span>
+              <span className="strategyMetaGroup">
+                <span>required</span>
+                <InlineList items={strategy.required_fields} />
+              </span>
+              <span className="strategyMetaGroup">
+                <span>limitations</span>
+                <InlineList items={strategy.limitations} />
+              </span>
             </label>
           ))}
           {strategyCatalog.length === 0 ? <p className="muted">strategy metadata loading</p> : null}
@@ -372,10 +398,32 @@ export default function ScreenerPage() {
                 </div>
               </div>
               <p className="strongLine">{selected.reason_summary}</p>
+              {selectedStrategy ? (
+                <>
+                  <h3>Strategy Metadata</h3>
+                  <p className="muted">{selectedStrategy.description}</p>
+                  <div className="metadataRows">
+                    <div>
+                      <span>required_fields</span>
+                      <InlineList items={selectedStrategy.required_fields} />
+                    </div>
+                    <div>
+                      <span>limitations</span>
+                      <InlineList items={selectedStrategy.limitations} />
+                    </div>
+                  </div>
+                </>
+              ) : null}
+              <h3>triggered_conditions</h3>
+              <InlineList items={selected.triggered_conditions} />
+              <h3>data_quality_flags</h3>
+              <pre className="tinyPre">{JSON.stringify(selected.data_quality_flags, null, 2)}</pre>
+              <h3>risk_metadata</h3>
+              <pre className="tinyPre">{JSON.stringify(selected.risk_metadata, null, 2)}</pre>
               <h3>Risk Values</h3>
               <pre className="tinyPre">{JSON.stringify(selected.risk_details_json, null, 2)}</pre>
               <h3>Score Values</h3>
-              <pre className="tinyPre">{JSON.stringify(selected.score_details_json, null, 2)}</pre>
+              <pre className="tinyPre">{JSON.stringify(selected.score_breakdown, null, 2)}</pre>
               <h3>pass_flags_json</h3>
               <pre className="tinyPre">{JSON.stringify(selected.pass_flags_json, null, 2)}</pre>
               <h3>failed_conditions_json</h3>

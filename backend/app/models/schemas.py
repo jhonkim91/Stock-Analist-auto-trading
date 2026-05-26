@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -49,11 +49,50 @@ class ScreenerStrategyResponse(BaseModel):
     limitations: list[str]
 
 
+class ScreenerResultResponse(BaseModel):
+    trade_date: date
+    symbol: str
+    name: str
+    strategy_name: str
+    strategy_tag: str
+    passed: bool
+    grade: str
+    total_score: float
+    entry_price: float | None
+    stop_price: float | None
+    target_price: float | None
+    reward_risk_ratio: float | None
+    position_size: int
+    risk_basis: str | None
+    reason_summary: str
+    pass_flags_json: dict[str, bool]
+    failed_conditions_json: list[str]
+    score_details_json: dict[str, Any]
+    risk_details_json: dict[str, Any]
+    triggered_conditions: list[str]
+    score_breakdown: dict[str, Any]
+    risk_flags: dict[str, Any]
+    data_quality_flags: dict[str, Any]
+    metadata: dict[str, Any]
+    risk_metadata: dict[str, Any]
+    explanation: str
+    rationale: str
+    pass_flags: dict[str, bool]
+    failed_conditions: list[str]
+    risk_per_share: float | None
+    position_notional: float | None
+
+
 class BacktestRunRequest(BaseModel):
     strategy_name: str = "trend_breakout"
     start_date: date | None = None
     end_date: date | None = None
     initial_equity: float | None = None
+    top_n: int | None = Field(default=None, ge=1)
+    max_positions: int | None = Field(default=None, ge=1)
+    rebalance_frequency: Literal["daily", "weekly", "monthly"] | None = None
+    weighting: Literal["equal_risk", "equal_weight"] | None = None
+    allow_overlap_positions: bool | None = None
 
 
 class BrokerPreviewRequest(BaseModel):
