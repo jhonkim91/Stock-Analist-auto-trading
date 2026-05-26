@@ -21,3 +21,13 @@ risk_gate:
 audit:
   persistence_enabled: false
   sanitize_enabled: true
+adapters:
+  kis_paper:
+    enabled: false
+    mode: "contract_skeleton"
+    official_endpoint_confirmed: false
+    live_fallback_enabled: false
+  kis_live:
+    enabled: false
+    mode: "disabled_placeholder"
+    live_trading_enabled: false

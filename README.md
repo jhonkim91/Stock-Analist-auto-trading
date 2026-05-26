@@ -11,13 +11,13 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.24.0` |
-| Phase | `KIS Paper Broker Phase 1 Notification Foundation` |
+| Phase | `KIS Paper Broker Phase 2 KIS Paper Broker Contract` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | Trading state | fail-closed, preview-only, real order 미구현 |
 | Latest backend pytest | `293 passed` |
-| Latest Phase 1 targeted pytest | `18 passed` |
-| Next recommended phase | `KIS paper broker Phase 2 KIS Paper Broker Contract` |
+| Latest Phase 2 targeted pytest | `22 passed` |
+| Next recommended phase | `KIS paper broker Phase 3 Paper Trading Persistence` |
 
 ## Implemented Scope
 
@@ -48,6 +48,7 @@
 - Factor/Filter Attribution Minimal Integration: 저장된 `backtest_trade_ledger`와 `screen_results` join 기반 realized PnL attribution과 filter failure counts.
 - KIS Paper Broker Phase 0 Baseline Audit: 현재 fail-closed baseline과 KIS paper API 확인 matrix 문서화.
 - KIS Paper Broker Phase 1 Notification Foundation: disabled/mock 기본 notification abstraction, redacted status/test API, Discord/Telegram adapter skeleton.
+- KIS Paper Broker Phase 2 KIS Paper Broker Contract: `BrokerAdapter` contract, disabled `KisPaperBrokerAdapter`, disabled `KisLiveBrokerAdapter`, in-memory-only `KisTokenManager`.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
 - Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration, strategy parameter snapshot migration.
 

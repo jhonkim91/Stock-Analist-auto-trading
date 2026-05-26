@@ -10,9 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.paths import CONFIG_DIR
+from backend.app.brokers.kis_paper import KisPaperBrokerAdapter
 from backend.app.models.tables import Order, PaperAuditEvent, PaperFill, PaperOrder, PaperPosition
-from backend.app.services.broker_service import TokenLifecycleService
 from backend.app.services.market_session_service import MarketSessionService
+from backend.app.services.token_manager import TokenLifecycleService
 
 PAPER_CONFIG_NAME = "paper.yaml"
 
@@ -188,6 +189,7 @@ class PaperTradingService:
         self.token_service = TokenLifecycleService()
         self.simulator = LocalPaperSimulator()
         self.market_session_service = market_session_service or MarketSessionService()
+        self.paper_adapter = KisPaperBrokerAdapter()
 
     def status(self) -> dict[str, object]:
         """Paper trading scaffold 상태를 secret이나 외부 호출 없이 반환한다."""
@@ -220,6 +222,7 @@ class PaperTradingService:
             "kill_switch": {"blocking": True, "reason_codes": reason_codes},
             "risk_gate": {"decision": "deny", "passed": False, "reason_codes": reason_codes},
             "token_lifecycle": token_status,
+            "broker_adapter": self.paper_adapter.status(),
             "simulator": self.simulator.status(),
             "counts": self._counts(),
         }

@@ -11,11 +11,13 @@ import yaml
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.brokers.kis_live import KisLiveBrokerAdapter
+from backend.app.brokers.kis_paper import KisPaperBrokerAdapter
 from backend.app.core.paths import CONFIG_DIR
 from backend.app.models.tables import Position
-from backend.app.services.kis_service import KIS_APP_KEY_ENV, KIS_APP_SECRET_ENV, KisReadOnlyService
 from backend.app.services.market_data_import_service import DataSourceService
 from backend.app.services.market_session_service import MarketSessionService
+from backend.app.services.token_manager import TokenLifecycleService
 
 BROKER_CONFIG_NAME = "broker.yaml"
 DEFAULT_SOURCE_ID = "kis_openapi"
@@ -61,23 +63,6 @@ class BrokerAuditService:
     def _is_sensitive_key(key: str) -> bool:
         normalized = key.lower()
         return any(part in normalized for part in SENSITIVE_AUDIT_KEY_PARTS)
-
-
-class TokenLifecycleService:
-    def status(self) -> dict[str, object]:
-        """Phase 3D에서는 token 발급 없이 configured boolean과 비활성 상태만 반환한다."""
-        app_key_configured = KisReadOnlyService._env_configured(KIS_APP_KEY_ENV)
-        app_secret_configured = KisReadOnlyService._env_configured(KIS_APP_SECRET_ENV)
-        return {
-            "state": "DISABLED_BLOCKED" if app_key_configured and app_secret_configured else "UNCONFIGURED",
-            "app_key_configured": app_key_configured,
-            "app_secret_configured": app_secret_configured,
-            "token_issued": False,
-            "token_cache_enabled": False,
-            "token_refresh_enabled": False,
-            "token_db_persistence_enabled": False,
-            "disabled_reason": "phase_3d_status_only",
-        }
 
 
 class BrokerConfigService:
@@ -240,6 +225,8 @@ class BrokerService:
         self.token_service = TokenLifecycleService()
         self.audit_service = BrokerAuditService()
         self.market_session_service = market_session_service or MarketSessionService()
+        self.paper_adapter = KisPaperBrokerAdapter()
+        self.live_adapter = KisLiveBrokerAdapter()
 
     def status(self) -> dict[str, object]:
         """Phase 3D broker safety scaffold 상태를 secret 없이 반환한다."""
@@ -280,6 +267,10 @@ class BrokerService:
                 "reason_codes": reason_codes,
             },
             "token_lifecycle": token_status,
+            "adapters": {
+                "kis_paper": self.paper_adapter.status(),
+                "kis_live": self.live_adapter.status(),
+            },
         }
 
     def preview_order(

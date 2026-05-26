@@ -20,3 +20,8 @@ audit:
 simulator:
   enabled: false
   auto_fill_on_create: false
+broker_adapter:
+  name: "kis_paper"
+  enabled: false
+  official_endpoint_confirmed: false
+  live_fallback_enabled: false

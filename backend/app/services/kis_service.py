@@ -4,10 +4,9 @@ import os
 from typing import Any
 
 from backend.app.services.market_data_import_service import DataSourceService
+from backend.app.services.token_manager import KIS_APP_KEY_ENV, KIS_APP_SECRET_ENV, KisTokenManager
 
 KIS_MARKET_DATA_SOURCE_ID = "kis_market_data"
-KIS_APP_KEY_ENV = "KIS_APP_KEY"
-KIS_APP_SECRET_ENV = "KIS_APP_SECRET"
 DISABLED_REASON = "Phase 3C read-only foundation only"
 
 
@@ -29,6 +28,7 @@ class KisReadOnlyService:
             "broker_enabled": False,
             "websocket_enabled": False,
             "disabled_reason": DISABLED_REASON,
+            "token_manager": KisTokenManager().metadata(),
         }
 
     def config(self) -> dict[str, object]:
@@ -43,6 +43,7 @@ class KisReadOnlyService:
             "broker_enabled": False,
             "websocket_enabled": False,
             "disabled_reason": DISABLED_REASON,
+            "token_manager": KisTokenManager().metadata(),
         }
 
     def validate_config(self) -> dict[str, object]:
@@ -72,14 +73,11 @@ class KisReadOnlyService:
 
     @classmethod
     def _env_configured(cls, name: str) -> bool:
-        return cls._is_configured_value(os.environ.get(name, ""))
+        return KisTokenManager.env_configured(name)
 
     @staticmethod
     def _is_configured_value(value: str) -> bool:
-        stripped = value.strip()
-        if not stripped:
-            return False
-        return "placeholder" not in stripped.lower()
+        return KisTokenManager.is_configured_value(value)
 
     @classmethod
     def _format_valid(cls, value: str) -> bool:
