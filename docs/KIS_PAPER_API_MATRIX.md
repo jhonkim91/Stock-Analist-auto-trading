@@ -5,7 +5,7 @@
 - 이 문서는 Phase 0 확인 matrix이며 구현 사양서가 아니다.
 - 공식 KIS Developers 문서에서 완전 확인되지 않은 endpoint/path/TR-ID/request field는 모두 `확인 필요`로 표시한다.
 - Phase 0에서는 KIS 호출, token 발급, credential 저장, paper submit/cancel/sync 구현을 하지 않는다.
-- 현재 구현 상태는 repository `main` 기준 fail-closed/preview-only baseline을 따른다.
+- 현재 구현 상태는 `feature/kis-paper-goal-phases` Phase 4 기준이다. `/api/paper/orders/submit`은 local `paper_orders` 전용이며 KIS paper endpoint/TR-ID/request field는 여전히 추정 구현하지 않는다.
 
 ## 공식 문서 확인 범위
 
@@ -25,15 +25,15 @@
 | KIS paper OAuth/token lifecycle | 부분 확인 | 확인 필요 | 미구현. 현재 token service는 disabled/status-only | raw token persistence 금지 |
 | KIS hashkey/request signing | 확인 필요 | 확인 필요 | 미구현 | 공식 request field 확인 전 사용 금지 |
 | Paper order preview | KIS API 아님 | 해당 없음 | 구현됨. `/api/paper/orders/preview` deny preview only | DB write, token, network call 없음 |
-| Paper cash order submit | 국내주식 주문/계좌 category는 확인 | 확인 필요 | 미구현 | paper domain/TR-ID/request field 확인 전 disabled |
-| Paper order cancel/modify | 국내주식 `주식주문(정정취소)` category는 확인 | 확인 필요 | 미구현 | cancel payload 추정 금지 |
+| Paper cash order submit | 국내주식 주문/계좌 category는 확인 | 확인 필요 | local-only 구현 | `/api/paper/orders/submit`은 confirm/idempotency/kill-switch gated local `paper_orders` 저장만 수행. KIS paper domain/TR-ID/request field 확인 전 broker submit disabled |
+| Paper order cancel/modify | 국내주식 `주식주문(정정취소)` category는 확인 | 확인 필요 | safely disabled | `/api/paper/orders/cancel`은 `KIS_PAPER_CANCEL_CONFIRMATION_REQUIRED`로 응답하며 cancel payload 추정 금지 |
 | Cancelable/open order inquiry | 국내주식 `주식정정취소가능주문조회` category는 확인 | 확인 필요 | 미구현 | sync/cancel 전제 데이터 확인 필요 |
 | Daily order/fill inquiry | 국내주식 `주식일별주문체결조회` category는 확인 | 확인 필요 | 미구현 | fill dedupe key 확인 필요 |
 | Balance/position inquiry | 국내주식 `주식잔고조회` category는 확인 | 확인 필요 | 미구현 | `paper_positions`와 synthetic `positions` 분리 필수 |
 | Buyable amount inquiry | 국내주식 `매수가능조회` category는 확인 | 확인 필요 | 미구현 | cash lock/available cash field 확인 필요 |
 | Sellable quantity inquiry | 국내주식 `매도가능수량조회` category는 확인 | 확인 필요 | 미구현 | short/oversell guard field 확인 필요 |
 | Paper portfolio/account snapshot | 관련 계좌 조회 category는 확인 | 확인 필요 | 미구현 | future `paper_portfolio_snapshots` migration 필요 |
-| Broker audit events | KIS API 아님 | 해당 없음 | 미구현. 현재 audit persistence disabled | raw account/token/webhook redaction 필수 |
+| Broker audit events | KIS API 아님 | 해당 없음 | local paper submit audit opt-in 구현 | raw account/token/webhook redaction 필수 |
 | Notification delivery | KIS API 아님 | 해당 없음 | 미구현 | Discord/Telegram secret은 env only |
 | Report notification | KIS API 아님 | 해당 없음 | 미구현 | notification failure는 report 생성 rollback 금지 |
 | Paper bot scheduler | KIS API 아님 | 해당 없음 | 미구현 | default scheduler disabled, `PAPER_BOT_AUTO_SUBMIT=false` |

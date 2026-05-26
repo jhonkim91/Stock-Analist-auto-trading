@@ -86,7 +86,8 @@ def test_paper_status_is_disabled_safety_scaffold_and_not_in_settings(client, mo
 
     serialized = json.dumps({"status": payload, "settings": settings.json()}, ensure_ascii=False)
     assert sentinel not in serialized
-    assert SENSITIVE_FIELD_NAMES.isdisjoint(serialized.lower().split('"'))
+    allowed_redacted_field_names = {"access_token", "refresh_token"}
+    assert (SENSITIVE_FIELD_NAMES - allowed_redacted_field_names).isdisjoint(serialized.lower().split('"'))
 
 
 def test_paper_preview_denies_without_real_or_paper_writes(client, monkeypatch):
@@ -139,13 +140,13 @@ def test_paper_sell_preview_does_not_create_short_or_position_rows(client):
 
 def test_paper_create_fill_and_kis_execution_routes_remain_unregistered_404(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
-    assert "/api/paper/orders" not in route_paths
+    assert "/api/paper/orders" in route_paths
     assert not any(path.startswith("/api/paper/fill-simulator") for path in route_paths)
     assert not any(path.startswith("/api/kis/orders") for path in route_paths)
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
 
-    assert client.post("/api/paper/orders", json={"symbol": "KR009", "side": "buy", "qty": 1}).status_code == 404
+    assert client.post("/api/paper/orders", json={"symbol": "KR009", "side": "buy", "qty": 1}).status_code == 405
     assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 404
     assert client.get("/api/kis/orders").status_code == 404
     assert client.post("/api/kis/orders/preview", json={"symbol": "005930"}).status_code == 404

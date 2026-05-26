@@ -292,11 +292,11 @@ def test_krx_read_only_provider_contract_and_safety_invariants_remain_closed(cli
     assert not any(path.startswith("/api/kis/orders") for path in route_paths)
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    assert "/api/paper/orders" not in route_paths
+    assert "/api/paper/orders" in route_paths
     assert not any(path.startswith("/api/paper/fill-simulator") for path in route_paths)
     assert client.get("/api/kis/orders").status_code == 404
     assert client.post("/api/kis/orders/preview", json={"symbol": "005930"}).status_code == 404
     assert client.get("/api/kis/broker/status").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
-    assert client.post("/api/paper/orders", json={"symbol": "005930", "side": "buy", "qty": 1}).status_code == 404
+    assert client.post("/api/paper/orders", json={"symbol": "005930", "side": "buy", "qty": 1}).status_code == 405
     assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 404

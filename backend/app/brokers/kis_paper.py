@@ -5,6 +5,7 @@ from typing import Any
 from backend.app.brokers.base import BrokerAdapter, BrokerCapabilityError, BrokerOrderRequest
 
 CONFIRMATION_REQUIRED = "KIS_PAPER_OFFICIAL_ENDPOINT_CONFIRMATION_REQUIRED"
+CANCEL_CONFIRMATION_REQUIRED = "KIS_PAPER_CANCEL_CONFIRMATION_REQUIRED"
 
 
 class KisPaperBrokerAdapter(BrokerAdapter):
@@ -42,7 +43,7 @@ class KisPaperBrokerAdapter(BrokerAdapter):
 
     def cancel_order(self, *, broker_order_id: str, confirm: bool = False) -> dict[str, Any]:
         """공식 cancel payload 확인 전 cancel을 실행하지 않는다."""
-        raise BrokerCapabilityError(CONFIRMATION_REQUIRED)
+        raise BrokerCapabilityError(CANCEL_CONFIRMATION_REQUIRED)
 
     def list_orders(self, *, status: str | None = None) -> dict[str, Any]:
         """공식 주문 조회 field 확인 전 list를 실행하지 않는다."""

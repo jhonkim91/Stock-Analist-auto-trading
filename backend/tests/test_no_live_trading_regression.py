@@ -60,3 +60,41 @@ def test_broker_and_paper_status_do_not_enable_live_or_leak_secret(client, monke
     assert paper_payload["broker_adapter"]["paper_trading_enabled"] is False
     assert sentinel not in json.dumps({"broker": broker_payload, "paper": paper_payload}, ensure_ascii=False)
     assert not Path(".cache/kis/token.json").exists()
+
+
+def test_paper_submit_cancel_endpoints_remain_local_fail_closed(client):
+    submit = client.post(
+        "/api/paper/orders/submit",
+        json={
+            "symbol": "KR009",
+            "side": "buy",
+            "qty": 1,
+            "confirm": True,
+            "idempotency_key": "no-live-regression-submit",
+        },
+    )
+    cancel = client.post(
+        "/api/paper/orders/cancel",
+        json={
+            "paper_order_id": "paper-missing",
+            "confirm": True,
+            "idempotency_key": "no-live-regression-cancel",
+        },
+    )
+
+    assert submit.status_code == 200
+    submit_payload = submit.json()
+    assert submit_payload["ok"] is False
+    assert submit_payload["paper_order_created"] is False
+    assert submit_payload["live_order_created"] is False
+    assert submit_payload["broker_order_created"] is False
+    assert submit_payload["network_call_performed"] is False
+    assert "KILL_SWITCH_ACTIVE" in submit_payload["reason_codes"]
+
+    assert cancel.status_code == 200
+    cancel_payload = cancel.json()
+    assert cancel_payload["status"] == "cancel_disabled"
+    assert cancel_payload["order_cancelled"] is False
+    assert cancel_payload["live_order_created"] is False
+    assert cancel_payload["broker_order_created"] is False
+    assert cancel_payload["network_call_performed"] is False

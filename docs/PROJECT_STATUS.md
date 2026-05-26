@@ -5,12 +5,12 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.24.0` |
-| Phase | `KIS Paper Broker Phase 3 Paper Trading Persistence` |
+| Phase | `KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
-| 거래 상태 | 실거래 미구현, fail-closed, preview-only |
-| 최신 backend pytest | Phase 3 migration `4 passed`, full `293 passed` |
-| 다음 권장 Phase | `KIS paper broker Phase 4 Paper Order Preview/Submit/Cancel` |
+| 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; live/real order disabled |
+| 최신 backend pytest | Phase 4 targeted `9 passed`, Phase 3E safety `4 passed`, related regression `21 passed`, full `293 passed` |
+| 다음 권장 Phase | `KIS paper broker Phase 5 Fill/Position/Portfolio Sync` |
 
 ## 구현 완료 항목
 
@@ -50,6 +50,7 @@
 - KIS Paper Broker Phase 1 Notification Foundation: `backend/config/notifications.yaml`, `/api/notifications/status`, `/api/notifications/test`, disabled/mock 기본값, Discord/Telegram adapter skeleton, settings redacted summary.
 - KIS Paper Broker Phase 2 KIS Paper Broker Contract: `BrokerAdapter` contract, KIS paper/live adapter skeleton, in-memory-only token manager, no-live regression tests.
 - KIS Paper Broker Phase 3 Paper Trading Persistence: `paper_*` table additive extension, `paper_portfolio_snapshots`, `broker_audit_events`, `notification_events`, `notification_delivery_logs`, `kis_token_status_metadata`.
+- KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel: local `paper_orders` submit/list lifecycle, explicit `confirm=true`, required idempotency key + canonical request hash, kill-switch/config gate, cancel disabled until official KIS cancel payload is confirmed.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -210,7 +211,7 @@
 - Phase 1 Notification Foundation은 완료했다. 실제 Discord/Telegram delivery는 config/env opt-in이며 기본 runtime은 disabled/dry-run이다.
 - Phase 2 KIS Paper Broker Contract는 완료했다. KIS paper/live adapter는 모두 fail-closed skeleton이며 endpoint/TR-ID/request field 추정 구현은 없다.
 - Phase 3 Paper Trading Persistence는 완료했다. schema 변경은 additive-only이며 raw token/account/webhook/chat_id column을 만들지 않았다.
-- Phase 4 Paper Order Preview/Submit/Cancel은 아직 시작하지 않았다.
+- Phase 4 Paper Order Preview/Submit/Cancel은 완료했다. local paper order submit/list만 추가됐고 KIS/live submit/cancel은 여전히 비활성이다.
 
 ## 검증 명령
 
@@ -274,4 +275,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-다음 단계에서는 Phase 4 Paper Order Preview/Submit/Cancel을 paper-only로 구현하되, confirm/idempotency/kill-switch 보호와 no-live safety contract를 유지한다.
+다음 단계에서는 Phase 5 Fill/Position/Portfolio Sync를 paper-only mirror로 구현하되, synthetic `positions`와 paper mirror를 분리하고 no-live safety contract를 유지한다.

@@ -2,10 +2,10 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `KIS Paper Broker Phase 3 Paper Trading Persistence`
+- [x] 현재 상태명: `KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel`
 - [x] 현재 version: `MVP v0.24.0`
 - [x] 현재 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
-- [x] 최신 targeted backend pytest: Phase 3 migration `4 passed`
+- [x] 최신 targeted backend pytest: Phase 4 order lifecycle `9 passed`
 - [x] 최신 backend full pytest: `293 passed`
 - [x] 최신 frontend 검증: Node `v24.15.0`에서 `npm ci`, lint, typecheck, build 통과
 - [x] 최신 Alembic pytest: `4 passed`
@@ -36,6 +36,7 @@
 - [x] KIS Paper Broker Phase 1 Notification Foundation 완료
 - [x] KIS Paper Broker Phase 2 KIS Paper Broker Contract 완료
 - [x] KIS Paper Broker Phase 3 Paper Trading Persistence 완료
+- [x] KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel 완료
 
 ## 현재 프로젝트 상태
 
@@ -62,6 +63,7 @@
 - KIS paper broker Phase 1 산출물: `backend/config/notifications.yaml`, `/api/notifications/status`, `/api/notifications/test`, disabled/mock notification abstraction, Discord/Telegram adapter skeleton.
 - KIS paper broker Phase 2 산출물: `backend/app/brokers/base.py`, `backend/app/brokers/kis_paper.py`, `backend/app/brokers/kis_live.py`, `backend/app/services/token_manager.py`.
 - KIS paper broker Phase 3 산출물: `backend/alembic/versions/a8b9c0d1e2f3_paper_trading_persistence.py`, `backend/tests/test_paper_persistence_migration.py`, paper persistence SQLAlchemy models.
+- KIS paper broker Phase 4 산출물: `backend/app/services/paper_order_service.py`, `/api/paper/orders/submit`, `/api/paper/orders/cancel`, `/api/paper/orders` local list API, `backend/tests/test_paper_order_api.py`, `backend/tests/test_paper_order_service.py`.
 
 ## 최근 변경 요약
 
@@ -78,9 +80,17 @@
 - `backend/tests/test_kis_paper_adapter.py`, `backend/tests/test_token_manager.py`, `backend/tests/test_no_live_trading_regression.py`: Phase 2 contract와 no-live regression 검증.
 - `backend/app/models/tables.py`, `backend/alembic/versions/a8b9c0d1e2f3_paper_trading_persistence.py`: `paper_*` nullable broker metadata, portfolio snapshot, broker audit, notification outbox/delivery log, KIS token status metadata 추가.
 - `backend/tests/test_paper_persistence_migration.py`, `backend/tests/test_alembic_migrations.py`: additive schema, no raw secret column, synthetic `positions` 분리 검증.
+- `backend/app/services/paper_order_service.py`, `backend/app/api/paper.py`: local-only paper order submit/list lifecycle 추가. submit은 `confirm=true`, `idempotency_key`, canonical request hash, kill-switch/config gate를 모두 통과해야 `paper_orders`에 저장한다.
+- `backend/app/brokers/kis_paper.py`: 공식 KIS cancel payload 확인 전 cancel은 `KIS_PAPER_CANCEL_CONFIRMATION_REQUIRED`로 fail-closed 유지.
+- `backend/tests/test_paper_order_api.py`, `backend/tests/test_paper_order_service.py`, `backend/tests/test_no_live_trading_regression.py`: Phase 4 confirm/idempotency/kill-switch/no-live 회귀 검증 추가.
 
 ## 최신 검증 결과
 
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_no_live_trading_regression.py -q`: 9 passed in 0.79s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`: 4 passed in 0.59s.
+- 2026-05-27 related regression: `backend/tests/test_phase3f_readonly_provider_contract.py backend/tests/test_phase3f2_kis_daily_ohlcv_adapter.py backend/tests/test_phase3f3_krx_fixture_contract.py backend/tests/test_phase3f4_data_quality_summary.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 21 passed in 39.73s.
+- 2026-05-27 Phase 4 secret exposure scan: `NO_PHASE4_SECRET_FINDINGS`.
+- 2026-05-27 Phase 4 live trading enable static scan: `NO_PHASE4_LIVE_TRADING_ENABLE_FINDINGS`.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_persistence_migration.py backend/tests/test_alembic_migrations.py -q`: 4 passed in 4.17s.
 - 2026-05-27 local SQLite drift 정합화: 누락된 legacy indicator columns를 additive로 보강하고 `alembic stamp f7a8b9c0d1e2` 후 `.\.venv\Scripts\python.exe -m alembic upgrade head` 통과, current `a8b9c0d1e2f3 (head)`.
 - 2026-05-27 Phase 3 secret exposure scan: `NO_PHASE3_SECRET_FINDINGS`.
@@ -109,7 +119,7 @@
 ## 불변 조건
 
 - 실제 주문, 주문 취소, 체결, 계좌 이동, websocket, live broker 구현 금지.
-- paper order/fill/position/audit mutation 구현 금지.
+- local `paper_orders` submit은 config opt-in + `confirm=true` + idempotency + kill-switch gate 통과 시에만 허용. paper fill/position mutation과 KIS/live order mutation 구현 금지.
 - KIS/KRX/yfinance network call, KIS token 발급/cache/credential 저장 금지.
 - broker/order adapter import 또는 호출 금지.
 - KIS paper endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인 전까지 `확인 필요`로 남긴다.
@@ -117,13 +127,13 @@
 - strategy registry 순서와 기존 `StrategyResult` 필드 제거 금지.
 - walk-forward는 actual local backtest OOS metric만 집계한다. PBO/Deflated Sharpe는 충분한 walk-forward 표본에서만 계산하고, factor/filter attribution은 저장된 ledger/screen join으로 확인되는 값만 계산한다.
 - snapshot이 없을 때 parameter drift를 0이나 false normal 상태로 위장하지 않고 unavailable reason과 `comparison_available=false`를 명시한다.
-- `orders_count == 0`, `paper_* == 0`, KIS/paper execution routes 404 유지.
+- `orders_count == 0`, KIS execution routes 404 유지. `paper_orders`는 Phase 4 local-only submit gate 통과 시에만 증가하며 default config에서는 0 유지.
 - `npm audit fix --force`, Next.js downgrade, 강제 push 금지.
 
 ## 미구현 항목
 
 - 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker.
-- paper order create, paper fill simulator, paper position mutation.
+- KIS/broker paper submit, KIS/broker cancel, paper fill simulator, paper position mutation.
 - KIS credential/token 저장, token 발급/refresh/cache, 실제 KIS API 호출.
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.
@@ -135,7 +145,7 @@
 
 ## 다음 작업
 
-- [ ] KIS paper broker Phase 4 Paper Order Preview/Submit/Cancel은 paper-only, confirm/idempotency/kill-switch 보호 기준으로 진행한다.
+- [ ] KIS paper broker Phase 5 Fill/Position/Portfolio Sync는 paper-only mirror로 진행하되 synthetic `positions`와 paper tables를 섞지 않는다.
 - [ ] `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` endpoint/path/TR-ID/request field를 공식 문서로 보강한다.
 - [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 - [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.

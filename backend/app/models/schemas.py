@@ -131,6 +131,17 @@ class PaperOrderPreviewRequest(BaseModel):
     as_of: datetime | None = None
 
 
+class PaperOrderSubmitRequest(PaperOrderPreviewRequest):
+    confirm: bool = False
+    idempotency_key: str | None = None
+
+
+class PaperOrderCancelRequest(BaseModel):
+    paper_order_id: str
+    confirm: bool = False
+    idempotency_key: str | None = None
+
+
 class ImportConfirmRequest(BaseModel):
     run_id: str
 

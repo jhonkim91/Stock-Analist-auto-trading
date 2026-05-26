@@ -6,11 +6,11 @@
 
 Version: `MVP v0.24.0`
 
-Checkpoint: `KIS Paper Broker Phase 3 Paper Trading Persistence`
+Checkpoint: `KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel`
 
 기준 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
 
-Next recommended phase: `KIS paper broker Phase 4 Paper Order Preview/Submit/Cancel`
+Next recommended phase: `KIS paper broker Phase 5 Fill/Position/Portfolio Sync`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -32,6 +32,11 @@ Next recommended phase: `KIS paper broker Phase 4 Paper Order Preview/Submit/Can
 | Phase 3 local Alembic upgrade | 통과 | local SQLite drift를 additive column 보강 후 `.\.venv\Scripts\python.exe -m alembic stamp f7a8b9c0d1e2`, `.\.venv\Scripts\python.exe -m alembic upgrade head`: current `a8b9c0d1e2f3 (head)` |
 | Phase 3 secret exposure scan | 통과 | changed/untracked Phase 3 scope scan: `NO_PHASE3_SECRET_FINDINGS` |
 | Phase 3 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE3_LIVE_TRADING_ENABLE_FINDINGS` |
+| Phase 4 paper order lifecycle pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_no_live_trading_regression.py -q`: 9 passed in 0.79s |
+| Phase 4 paper safety regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`: 4 passed in 0.59s |
+| Phase 4 related regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f_readonly_provider_contract.py backend/tests/test_phase3f2_kis_daily_ohlcv_adapter.py backend/tests/test_phase3f3_krx_fixture_contract.py backend/tests/test_phase3f4_data_quality_summary.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 21 passed in 39.73s |
+| Phase 4 secret exposure scan | 통과 | changed/untracked Phase 4 scope scan: `NO_PHASE4_SECRET_FINDINGS` |
+| Phase 4 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE4_LIVE_TRADING_ENABLE_FINDINGS` |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
 | Documentation cross-reference check | 통과 | `README.md`, `docs/PROJECT_STATUS.md`, `docs/DB_MIGRATION.md`, `docs/plans/README.md`, `docs/VALIDATION.md`, `Memory.md` Phase 0 기준선 반영 |
 | 직전 backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
@@ -136,6 +141,13 @@ Phase 3 paper persistence:
 .\.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
+Phase 4 paper order lifecycle:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_no_live_trading_regression.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q
+```
+
 Phase 0 safety:
 
 ```powershell
@@ -172,7 +184,7 @@ git diff --check
 |---|---|
 | 실제 주문/주문 취소/체결/계좌 이동 | 없음 |
 | broker/paper adapter 호출 | 없음 |
-| paper order/fill/position mutation | 없음 |
+| paper order/fill/position mutation | local `paper_orders` submit만 config opt-in + `confirm=true` + idempotency + kill-switch gate 통과 시 허용. paper fill/position mutation 없음 |
 | KIS/KRX/yfinance network call | 없음 |
 | credential/token 저장 | 없음 |
 | earnings/corporate action 실데이터 fetch | 없음 |
@@ -194,5 +206,5 @@ git diff --check
 ## 남은 검증
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
-- Phase 4 Paper Order Preview/Submit/Cancel, paper sync, report notification, paper bot scheduler는 이후 순차 진행 대상이다.
+- Phase 5 Fill/Position/Portfolio Sync, report notification, paper bot scheduler는 이후 순차 진행 대상이다.
 - KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.

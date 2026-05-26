@@ -158,7 +158,8 @@ class PaperRiskGate:
                 reason_codes.append("PAPER_SELL_PREVIEW_DISABLED")
             reason_codes.extend(self._sell_position_reasons(symbol=normalized_symbol, qty=qty))
 
-        return {"decision": "deny", "passed": False, "reason_codes": reason_codes}
+        passed = not reason_codes
+        return {"decision": "allow" if passed else "deny", "passed": passed, "reason_codes": reason_codes}
 
     def _sell_position_reasons(self, *, symbol: str, qty: int) -> list[str]:
         if not symbol or qty <= 0:
@@ -255,6 +256,8 @@ class PaperTradingService:
             list(risk_gate["reason_codes"]),
         )
         risk_gate["reason_codes"] = reason_codes
+        risk_gate["decision"] = "deny" if reason_codes else "allow"
+        risk_gate["passed"] = not reason_codes
         return {
             "preview_id": f"paper-preview-{uuid4().hex[:12]}",
             "mode": str(config["mode"]),
@@ -292,6 +295,93 @@ class PaperTradingService:
             "simulator": self.simulator.status(),
             "counts": self._counts(),
         }
+
+    def submit_order(
+        self,
+        *,
+        symbol: str,
+        side: str,
+        qty: int,
+        confirm: bool,
+        idempotency_key: str | None,
+        limit_price: float | None = None,
+        stop_price: float | None = None,
+        strategy_tag: str | None = None,
+        venue: str | None = None,
+        as_of: datetime | None = None,
+    ) -> dict[str, object]:
+        """local paper order submit은 별도 service의 safety gate에 위임한다."""
+        if self.db is None:
+            return {
+                "ok": False,
+                "status": "blocked",
+                "paper_order_created": False,
+                "live_order_created": False,
+                "broker_order_created": False,
+                "network_call_performed": False,
+                "reason": "PAPER_DB_SESSION_REQUIRED",
+                "reason_codes": ["PAPER_DB_SESSION_REQUIRED"],
+                "counts": self._counts(),
+            }
+        from backend.app.services.paper_order_service import PaperOrderService
+
+        return PaperOrderService(self.db, config_dir=self.config_service.config_dir).submit_order(
+            symbol=symbol,
+            side=side,
+            qty=qty,
+            confirm=confirm,
+            idempotency_key=idempotency_key,
+            limit_price=limit_price,
+            stop_price=stop_price,
+            strategy_tag=strategy_tag,
+            venue=venue,
+            as_of=as_of,
+        )
+
+    def cancel_order(
+        self,
+        *,
+        paper_order_id: str,
+        confirm: bool,
+        idempotency_key: str | None,
+    ) -> dict[str, object]:
+        """공식 cancel contract 확인 전에는 submit과 분리된 disabled 응답을 반환한다."""
+        if self.db is None:
+            return {
+                "ok": False,
+                "status": "blocked",
+                "cancel_supported": False,
+                "order_cancelled": False,
+                "paper_order_id": paper_order_id,
+                "live_order_created": False,
+                "broker_order_created": False,
+                "network_call_performed": False,
+                "reason": "PAPER_DB_SESSION_REQUIRED",
+                "reason_codes": ["PAPER_DB_SESSION_REQUIRED"],
+                "counts": self._counts(),
+            }
+        from backend.app.services.paper_order_service import PaperOrderService
+
+        return PaperOrderService(self.db, config_dir=self.config_service.config_dir).cancel_order(
+            paper_order_id=paper_order_id,
+            confirm=confirm,
+            idempotency_key=idempotency_key,
+        )
+
+    def list_orders(self, *, status: str | None = None) -> dict[str, object]:
+        """저장된 local paper order 목록을 반환한다."""
+        if self.db is None:
+            return {
+                "ok": True,
+                "orders": [],
+                "counts": self._counts(),
+                "live_order_created": False,
+                "broker_order_created": False,
+                "network_call_performed": False,
+            }
+        from backend.app.services.paper_order_service import PaperOrderService
+
+        return PaperOrderService(self.db, config_dir=self.config_service.config_dir).list_orders(status=status)
 
     def _base_reason_codes(
         self,
