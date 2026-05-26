@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { callApi, type ApiStatus, type NotificationStatus, type SettingsPayload } from "../../lib/api";
 
-const sections = ["strategies", "risk", "backtest", "app", "data_sources", "notifications"] as const;
+const sections = ["strategies", "risk", "backtest", "app", "data_sources", "notifications", "bot"] as const;
 
 export default function SettingsPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
@@ -64,6 +64,11 @@ export default function SettingsPage() {
       <section className="panel">
         <h2>Read-only config summary</h2>
         <p className="muted">backend/config/*.yaml 값만 표시한다. 웹 config 수정 기능은 제공하지 않는다.</p>
+      </section>
+
+      <section className="panel">
+        <h2>Paper bot safety</h2>
+        <p className="muted">scheduler disabled by default 쨌 auto-submit opt-in only 쨌 kill-switch first</p>
       </section>
 
       {notifications ? (

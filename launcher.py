@@ -87,6 +87,11 @@ def frontend_build_env(base_env: dict[str, str] | None = None) -> dict[str, str]
     return env
 
 
+def paper_bot_launcher_enabled() -> bool:
+    """paper bot scheduler는 명시 env flag 없이는 launcher에서 시작하지 않는다."""
+    return os.getenv("PAPER_BOT_SCHEDULER_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def is_port_open(host: str, port: int, timeout: float = 0.25) -> bool:
     """TCP 포트가 이미 연결 가능한 상태인지 확인한다."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -397,6 +402,7 @@ def check_environment() -> int:
     report("frontend node_modules", "OK" if (FRONTEND_DIR / "node_modules").exists() else "WARN", "frontend/node_modules")
     report("frontend build", "OK" if (FRONTEND_DIR / ".next" / "BUILD_ID").exists() else "WARN", "frontend/.next/BUILD_ID")
     report("launcher build metadata", "OK" if build_metadata_is_current() else "WARN", str(BUILD_METADATA_PATH))
+    report("paper bot scheduler", "OK", "disabled" if not paper_bot_launcher_enabled() else "explicitly enabled")
     try:
         statuses = ensure_ports_available(load_state())
         report("backend port", "OK", f"{BACKEND_PORT} {statuses['backend']}")

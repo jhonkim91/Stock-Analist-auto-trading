@@ -5,12 +5,12 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.24.0` |
-| Phase | `KIS Paper Broker Phase 6 Report Notification` |
+| Phase | `KIS Paper Broker Phase 7 Bot Scheduler` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; sync fail-closed/no-network; live/real order disabled |
-| 최신 backend pytest | Phase 6 report notify `8 passed`, notification API `3 passed`, report quality `4 passed`, full `293 passed` |
-| 다음 권장 Phase | `KIS paper broker Phase 7 Bot Scheduler` |
+| 최신 backend pytest | Phase 7 bot/no-live `9 passed`, launcher `7 passed`, full `293 passed` |
+| 다음 권장 Phase | `KIS paper broker Phase 8 Frontend Integration` |
 
 ## 구현 완료 항목
 
@@ -53,6 +53,7 @@
 - KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel: local `paper_orders` submit/list lifecycle, explicit `confirm=true`, required idempotency key + canonical request hash, kill-switch/config gate, cancel disabled until official KIS cancel payload is confirmed.
 - KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync: `paper_fills`, `paper_positions`, `paper_portfolio_snapshots` read APIs and fail-closed/idempotent `POST /api/paper/sync`; synthetic `positions` remains separate.
 - KIS Paper Broker Phase 6 Report Notification: saved report notification endpoint, channel-safe summary splitting, optional attachment metadata, sanitized notification event/delivery logs, delivery failure isolation.
+- KIS Paper Broker Phase 7 Bot Scheduler: disabled-by-default bot config, safe once/loop CLI runner, bot status/run API, launcher check-only integration, explicit auto-submit gate.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -216,6 +217,7 @@
 - Phase 4 Paper Order Preview/Submit/Cancel은 완료했다. local paper order submit/list만 추가됐고 KIS/live submit/cancel은 여전히 비활성이다.
 - Phase 5 Fill/Position/Portfolio Sync는 완료했다. KIS sync endpoint는 공식 확인 전 disabled no-op이고, views는 paper_* tables만 조회한다.
 - Phase 6 Report Notification은 완료했다. notification failure는 report row/markdown을 rollback하지 않고 sanitized delivery log로 기록한다.
+- Phase 7 Bot Scheduler는 완료했다. scheduler/auto-submit은 기본 disabled이고 runner/API는 주문 없이 safe no-op을 반환한다.
 
 ## 검증 명령
 
@@ -279,4 +281,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-다음 단계에서는 Phase 7 Bot Scheduler를 default disabled, `PAPER_BOT_AUTO_SUBMIT=false`, kill-switch 우선 기준으로 구현한다.
+다음 단계에서는 Phase 8 Frontend Integration을 mock/paper-only 문구와 backend safety checks 기준으로 구현한다.

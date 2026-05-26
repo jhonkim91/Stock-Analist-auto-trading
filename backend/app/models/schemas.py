@@ -146,6 +146,10 @@ class PaperSyncRequest(BaseModel):
     scope: Literal["orders", "fills", "positions", "portfolio", "all"] = "all"
 
 
+class PaperBotRunRequest(BaseModel):
+    auto_submit: bool | None = None
+
+
 class ReportNotifyRequest(BaseModel):
     mode: Literal["summary", "summary_and_file"] = "summary"
     channel_alias: str | None = None

@@ -111,3 +111,15 @@ def test_paper_sync_endpoint_remains_noop_without_network_or_live_path(client):
     assert payload["broker_order_created"] is False
     assert payload["network_call_performed"] is False
     assert payload["synthetic_positions_touched"] is False
+
+
+def test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path(client):
+    response = client.post("/api/paper/bot/run", json={"auto_submit": True})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["paper_order_submitted"] is False
+    assert payload["auto_submit_allowed"] is False
+    assert payload["live_order_created"] is False
+    assert payload["broker_order_created"] is False
+    assert payload["network_call_performed"] is False

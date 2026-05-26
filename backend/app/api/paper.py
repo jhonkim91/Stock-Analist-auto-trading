@@ -8,6 +8,7 @@ from backend.app.models.schemas import (
     PaperOrderCancelRequest,
     PaperOrderPreviewRequest,
     PaperOrderSubmitRequest,
+    PaperBotRunRequest,
     PaperSyncRequest,
 )
 from backend.app.services.paper_trading_service import PaperTradingService
@@ -82,3 +83,13 @@ def paper_portfolio(db: Session = Depends(get_db)) -> dict[str, object]:
 @router.post("/sync")
 def sync_paper(payload: PaperSyncRequest, db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).sync(scope=payload.scope)
+
+
+@router.get("/bot/status")
+def paper_bot_status(db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).bot_status()
+
+
+@router.post("/bot/run")
+def run_paper_bot(payload: PaperBotRunRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).run_bot_once(auto_submit=payload.auto_submit)

@@ -6,11 +6,11 @@
 
 Version: `MVP v0.24.0`
 
-Checkpoint: `KIS Paper Broker Phase 6 Report Notification`
+Checkpoint: `KIS Paper Broker Phase 7 Bot Scheduler`
 
 기준 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
 
-Next recommended phase: `KIS paper broker Phase 7 Bot Scheduler`
+Next recommended phase: `KIS paper broker Phase 8 Frontend Integration`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -47,6 +47,11 @@ Next recommended phase: `KIS paper broker Phase 7 Bot Scheduler`
 | Phase 6 report quality regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_quality.py -q`: 4 passed in 28.61s |
 | Phase 6 secret exposure scan | 통과 | changed/untracked Phase 6 scope scan: `NO_PHASE6_SECRET_FINDINGS` |
 | Phase 6 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE6_LIVE_TRADING_ENABLE_FINDINGS` |
+| Phase 7 bot scheduler pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py -q`: 9 passed in 1.76s |
+| Phase 7 launcher regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_local_launcher.py -q`: 7 passed in 0.08s |
+| Phase 7 frontend lint/typecheck/build | 통과 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` |
+| Phase 7 secret exposure scan | 통과 | changed/untracked Phase 7 scope scan: `NO_PHASE7_SECRET_FINDINGS` |
+| Phase 7 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE7_LIVE_TRADING_ENABLE_FINDINGS` |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
 | Documentation cross-reference check | 통과 | `README.md`, `docs/PROJECT_STATUS.md`, `docs/DB_MIGRATION.md`, `docs/plans/README.md`, `docs/VALIDATION.md`, `Memory.md` Phase 0 기준선 반영 |
 | 직전 backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
@@ -173,6 +178,18 @@ Phase 6 report notification:
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_report_quality.py -q
 ```
 
+Phase 7 bot scheduler:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_local_launcher.py -q
+cd frontend
+npm.cmd run lint
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+cd ..
+```
+
 Phase 0 safety:
 
 ```powershell
@@ -229,9 +246,10 @@ git diff --check
 | weekly_ohlcv migration 추가 | 없음 |
 | `orders_count == 0` 정책 변경 | 없음 |
 | paper sync network/fetch | 없음. `POST /api/paper/sync`는 공식 KIS sync contract 확인 전 `KIS_PAPER_SYNC_CONFIRMATION_REQUIRED` no-op |
+| paper bot scheduler auto-start | 없음. launcher는 check-only 상태만 표시하며 scheduler/auto-submit은 기본 disabled |
 
 ## 남은 검증
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
-- Phase 7 Bot Scheduler는 이후 순차 진행 대상이다.
+- Phase 8 Frontend Integration은 이후 순차 진행 대상이다.
 - KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.

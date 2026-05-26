@@ -415,6 +415,22 @@ class PaperTradingService:
 
         return PaperSyncService(self.db).sync(scope=scope)
 
+    def bot_status(self) -> dict[str, object]:
+        """paper bot scheduler 상태를 반환한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("bot")
+        from backend.app.services.paper_bot_service import PaperBotService
+
+        return PaperBotService(self.db, config_dir=self.config_service.config_dir).status()
+
+    def run_bot_once(self, *, auto_submit: bool | None = None) -> dict[str, object]:
+        """paper bot once 실행을 안전한 no-op service에 위임한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("bot")
+        from backend.app.services.paper_bot_service import PaperBotService
+
+        return PaperBotService(self.db, config_dir=self.config_service.config_dir).run_once(auto_submit=auto_submit)
+
     def _paper_sync_unavailable_payload(self, scope: str) -> dict[str, object]:
         return {
             "ok": False,
