@@ -1,6 +1,6 @@
 # Phase Plans
 
-이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `Trade Ledger Foundation for Review Metrics`이다.
+이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `Validation Framework Scaffold`이다.
 
 ## 문서 역할
 
@@ -13,9 +13,10 @@
 
 | 항목 | 값 |
 |---|---|
-| 현재 checkpoint | `Trade Ledger Foundation for Review Metrics` |
-| 현재 구현 완료 | Backtest trade ledger 저장 계약과 weekly realized metrics |
-| 다음 권장 Phase | `Parameter Snapshot Foundation for Drift Check` |
+| 현재 checkpoint | `Validation Framework Scaffold` |
+| 현재 구현 완료 | Weekly Review Report, Trade Ledger Foundation, Portfolio Risk Guard v2, breadth/Data Reliability 2, Validation Framework Scaffold |
+| 최신 backend pytest | `287 passed` |
+| 다음 권장 Phase | `Parameter Snapshot Foundation → Walk-forward/PBO/DSR` |
 | 상태 요약 문서 | `docs/PROJECT_STATUS.md` |
 | 상세 검증 문서 | `docs/VALIDATION.md` |
 | 프로젝트 메모리 | `Memory.md` |
@@ -42,16 +43,20 @@
 | Phase C-6 | 완료 | `README.md`, `docs/VALIDATION.md`, `docs/PROJECT_STATUS.md` | `pullback_20ema` default and available strategy |
 | Phase C hardening | 완료 | `README.md`, `docs/VALIDATION.md`, `docs/PROJECT_STATUS.md`, `Memory.md` | 9개 전략 hardening foundation, `data_quality_flags`, `risk_metadata` |
 | Phase 3I | 완료 | `README.md`, `docs/VALIDATION.md`, `docs/PROJECT_STATUS.md` | Weekly Review Report |
-| Review metrics ledger | 완료 | `README.md`, `docs/VALIDATION.md`, `docs/PROJECT_STATUS.md`, `Memory.md` | `backtest_trade_ledger`, saved trade 조회, weekly realized PnL/win rate/failed trades review |
+| Trade Ledger Foundation | 완료 | `README.md`, `docs/VALIDATION.md`, `docs/PROJECT_STATUS.md`, `Memory.md` | `backtest_trade_ledger`, saved trade 조회, weekly realized PnL/win rate/failed trades review |
+| Portfolio Risk Guard v2 | 완료 | `README.md`, `docs/VALIDATION.md`, `docs/PROJECT_STATUS.md`, `Memory.md` | synthetic gross/sector/symbol/strategy exposure, daily loss budget, gap risk preview |
+| Breadth/Data Reliability 2 | 완료 | `README.md`, `docs/VALIDATION.md`, `docs/PROJECT_STATUS.md`, `Memory.md` | incremental indicator recompute, breadth-aware regime, earnings/corporate-action as-of, adjusted/raw price contract |
+| Validation Framework Scaffold | 완료 | `README.md`, `docs/VALIDATION.md`, `docs/PROJECT_STATUS.md`, `Memory.md` | validation service split, baseline comparator, JSON report writer, walk-forward/PBO/DSR placeholders |
 | Phase 4A/4B | 보류 | 별도 승인 필요 | broker 또는 live gate |
 
 ## 다음 후보
 
-1. Parameter snapshot foundation: Weekly `Parameter Drift Check`를 실제 변경 이력 기반으로 계산할 수 있도록 strategy parameter snapshot 저장 계약을 검토한다.
-2. Monthly report extension: `ReportService`의 daily/weekly 공통 persistence contract를 재사용해 monthly report를 확장할지 검토한다.
-3. Strategy hardening 조건을 기본 활성화할지는 별도 백테스트와 샘플 영향 검증 후 결정한다.
-4. `metadata.risk_metadata`와 explanation contract를 frontend에 표시할지는 별도 UI 범위로 검토한다.
-5. Phase 4A/4B broker 또는 live gate는 현재 안전 기준과 충돌하므로 별도 승인 없이 구현하지 않는다.
+1. Parameter Snapshot Foundation: Weekly `Parameter Drift Check`를 실제 변경 이력 기반으로 계산할 수 있도록 strategy parameter snapshot 저장 계약을 검토한다.
+2. Walk-forward/PBO/DSR computation design: train/test window, multiple-testing 보정 입력, 수익률 표본 계약, factor/filter attribution join 계약을 정의한다.
+3. Monthly report extension: `ReportService`의 daily/weekly 공통 persistence contract를 재사용해 monthly report를 확장할지 검토한다.
+4. Strategy hardening 조건을 기본 활성화할지는 별도 백테스트와 샘플 영향 검증 후 결정한다.
+5. `metadata.risk_metadata`와 explanation contract를 frontend에 표시할지는 별도 UI 범위로 검토한다.
+6. Phase 4A/4B broker 또는 live gate는 현재 안전 기준과 충돌하므로 별도 승인 없이 구현하지 않는다.
 
 ## Report 기준
 
