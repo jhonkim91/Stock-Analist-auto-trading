@@ -244,6 +244,8 @@ export type PaperCounts = {
   paper_fills_count: number;
   paper_positions_count: number;
   paper_audit_events_count: number;
+  paper_portfolio_snapshots_count?: number;
+  synthetic_positions_count?: number;
   orders_count: number;
 };
 
@@ -282,6 +284,8 @@ export type PaperPreviewRequest = {
   limit_price?: number | null;
   stop_price?: number | null;
   strategy_tag?: string | null;
+  venue?: string | null;
+  as_of?: string | null;
 };
 
 export type PaperPreviewResponse = PaperStatus & {
@@ -292,6 +296,195 @@ export type PaperPreviewResponse = PaperStatus & {
   limit_price: number | null;
   stop_price: number | null;
   strategy_tag: string | null;
+};
+
+export type PaperSubmitRequest = PaperPreviewRequest & {
+  confirm: boolean;
+  idempotency_key?: string | null;
+};
+
+export type PaperOrder = {
+  paper_order_id: string;
+  created_ts: string | null;
+  updated_ts: string | null;
+  symbol: string;
+  side: string;
+  qty: number;
+  filled_qty: number;
+  remaining_qty: number;
+  order_type: string;
+  limit_price: number | null;
+  stop_price: number | null;
+  status: string;
+  idempotency_key: string | null;
+  request_hash: string | null;
+  strategy_tag: string | null;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  broker_order_id: string | null;
+  broker_order_status: string | null;
+  submitted_at: string | null;
+  canceled_at: string | null;
+};
+
+export type PaperOrderListResponse = {
+  ok: boolean;
+  orders: PaperOrder[];
+  counts: PaperCounts;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+};
+
+export type PaperSubmitResponse = {
+  ok: boolean;
+  status: string;
+  paper_order_created: boolean;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  reason: string;
+  reason_codes: string[];
+  risk_gate: PaperRiskGate;
+  request_hash: string;
+  idempotency_key: string | null;
+  order?: PaperOrder;
+  counts: PaperCounts;
+};
+
+export type PaperCancelRequest = {
+  paper_order_id: string;
+  confirm: boolean;
+  idempotency_key?: string | null;
+};
+
+export type PaperCancelResponse = {
+  ok: boolean;
+  status: string;
+  cancel_supported: boolean;
+  order_cancelled: boolean;
+  paper_order_id: string;
+  paper_order_created: boolean;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  reason: string;
+  reason_codes: string[];
+  request_hash: string;
+  idempotency_key: string | null;
+  counts: PaperCounts;
+};
+
+export type PaperFill = {
+  paper_fill_id: string;
+  paper_order_id: string | null;
+  symbol: string;
+  side: string;
+  qty: number;
+  price: number;
+  fill_ts: string | null;
+  fill_source: string;
+  commission: number;
+  slippage_bps: number;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  broker_fill_id: string | null;
+  broker_order_id: string | null;
+  broker_fill_ts: string | null;
+};
+
+export type PaperFillsResponse = {
+  ok: boolean;
+  fills: PaperFill[];
+  counts: PaperCounts;
+  source: string;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+};
+
+export type PaperPosition = {
+  id: number;
+  symbol: string;
+  strategy_tag: string | null;
+  qty: number;
+  avg_price: number;
+  realized_pnl: number;
+  last_price: number | null;
+  market_value: number | null;
+  unrealized_pnl: number | null;
+  updated_at: string | null;
+  broker_position_key: string | null;
+  account_alias: string | null;
+  broker_synced_at: string | null;
+};
+
+export type PaperPositionsResponse = {
+  ok: boolean;
+  positions: PaperPosition[];
+  counts: PaperCounts;
+  source: string;
+  synthetic_positions_included: boolean;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+};
+
+export type PaperPortfolioSnapshot = {
+  snapshot_id: string;
+  snapshot_ts: string | null;
+  account_alias: string | null;
+  cash_balance: number;
+  buying_power: number;
+  market_value: number;
+  total_equity: number;
+  unrealized_pnl: number;
+  realized_pnl: number;
+  source: string;
+  status: string;
+  created_at: string | null;
+};
+
+export type PaperPositionsSummary = {
+  source: string;
+  count: number;
+  total_qty: number;
+  market_value: number;
+  unrealized_pnl: number;
+};
+
+export type PaperPortfolioResponse = {
+  ok: boolean;
+  source: string;
+  snapshot: PaperPortfolioSnapshot | null;
+  positions_summary: PaperPositionsSummary;
+  counts: PaperCounts;
+  separation_contract: JsonRecord;
+  reason: string | null;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+};
+
+export type PaperSyncScope = "orders" | "fills" | "positions" | "portfolio" | "all";
+
+export type PaperSyncResponse = {
+  ok: boolean;
+  status: string;
+  scope: PaperSyncScope | string;
+  supported_scopes: string[];
+  sync_performed: boolean;
+  synced_scopes?: string[];
+  reason: string;
+  reason_codes: string[];
+  counts: PaperCounts;
+  dedupe: JsonRecord;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  synthetic_positions_touched: boolean;
 };
 
 export type PortfolioRisk = {
@@ -545,6 +738,30 @@ export type NotificationStatus = {
   network_delivery_allowed: boolean;
   secrets_redacted: boolean;
   channels: NotificationChannelStatus[];
+};
+
+export type ReportNotifyRequest = {
+  mode: "summary" | "summary_and_file";
+  channel_alias?: string | null;
+  dry_run?: boolean | null;
+};
+
+export type ReportNotifyResponse = {
+  ok: boolean;
+  status: string;
+  delivered: boolean;
+  report_id: string;
+  mode: string;
+  channel_alias: string | null;
+  dry_run: boolean;
+  message_count: number;
+  message_lengths: number[];
+  max_message_length: number;
+  reason_codes: string[];
+  secrets_redacted: boolean;
+  report_preserved: boolean;
+  attachment?: JsonRecord;
+  payload_shape?: JsonRecord;
 };
 
 export type SettingsPayload = Record<string, unknown>;

@@ -3,12 +3,23 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { callApi, formatNumber, type ApiStatus, type PortfolioRisk } from "../../lib/api";
+import { PaperModeBanner } from "../../components/paper-mode-banner";
+import { callApi, formatNumber, type ApiStatus, type PaperPortfolioResponse, type PortfolioRisk } from "../../lib/api";
+
+function Metric({ label, value }: { label: string; value: string | number | boolean | null | undefined }) {
+  return (
+    <div className="metric">
+      <span>{label}</span>
+      <strong>{value === undefined || value === null ? "-" : String(value)}</strong>
+    </div>
+  );
+}
 
 export default function PortfolioPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [message, setMessage] = useState("조회 중");
   const [risk, setRisk] = useState<PortfolioRisk | null>(null);
+  const [paperPortfolio, setPaperPortfolio] = useState<PaperPortfolioResponse | null>(null);
 
   const loadRisk = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -16,14 +27,19 @@ export default function PortfolioPage() {
       setMessage("조회 중");
     }
     try {
-      const data = await callApi<PortfolioRisk>("/api/portfolio/risk");
-      setRisk(data);
+      const [riskData, paperData] = await Promise.all([
+        callApi<PortfolioRisk>("/api/portfolio/risk"),
+        callApi<PaperPortfolioResponse>("/api/paper/portfolio")
+      ]);
+      setRisk(riskData);
+      setPaperPortfolio(paperData);
       setStatus("ok");
       setMessage("조회 완료");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "조회 실패");
       setRisk(null);
+      setPaperPortfolio(null);
     }
   }, []);
 
@@ -34,11 +50,13 @@ export default function PortfolioPage() {
     return () => window.clearTimeout(timer);
   }, [loadRisk]);
 
+  const snapshot = paperPortfolio?.snapshot ?? null;
+
   return (
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 2</p>
+          <p className="eyebrow">Phase 8 · Portfolio</p>
           <h1>Portfolio / Risk</h1>
         </div>
         <nav className="nav">
@@ -52,6 +70,15 @@ export default function PortfolioPage() {
         </nav>
         <span className={`status ${status}`}>{message}</span>
       </header>
+
+      <PaperModeBanner title="모의투자 포트폴리오 · synthetic과 분리" />
+
+      <section className="panel">
+        <div className="sectionHeader">
+          <h2>Synthetic Portfolio Risk</h2>
+          <span className="badge">synthetic baseline</span>
+        </div>
+      </section>
 
       <section className="cardGrid">
         <article>
@@ -84,22 +111,10 @@ export default function PortfolioPage() {
         <article>
           <h2>Mock / Synthetic Status</h2>
           <div className="metricGrid">
-            <div className="metric">
-              <span>broker_mode</span>
-              <strong>{risk?.broker_mode ?? "-"}</strong>
-            </div>
-            <div className="metric">
-              <span>latest_signal_date</span>
-              <strong>{risk?.latest_signal_date ?? "-"}</strong>
-            </div>
-            <div className="metric">
-              <span>proposed_positions</span>
-              <strong>{formatNumber(risk?.proposed_positions)}</strong>
-            </div>
-            <div className="metric">
-              <span>proposed_notional</span>
-              <strong>{formatNumber(risk?.proposed_notional)}</strong>
-            </div>
+            <Metric label="broker_mode" value={risk?.broker_mode ?? "-"} />
+            <Metric label="latest_signal_date" value={risk?.latest_signal_date ?? "-"} />
+            <Metric label="proposed_positions" value={formatNumber(risk?.proposed_positions)} />
+            <Metric label="proposed_notional" value={formatNumber(risk?.proposed_notional)} />
           </div>
         </article>
         <article>
@@ -109,6 +124,49 @@ export default function PortfolioPage() {
               <li key={warning}>{warning}</li>
             ))}
           </ul>
+        </article>
+      </section>
+
+      <section className="panel">
+        <div className="sectionHeader">
+          <h2>Paper Portfolio Snapshot</h2>
+          <span className="badge fail">모의투자 · 실거래 아님</span>
+        </div>
+      </section>
+
+      <section className="cardGrid">
+        <article>
+          <h2>paper total_equity</h2>
+          <p className="bigNumber">{formatNumber(snapshot?.total_equity)}</p>
+        </article>
+        <article>
+          <h2>paper market_value</h2>
+          <p className="bigNumber">{formatNumber(snapshot?.market_value)}</p>
+        </article>
+        <article>
+          <h2>paper position_count</h2>
+          <p className="bigNumber">{formatNumber(paperPortfolio?.positions_summary.count)}</p>
+        </article>
+      </section>
+
+      <section className="grid">
+        <article>
+          <h2>Paper Snapshot Source</h2>
+          <div className="metricGrid">
+            <Metric label="source" value={paperPortfolio?.source} />
+            <Metric label="snapshot_id" value={snapshot?.snapshot_id} />
+            <Metric label="snapshot_status" value={snapshot?.status} />
+            <Metric label="reason" value={paperPortfolio?.reason ?? "ok"} />
+          </div>
+        </article>
+        <article>
+          <h2>State Separation</h2>
+          <div className="metricGrid">
+            <Metric label="paper_positions_table" value={String(paperPortfolio?.separation_contract.paper_positions_table ?? "-")} />
+            <Metric label="paper_snapshots_table" value={String(paperPortfolio?.separation_contract.paper_snapshots_table ?? "-")} />
+            <Metric label="mixed" value={String(paperPortfolio?.separation_contract.mixed ?? false)} />
+            <Metric label="network_call" value={paperPortfolio?.network_call_performed} />
+          </div>
         </article>
       </section>
     </main>

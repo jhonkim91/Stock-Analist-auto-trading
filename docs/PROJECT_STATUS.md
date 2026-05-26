@@ -4,13 +4,13 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.24.0` |
-| Phase | `KIS Paper Broker Phase 7 Bot Scheduler` |
+| Version | `MVP v0.25.0` |
+| Phase | `KIS Paper Broker Phase 8 Frontend Integration` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; sync fail-closed/no-network; live/real order disabled |
-| 최신 backend pytest | Phase 7 bot/no-live `9 passed`, launcher `7 passed`, full `293 passed` |
-| 다음 권장 Phase | `KIS paper broker Phase 8 Frontend Integration` |
+| 최신 backend pytest | Phase 8 frontend contract/no-live/report notify `11 passed`, full `293 passed` |
+| 다음 권장 Phase | `KIS paper broker Phase 9 Validation & Hardening` |
 
 ## 구현 완료 항목
 
@@ -54,6 +54,7 @@
 - KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync: `paper_fills`, `paper_positions`, `paper_portfolio_snapshots` read APIs and fail-closed/idempotent `POST /api/paper/sync`; synthetic `positions` remains separate.
 - KIS Paper Broker Phase 6 Report Notification: saved report notification endpoint, channel-safe summary splitting, optional attachment metadata, sanitized notification event/delivery logs, delivery failure isolation.
 - KIS Paper Broker Phase 7 Bot Scheduler: disabled-by-default bot config, safe once/loop CLI runner, bot status/run API, launcher check-only integration, explicit auto-submit gate.
+- KIS Paper Broker Phase 8 Frontend Integration: `/paper`, `/portfolio`, `/reports`, `/settings`에 paper-only banner와 backend-gated submit/cancel/sync/notify controls를 추가하고 live readiness copy를 배제.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -186,9 +187,9 @@
 ## 미구현 항목
 
 - 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker.
-- paper order create, paper fill simulator, paper position mutation.
+- KIS/broker paper order create, paper fill simulator, paper position mutation.
 - KIS credential/token 저장, token 발급/refresh/cache, 실제 KIS API 호출.
-- KIS paper broker submit/cancel/sync implementation, report notification, paper bot scheduler.
+- KIS paper broker submit/cancel/sync network implementation.
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.
 - broker-synced portfolio cash/position state, cash lock, open_positions state machine, realized exposure/drawdown.
@@ -201,7 +202,7 @@
 - broker/paper는 기본 deny, fail-closed, preview-only 정책을 유지한다.
 - venue/session metadata는 preview 응답에만 노출하며 submit 가능 여부를 true로 바꾸지 않는다.
 - `orders_count == 0`을 유지한다.
-- `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` row count는 0을 유지한다.
+- 기본 config에서 `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` row count는 0을 유지한다. local `paper_orders`는 confirm/idempotency/kill-switch gate 통과 시에만 생성된다.
 - `POST /api/paper/orders`, `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*`는 미등록 404 상태를 유지한다.
 - KIS token cache 파일 `.cache/kis/token.json`은 생성하지 않는다.
 - secret, token, account/header/raw credential 값을 코드, 문서, 로그, API 응답에 노출하지 않는다.
@@ -218,6 +219,7 @@
 - Phase 5 Fill/Position/Portfolio Sync는 완료했다. KIS sync endpoint는 공식 확인 전 disabled no-op이고, views는 paper_* tables만 조회한다.
 - Phase 6 Report Notification은 완료했다. notification failure는 report row/markdown을 rollback하지 않고 sanitized delivery log로 기록한다.
 - Phase 7 Bot Scheduler는 완료했다. scheduler/auto-submit은 기본 disabled이고 runner/API는 주문 없이 safe no-op을 반환한다.
+- Phase 8 Frontend Integration은 완료했다. `/paper`, `/portfolio`, `/reports`, `/settings`는 `모의투자`, `실거래 아님`, `paper only`를 명시하고 backend safety API만 호출한다.
 
 ## 검증 명령
 
@@ -281,4 +283,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-다음 단계에서는 Phase 8 Frontend Integration을 mock/paper-only 문구와 backend safety checks 기준으로 구현한다.
+다음 단계에서는 Phase 9 Validation & Hardening을 full test, secret scan, no-live regression 기준으로 수행한다.

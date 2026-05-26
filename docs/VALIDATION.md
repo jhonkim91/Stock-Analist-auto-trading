@@ -4,13 +4,13 @@
 
 검증 기준일: 2026-05-27
 
-Version: `MVP v0.24.0`
+Version: `MVP v0.25.0`
 
-Checkpoint: `KIS Paper Broker Phase 7 Bot Scheduler`
+Checkpoint: `KIS Paper Broker Phase 8 Frontend Integration`
 
 기준 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
 
-Next recommended phase: `KIS paper broker Phase 8 Frontend Integration`
+Next recommended phase: `KIS paper broker Phase 9 Validation & Hardening`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -52,6 +52,12 @@ Next recommended phase: `KIS paper broker Phase 8 Frontend Integration`
 | Phase 7 frontend lint/typecheck/build | 통과 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` |
 | Phase 7 secret exposure scan | 통과 | changed/untracked Phase 7 scope scan: `NO_PHASE7_SECRET_FINDINGS` |
 | Phase 7 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE7_LIVE_TRADING_ENABLE_FINDINGS` |
+| Phase 8 frontend API contract pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q`: 2 passed in 0.61s |
+| Phase 8 related regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py backend/tests/test_no_live_trading_regression.py backend/tests/test_report_notify.py -q`: 11 passed in 1.62s |
+| Phase 8 frontend lint/typecheck/build | 통과 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` |
+| Phase 8 local UI smoke | 통과 | backend `127.0.0.1:8123` + frontend `127.0.0.1:3123` fallback HTTP smoke: `/paper`, `/portfolio`, `/reports`, `/settings` 모두 `모의투자`, `실거래 아님`, `paper only` 포함, secret/live-ready copy 없음 |
+| Phase 8 secret exposure scan | 통과 | changed/untracked Phase 8 scope scan: `NO_PHASE8_SECRET_FINDINGS` |
+| Phase 8 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE8_LIVE_TRADING_ENABLE_FINDINGS` |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
 | Documentation cross-reference check | 통과 | `README.md`, `docs/PROJECT_STATUS.md`, `docs/DB_MIGRATION.md`, `docs/plans/README.md`, `docs/VALIDATION.md`, `Memory.md` Phase 0 기준선 반영 |
 | 직전 backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
@@ -190,6 +196,18 @@ npm.cmd run build
 cd ..
 ```
 
+Phase 8 frontend integration:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py backend/tests/test_no_live_trading_regression.py backend/tests/test_report_notify.py -q
+cd frontend
+npm.cmd run lint
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+cd ..
+```
+
 Phase 0 safety:
 
 ```powershell
@@ -247,9 +265,10 @@ git diff --check
 | `orders_count == 0` 정책 변경 | 없음 |
 | paper sync network/fetch | 없음. `POST /api/paper/sync`는 공식 KIS sync contract 확인 전 `KIS_PAPER_SYNC_CONFIRMATION_REQUIRED` no-op |
 | paper bot scheduler auto-start | 없음. launcher는 check-only 상태만 표시하며 scheduler/auto-submit은 기본 disabled |
+| frontend paper-mode boundary | `/paper`, `/portfolio`, `/reports`, `/settings`는 `모의투자`, `실거래 아님`, `paper only`를 명시하고 backend safety API만 호출 |
 
 ## 남은 검증
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
-- Phase 8 Frontend Integration은 이후 순차 진행 대상이다.
+- Phase 9 Validation & Hardening은 이후 순차 진행 대상이다.
 - KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.

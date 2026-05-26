@@ -2,10 +2,10 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `KIS Paper Broker Phase 7 Bot Scheduler`
-- [x] 현재 version: `MVP v0.24.0`
+- [x] 현재 상태명: `KIS Paper Broker Phase 8 Frontend Integration`
+- [x] 현재 version: `MVP v0.25.0`
 - [x] 현재 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
-- [x] 최신 targeted backend pytest: Phase 7 bot/no-live `9 passed`
+- [x] 최신 targeted backend pytest: Phase 8 frontend contract/no-live/report notify `11 passed`
 - [x] 최신 backend full pytest: `293 passed`
 - [x] 최신 frontend 검증: Node `v24.15.0`에서 `npm ci`, lint, typecheck, build 통과
 - [x] 최신 Alembic pytest: `4 passed`
@@ -40,6 +40,7 @@
 - [x] KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync 완료
 - [x] KIS Paper Broker Phase 6 Report Notification 완료
 - [x] KIS Paper Broker Phase 7 Bot Scheduler 완료
+- [x] KIS Paper Broker Phase 8 Frontend Integration 완료
 
 ## 현재 프로젝트 상태
 
@@ -70,6 +71,7 @@
 - KIS paper broker Phase 5 산출물: `backend/app/services/paper_sync_service.py`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio`, `/api/paper/sync`, `backend/tests/test_paper_sync.py`, `backend/tests/test_paper_portfolio_api.py`.
 - KIS paper broker Phase 6 산출물: `backend/app/services/report_notification_service.py`, `/api/reports/{report_id}/notify`, `backend/tests/test_report_notify.py`.
 - KIS paper broker Phase 7 산출물: `backend/config/bot.yaml`, `backend/app/services/paper_bot_service.py`, `backend/app/jobs/paper_bot_runner.py`, `/api/paper/bot/status`, `/api/paper/bot/run`.
+- KIS paper broker Phase 8 산출물: `frontend/components/paper-mode-banner.tsx`, `/paper` submit/cancel/sync/history/snapshot UI, `/portfolio` synthetic vs paper sections, `/reports` notify dry-run control, `/settings` redacted paper/notification/bot summary, `backend/tests/test_frontend_api_contracts.py`.
 
 ## 최근 변경 요약
 
@@ -98,9 +100,15 @@
 - `backend/app/services/paper_bot_service.py`, `backend/app/jobs/paper_bot_runner.py`: default disabled paper bot scheduler, safe once/loop runner, explicit auto-submit gate 추가.
 - `backend/app/api/paper.py`, `launcher.py`, `.env.example`, `frontend/app/settings/page.tsx`: bot status/run API, launcher check-only 표시, placeholder env, read-only bot config 노출 추가.
 - `backend/tests/test_paper_bot_scheduler.py`: default disabled, API no-submit, runner once/loop gating 검증 추가.
+- `frontend/components/paper-mode-banner.tsx`, `frontend/app/paper/page.tsx`, `frontend/app/portfolio/page.tsx`, `frontend/app/reports/page.tsx`, `frontend/app/settings/page.tsx`, `frontend/lib/api.ts`: paper-only banner, backend-gated submit/cancel/sync/notify controls, synthetic/paper separation UI, typed frontend API contract 추가.
+- `backend/tests/test_frontend_api_contracts.py`: frontend endpoint 문자열, paper-only copy, secret/live-ready copy 부재, backend fail-closed contract를 검증.
 
 ## 최신 검증 결과
 
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q`: 2 passed in 0.61s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py backend/tests/test_no_live_trading_regression.py backend/tests/test_report_notify.py -q`: 11 passed in 1.62s.
+- 2026-05-27 frontend `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.
+- 2026-05-27 Phase 8 local UI fallback smoke: `/paper`, `/portfolio`, `/reports`, `/settings` HTML에 `모의투자`, `실거래 아님`, `paper only` 포함, secret/live-ready copy 없음.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_no_live_trading_regression.py -q`: 9 passed in 0.79s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`: 4 passed in 0.59s.
 - 2026-05-27 related regression: `backend/tests/test_phase3f_readonly_provider_contract.py backend/tests/test_phase3f2_kis_daily_ohlcv_adapter.py backend/tests/test_phase3f3_krx_fixture_contract.py backend/tests/test_phase3f4_data_quality_summary.py backend/tests/test_phase3g_backtest_execution_model.py -q`: 21 passed in 39.73s.
@@ -166,7 +174,7 @@
 - KIS/broker paper submit, KIS/broker cancel, KIS/broker sync fetch, paper fill simulator, paper position mutation via simulator.
 - KIS credential/token 저장, token 발급/refresh/cache, 실제 KIS API 호출.
 - 실제 KRX/yfinance network fetch.
-- 자동매매 scheduler, live broker adapter, AI prediction model.
+- live broker adapter, AI prediction model.
 - broker-synced portfolio cash/position state, cash lock, open_positions state machine, realized exposure/drawdown.
 - 저장된 parameter snapshot 기반 train-window 후보 선택과 OOS window persistence.
 - walk-forward parameter optimization, multiple-testing 보정, 저장된 parameter snapshot 기반 후보 선택.
@@ -175,7 +183,7 @@
 
 ## 다음 작업
 
-- [ ] KIS paper broker Phase 8 Frontend Integration은 mock/paper-only 표시와 backend safety checks 기준으로 진행한다.
+- [ ] KIS paper broker Phase 9 Validation & Hardening은 full backend pytest, secret scan, no-live regression, frontend build 기준으로 진행한다.
 - [ ] `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` endpoint/path/TR-ID/request field를 공식 문서로 보강한다.
 - [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 - [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.

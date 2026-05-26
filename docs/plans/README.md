@@ -1,6 +1,6 @@
 # Phase Plans
 
-이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `MVP v0.24.0 / KIS Paper Broker Phase 7 Bot Scheduler`이다.
+이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `MVP v0.25.0 / KIS Paper Broker Phase 8 Frontend Integration`이다.
 
 ## 문서 역할
 
@@ -13,10 +13,10 @@
 
 | 항목 | 값 |
 |---|---|
-| 현재 checkpoint | `KIS Paper Broker Phase 7 Bot Scheduler` |
-| 현재 구현 완료 | Weekly Review Report, Trade Ledger Foundation, Portfolio Risk Guard v2, breadth/Data Reliability 2, Validation Framework Scaffold, Parameter Snapshot Foundation, Walk-forward/PBO/DSR minimal validation, Factor/Filter Attribution, KIS paper broker Phase 0 audit, Phase 1 notification foundation, Phase 2 broker contract, Phase 3 paper persistence, Phase 4 paper order lifecycle, Phase 5 paper sync views, Phase 6 report notification, Phase 7 bot scheduler |
-| 최신 backend pytest | Phase 7 bot/no-live `9 passed`, launcher `7 passed`, full backend `293 passed` |
-| 다음 권장 Phase | `KIS paper broker Phase 8 Frontend Integration` |
+| 현재 checkpoint | `KIS Paper Broker Phase 8 Frontend Integration` |
+| 현재 구현 완료 | Weekly Review Report, Trade Ledger Foundation, Portfolio Risk Guard v2, breadth/Data Reliability 2, Validation Framework Scaffold, Parameter Snapshot Foundation, Walk-forward/PBO/DSR minimal validation, Factor/Filter Attribution, KIS paper broker Phase 0 audit, Phase 1 notification foundation, Phase 2 broker contract, Phase 3 paper persistence, Phase 4 paper order lifecycle, Phase 5 paper sync views, Phase 6 report notification, Phase 7 bot scheduler, Phase 8 frontend integration |
+| 최신 backend pytest | Phase 8 frontend contract/no-live/report notify `11 passed`, full backend `293 passed` |
+| 다음 권장 Phase | `KIS paper broker Phase 9 Validation & Hardening` |
 | 상태 요약 문서 | `docs/PROJECT_STATUS.md` |
 | 상세 검증 문서 | `docs/VALIDATION.md` |
 | 프로젝트 메모리 | `Memory.md` |
@@ -58,11 +58,12 @@
 | KIS Paper Broker Phase 5 | 완료 | `backend/app/services/paper_sync_service.py`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio`, `/api/paper/sync` | paper_* table views, fail-closed idempotent sync no-op, synthetic positions separation |
 | KIS Paper Broker Phase 6 | 완료 | `backend/app/services/report_notification_service.py`, `/api/reports/{report_id}/notify` | channel-safe summary/file notification, sanitized delivery logs, failure isolation |
 | KIS Paper Broker Phase 7 | 완료 | `backend/app/services/paper_bot_service.py`, `backend/app/jobs/paper_bot_runner.py`, `/api/paper/bot/status`, `/api/paper/bot/run` | disabled scheduler, safe once/loop runner, explicit auto-submit gate |
+| KIS Paper Broker Phase 8 | 완료 | `frontend/app/paper/page.tsx`, `frontend/components/paper-mode-banner.tsx`, `backend/tests/test_frontend_api_contracts.py` | paper-only UI boundary, backend-gated submit/cancel/sync/notify controls, contract tests |
 | Phase 4A/4B | 보류 | 별도 승인 필요 | broker 또는 live gate |
 
 ## 다음 후보
 
-1. KIS paper broker Phase 8 Frontend Integration은 live trading readiness처럼 보이는 문구 없이 mock/paper-only control만 노출한다.
+1. KIS paper broker Phase 9 Validation & Hardening은 full backend pytest, secret scan, no-live regression, frontend build를 최종 acceptance 기준으로 수행한다.
 2. KIS endpoint/path/TR-ID/request field는 `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` 항목을 공식 문서로 먼저 보강한다.
 3. Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 4. Strategy hardening 조건을 기본 활성화할지는 별도 백테스트와 샘플 영향 검증 후 결정한다.
@@ -89,8 +90,8 @@
 ## 고정 안전 경계
 
 - 실주문, 주문 취소, 체결, 계좌 이동, websocket, live broker 구현 금지.
-- paper order/fill/position/audit mutation 구현 금지.
+- KIS/broker paper order, paper fill/position simulator mutation 구현 금지. local `paper_orders`는 confirm/idempotency/kill-switch gate 통과 시에만 허용한다.
 - KIS token 발급/cache/credential 저장 금지.
 - 실제 KIS/KRX/yfinance network call 금지.
-- `/api/broker/status`, `/api/broker/orders/preview`, `/api/paper/status`, `/api/paper/orders/preview`, `/paper`는 preview-only/fail-closed 상태로 유지한다.
-- `POST /api/paper/orders`, fill simulator, paper mutation은 미구현 404 상태를 유지한다.
+- `/api/broker/status`, `/api/broker/orders/preview`, `/api/paper/status`, `/api/paper/orders/preview`, `/paper`는 paper-only/fail-closed 경계를 명시한다.
+- `POST /api/paper/orders`, fill simulator, KIS/live order mutation은 미구현 404 또는 disabled 상태를 유지한다.
