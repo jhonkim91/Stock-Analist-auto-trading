@@ -12,6 +12,7 @@
 | Local paper submit | `/api/paper/orders/submit`, `confirm=true`, `idempotency_key`, kill-switch/config gate 통과 시 `paper_orders`만 저장 |
 | Paper cancel | `/api/paper/orders/cancel`, 공식 cancel payload 확인 전 disabled |
 | Paper views | `/api/paper/orders`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio` |
+| KIS paper balance | `/api/paper/portfolio`에서 조건부 read-only 호출. 기본 disabled/mock 상태는 local snapshot fallback 유지 |
 | Paper sync | `/api/paper/sync`, 공식 sync contract 확인 전 fail-closed no-op |
 | Report notify | `/api/reports/{report_id}/notify`, secret redaction 및 delivery failure isolation |
 | Paper bot | runner/API 존재, scheduler와 auto-submit은 기본 disabled |
@@ -47,6 +48,10 @@ cd ..
 | `PAPER_BOT_AUTO_SUBMIT` | `false` | bot 자동 submit 비활성 |
 | `PAPER_BOT_SCHEDULER_ENABLED` | `false` | scheduler 비활성 |
 | `PAPER_BOT_KILL_SWITCH` | `true` | bot 실행 안전 차단 |
+| `ENABLE_REAL_ORDER` | `false` | KIS balance 조회 포함 실전/주문 경로 차단 |
+| `KIS_ACCESS_TOKEN` | `<placeholder>` | KIS paper balance 조회에 필요한 env-only token placeholder |
+| `KIS_ACCOUNT_NO` | `<placeholder>` | KIS paper balance 조회 CANO env placeholder |
+| `KIS_PRODUCT_CODE` | `<placeholder>` | KIS paper balance 조회 ACNT_PRDT_CD env placeholder |
 
 ## 장애 대응
 

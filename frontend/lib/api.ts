@@ -455,11 +455,40 @@ export type PaperPositionsSummary = {
   unrealized_pnl: number;
 };
 
+export type PaperHolding = {
+  symbol: string;
+  name: string;
+  quantity: number;
+  orderable_quantity: number;
+  average_price: number | null;
+  purchase_amount: number | null;
+  current_price: number | null;
+  evaluation_amount: number | null;
+  profit_loss_amount: number | null;
+  profit_loss_rate: number | null;
+};
+
+export type PaperAccountSummary = {
+  cash_total: number | null;
+  securities_evaluation_amount: number | null;
+  total_evaluation_amount: number | null;
+  net_asset_amount: number | null;
+  total_purchase_amount: number | null;
+  total_stock_evaluation_amount: number | null;
+  total_profit_loss_amount: number | null;
+  previous_total_asset_amount: number | null;
+  asset_change_amount: number | null;
+  asset_change_rate: number | null;
+};
+
 export type PaperPortfolioResponse = {
   ok: boolean;
   source: string;
   snapshot: PaperPortfolioSnapshot | null;
   positions_summary: PaperPositionsSummary;
+  holdings?: PaperHolding[];
+  account_summary?: PaperAccountSummary;
+  kis_balance?: JsonRecord;
   counts: PaperCounts;
   separation_contract: JsonRecord;
   reason: string | null;

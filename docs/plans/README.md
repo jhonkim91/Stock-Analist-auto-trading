@@ -1,6 +1,6 @@
 # Phase Plans
 
-이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `MVP v0.26.0 / KIS Paper Broker Phase 9 Validation & Hardening`이다.
+이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `MVP v0.26.0 / KIS Paper Balance Inquiry Read-only`이다.
 
 ## 문서 역할
 
@@ -13,10 +13,10 @@
 
 | 항목 | 값 |
 |---|---|
-| 현재 checkpoint | `KIS Paper Broker Phase 9 Validation & Hardening` |
-| 현재 구현 완료 | Weekly Review Report, Trade Ledger Foundation, Portfolio Risk Guard v2, breadth/Data Reliability 2, Validation Framework Scaffold, Parameter Snapshot Foundation, Walk-forward/PBO/DSR minimal validation, Factor/Filter Attribution, KIS paper broker Phase 0 audit, Phase 1 notification foundation, Phase 2 broker contract, Phase 3 paper persistence, Phase 4 paper order lifecycle, Phase 5 paper sync views, Phase 6 report notification, Phase 7 bot scheduler, Phase 8 frontend integration, Phase 9 validation hardening |
-| 최신 backend pytest | full backend `338 passed`, Phase 9 secret/no-live/migration `12 passed` |
-| 다음 권장 Phase | 없음. 공식 KIS paper endpoint/TR-ID/request field 확인 전 network 구현 금지 |
+| 현재 checkpoint | `KIS Paper Balance Inquiry Read-only` |
+| 현재 구현 완료 | Weekly Review Report, Trade Ledger Foundation, Portfolio Risk Guard v2, breadth/Data Reliability 2, Validation Framework Scaffold, Parameter Snapshot Foundation, Walk-forward/PBO/DSR minimal validation, Factor/Filter Attribution, KIS paper broker Phase 0-9, KIS paper balance inquiry read-only |
+| 최신 backend pytest | full backend `342 passed`, KIS balance/no-live/secret targeted suites 통과 |
+| 다음 권장 Phase | KIS paper submit/cancel/sync network 구현은 보류. balance 조회는 read-only 조건부 경로만 허용 |
 | 상태 요약 문서 | `docs/PROJECT_STATUS.md` |
 | 상세 검증 문서 | `docs/VALIDATION.md` |
 | 프로젝트 메모리 | `Memory.md` |
@@ -60,6 +60,7 @@
 | KIS Paper Broker Phase 7 | 완료 | `backend/app/services/paper_bot_service.py`, `backend/app/jobs/paper_bot_runner.py`, `/api/paper/bot/status`, `/api/paper/bot/run` | disabled scheduler, safe once/loop runner, explicit auto-submit gate |
 | KIS Paper Broker Phase 8 | 완료 | `frontend/app/paper/page.tsx`, `frontend/components/paper-mode-banner.tsx`, `backend/tests/test_frontend_api_contracts.py` | paper-only UI boundary, backend-gated submit/cancel/sync/notify controls, contract tests |
 | KIS Paper Broker Phase 9 | 완료 | `tools/secret_scan.py`, `backend/tests/test_secret_redaction.py`, `docs/PAPER_TRADING_OPERATION.md`, `.github/workflows/ci.yml` | full validation, CI secret scan, key-name redaction hardening, operation guide |
+| KIS Paper Balance Inquiry | 완료 | `backend/app/services/kis_paper_balance.py`, `backend/tests/test_kis_paper_balance.py`, `docs/VALIDATION.md` | `/api/paper/portfolio` 조건부 read-only KIS balance 조회, disabled/mock local fallback |
 | Phase 4A/4B | 보류 | 별도 승인 필요 | broker 또는 live gate |
 
 ## 다음 후보

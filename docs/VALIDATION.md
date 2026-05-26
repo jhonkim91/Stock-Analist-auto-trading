@@ -1,16 +1,31 @@
 # Validation
 
+## 2026-05-27 KIS Paper Balance Inquiry
+
+이번 변경은 `/api/paper/portfolio`에 KIS 모의투자 주식잔고조회 read-only 경로를 조건부로 추가했다. 기본 disabled/mock 상태에서는 기존 `paper_portfolio_snapshots` fallback을 유지하며, KIS paper mode와 env credential이 모두 안전 조건을 만족할 때만 `/uapi/domestic-stock/v1/trading/inquire-balance`를 `tr_id=VTTC8434R`로 호출한다. 주문 API, 실전 TR ID, token/cache persistence는 연결하지 않았다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| KIS balance client 및 paper portfolio fallback pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_balance.py backend/tests/test_paper_portfolio_api.py -q`: 7 passed in 0.96s |
+| no-live/secret/adapter 회귀 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py backend/tests/test_secret_redaction.py backend/tests/test_kis_paper_adapter.py -q`: 13 passed in 1.20s |
+| 전체 backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 342 passed in 631.22s |
+| repo secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| frontend lint/typecheck/build | 통과 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` |
+| diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
+주의: frontend build 최초 1회는 기존 localhost backend/frontend 서버가 `frontend\.next\launcher-backend.err.log`를 잠그고 있어 `EBUSY`로 실패했다. 해당 저장소의 로컬 uvicorn/next 서버 프로세스를 종료한 뒤 같은 `npm.cmd run build`가 통과했다.
+
 ## 최신 검증 결과
 
 검증 기준일: 2026-05-27
 
 Version: `MVP v0.26.0`
 
-Checkpoint: `KIS Paper Broker Phase 9 Validation & Hardening`
+Checkpoint: `KIS Paper Balance Inquiry Read-only`
 
 기준 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
 
-Next recommended phase: 없음. 공식 KIS paper endpoint/TR-ID/request field 확인 전 network 구현 금지
+Next recommended phase: KIS paper submit/cancel/sync network 구현은 보류. balance 조회는 read-only 조건부 경로만 허용
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|

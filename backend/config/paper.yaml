@@ -6,6 +6,7 @@ paper:
   preview_only: true
   kill_switch_enabled: true
   network_enabled: false
+  balance_inquiry_enabled: false
   live_order_enabled: false
   broker_order_enabled: false
 risk_gate:
@@ -24,4 +25,6 @@ broker_adapter:
   name: "kis_paper"
   enabled: false
   official_endpoint_confirmed: false
+  official_balance_endpoint_confirmed: false
+  balance_inquiry_enabled: false
   live_fallback_enabled: false

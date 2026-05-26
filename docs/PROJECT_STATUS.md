@@ -5,12 +5,12 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.26.0` |
-| Phase | `KIS Paper Broker Phase 9 Validation & Hardening` |
+| Phase | `KIS Paper Balance Inquiry Read-only` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
-| 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; sync fail-closed/no-network; live/real order disabled |
-| 최신 backend pytest | full backend `338 passed`, Phase 9 secret/no-live/migration `12 passed` |
-| 다음 권장 Phase | 없음. 공식 KIS paper endpoint/TR-ID/request field 확인 전 network 구현 금지 |
+| 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; KIS paper balance read-only 조건부 지원; live/real order disabled |
+| 최신 backend pytest | full backend `342 passed`, KIS balance/no-live/secret targeted suites 통과 |
+| 다음 권장 Phase | KIS paper submit/cancel/sync network 구현은 보류. balance 조회는 read-only 조건부 경로만 허용 |
 
 ## 구현 완료 항목
 
@@ -56,6 +56,7 @@
 - KIS Paper Broker Phase 7 Bot Scheduler: disabled-by-default bot config, safe once/loop CLI runner, bot status/run API, launcher check-only integration, explicit auto-submit gate.
 - KIS Paper Broker Phase 8 Frontend Integration: `/paper`, `/portfolio`, `/reports`, `/settings`에 paper-only banner와 backend-gated submit/cancel/sync/notify controls를 추가하고 live readiness copy를 배제.
 - KIS Paper Broker Phase 9 Validation & Hardening: repo secret scan 도구, CI secret scan, settings key-name redaction hardening, operation doc, full backend/frontend acceptance 검증.
+- KIS Paper Balance Inquiry Read-only: `/api/paper/portfolio`에서 paper mode와 env credential 조건이 모두 맞을 때만 KIS `주식잔고조회` paper TR `VTTC8434R`를 호출하고, 기본 disabled/mock 상태는 local snapshot fallback을 유지.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -187,9 +188,9 @@
 
 ## 미구현 항목
 
-- 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker.
+- 실제 주문, 주문 취소, 체결, 계좌 자금 이동, websocket, live broker.
 - KIS/broker paper order create, paper fill simulator, paper position mutation.
-- KIS credential/token 저장, token 발급/refresh/cache, 실제 KIS API 호출.
+- KIS credential/token 저장, token 발급/refresh/cache, KIS 주문/실전 API 호출.
 - KIS paper broker submit/cancel/sync network implementation.
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.

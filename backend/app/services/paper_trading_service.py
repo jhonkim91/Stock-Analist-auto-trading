@@ -53,7 +53,8 @@ class PaperConfigService:
         risk_gate = raw.get("risk_gate", {})
         audit = raw.get("audit", {})
         simulator = raw.get("simulator", {})
-        if not all(isinstance(item, dict) for item in (paper, risk_gate, audit, simulator)):
+        broker_adapter = raw.get("broker_adapter", {})
+        if not all(isinstance(item, dict) for item in (paper, risk_gate, audit, simulator, broker_adapter)):
             return self._closed_config(), ["PAPER_CONFIG_PARSE_FAILED"]
 
         config = self._closed_config()
@@ -69,6 +70,15 @@ class PaperConfigService:
                     "network_enabled": bool(paper.get("network_enabled", False)),
                     "live_order_enabled": bool(paper.get("live_order_enabled", False)),
                     "broker_order_enabled": bool(paper.get("broker_order_enabled", False)),
+                    "balance_inquiry_enabled": bool(
+                        paper.get("balance_inquiry_enabled", broker_adapter.get("balance_inquiry_enabled", False))
+                    ),
+                    "broker_adapter_name": str(broker_adapter.get("name") or "kis_paper"),
+                    "broker_adapter_enabled": bool(broker_adapter.get("enabled", False)),
+                    "official_balance_endpoint_confirmed": bool(
+                        broker_adapter.get("official_balance_endpoint_confirmed", False)
+                    ),
+                    "live_fallback_enabled": bool(broker_adapter.get("live_fallback_enabled", False)),
                     "allow_buy_preview": bool(risk_gate.get("allow_buy_preview", True)),
                     "allow_sell_preview": bool(risk_gate.get("allow_sell_preview", True)),
                     "allow_short_sell": bool(risk_gate.get("allow_short_sell", False)),
@@ -84,7 +94,7 @@ class PaperConfigService:
             return self._closed_config(), ["PAPER_CONFIG_PARSE_FAILED"]
 
         reasons: list[str] = []
-        if config["mode"] not in {"disabled", "safety_scaffold"}:
+        if config["mode"] not in {"disabled", "safety_scaffold", "paper"}:
             reasons.append("UNKNOWN_PAPER_MODE")
             config["mode"] = "disabled"
         return config, reasons
@@ -101,6 +111,11 @@ class PaperConfigService:
             "network_enabled": False,
             "live_order_enabled": False,
             "broker_order_enabled": False,
+            "balance_inquiry_enabled": False,
+            "broker_adapter_name": "kis_paper",
+            "broker_adapter_enabled": False,
+            "official_balance_endpoint_confirmed": False,
+            "live_fallback_enabled": False,
             "allow_buy_preview": True,
             "allow_sell_preview": True,
             "allow_short_sell": False,
@@ -405,7 +420,7 @@ class PaperTradingService:
             return self._paper_sync_unavailable_payload("portfolio")
         from backend.app.services.paper_sync_service import PaperSyncService
 
-        return PaperSyncService(self.db).portfolio()
+        return PaperSyncService(self.db, config_dir=self.config_service.config_dir).portfolio()
 
     def sync(self, *, scope: str = "all") -> dict[str, object]:
         """공식 KIS sync contract 확인 전에는 no-op sync 응답을 반환한다."""

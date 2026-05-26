@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.app.core.paths import CONFIG_DIR
 from backend.app.models.tables import (
     Order,
     PaperFill,
@@ -13,15 +15,34 @@ from backend.app.models.tables import (
     PaperPosition,
     Position,
 )
+from backend.app.services.kis_paper_balance import (
+    KIS_PAPER_BALANCE_PATH,
+    KIS_PAPER_BALANCE_TR_ID,
+    KisPaperBalanceClient,
+    KisPaperBalanceConfigError,
+    KisPaperBalanceCredentials,
+    KisPaperBalanceRequestError,
+    kis_real_order_enabled,
+)
+from backend.app.services.paper_trading_service import PaperConfigService
 from backend.app.services.portfolio_service import PortfolioService
 
 SYNC_CONFIRMATION_REQUIRED = "KIS_PAPER_SYNC_CONFIRMATION_REQUIRED"
 SUPPORTED_SYNC_SCOPES = {"orders", "fills", "positions", "portfolio", "all"}
+KIS_PAPER_BALANCE_FETCH_FAILED = "KIS_PAPER_BALANCE_FETCH_FAILED"
 
 
 class PaperSyncService:
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self,
+        db: Session,
+        *,
+        config_dir: Path = CONFIG_DIR,
+        balance_client: KisPaperBalanceClient | None = None,
+    ) -> None:
         self.db = db
+        self.config_dir = config_dir
+        self.balance_client = balance_client or KisPaperBalanceClient()
 
     def sync(self, *, scope: str = "all") -> dict[str, Any]:
         """공식 KIS paper sync contract 확인 전에는 idempotent no-op으로 차단한다."""
@@ -93,7 +114,41 @@ class PaperSyncService:
         }
 
     def portfolio(self) -> dict[str, Any]:
-        """최신 `paper_portfolio_snapshots`와 `paper_positions` 요약만 반환한다."""
+        """KIS paper 잔고조회가 안전하게 활성화되면 우선 호출하고, 아니면 local snapshot으로 fallback한다."""
+        config, config_reasons = PaperConfigService(self.config_dir).load()
+        balance_status = self._balance_status(config, config_reasons)
+        if balance_status["enabled"]:
+            try:
+                payload = self.balance_client.fetch_balance()
+                payload.update(
+                    {
+                        "counts": self._counts(),
+                        "separation_contract": PortfolioService(self.db).paper_state_separation_contract(),
+                    }
+                )
+                return payload
+            except (KisPaperBalanceConfigError, KisPaperBalanceRequestError):
+                fallback = self._local_portfolio_payload()
+                fallback.update(
+                    {
+                        "ok": False,
+                        "reason": KIS_PAPER_BALANCE_FETCH_FAILED,
+                        "kis_balance": {
+                            **balance_status,
+                            "status": "failed",
+                            "reason_codes": [KIS_PAPER_BALANCE_FETCH_FAILED],
+                            "network_call_performed": False,
+                        },
+                    }
+                )
+                return fallback
+
+        fallback = self._local_portfolio_payload()
+        fallback["kis_balance"] = balance_status
+        return fallback
+
+    def _local_portfolio_payload(self) -> dict[str, Any]:
+        """기존 `paper_portfolio_snapshots`와 `paper_positions` 조회 응답을 유지한다."""
         snapshot = self.db.scalar(
             select(PaperPortfolioSnapshot).order_by(
                 PaperPortfolioSnapshot.snapshot_ts.desc(),
@@ -111,6 +166,48 @@ class PaperSyncService:
             "reason": None if snapshot is not None else "PAPER_PORTFOLIO_SNAPSHOT_NOT_FOUND",
             "live_order_created": False,
             "broker_order_created": False,
+            "network_call_performed": False,
+        }
+
+    def _balance_status(self, config: dict[str, object], config_reasons: list[str]) -> dict[str, Any]:
+        credentials = KisPaperBalanceCredentials.configured_fields()
+        reason_codes = list(config_reasons)
+        if str(config.get("mode")) != "paper":
+            reason_codes.append("KIS_PAPER_BALANCE_MODE_NOT_PAPER")
+        if not bool(config.get("enabled")):
+            reason_codes.append("PAPER_TRADING_DISABLED")
+        if not bool(config.get("network_enabled")):
+            reason_codes.append("PAPER_NETWORK_DISABLED")
+        if not bool(config.get("balance_inquiry_enabled")):
+            reason_codes.append("KIS_PAPER_BALANCE_DISABLED")
+        if str(config.get("broker_adapter_name") or "") != "kis_paper":
+            reason_codes.append("KIS_PAPER_ADAPTER_REQUIRED")
+        if not bool(config.get("broker_adapter_enabled")):
+            reason_codes.append("KIS_PAPER_ADAPTER_DISABLED")
+        if not bool(config.get("official_balance_endpoint_confirmed")):
+            reason_codes.append("KIS_PAPER_BALANCE_ENDPOINT_UNCONFIRMED")
+        if bool(config.get("live_order_enabled")) or bool(config.get("live_fallback_enabled")):
+            reason_codes.append("KIS_LIVE_PATH_BLOCKED")
+        if bool(config.get("broker_order_enabled")):
+            reason_codes.append("KIS_ORDER_PATH_BLOCKED")
+        if kis_real_order_enabled():
+            reason_codes.append("ENABLE_REAL_ORDER_MUST_BE_FALSE")
+        for field_name, configured in credentials.items():
+            if not configured:
+                reason_codes.append(field_name.upper().replace("_CONFIGURED", "_MISSING"))
+        reason_codes = self._merge_reason_codes(reason_codes)
+        enabled = not reason_codes
+        return {
+            "enabled": enabled,
+            "status": "enabled" if enabled else "fallback",
+            "source": "kis_paper_balance" if enabled else "paper_portfolio_snapshots",
+            "endpoint_path": KIS_PAPER_BALANCE_PATH,
+            "tr_id": KIS_PAPER_BALANCE_TR_ID,
+            "credential_fields": credentials,
+            "reason_codes": reason_codes,
+            "secrets_redacted": True,
+            "read_only": True,
+            "real_order_enabled": False,
             "network_call_performed": False,
         }
 
@@ -209,3 +306,11 @@ class PaperSyncService:
             "orders_count": int(self.db.scalar(select(func.count()).select_from(Order)) or 0),
             "synthetic_positions_count": int(self.db.scalar(select(func.count()).select_from(Position)) or 0),
         }
+
+    @staticmethod
+    def _merge_reason_codes(codes: list[str]) -> list[str]:
+        merged: list[str] = []
+        for code in codes:
+            if code not in merged:
+                merged.append(code)
+        return merged
