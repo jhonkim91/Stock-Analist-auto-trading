@@ -3,6 +3,9 @@
 ## Checkpoint
 
 - [x] 현재 상태명: `Validation Framework Scaffold`
+- [x] 현재 version: `MVP v0.21.0`
+- [x] 최신 backend full pytest: `287 passed`
+- [x] 다음 권장 흐름: `Parameter Snapshot Foundation → Walk-forward/PBO/DSR`
 - [x] Phase 1 Backend Core MVP 구현
 - [x] Phase 2 MVP Web Flow 구현
 - [x] Phase 3A CSV validate/confirm import 구현
@@ -18,7 +21,7 @@
 - [x] Backtest integrity hardening 구현
 - [x] Single PC Launcher v1 구현
 - [x] Phase 3I Weekly Review Report 구현
-- [x] Backtest trade ledger 저장 계약 구현
+- [x] Trade Ledger Foundation 구현
 - [x] Portfolio Risk Guard v2 구현
 - [x] Venue-aware session preview layer 구현
 - [x] Indicator incremental + breadth-aware regime 구현
@@ -38,7 +41,7 @@
 - strategy summary 계산은 `StrategyValidationService`, baseline 비교는 `ValidationBaselineComparator`, JSON artifact 저장은 `ValidationReportService`가 담당한다.
 - `/api/backtest/strategy-summary`와 `/api/backtest/run`은 `validation_framework` scaffold를 additive로 반환한다.
 - walk-forward, PBO, Deflated Sharpe Ratio, factor/filter attribution은 아직 계산하지 않고 `not_available_in_current_mvp`와 `calculated=false`로 명시한다.
-- 저장형 `/api/backtest/run`은 `backtest_runs`와 함께 closed trade 전체를 `backtest_trade_ledger`에 저장한다.
+- Trade Ledger Foundation은 저장형 `/api/backtest/run`에서 `backtest_runs`와 함께 closed trade 전체를 `backtest_trade_ledger`에 저장한다.
 - `/api/backtest/runs/{run_id}`는 기존 metric contract에 `trade_ledger_count`, `trade_ledger`, `trades`를 additive로 제공한다.
 - `/api/backtest/runs/{run_id}/trades`는 저장된 ledger rows를 반환한다.
 - `/api/reports/daily`와 `/api/reports/weekly`는 같은 Report persistence contract를 사용하며, `/api/reports?report_type=daily|weekly` 필터를 지원한다.
@@ -57,12 +60,14 @@
 - backtest metrics에 `walk_forward`, `pbo`, `probability_of_backtest_overfitting`, `deflated_sharpe_ratio`, `factor_filter_attribution` placeholder를 additive로 추가했다.
 - minimal trade ledger schema metadata는 `backtest_and_report_analysis_only` 범위와 `orders`/`paper_orders`/broker/KIS/live trading 미연결을 명시한다.
 - baseline_run_id, baseline_snapshot, unavailable placeholder, strategy-level payload 안정성 테스트를 추가했다.
+- README, PROJECT_STATUS, VALIDATION, plans README, Memory의 checkpoint/version/next phase/latest pytest count를 `MVP v0.21.0` / `Validation Framework Scaffold` 기준으로 맞췄다.
 
 ## 최신 검증 결과
 
 - 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q`: 41 passed in 99.84s.
 - 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 287 passed in 249.61s.
 - 2026-05-26 `git diff --check`: 통과, CRLF warning 외 whitespace error 없음.
+- 2026-05-26 문서 동기화 검증: checkpoint/version/next phase/latest pytest count `rg` 확인 통과, Markdown local link check 통과.
 - 2026-05-26 frontend lint/typecheck/build는 이번 backend-only 변경에서 재실행하지 않았다. 직전 동일일 검증은 통과 상태였다.
 
 ## 불변 조건
@@ -100,7 +105,7 @@
 
 ## 다음 작업
 
-- [ ] Parameter snapshot foundation: weekly `Parameter Drift Check`를 실제 이력 기반으로 계산할 수 있는 저장 계약을 검토한다.
+- [ ] Parameter Snapshot Foundation: weekly `Parameter Drift Check`를 실제 이력 기반으로 계산할 수 있는 저장 계약을 검토한다.
 - [ ] Walk-forward/PBO/DSR 계산 설계: train/test window, multiple-testing 보정 입력, 수익률 표본 계약을 먼저 정의한다.
 - [ ] Factor/filter attribution: trade ledger와 pass_flags/failed_conditions/risk_flags를 연결할 저장/조회 계약을 검토한다.
 - [ ] Monthly report extension을 daily/weekly 공통 persistence contract 위에 추가할지 검토한다.

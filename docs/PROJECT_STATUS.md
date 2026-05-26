@@ -9,7 +9,8 @@
 | Branch | `main` |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | 실거래 미구현, fail-closed, preview-only |
-| 다음 권장 Phase | `Walk-forward / PBO / DSR computation design` |
+| 최신 backend pytest | `287 passed` |
+| 다음 권장 Phase | `Parameter Snapshot Foundation → Walk-forward/PBO/DSR` |
 
 ## 구현 완료 항목
 
@@ -35,7 +36,7 @@
 - Strategy validation summary: `/api/backtest/strategy-summary?lookback_days=252`, `backend/reports/strategy_validation_252d.json`, baseline 미지정 `unspecified/null delta` contract.
 - Backtest integrity hardening: RR 목표가 의미, `rank_portfolio` realized-equity 회계, 평균 활성 포지션 range 집계 보강.
 - Phase 3I Weekly Review Report: `POST /api/reports/weekly`, `report_type="weekly"` persistence, daily/weekly report filtering, unavailable trade-ledger fields 명시.
-- Trade ledger foundation: `backtest_trade_ledger` 저장 계약, saved backtest trade 조회, weekly realized PnL/win rate/failed trades review 계산.
+- Trade Ledger Foundation: `backtest_trade_ledger` 저장 계약, saved backtest trade 조회, weekly realized PnL/win rate/failed trades review 계산.
 - Portfolio Risk Guard v2: `GET /api/portfolio/risk` additive exposure summary, sector/symbol/strategy concentration, daily loss budget, gap risk preview.
 - Venue-aware session preview layer: `MarketSessionService`, `/api/market/session`, `/api/market/sessions`, `/api/market/calendar`, broker/paper preview `session_metadata`.
 - Indicator incremental + breadth-aware regime: `IndicatorService.recompute(symbol/start_date/end_date)` 증분 경로, changed range snapshot 갱신, breadth proxy snapshot fields, `RegimeService` breadth diagnostics.
@@ -144,7 +145,7 @@
 - 신규 조건의 사용 가능 여부는 `metadata.data_quality_flags`에 남긴다.
 - `metadata.risk_metadata`는 `suggested_stop_price`, `risk_per_share`, `risk_basis`, `entry_chase_warning`을 additive로 제공한다.
 - strategy registry order, `DEFAULT_STRATEGY_NAMES`, `AVAILABLE_STRATEGY_NAMES`, `StrategyResult` 기존 필드는 변경하지 않는다.
-- 2026-05-26 backend full pytest 286 passed를 확인했다. frontend lint/typecheck/build는 이번 backend-only 변경에서 재실행하지 않았으며 최신 검증 상태는 `docs/VALIDATION.md`를 기준으로 본다.
+- 2026-05-26 backend full pytest 287 passed를 확인했다. frontend lint/typecheck/build는 이번 backend-only 변경에서 재실행하지 않았으며 최신 검증 상태는 `docs/VALIDATION.md`를 기준으로 본다.
 
 ## Data Reliability 2 상태
 
@@ -237,4 +238,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-Walk-forward/PBO/Deflated Sharpe 계산 설계를 검토한다. 다음 단계에서는 train/test window 분할, multiple-testing 보정 입력, factor/filter attribution join 계약, parameter snapshot 저장 계약을 먼저 정의해야 한다. 기존 API, safety contract, no real-order 정책은 유지한다.
+Parameter Snapshot Foundation을 먼저 검토한 뒤 Walk-forward/PBO/DSR 계산 설계로 확장한다. 다음 단계에서는 strategy parameter snapshot 저장 계약, train/test window 분할, multiple-testing 보정 입력, factor/filter attribution join 계약을 순서대로 정의해야 한다. 기존 API, safety contract, no real-order 정책은 유지한다.

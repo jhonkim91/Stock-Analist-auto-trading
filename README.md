@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `Data Reliability 2`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
+현재 기준선은 `Validation Framework Scaffold`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -10,12 +10,13 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.20.0` |
-| Phase | `Data Reliability 2` |
+| Version | `MVP v0.21.0` |
+| Phase | `Validation Framework Scaffold` |
 | Branch | `main` |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | Trading state | fail-closed, preview-only, real order 미구현 |
-| Next recommended phase | `Parameter Snapshot Foundation for Drift Check` |
+| Latest backend pytest | `287 passed` |
+| Next recommended phase | `Parameter Snapshot Foundation → Walk-forward/PBO/DSR` |
 
 ## Implemented Scope
 
@@ -33,11 +34,13 @@
 - Phase C Strategy Hardening Foundation: 9개 전략의 optional hardening 조건 기반, `data_quality_flags`, additive `risk_metadata`.
 - Strategy validation summary: 최근 252 trading days 기준 strategy별 screener/backtest 요약과 baseline delta contract.
 - Backtest integrity hardening: RR 목표가 의미, `rank_portfolio` realized-equity 회계, 평균 활성 포지션 range 집계 보강.
-- Weekly strategy review: `POST /api/reports/weekly`, `report_type="weekly"` persistence, daily/weekly report filtering, ledger-backed realized metrics.
-- Backtest trade ledger: `backtest_trade_ledger` table, `GET /api/backtest/runs/{run_id}/trades`, weekly realized PnL/win rate/failed trades review.
+- Phase 3I Weekly Review Report: `POST /api/reports/weekly`, `report_type="weekly"` persistence, daily/weekly report filtering, ledger-backed realized metrics.
+- Trade Ledger Foundation: `backtest_trade_ledger` table, `GET /api/backtest/runs/{run_id}/trades`, weekly realized PnL/win rate/failed trades review.
+- Portfolio Risk Guard v2: `GET /api/portfolio/risk` additive gross/sector/symbol/strategy exposure, daily loss budget, gap risk preview.
 - Venue-aware session preview layer: KRX/NXT session window service, `/api/market/session`, `/api/market/sessions`, `/api/market/calendar`, broker/paper preview `session_metadata`.
 - Indicator incremental + breadth-aware regime: `/api/indicators/recompute`는 full recompute와 `symbol`, `start_date`, `end_date` 범위 recompute를 지원하고, `RegimeService`는 advance/decline, 52-week high/low, MA50 participation breadth proxy를 함께 반환한다.
 - Data Reliability 2: earnings event timestamp/session 기반 blackout 판단, corporate action effective-date as-of 조회, adjusted/raw price 선택 계약을 보강했다.
+- Validation Framework Scaffold: `StrategyValidationService`, `ValidationBaselineComparator`, `ValidationReportService`, walk-forward/PBO/Deflated Sharpe/factor attribution placeholder, minimal trade ledger schema metadata.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
 - Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration.
 

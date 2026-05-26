@@ -4,9 +4,13 @@
 
 검증 기준일: 2026-05-26
 
+Version: `MVP v0.21.0`
+
 Checkpoint: `Validation Framework Scaffold`
 
 기준 브랜치: `main`
+
+Next recommended phase: `Parameter Snapshot Foundation → Walk-forward/PBO/DSR`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -14,6 +18,7 @@ Checkpoint: `Validation Framework Scaffold`
 | Backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 287 passed in 249.61s |
 | Frontend lint/typecheck/build | 미실행 | 이번 변경은 backend service/API/test/docs 범위이며 frontend 파일은 수정하지 않음 |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
+| Documentation cross-reference check | 통과 | `rg` checkpoint/version/phase/pytest count 확인 및 Markdown local link check |
 
 ## 검증 범위
 
