@@ -5,12 +5,12 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.24.0` |
-| Phase | `KIS Paper Broker Phase 2 KIS Paper Broker Contract` |
+| Phase | `KIS Paper Broker Phase 3 Paper Trading Persistence` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | 실거래 미구현, fail-closed, preview-only |
-| 최신 backend pytest | Phase 2 targeted/regression `22 passed`, full `293 passed` |
-| 다음 권장 Phase | `KIS paper broker Phase 3 Paper Trading Persistence` |
+| 최신 backend pytest | Phase 3 migration `4 passed`, full `293 passed` |
+| 다음 권장 Phase | `KIS paper broker Phase 4 Paper Order Preview/Submit/Cancel` |
 
 ## 구현 완료 항목
 
@@ -49,6 +49,7 @@
 - KIS Paper Broker Phase 0 Baseline Audit: 현재 fail-closed 기준선, stale 문서 충돌, 공식 문서 확인 필요 matrix를 문서화.
 - KIS Paper Broker Phase 1 Notification Foundation: `backend/config/notifications.yaml`, `/api/notifications/status`, `/api/notifications/test`, disabled/mock 기본값, Discord/Telegram adapter skeleton, settings redacted summary.
 - KIS Paper Broker Phase 2 KIS Paper Broker Contract: `BrokerAdapter` contract, KIS paper/live adapter skeleton, in-memory-only token manager, no-live regression tests.
+- KIS Paper Broker Phase 3 Paper Trading Persistence: `paper_*` table additive extension, `paper_portfolio_snapshots`, `broker_audit_events`, `notification_events`, `notification_delivery_logs`, `kis_token_status_metadata`.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -61,7 +62,7 @@
 - `indicator_snapshot`에는 `breadth_advance_decline_ratio`, `breadth_52w_high_low_ratio`, `breadth_ma50_participation`, `breadth_score`와 각 availability flag가 추가됐다.
 - `RegimeService`는 index/weekly 기반 `index_regime`을 먼저 계산한 뒤 breadth가 weak이면 bull을 neutral로 낮춘다. breadth 데이터가 없으면 `breadth_regime="not_available"`로 표기하고 최종 판정을 강제로 악화시키지 않는다.
 - `momentum_rank`, `stage_analysis_weekly`는 breadth hardening을 optional config가 켜진 경우에만 적용하며, enabled 상태에서 breadth 입력이 없으면 fail-closed 처리한다.
-- 최신 Alembic head는 `f7a8b9c0d1e2_add_strategy_parameter_snapshots`다.
+- 최신 Alembic head는 `a8b9c0d1e2f3_paper_trading_persistence`다.
 
 ## BacktestService 상태
 
@@ -152,7 +153,7 @@
 - `/screener`는 기본 전략 5개를 기본 선택하고, available-only 전략은 사용자가 명시 체크한 경우에만 실행 요청에 포함한다.
 - `/dashboard`와 `/backtest`의 단일 전략 실행 UI는 backend metadata를 사용한다.
 - `IndicatorService`는 EMA20, weekly fields, ATR, volume ratio, 52주 고점, pivot, RS/sector/market score, breadth proxy를 `indicator_snapshot`에 저장한다.
-- 최신 Alembic head는 `f7a8b9c0d1e2_add_strategy_parameter_snapshots`다.
+- 최신 Alembic head는 `a8b9c0d1e2f3_paper_trading_persistence`다.
 - Screener 응답은 기존 explanation contract 필드를 제거하지 않는다.
 
 ## Phase C Hardening Foundation
@@ -208,7 +209,8 @@
 - 공식 문서에서 endpoint/path/TR-ID/request field가 완전 확인되지 않은 KIS paper capability는 `확인 필요`로 남겼다.
 - Phase 1 Notification Foundation은 완료했다. 실제 Discord/Telegram delivery는 config/env opt-in이며 기본 runtime은 disabled/dry-run이다.
 - Phase 2 KIS Paper Broker Contract는 완료했다. KIS paper/live adapter는 모두 fail-closed skeleton이며 endpoint/TR-ID/request field 추정 구현은 없다.
-- Phase 3 Paper Trading Persistence는 아직 시작하지 않았다.
+- Phase 3 Paper Trading Persistence는 완료했다. schema 변경은 additive-only이며 raw token/account/webhook/chat_id column을 만들지 않았다.
+- Phase 4 Paper Order Preview/Submit/Cancel은 아직 시작하지 않았다.
 
 ## 검증 명령
 
@@ -272,4 +274,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-다음 단계에서는 저장된 strategy parameter snapshot을 기준선으로 삼아 train-window 후보 선택과 OOS window persistence를 고도화하고, attribution 결과 저장, market_regime 저장 계약, sector as-of attribution contract를 정의해야 한다. 기존 API, safety contract, no real-order 정책은 유지한다.
+다음 단계에서는 Phase 4 Paper Order Preview/Submit/Cancel을 paper-only로 구현하되, confirm/idempotency/kill-switch 보호와 no-live safety contract를 유지한다.

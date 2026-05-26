@@ -6,11 +6,11 @@
 
 Version: `MVP v0.24.0`
 
-Checkpoint: `KIS Paper Broker Phase 2 KIS Paper Broker Contract`
+Checkpoint: `KIS Paper Broker Phase 3 Paper Trading Persistence`
 
 기준 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
 
-Next recommended phase: `KIS paper broker Phase 3 Paper Trading Persistence`
+Next recommended phase: `KIS paper broker Phase 4 Paper Order Preview/Submit/Cancel`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -28,6 +28,10 @@ Next recommended phase: `KIS paper broker Phase 3 Paper Trading Persistence`
 | Phase 2 KIS/broker safety regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py -q`: 13 passed in 3.05s |
 | Phase 2 secret exposure scan | 통과 | changed/untracked Phase 2 scope scan: `NO_PHASE2_SECRET_FINDINGS` |
 | Phase 2 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE2_LIVE_TRADING_ENABLE_FINDINGS` |
+| Phase 3 migration pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_persistence_migration.py backend/tests/test_alembic_migrations.py -q`: 4 passed in 4.17s |
+| Phase 3 local Alembic upgrade | 통과 | local SQLite drift를 additive column 보강 후 `.\.venv\Scripts\python.exe -m alembic stamp f7a8b9c0d1e2`, `.\.venv\Scripts\python.exe -m alembic upgrade head`: current `a8b9c0d1e2f3 (head)` |
+| Phase 3 secret exposure scan | 통과 | changed/untracked Phase 3 scope scan: `NO_PHASE3_SECRET_FINDINGS` |
+| Phase 3 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE3_LIVE_TRADING_ENABLE_FINDINGS` |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
 | Documentation cross-reference check | 통과 | `README.md`, `docs/PROJECT_STATUS.md`, `docs/DB_MIGRATION.md`, `docs/plans/README.md`, `docs/VALIDATION.md`, `Memory.md` Phase 0 기준선 반영 |
 | 직전 backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
@@ -41,10 +45,12 @@ Next recommended phase: `KIS paper broker Phase 3 Paper Trading Persistence`
 - Discord adapter는 `allowed_mentions.parse=[]` payload를 강제하고, Telegram adapter는 unsafe MarkdownV2를 기본값으로 사용하지 않는다.
 - KIS paper broker Phase 2는 adapter/token contract skeleton만 추가했다. `KisPaperBrokerAdapter`는 공식 endpoint/TR-ID/request field 확인 전 capability를 `KIS_PAPER_OFFICIAL_ENDPOINT_CONFIRMATION_REQUIRED`로 막고, `KisLiveBrokerAdapter`는 disabled placeholder로만 존재한다.
 - `KisTokenManager`는 raw token을 process memory에만 저장하고 metadata/status에서는 `***REDACTED***`만 반환한다. token cache file/DB persistence는 활성화하지 않는다.
+- KIS paper broker Phase 3는 `paper_orders`, `paper_fills`, `paper_positions`에 nullable broker-sync metadata만 추가하고, `positions` synthetic table은 변경하지 않았다.
+- 신규 table은 `paper_portfolio_snapshots`, `broker_audit_events`, `notification_events`, `notification_delivery_logs`, `kis_token_status_metadata`이며 raw token/account/webhook/chat_id column을 만들지 않는다.
 - `docs/plans/phase-paper-broker-baseline-audit.md`는 현재 `main` baseline, stale 문서 충돌, source-of-truth 우선순위를 기록한다.
 - `docs/KIS_PAPER_API_MATRIX.md`는 공식 문서에서 완전 확인되지 않은 KIS paper endpoint/path/TR-ID/request field를 `확인 필요`로 남긴다.
 - `README.md`, `docs/plans/README.md`, `docs/DB_MIGRATION.md`의 stale 기준선을 `docs/PROJECT_STATUS.md`와 `docs/VALIDATION.md` 기준으로 조정했다.
-- `strategy_parameter_snapshots` SQLAlchemy model과 Alembic head `f7a8b9c0d1e2_add_strategy_parameter_snapshots`가 테스트 DB에 적용된다.
+- `strategy_parameter_snapshots` SQLAlchemy model과 Alembic head `a8b9c0d1e2f3_paper_trading_persistence`가 테스트 DB에 적용된다.
 - strategy parameter snapshot은 `strategy_name`, `config_hash`, `snapshot_date`, `effective_date`, `parameter_json`, `created_at`을 저장한다.
 - `StrategyParameterSnapshotService.save_current_snapshots()`는 현재 config의 `common + strategy` payload를 strategy별 snapshot으로 저장하고, `latest_snapshots()`로 기준일 이전 최신 snapshot을 조회한다.
 - `StrategyParameterSnapshotService.parameter_drift_check()`는 snapshot이 없으면 `not_available_in_current_mvp`, `strategy_parameter_snapshot_not_found`, `comparison_available=false`, `drifted_parameter_count=0`을 반환해 거짓 diff를 만들지 않는다.
@@ -123,6 +129,13 @@ Phase 2 broker contract:
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py -q
 ```
 
+Phase 3 paper persistence:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_persistence_migration.py backend/tests/test_alembic_migrations.py -q
+.\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
 Phase 0 safety:
 
 ```powershell
@@ -181,5 +194,5 @@ git diff --check
 ## 남은 검증
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
-- Phase 3 Paper Trading Persistence, paper submit/cancel/sync, report notification, paper bot scheduler는 이후 순차 진행 대상이다.
+- Phase 4 Paper Order Preview/Submit/Cancel, paper sync, report notification, paper bot scheduler는 이후 순차 진행 대상이다.
 - KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.

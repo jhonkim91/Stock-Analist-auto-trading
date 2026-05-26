@@ -2,10 +2,10 @@
 
 ## Current Head
 
-- Current Alembic head: `f7a8b9c0d1e2_add_strategy_parameter_snapshots`.
-- Latest schema addition: strategy parameter snapshot table.
+- Current Alembic head: `a8b9c0d1e2f3_paper_trading_persistence`.
+- Latest schema addition: additive paper trading persistence tables and broker-sync metadata columns.
 - The ledger is a backtest/report artifact only and is not connected to live orders, paper orders, broker adapters, KIS routes, or `orders` rows.
-- KIS paper broker Phase 0 added no schema changes. Existing `paper_orders`, `paper_fills`, `paper_positions`, and `paper_audit_events` remain write-disabled by service policy.
+- KIS paper broker Phase 3 added `paper_portfolio_snapshots`, `broker_audit_events`, `notification_events`, `notification_delivery_logs`, `kis_token_status_metadata`, plus nullable broker-sync metadata on `paper_orders`, `paper_fills`, and `paper_positions`. Service-level writes remain disabled until later phases explicitly enable paper submit/sync.
 
 ## 현재 정책
 

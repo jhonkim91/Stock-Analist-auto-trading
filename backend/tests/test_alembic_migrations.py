@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from backend.app.core.database import Base
 from backend.app.models import tables  # noqa: F401
 
-ALEMBIC_HEAD = "f7a8b9c0d1e2"
+ALEMBIC_HEAD = "a8b9c0d1e2f3"
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -42,7 +42,32 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "backtest_trade_ledger",
         "strategy_parameter_snapshots",
         "earnings_events",
+        "paper_portfolio_snapshots",
+        "broker_audit_events",
+        "notification_events",
+        "notification_delivery_logs",
+        "kis_token_status_metadata",
     }.issubset(table_names)
+    paper_order_columns = {column["name"] for column in inspector.get_columns("paper_orders")}
+    assert {
+        "broker_order_id",
+        "broker_order_status",
+        "account_alias",
+        "submitted_at",
+        "canceled_at",
+        "broker_status_json",
+    }.issubset(paper_order_columns)
+    paper_fill_columns = {column["name"] for column in inspector.get_columns("paper_fills")}
+    assert {"broker_fill_id", "broker_order_id", "broker_fill_ts", "broker_status_json"}.issubset(paper_fill_columns)
+    paper_position_columns = {column["name"] for column in inspector.get_columns("paper_positions")}
+    assert {
+        "broker_position_key",
+        "account_alias",
+        "market_value",
+        "unrealized_pnl",
+        "broker_synced_at",
+        "broker_status_json",
+    }.issubset(paper_position_columns)
     strategy_parameter_snapshot_columns = {
         column["name"] for column in inspector.get_columns("strategy_parameter_snapshots")
     }

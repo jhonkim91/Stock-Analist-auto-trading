@@ -2,13 +2,13 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `KIS Paper Broker Phase 2 KIS Paper Broker Contract`
+- [x] 현재 상태명: `KIS Paper Broker Phase 3 Paper Trading Persistence`
 - [x] 현재 version: `MVP v0.24.0`
 - [x] 현재 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
-- [x] 최신 targeted backend pytest: Phase 2 adapter/token/regression `22 passed`
+- [x] 최신 targeted backend pytest: Phase 3 migration `4 passed`
 - [x] 최신 backend full pytest: `293 passed`
 - [x] 최신 frontend 검증: Node `v24.15.0`에서 `npm ci`, lint, typecheck, build 통과
-- [x] 최신 Alembic pytest: `미실행` (이번 변경은 DB schema 변경 없음)
+- [x] 최신 Alembic pytest: `4 passed`
 - [x] 최신 diff check: `git diff --check` 통과, CRLF warning만 있음
 - [x] Phase 1 Backend Core MVP 구현
 - [x] Phase 2 MVP Web Flow 구현
@@ -35,6 +35,7 @@
 - [x] KIS Paper Broker Phase 0 Baseline Audit 완료
 - [x] KIS Paper Broker Phase 1 Notification Foundation 완료
 - [x] KIS Paper Broker Phase 2 KIS Paper Broker Contract 완료
+- [x] KIS Paper Broker Phase 3 Paper Trading Persistence 완료
 
 ## 현재 프로젝트 상태
 
@@ -56,10 +57,11 @@
 - Drift가 없으면 weekly Markdown과 detail metadata에 `no_drift_detected`를 명시한다.
 - report detail API의 `metadata.parameter_drift`는 저장된 Markdown에서 추출해 Markdown과 모순되지 않게 유지한다.
 - `/api/reports/daily`, `/api/reports/weekly`, `/api/reports?report_type=daily|weekly`, `/api/reports/{report_id}/markdown` contract는 유지된다.
-- DB migration head: `f7a8b9c0d1e2_add_strategy_parameter_snapshots`.
+- DB migration head: `a8b9c0d1e2f3_paper_trading_persistence`.
 - KIS paper broker Phase 0 산출물: `docs/plans/phase-paper-broker-baseline-audit.md`, `docs/KIS_PAPER_API_MATRIX.md`.
 - KIS paper broker Phase 1 산출물: `backend/config/notifications.yaml`, `/api/notifications/status`, `/api/notifications/test`, disabled/mock notification abstraction, Discord/Telegram adapter skeleton.
 - KIS paper broker Phase 2 산출물: `backend/app/brokers/base.py`, `backend/app/brokers/kis_paper.py`, `backend/app/brokers/kis_live.py`, `backend/app/services/token_manager.py`.
+- KIS paper broker Phase 3 산출물: `backend/alembic/versions/a8b9c0d1e2f3_paper_trading_persistence.py`, `backend/tests/test_paper_persistence_migration.py`, paper persistence SQLAlchemy models.
 
 ## 최근 변경 요약
 
@@ -74,9 +76,15 @@
 - `backend/app/brokers/*`, `backend/app/services/token_manager.py`: broker contract, KIS paper confirmation-required skeleton, live disabled placeholder, in-memory token metadata 추가.
 - `backend/app/services/broker_service.py`, `backend/app/services/paper_trading_service.py`, `backend/app/services/kis_service.py`: 기존 fail-closed status에 adapter/token metadata를 additive로 연결.
 - `backend/tests/test_kis_paper_adapter.py`, `backend/tests/test_token_manager.py`, `backend/tests/test_no_live_trading_regression.py`: Phase 2 contract와 no-live regression 검증.
+- `backend/app/models/tables.py`, `backend/alembic/versions/a8b9c0d1e2f3_paper_trading_persistence.py`: `paper_*` nullable broker metadata, portfolio snapshot, broker audit, notification outbox/delivery log, KIS token status metadata 추가.
+- `backend/tests/test_paper_persistence_migration.py`, `backend/tests/test_alembic_migrations.py`: additive schema, no raw secret column, synthetic `positions` 분리 검증.
 
 ## 최신 검증 결과
 
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_persistence_migration.py backend/tests/test_alembic_migrations.py -q`: 4 passed in 4.17s.
+- 2026-05-27 local SQLite drift 정합화: 누락된 legacy indicator columns를 additive로 보강하고 `alembic stamp f7a8b9c0d1e2` 후 `.\.venv\Scripts\python.exe -m alembic upgrade head` 통과, current `a8b9c0d1e2f3 (head)`.
+- 2026-05-27 Phase 3 secret exposure scan: `NO_PHASE3_SECRET_FINDINGS`.
+- 2026-05-27 Phase 3 live trading enable static scan: `NO_PHASE3_LIVE_TRADING_ENABLE_FINDINGS`.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py backend/tests/test_token_manager.py backend/tests/test_no_live_trading_regression.py -q`: 9 passed in 0.54s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py -q`: 13 passed in 3.05s.
 - 2026-05-27 Phase 2 secret exposure scan: `NO_PHASE2_SECRET_FINDINGS`.
@@ -127,7 +135,7 @@
 
 ## 다음 작업
 
-- [ ] KIS paper broker Phase 3 Paper Trading Persistence는 additive-only migration으로 진행한다.
+- [ ] KIS paper broker Phase 4 Paper Order Preview/Submit/Cancel은 paper-only, confirm/idempotency/kill-switch 보호 기준으로 진행한다.
 - [ ] `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` endpoint/path/TR-ID/request field를 공식 문서로 보강한다.
 - [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 - [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.
