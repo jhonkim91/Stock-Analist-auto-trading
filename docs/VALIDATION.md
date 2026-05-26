@@ -2,27 +2,34 @@
 
 ## 최신 검증 결과
 
-검증 기준일: 2026-05-26
+검증 기준일: 2026-05-27
 
 Version: `MVP v0.24.0`
 
-Checkpoint: `Factor/Filter Attribution Minimal Integration`
+Checkpoint: `KIS Paper Broker Phase 0 Baseline Audit`
 
-기준 브랜치: `main`
+기준 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
 
-Next recommended phase: `저장형 후보 선택 및 attribution persistence 고도화`
+Next recommended phase: `KIS paper broker Phase 1 Notification Foundation`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
-| factor/filter attribution targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q`: 47 passed in 225.71s |
-| Alembic migration pytest | 미실행 | 이번 변경은 DB schema/migration을 추가하지 않음 |
-| Backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
-| Frontend lint/typecheck/build | 미실행 | 이번 변경은 backend service/API/test/docs 범위이며 frontend 파일은 수정하지 않음 |
+| Phase 0 KIS read-only safety pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py -q`: 7 passed in 2.70s |
+| Phase 0 broker safety pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3d_broker_safety.py -q`: 6 passed in 0.54s |
+| Phase 0 paper safety pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`: 4 passed in 0.55s |
+| Phase 0 secret exposure scan | 통과 | changed Phase 0 docs/goal scope scan: `NO_SECRET_FINDINGS` |
+| Phase 0 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_LIVE_TRADING_ENABLE_FINDINGS` |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
-| Documentation cross-reference check | 통과 | `PROJECT_STATUS.md`, `VALIDATION.md`, `Memory.md` 최신 checkpoint와 검증 결과 반영 |
+| Documentation cross-reference check | 통과 | `README.md`, `docs/PROJECT_STATUS.md`, `docs/DB_MIGRATION.md`, `docs/plans/README.md`, `docs/VALIDATION.md`, `Memory.md` Phase 0 기준선 반영 |
+| 직전 backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
+| 직전 frontend install/lint/typecheck/build | 통과 | `node -v`: v24.15.0, `npm.cmd ci`, `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` |
 
 ## 검증 범위
 
+- KIS paper broker Phase 0는 문서 전용 변경이며 runtime code, API endpoint, DB schema를 변경하지 않았다.
+- `docs/plans/phase-paper-broker-baseline-audit.md`는 현재 `main` baseline, stale 문서 충돌, source-of-truth 우선순위를 기록한다.
+- `docs/KIS_PAPER_API_MATRIX.md`는 공식 문서에서 완전 확인되지 않은 KIS paper endpoint/path/TR-ID/request field를 `확인 필요`로 남긴다.
+- `README.md`, `docs/plans/README.md`, `docs/DB_MIGRATION.md`의 stale 기준선을 `docs/PROJECT_STATUS.md`와 `docs/VALIDATION.md` 기준으로 조정했다.
 - `strategy_parameter_snapshots` SQLAlchemy model과 Alembic head `f7a8b9c0d1e2_add_strategy_parameter_snapshots`가 테스트 DB에 적용된다.
 - strategy parameter snapshot은 `strategy_name`, `config_hash`, `snapshot_date`, `effective_date`, `parameter_json`, `created_at`을 저장한다.
 - `StrategyParameterSnapshotService.save_current_snapshots()`는 현재 config의 `common + strategy` payload를 strategy별 snapshot으로 저장하고, `latest_snapshots()`로 기준일 이전 최신 snapshot을 조회한다.
@@ -83,6 +90,14 @@ Next recommended phase: `저장형 후보 선택 및 attribution persistence 고
 
 ## 재현 명령
 
+Phase 0 safety:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3d_broker_safety.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q
+```
+
 Targeted backend:
 
 ```powershell
@@ -132,5 +147,6 @@ git diff --check
 
 ## 남은 검증
 
-- Alembic pytest와 frontend lint/typecheck/build는 이번 backend report/test 변경에서 재실행하지 않았다.
-- parameter optimization, 저장된 parameter snapshot 기반 후보 선택, attribution persistence/as-of sector contract는 별도 단계에서 정의해야 한다.
+- Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
+- Phase 1 Notification Foundation, KIS paper submit/cancel/sync, report notification, paper bot scheduler는 Phase 0 이후 순차 진행 대상이다.
+- KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.

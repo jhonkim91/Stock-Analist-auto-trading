@@ -2,9 +2,10 @@
 
 ## Current Head
 
-- Current Alembic head: `e5f6a7b8c9d0_add_indicator_breadth_fields`.
-- Latest schema addition: breadth proxy fields on `indicator_snapshot`.
+- Current Alembic head: `f7a8b9c0d1e2_add_strategy_parameter_snapshots`.
+- Latest schema addition: strategy parameter snapshot table.
 - The ledger is a backtest/report artifact only and is not connected to live orders, paper orders, broker adapters, KIS routes, or `orders` rows.
+- KIS paper broker Phase 0 added no schema changes. Existing `paper_orders`, `paper_fills`, `paper_positions`, and `paper_audit_events` remain write-disabled by service policy.
 
 ## 현재 정책
 
@@ -128,4 +129,5 @@ Autogenerate 결과는 그대로 신뢰하지 말고 다음을 확인한다.
 - 데이터 보존 migration은 autogenerate 대신 수동 migration으로 작성한다.
 - index/unique constraint 이름을 명시해 환경별 drift를 줄인다.
 - migration 적용 전 백업, dry-run SQL 검토, rollback 방안을 별도 문서화한다.
+- future paper broker persistence는 별도 phase에서 additive-only migration으로 작성한다.
 - broker/KIS/live trading 관련 schema는 별도 승인 전까지 추가하지 않는다.

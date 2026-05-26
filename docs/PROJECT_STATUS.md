@@ -6,11 +6,11 @@
 |---|---|
 | Version | `MVP v0.24.0` |
 | Phase | `Factor/Filter Attribution Minimal Integration` |
-| Branch | `main` |
+| Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | 실거래 미구현, fail-closed, preview-only |
-| 최신 backend pytest | `factor/filter attribution targeted 47 passed` |
-| 다음 권장 Phase | `저장형 후보 선택 및 attribution persistence 고도화` |
+| 최신 backend pytest | Phase 0 safety suites `17 passed`, full `293 passed` |
+| 다음 권장 Phase | `KIS paper broker Phase 1 Notification Foundation` |
 
 ## 구현 완료 항목
 
@@ -46,6 +46,7 @@
 - Walk-forward Minimal OOS Summary: train/test/step trading-day window와 rebalance frequency 입력 기반 `WalkForwardRunner`, strategy별 OOS metric summary, insufficient data fail-closed, `strategy_validation_252d.json` artifact 저장.
 - PBO/DSR Minimal Overfitting Validation: walk-forward window total_return 기반 CSCV-lite PBO, multiple-testing 및 non-normal input shape 기반 Deflated Sharpe Ratio, insufficient sample fail-closed unavailable.
 - Factor/Filter Attribution Minimal Integration: `backtest_trade_ledger`와 `screen_results`를 signal date/symbol/strategy 기준으로 join해 realized PnL attribution과 screen filter failure counts를 분리 계산.
+- KIS Paper Broker Phase 0 Baseline Audit: 현재 fail-closed 기준선, stale 문서 충돌, 공식 문서 확인 필요 matrix를 문서화.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -180,6 +181,7 @@
 - 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker.
 - paper order create, paper fill simulator, paper position mutation.
 - KIS credential/token 저장, token 발급/refresh/cache, 실제 KIS API 호출.
+- KIS paper broker submit/cancel/sync adapter, notification service, report notification, paper bot scheduler.
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.
 - broker-synced portfolio cash/position state, cash lock, open_positions state machine, realized exposure/drawdown.
@@ -196,6 +198,13 @@
 - `POST /api/paper/orders`, `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*`는 미등록 404 상태를 유지한다.
 - KIS token cache 파일 `.cache/kis/token.json`은 생성하지 않는다.
 - secret, token, account/header/raw credential 값을 코드, 문서, 로그, API 응답에 노출하지 않는다.
+
+## KIS Paper Broker Phase 0 상태
+
+- `docs/plans/phase-paper-broker-baseline-audit.md`와 `docs/KIS_PAPER_API_MATRIX.md`를 Phase 0 산출물로 추가했다.
+- `README.md`, `docs/plans/README.md`, `docs/DB_MIGRATION.md`의 stale 기준선은 `docs/PROJECT_STATUS.md`와 `docs/VALIDATION.md` 기준으로 조정했다.
+- 공식 문서에서 endpoint/path/TR-ID/request field가 완전 확인되지 않은 KIS paper capability는 `확인 필요`로 남겼다.
+- Phase 1 Notification Foundation은 Phase 0 커밋과 검증이 끝난 뒤 순차 진입 대상이다.
 
 ## 검증 명령
 

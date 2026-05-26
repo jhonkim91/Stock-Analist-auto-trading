@@ -2,11 +2,12 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `Factor/Filter Attribution Minimal Integration`
+- [x] 현재 상태명: `KIS Paper Broker Phase 0 Baseline Audit`
 - [x] 현재 version: `MVP v0.24.0`
-- [x] 현재 브랜치: `main`
-- [x] 최신 targeted backend pytest: `47 passed`
+- [x] 현재 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
+- [x] 최신 targeted backend pytest: Phase 0 safety suites `17 passed`
 - [x] 최신 backend full pytest: `293 passed`
+- [x] 최신 frontend 검증: Node `v24.15.0`에서 `npm ci`, lint, typecheck, build 통과
 - [x] 최신 Alembic pytest: `미실행` (이번 변경은 DB schema 변경 없음)
 - [x] 최신 diff check: `git diff --check` 통과, CRLF warning만 있음
 - [x] Phase 1 Backend Core MVP 구현
@@ -31,6 +32,7 @@
 - [x] Walk-forward Minimal OOS Summary 구현
 - [x] PBO/DSR Minimal Overfitting Validation 구현
 - [x] Factor/Filter Attribution Minimal Integration 구현
+- [x] KIS Paper Broker Phase 0 Baseline Audit 완료
 
 ## 현재 프로젝트 상태
 
@@ -53,23 +55,28 @@
 - report detail API의 `metadata.parameter_drift`는 저장된 Markdown에서 추출해 Markdown과 모순되지 않게 유지한다.
 - `/api/reports/daily`, `/api/reports/weekly`, `/api/reports?report_type=daily|weekly`, `/api/reports/{report_id}/markdown` contract는 유지된다.
 - DB migration head: `f7a8b9c0d1e2_add_strategy_parameter_snapshots`.
+- KIS paper broker Phase 0 산출물: `docs/plans/phase-paper-broker-baseline-audit.md`, `docs/KIS_PAPER_API_MATRIX.md`.
 
 ## 최근 변경 요약
 
-- `backend/app/services/validation_service.py`: `FactorFilterAttributionService` 추가, validation framework와 strategy별 validation payload에 attribution summary 연결.
-- `backend/app/services/report_service.py`: weekly report의 `Factor/Filter Attribution` placeholder를 실제 realized PnL attribution table과 screen filter failure count table로 교체.
-- `backend/tests/test_backtest.py`, `backend/tests/test_phase2_api.py`: attribution join 성공/불완전 join, weekly markdown table, strategy-summary artifact 저장 검증 추가.
-- `backend/tests/test_report_quality.py`: weekly report quality expectation을 현재 parameter drift와 attribution table 출력 계약에 맞춤.
-- `backend/reports/strategy_validation_252d.json`: top-level `validation_framework.attribution`과 strategy별 `validation.attribution` 결과 저장.
-- `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `Memory.md`: `MVP v0.24.0 / Factor/Filter Attribution Minimal Integration` 기준으로 갱신.
+- `docs/plans/phase-paper-broker-baseline-audit.md`: 현재 `main` baseline, stale 문서 충돌, Phase 0 안전 결론 기록.
+- `docs/KIS_PAPER_API_MATRIX.md`: KIS paper planned capability별 공식 문서 확인 상태와 `확인 필요` 항목 기록.
+- `README.md`, `docs/plans/README.md`, `docs/DB_MIGRATION.md`: stale baseline과 Alembic head를 source-of-truth 기준으로 조정.
+- `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `Memory.md`: KIS Paper Broker Phase 0 기준선과 safety 검증 결과 반영.
 
 ## 최신 검증 결과
 
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py -q`: 7 passed in 2.70s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3d_broker_safety.py -q`: 6 passed in 0.54s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`: 4 passed in 0.55s.
+- 2026-05-27 Phase 0 secret exposure scan: `NO_SECRET_FINDINGS`.
+- 2026-05-27 live trading enable static scan: `NO_LIVE_TRADING_ENABLE_FINDINGS`.
+- 2026-05-27 `git diff --check`: 통과, CRLF warning만 있음.
 - 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q`: 47 passed in 225.71s.
 - 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_quality.py -q`: 4 passed in 27.29s.
 - 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s.
-- 2026-05-26 `git diff --check`: 통과, CRLF warning만 있음.
-- Alembic pytest와 frontend lint/typecheck/build는 이번 backend report/test 변경에서 재실행하지 않았다.
+- 2026-05-26 Node `v24.15.0`에서 `npm.cmd ci`, `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.
+- Phase 0는 DB schema/frontend/runtime 변경이 없으므로 Alembic pytest와 frontend 검증을 재실행하지 않았다.
 
 ## 불변 조건
 
@@ -77,6 +84,7 @@
 - paper order/fill/position/audit mutation 구현 금지.
 - KIS/KRX/yfinance network call, KIS token 발급/cache/credential 저장 금지.
 - broker/order adapter import 또는 호출 금지.
+- KIS paper endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인 전까지 `확인 필요`로 남긴다.
 - 기존 report/backtest/screener API breaking change 금지.
 - strategy registry 순서와 기존 `StrategyResult` 필드 제거 금지.
 - walk-forward는 actual local backtest OOS metric만 집계한다. PBO/Deflated Sharpe는 충분한 walk-forward 표본에서만 계산하고, factor/filter attribution은 저장된 ledger/screen join으로 확인되는 값만 계산한다.
@@ -95,11 +103,12 @@
 - 저장된 parameter snapshot 기반 train-window 후보 선택과 OOS window persistence.
 - walk-forward parameter optimization, multiple-testing 보정, 저장된 parameter snapshot 기반 후보 선택.
 - parameter snapshot을 자동 생성하는 scheduler 또는 API route.
+- KIS paper broker submit/cancel/sync adapter, notification service, report notification, paper bot scheduler.
 
 ## 다음 작업
 
-- [ ] Walk-forward 고도화: 저장된 parameter snapshot 기반 후보 선택, train-window parameter selection, OOS window persistence 정책을 정의한다.
-- [ ] Factor/filter attribution 고도화: market_regime 저장 계약, sector as-of 계약, 더 긴 window별 attribution persistence를 검토한다.
+- [ ] KIS paper broker Phase 1 Notification Foundation은 Phase 0 커밋과 안전 검증이 끝난 뒤 순차 착수한다.
+- [ ] `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` endpoint/path/TR-ID/request field를 공식 문서로 보강한다.
 - [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 - [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.
 - [ ] frontend lint/typecheck/build는 frontend 변경이 포함될 때 재실행한다.

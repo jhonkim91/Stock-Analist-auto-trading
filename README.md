@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `Validation Framework Scaffold`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
+현재 기준선은 `MVP v0.24.0 / Factor/Filter Attribution Minimal Integration`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker, KIS credential/token 저장, 실제 KIS/KRX/yfinance 호출은 구현하지 않습니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -10,13 +10,14 @@
 
 | 항목 | 값 |
 |---|---|
-| Version | `MVP v0.21.0` |
-| Phase | `Validation Framework Scaffold` |
-| Branch | `main` |
+| Version | `MVP v0.24.0` |
+| Phase | `Factor/Filter Attribution Minimal Integration` |
+| Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | Trading state | fail-closed, preview-only, real order 미구현 |
-| Latest backend pytest | `287 passed` |
-| Next recommended phase | `Parameter Snapshot Foundation → Walk-forward/PBO/DSR` |
+| Latest backend pytest | `293 passed` |
+| Latest Phase 0 safety pytest | `17 passed` |
+| Next recommended phase | `KIS paper broker Phase 1 Notification Foundation` |
 
 ## Implemented Scope
 
@@ -41,8 +42,13 @@
 - Indicator incremental + breadth-aware regime: `/api/indicators/recompute`는 full recompute와 `symbol`, `start_date`, `end_date` 범위 recompute를 지원하고, `RegimeService`는 advance/decline, 52-week high/low, MA50 participation breadth proxy를 함께 반환한다.
 - Data Reliability 2: earnings event timestamp/session 기반 blackout 판단, corporate action effective-date as-of 조회, adjusted/raw price 선택 계약을 보강했다.
 - Validation Framework Scaffold: `StrategyValidationService`, `ValidationBaselineComparator`, `ValidationReportService`, walk-forward/PBO/Deflated Sharpe/factor attribution placeholder, minimal trade ledger schema metadata.
+- Parameter Snapshot Foundation: strategy parameter snapshot 저장/조회/diff와 weekly `Parameter Drift Check`.
+- Walk-forward Minimal OOS Summary: train/test/step trading-day window 기반 strategy별 OOS metric summary.
+- PBO/DSR Minimal Overfitting Validation: 충분한 walk-forward 표본에서만 PBO/Deflated Sharpe Ratio 산출.
+- Factor/Filter Attribution Minimal Integration: 저장된 `backtest_trade_ledger`와 `screen_results` join 기반 realized PnL attribution과 filter failure counts.
+- KIS Paper Broker Phase 0 Baseline Audit: 현재 fail-closed baseline과 KIS paper API 확인 matrix 문서화.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
-- Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration.
+- Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration, strategy parameter snapshot migration.
 
 ## Strategy Behavior
 
