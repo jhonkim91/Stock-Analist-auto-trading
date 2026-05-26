@@ -16,7 +16,7 @@ Next recommended phase: `저장형 후보 선택 및 attribution persistence 고
 |---|---|---|
 | factor/filter attribution targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q`: 47 passed in 225.71s |
 | Alembic migration pytest | 미실행 | 이번 변경은 DB schema/migration을 추가하지 않음 |
-| Backend full pytest | 미실행 | 이번 변경은 사용자가 지정한 targeted pytest를 실행함 |
+| Backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
 | Frontend lint/typecheck/build | 미실행 | 이번 변경은 backend service/API/test/docs 범위이며 frontend 파일은 수정하지 않음 |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
 | Documentation cross-reference check | 통과 | `PROJECT_STATUS.md`, `VALIDATION.md`, `Memory.md` 최신 checkpoint와 검증 결과 반영 |
@@ -132,5 +132,5 @@ git diff --check
 
 ## 남은 검증
 
-- backend full pytest, Alembic pytest, frontend lint/typecheck/build는 이번 targeted backend 변경에서 재실행하지 않았다.
+- Alembic pytest와 frontend lint/typecheck/build는 이번 backend report/test 변경에서 재실행하지 않았다.
 - parameter optimization, 저장된 parameter snapshot 기반 후보 선택, attribution persistence/as-of sector contract는 별도 단계에서 정의해야 한다.

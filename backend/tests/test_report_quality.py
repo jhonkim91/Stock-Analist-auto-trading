@@ -69,12 +69,20 @@ def test_weekly_report_marks_trade_ledger_fields_unavailable(seeded_db):
         "win_rate",
         "regime_segment_return",
         "failed_trade_count",
-        "parameter_snapshot_diff",
     ):
         assert f"{unavailable_field}: not_available_in_current_mvp" in content
 
     assert "| setup | screened | screen_passed | screen_pass_rate | trade_hit_rate |" in content
     assert "| not_available_in_current_mvp |" in content
+    assert "### Realized PnL Attribution" in content
+    assert "### Screen Filter Failure Counts" in content
+    assert (
+        "| attribution_type | dimension | value | trade_count | pnl | win_rate | "
+        "avg_return | joined_trade_count | unavailable_count | status |"
+    ) in content
+    assert "- parameter_snapshot_status: not_available_in_current_mvp" in content
+    assert "- unavailable_reason: strategy_parameter_snapshot_not_found" in content
+    assert "- parameter_snapshot_diff: not_available_in_current_mvp" not in content
 
     assert "- win_rate: 0" not in content
     assert "- realized_pnl: 0" not in content
@@ -149,7 +157,13 @@ def test_weekly_report_uses_trade_ledger_for_realized_metrics(seeded_db):
     assert "- failed_trade_count: 1" in content
     assert "- loss_reason_breakdown: stop:1" in content
     assert "| KRLOSS | trend_breakout |" in content
-    assert "- parameter_snapshot_diff: not_available_in_current_mvp" in content
+    assert "### Realized PnL Attribution" in content
+    assert (
+        "| realized_pnl | strategy_name | trend_breakout | 2 | 50.0 | 0.5 | 0.025 |"
+    ) in content
+    assert "- parameter_snapshot_status: not_available_in_current_mvp" in content
+    assert "- unavailable_reason: strategy_parameter_snapshot_not_found" in content
+    assert "- parameter_snapshot_diff: not_available_in_current_mvp" not in content
 
 
 def test_latest_report_endpoint_payload(client):

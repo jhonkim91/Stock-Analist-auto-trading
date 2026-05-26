@@ -6,6 +6,7 @@
 - [x] 현재 version: `MVP v0.24.0`
 - [x] 현재 브랜치: `main`
 - [x] 최신 targeted backend pytest: `47 passed`
+- [x] 최신 backend full pytest: `293 passed`
 - [x] 최신 Alembic pytest: `미실행` (이번 변경은 DB schema 변경 없음)
 - [x] 최신 diff check: `git diff --check` 통과, CRLF warning만 있음
 - [x] Phase 1 Backend Core MVP 구현
@@ -58,14 +59,17 @@
 - `backend/app/services/validation_service.py`: `FactorFilterAttributionService` 추가, validation framework와 strategy별 validation payload에 attribution summary 연결.
 - `backend/app/services/report_service.py`: weekly report의 `Factor/Filter Attribution` placeholder를 실제 realized PnL attribution table과 screen filter failure count table로 교체.
 - `backend/tests/test_backtest.py`, `backend/tests/test_phase2_api.py`: attribution join 성공/불완전 join, weekly markdown table, strategy-summary artifact 저장 검증 추가.
+- `backend/tests/test_report_quality.py`: weekly report quality expectation을 현재 parameter drift와 attribution table 출력 계약에 맞춤.
 - `backend/reports/strategy_validation_252d.json`: top-level `validation_framework.attribution`과 strategy별 `validation.attribution` 결과 저장.
 - `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `Memory.md`: `MVP v0.24.0 / Factor/Filter Attribution Minimal Integration` 기준으로 갱신.
 
 ## 최신 검증 결과
 
 - 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q`: 47 passed in 225.71s.
+- 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_quality.py -q`: 4 passed in 27.29s.
+- 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s.
 - 2026-05-26 `git diff --check`: 통과, CRLF warning만 있음.
-- backend full pytest, Alembic pytest, frontend lint/typecheck/build는 이번 targeted backend 변경에서 재실행하지 않았다.
+- Alembic pytest와 frontend lint/typecheck/build는 이번 backend report/test 변경에서 재실행하지 않았다.
 
 ## 불변 조건
 
@@ -98,4 +102,4 @@
 - [ ] Factor/filter attribution 고도화: market_regime 저장 계약, sector as-of 계약, 더 긴 window별 attribution persistence를 검토한다.
 - [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 - [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.
-- [ ] full backend pytest와 frontend lint/typecheck/build는 publish/commit 전 필요 시 재실행한다.
+- [ ] frontend lint/typecheck/build는 frontend 변경이 포함될 때 재실행한다.
