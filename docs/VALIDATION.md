@@ -6,11 +6,11 @@
 
 Version: `MVP v0.24.0`
 
-Checkpoint: `KIS Paper Broker Phase 0 Baseline Audit`
+Checkpoint: `KIS Paper Broker Phase 1 Notification Foundation`
 
 기준 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
 
-Next recommended phase: `KIS paper broker Phase 1 Notification Foundation`
+Next recommended phase: `KIS paper broker Phase 2 KIS Paper Broker Contract`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -19,6 +19,11 @@ Next recommended phase: `KIS paper broker Phase 1 Notification Foundation`
 | Phase 0 paper safety pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`: 4 passed in 0.55s |
 | Phase 0 secret exposure scan | 통과 | changed Phase 0 docs/goal scope scan: `NO_SECRET_FINDINGS` |
 | Phase 0 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_LIVE_TRADING_ENABLE_FINDINGS` |
+| Phase 1 notification pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_api.py -q`: 8 passed in 0.49s |
+| Phase 1 broker/paper safety regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 10 passed in 0.68s |
+| Phase 1 frontend lint/typecheck/build | 통과 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` |
+| Phase 1 secret exposure scan | 통과 | changed/untracked Phase 1 scope scan: `NO_PHASE1_SECRET_FINDINGS` |
+| Phase 1 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE1_LIVE_TRADING_ENABLE_FINDINGS` |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
 | Documentation cross-reference check | 통과 | `README.md`, `docs/PROJECT_STATUS.md`, `docs/DB_MIGRATION.md`, `docs/plans/README.md`, `docs/VALIDATION.md`, `Memory.md` Phase 0 기준선 반영 |
 | 직전 backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
@@ -27,6 +32,9 @@ Next recommended phase: `KIS paper broker Phase 1 Notification Foundation`
 ## 검증 범위
 
 - KIS paper broker Phase 0는 문서 전용 변경이며 runtime code, API endpoint, DB schema를 변경하지 않았다.
+- KIS paper broker Phase 1은 notification foundation만 추가했다. 기본 config는 disabled/dry-run이며 trading flow와 연결하지 않았다.
+- `/api/notifications/status`와 `/api/notifications/test`는 secret 값을 반환하지 않고 credential configured boolean만 반환한다.
+- Discord adapter는 `allowed_mentions.parse=[]` payload를 강제하고, Telegram adapter는 unsafe MarkdownV2를 기본값으로 사용하지 않는다.
 - `docs/plans/phase-paper-broker-baseline-audit.md`는 현재 `main` baseline, stale 문서 충돌, source-of-truth 우선순위를 기록한다.
 - `docs/KIS_PAPER_API_MATRIX.md`는 공식 문서에서 완전 확인되지 않은 KIS paper endpoint/path/TR-ID/request field를 `확인 필요`로 남긴다.
 - `README.md`, `docs/plans/README.md`, `docs/DB_MIGRATION.md`의 stale 기준선을 `docs/PROJECT_STATUS.md`와 `docs/VALIDATION.md` 기준으로 조정했다.
@@ -90,6 +98,18 @@ Next recommended phase: `KIS paper broker Phase 1 Notification Foundation`
 
 ## 재현 명령
 
+Phase 1 notification:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_api.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q
+cd frontend
+npm.cmd run lint
+npm.cmd exec tsc -- --noEmit
+npm.cmd run build
+cd ..
+```
+
 Phase 0 safety:
 
 ```powershell
@@ -148,5 +168,5 @@ git diff --check
 ## 남은 검증
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
-- Phase 1 Notification Foundation, KIS paper submit/cancel/sync, report notification, paper bot scheduler는 Phase 0 이후 순차 진행 대상이다.
+- Phase 2 KIS Paper Broker Contract, paper submit/cancel/sync, report notification, paper bot scheduler는 이후 순차 진행 대상이다.
 - KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.

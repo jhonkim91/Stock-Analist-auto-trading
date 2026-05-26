@@ -2,10 +2,10 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `KIS Paper Broker Phase 0 Baseline Audit`
+- [x] 현재 상태명: `KIS Paper Broker Phase 1 Notification Foundation`
 - [x] 현재 version: `MVP v0.24.0`
 - [x] 현재 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
-- [x] 최신 targeted backend pytest: Phase 0 safety suites `17 passed`
+- [x] 최신 targeted backend pytest: Phase 1 notification/regression `18 passed`
 - [x] 최신 backend full pytest: `293 passed`
 - [x] 최신 frontend 검증: Node `v24.15.0`에서 `npm ci`, lint, typecheck, build 통과
 - [x] 최신 Alembic pytest: `미실행` (이번 변경은 DB schema 변경 없음)
@@ -33,6 +33,7 @@
 - [x] PBO/DSR Minimal Overfitting Validation 구현
 - [x] Factor/Filter Attribution Minimal Integration 구현
 - [x] KIS Paper Broker Phase 0 Baseline Audit 완료
+- [x] KIS Paper Broker Phase 1 Notification Foundation 완료
 
 ## 현재 프로젝트 상태
 
@@ -56,6 +57,7 @@
 - `/api/reports/daily`, `/api/reports/weekly`, `/api/reports?report_type=daily|weekly`, `/api/reports/{report_id}/markdown` contract는 유지된다.
 - DB migration head: `f7a8b9c0d1e2_add_strategy_parameter_snapshots`.
 - KIS paper broker Phase 0 산출물: `docs/plans/phase-paper-broker-baseline-audit.md`, `docs/KIS_PAPER_API_MATRIX.md`.
+- KIS paper broker Phase 1 산출물: `backend/config/notifications.yaml`, `/api/notifications/status`, `/api/notifications/test`, disabled/mock notification abstraction, Discord/Telegram adapter skeleton.
 
 ## 최근 변경 요약
 
@@ -63,9 +65,18 @@
 - `docs/KIS_PAPER_API_MATRIX.md`: KIS paper planned capability별 공식 문서 확인 상태와 `확인 필요` 항목 기록.
 - `README.md`, `docs/plans/README.md`, `docs/DB_MIGRATION.md`: stale baseline과 Alembic head를 source-of-truth 기준으로 조정.
 - `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `Memory.md`: KIS Paper Broker Phase 0 기준선과 safety 검증 결과 반영.
+- `backend/app/services/notification_service.py`, `discord_notifier.py`, `telegram_notifier.py`: disabled/mock 기본 notification abstraction과 redacted status/test dispatch contract 추가.
+- `backend/app/api/notifications.py`, `backend/config/notifications.yaml`, `.env.example`: `/api/notifications/status`, `/api/notifications/test`, placeholder-only env 변수 추가.
+- `frontend/app/settings/page.tsx`, `frontend/lib/api.ts`: settings 화면에 redacted notification status 요약 추가.
+- `backend/tests/test_notifications.py`, `backend/tests/test_notification_api.py`: redaction, disabled dry-run, mock mode, Discord mention safety, Telegram plain text 기본값 검증.
 
 ## 최신 검증 결과
 
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_api.py -q`: 8 passed in 0.49s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 10 passed in 0.68s.
+- 2026-05-27 frontend `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.
+- 2026-05-27 Phase 1 secret exposure scan: `NO_PHASE1_SECRET_FINDINGS`.
+- 2026-05-27 Phase 1 live trading enable static scan: `NO_PHASE1_LIVE_TRADING_ENABLE_FINDINGS`.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py -q`: 7 passed in 2.70s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3d_broker_safety.py -q`: 6 passed in 0.54s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`: 4 passed in 0.55s.
@@ -103,11 +114,11 @@
 - 저장된 parameter snapshot 기반 train-window 후보 선택과 OOS window persistence.
 - walk-forward parameter optimization, multiple-testing 보정, 저장된 parameter snapshot 기반 후보 선택.
 - parameter snapshot을 자동 생성하는 scheduler 또는 API route.
-- KIS paper broker submit/cancel/sync adapter, notification service, report notification, paper bot scheduler.
+- KIS paper broker submit/cancel/sync adapter, report notification, paper bot scheduler.
 
 ## 다음 작업
 
-- [ ] KIS paper broker Phase 1 Notification Foundation은 Phase 0 커밋과 안전 검증이 끝난 뒤 순차 착수한다.
+- [ ] KIS paper broker Phase 2 KIS Paper Broker Contract는 live placeholder를 fail-closed로 유지하면서 adapter/token contract만 추가한다.
 - [ ] `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` endpoint/path/TR-ID/request field를 공식 문서로 보강한다.
 - [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 - [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.

@@ -1,6 +1,6 @@
 # Phase Plans
 
-이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `MVP v0.24.0 / Factor/Filter Attribution Minimal Integration`이며 KIS paper broker 작업은 Phase 0 baseline audit까지만 완료했다.
+이 디렉터리는 단계별 개발 계획과 승인 경계를 관리한다. 현재 기준선은 `MVP v0.24.0 / KIS Paper Broker Phase 1 Notification Foundation`이다.
 
 ## 문서 역할
 
@@ -13,10 +13,10 @@
 
 | 항목 | 값 |
 |---|---|
-| 현재 checkpoint | `Factor/Filter Attribution Minimal Integration` |
-| 현재 구현 완료 | Weekly Review Report, Trade Ledger Foundation, Portfolio Risk Guard v2, breadth/Data Reliability 2, Validation Framework Scaffold, Parameter Snapshot Foundation, Walk-forward/PBO/DSR minimal validation, Factor/Filter Attribution, KIS paper broker Phase 0 audit |
-| 최신 backend pytest | Phase 0 safety suites `17 passed`, full backend `293 passed` |
-| 다음 권장 Phase | `KIS paper broker Phase 1 Notification Foundation` |
+| 현재 checkpoint | `KIS Paper Broker Phase 1 Notification Foundation` |
+| 현재 구현 완료 | Weekly Review Report, Trade Ledger Foundation, Portfolio Risk Guard v2, breadth/Data Reliability 2, Validation Framework Scaffold, Parameter Snapshot Foundation, Walk-forward/PBO/DSR minimal validation, Factor/Filter Attribution, KIS paper broker Phase 0 audit, Phase 1 notification foundation |
+| 최신 backend pytest | Phase 1 targeted/regression `18 passed`, full backend `293 passed` |
+| 다음 권장 Phase | `KIS paper broker Phase 2 KIS Paper Broker Contract` |
 | 상태 요약 문서 | `docs/PROJECT_STATUS.md` |
 | 상세 검증 문서 | `docs/VALIDATION.md` |
 | 프로젝트 메모리 | `Memory.md` |
@@ -51,11 +51,12 @@
 | Walk-forward/PBO/DSR Minimal Validation | 완료 | `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `Memory.md` | OOS summary, PBO/DSR fail-closed calculation |
 | Factor/Filter Attribution Minimal Integration | 완료 | `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `Memory.md` | ledger/screen join 기반 realized PnL attribution과 filter failure counts |
 | KIS Paper Broker Phase 0 | 완료 | `docs/plans/phase-paper-broker-baseline-audit.md`, `docs/KIS_PAPER_API_MATRIX.md`, `docs/VALIDATION.md`, `Memory.md` | baseline audit, stale docs reconciliation, official-doc confirmation matrix |
+| KIS Paper Broker Phase 1 | 완료 | `backend/config/notifications.yaml`, `/api/notifications/status`, `/api/notifications/test`, `docs/VALIDATION.md`, `Memory.md` | disabled/mock notification abstraction, Discord/Telegram adapter skeleton, settings redacted summary |
 | Phase 4A/4B | 보류 | 별도 승인 필요 | broker 또는 live gate |
 
 ## 다음 후보
 
-1. KIS paper broker Phase 1 Notification Foundation은 Phase 0 커밋과 안전 검증이 끝난 뒤 순차 착수한다.
+1. KIS paper broker Phase 2 KIS Paper Broker Contract는 live placeholder를 fail-closed로 유지하면서 adapter/token contract만 추가한다.
 2. KIS endpoint/path/TR-ID/request field는 `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` 항목을 공식 문서로 먼저 보강한다.
 3. Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 4. Strategy hardening 조건을 기본 활성화할지는 별도 백테스트와 샘플 영향 검증 후 결정한다.

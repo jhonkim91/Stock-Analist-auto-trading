@@ -524,6 +524,29 @@ export type KisStatus = {
   disabled_reason: string;
 };
 
+export type NotificationChannelStatus = {
+  alias: string;
+  type: string;
+  enabled: boolean;
+  mode: string;
+  dry_run: boolean;
+  configured: boolean;
+  credential_fields: Record<string, boolean>;
+  can_dispatch: boolean;
+  reason_codes: string[];
+  secrets_redacted: boolean;
+};
+
+export type NotificationStatus = {
+  enabled: boolean;
+  default_dry_run: boolean;
+  config_status: string;
+  reason_codes: string[];
+  network_delivery_allowed: boolean;
+  secrets_redacted: boolean;
+  channels: NotificationChannelStatus[];
+};
+
 export type SettingsPayload = Record<string, unknown>;
 
 export type ActionResponse = Record<string, unknown>;

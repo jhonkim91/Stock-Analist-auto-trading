@@ -1,0 +1,20 @@
+notifications:
+  enabled: false
+  default_dry_run: true
+  channels:
+    discord_ops:
+      type: discord
+      enabled: false
+      mode: disabled
+      webhook_env: DISCORD_OPS_WEBHOOK_URL
+      dry_run: true
+      allowed_mentions:
+        parse: []
+    telegram_main:
+      type: telegram
+      enabled: false
+      mode: disabled
+      bot_token_env: TELEGRAM_BOT_TOKEN
+      chat_id_env: TELEGRAM_CHAT_ID
+      dry_run: true
+      parse_mode: null
