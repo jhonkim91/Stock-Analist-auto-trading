@@ -2,10 +2,10 @@
 
 ## Checkpoint
 
-- [x] 현재 상태명: `KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync`
+- [x] 현재 상태명: `KIS Paper Broker Phase 6 Report Notification`
 - [x] 현재 version: `MVP v0.24.0`
 - [x] 현재 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
-- [x] 최신 targeted backend pytest: Phase 5 sync/portfolio `6 passed`
+- [x] 최신 targeted backend pytest: Phase 6 report notify `8 passed`
 - [x] 최신 backend full pytest: `293 passed`
 - [x] 최신 frontend 검증: Node `v24.15.0`에서 `npm ci`, lint, typecheck, build 통과
 - [x] 최신 Alembic pytest: `4 passed`
@@ -38,6 +38,7 @@
 - [x] KIS Paper Broker Phase 3 Paper Trading Persistence 완료
 - [x] KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel 완료
 - [x] KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync 완료
+- [x] KIS Paper Broker Phase 6 Report Notification 완료
 
 ## 현재 프로젝트 상태
 
@@ -66,6 +67,7 @@
 - KIS paper broker Phase 3 산출물: `backend/alembic/versions/a8b9c0d1e2f3_paper_trading_persistence.py`, `backend/tests/test_paper_persistence_migration.py`, paper persistence SQLAlchemy models.
 - KIS paper broker Phase 4 산출물: `backend/app/services/paper_order_service.py`, `/api/paper/orders/submit`, `/api/paper/orders/cancel`, `/api/paper/orders` local list API, `backend/tests/test_paper_order_api.py`, `backend/tests/test_paper_order_service.py`.
 - KIS paper broker Phase 5 산출물: `backend/app/services/paper_sync_service.py`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio`, `/api/paper/sync`, `backend/tests/test_paper_sync.py`, `backend/tests/test_paper_portfolio_api.py`.
+- KIS paper broker Phase 6 산출물: `backend/app/services/report_notification_service.py`, `/api/reports/{report_id}/notify`, `backend/tests/test_report_notify.py`.
 
 ## 최근 변경 요약
 
@@ -88,6 +90,9 @@
 - `backend/app/services/paper_sync_service.py`, `backend/app/api/paper.py`: paper fill/position/portfolio snapshot 조회 API와 공식 KIS sync contract 확인 전 fail-closed/idempotent sync no-op 추가.
 - `backend/app/services/portfolio_service.py`: synthetic `positions`와 `paper_positions`/`paper_portfolio_snapshots` 분리 contract 추가.
 - `backend/tests/test_paper_sync.py`, `backend/tests/test_paper_portfolio_api.py`: sync no-op idempotency, paper table 전용 views, synthetic position 미혼합 검증 추가.
+- `backend/app/services/report_notification_service.py`, `backend/app/api/reports.py`: saved report notify endpoint 추가. summary는 channel limit 아래로 split하고, summary_and_file은 첨부 metadata를 포함한다.
+- `backend/app/services/notification_service.py`, `backend/app/services/report_service.py`: report notification이 channel resolution/dispatch와 report lookup을 재사용하도록 public wrapper 추가.
+- `backend/tests/test_report_notify.py`: disabled/mock/live-failure 경로, secret redaction, split length, delivery log, report preservation 검증 추가.
 
 ## 최신 검증 결과
 
@@ -97,6 +102,11 @@
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q`: 6 passed in 0.76s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py -q`: 5 passed in 0.63s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py -q`: 3 passed in 0.03s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_notify.py backend/tests/test_notifications.py -q`: 8 passed in 0.73s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notification_api.py -q`: 3 passed in 0.54s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_quality.py -q`: 4 passed in 28.61s.
+- 2026-05-27 Phase 6 secret exposure scan: `NO_PHASE6_SECRET_FINDINGS`.
+- 2026-05-27 Phase 6 live trading enable static scan: `NO_PHASE6_LIVE_TRADING_ENABLE_FINDINGS`.
 - 2026-05-27 Phase 5 secret exposure scan: `NO_PHASE5_SECRET_FINDINGS`.
 - 2026-05-27 Phase 5 live trading enable static scan: `NO_PHASE5_LIVE_TRADING_ENABLE_FINDINGS`.
 - 2026-05-27 Phase 4 secret exposure scan: `NO_PHASE4_SECRET_FINDINGS`.
@@ -151,11 +161,11 @@
 - 저장된 parameter snapshot 기반 train-window 후보 선택과 OOS window persistence.
 - walk-forward parameter optimization, multiple-testing 보정, 저장된 parameter snapshot 기반 후보 선택.
 - parameter snapshot을 자동 생성하는 scheduler 또는 API route.
-- KIS paper broker submit/cancel network implementation, report notification, paper bot scheduler.
+- KIS paper broker submit/cancel network implementation, paper bot scheduler.
 
 ## 다음 작업
 
-- [ ] KIS paper broker Phase 6 Report Notification은 notification failure가 report/paper state를 rollback하지 않도록 진행한다.
+- [ ] KIS paper broker Phase 7 Bot Scheduler는 default disabled, `PAPER_BOT_AUTO_SUBMIT=false`, kill-switch 우선 기준으로 진행한다.
 - [ ] `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` endpoint/path/TR-ID/request field를 공식 문서로 보강한다.
 - [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
 - [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.

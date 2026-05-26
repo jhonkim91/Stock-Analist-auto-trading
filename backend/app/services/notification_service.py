@@ -156,6 +156,35 @@ class NotificationService:
             delivered=bool(delivery.get("delivered")),
         )
 
+    def resolve_channel(self, channel_alias: str | None = None) -> dict[str, Any]:
+        """report delivery가 secret 없이 channel 상태와 payload shape를 재사용하도록 반환한다."""
+        config, reasons = self.config_service.load()
+        alias, raw = self._select_channel(config, channel_alias)
+        if raw is None:
+            return {
+                "found": False,
+                "alias": alias,
+                "raw": None,
+                "channel": None,
+                "reason_codes": self._merge_reason_codes(reasons, ["CHANNEL_NOT_FOUND"]),
+                "payload_shape": {},
+                "default_dry_run": True,
+            }
+        channel = self._channel_status(alias, raw, config)
+        return {
+            "found": True,
+            "alias": alias,
+            "raw": raw,
+            "channel": channel,
+            "reason_codes": self._merge_reason_codes(reasons, list(channel["reason_codes"])),
+            "payload_shape": self._payload_shape(raw),
+            "default_dry_run": bool(config.get("default_dry_run", True)),
+        }
+
+    def dispatch(self, raw: dict[str, Any], message: str) -> dict[str, Any]:
+        """검증된 channel raw config로 실제 dispatch를 수행한다."""
+        return self._dispatch(raw, message)
+
     def _iter_channels(self, config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         raw_channels = config.get("channels")
         channels = raw_channels if isinstance(raw_channels, dict) else {}

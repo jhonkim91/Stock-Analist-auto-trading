@@ -6,11 +6,11 @@
 
 Version: `MVP v0.24.0`
 
-Checkpoint: `KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync`
+Checkpoint: `KIS Paper Broker Phase 6 Report Notification`
 
 기준 브랜치: `feature/kis-paper-goal-phases` (baseline: `main`)
 
-Next recommended phase: `KIS paper broker Phase 6 Report Notification`
+Next recommended phase: `KIS paper broker Phase 7 Bot Scheduler`
 
 | 항목 | 결과 | 명령/근거 |
 |---|---|---|
@@ -42,6 +42,11 @@ Next recommended phase: `KIS paper broker Phase 6 Report Notification`
 | Phase 5 KIS adapter regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py -q`: 3 passed in 0.03s |
 | Phase 5 secret exposure scan | 통과 | changed/untracked Phase 5 scope scan: `NO_PHASE5_SECRET_FINDINGS` |
 | Phase 5 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE5_LIVE_TRADING_ENABLE_FINDINGS` |
+| Phase 6 report notify pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_notify.py backend/tests/test_notifications.py -q`: 8 passed in 0.73s |
+| Phase 6 notification API regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notification_api.py -q`: 3 passed in 0.54s |
+| Phase 6 report quality regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_quality.py -q`: 4 passed in 28.61s |
+| Phase 6 secret exposure scan | 통과 | changed/untracked Phase 6 scope scan: `NO_PHASE6_SECRET_FINDINGS` |
+| Phase 6 live trading enable scan | 통과 | backend/frontend/config static scan: `NO_PHASE6_LIVE_TRADING_ENABLE_FINDINGS` |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning 외 whitespace error 없음 |
 | Documentation cross-reference check | 통과 | `README.md`, `docs/PROJECT_STATUS.md`, `docs/DB_MIGRATION.md`, `docs/plans/README.md`, `docs/VALIDATION.md`, `Memory.md` Phase 0 기준선 반영 |
 | 직전 backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s |
@@ -160,6 +165,14 @@ Phase 5 paper sync/portfolio:
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py -q
 ```
 
+Phase 6 report notification:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_notify.py backend/tests/test_notifications.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_notification_api.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_quality.py -q
+```
+
 Phase 0 safety:
 
 ```powershell
@@ -208,6 +221,7 @@ git diff --check
 | PBO/Deflated Sharpe 허위 precision 생성 | 없음. 충분 표본에서만 계산하고 부족하면 `not_available_in_current_mvp`, `calculated=false`, `reason` 유지 |
 | factor/filter attribution 추정 수치 생성 | 없음. 저장된 ledger/screen join으로 확인되는 값만 계산하고 불완전 join은 `not_available_in_current_mvp`로 표시 |
 | report schema 변경 | 없음. 기존 `reports` 테이블 재사용 |
+| report notification log secret exposure | 없음. event/log에는 message 본문 대신 hash, 길이, 첨부 metadata만 저장 |
 | indicator schema 변경 | 이번 변경 없음. 기존 breadth proxy nullable fields와 availability flags 유지 |
 | parameter snapshot schema 변경 | `strategy_parameter_snapshots` 추가. report/backtest/order 실행 테이블과 분리 |
 | backtest/report schema 변경 | `backtest_trade_ledger` 유지, 기존 report persistence contract 유지 |
@@ -219,5 +233,5 @@ git diff --check
 ## 남은 검증
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
-- Phase 6 Report Notification, paper bot scheduler는 이후 순차 진행 대상이다.
+- Phase 7 Bot Scheduler는 이후 순차 진행 대상이다.
 - KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.

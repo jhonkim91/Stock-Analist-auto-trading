@@ -146,6 +146,12 @@ class PaperSyncRequest(BaseModel):
     scope: Literal["orders", "fills", "positions", "portfolio", "all"] = "all"
 
 
+class ReportNotifyRequest(BaseModel):
+    mode: Literal["summary", "summary_and_file"] = "summary"
+    channel_alias: str | None = None
+    dry_run: bool | None = None
+
+
 class ImportConfirmRequest(BaseModel):
     run_id: str
 

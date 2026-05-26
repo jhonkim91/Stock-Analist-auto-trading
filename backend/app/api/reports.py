@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
+from backend.app.models.schemas import ReportNotifyRequest
 from backend.app.services.report_service import ReportService
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -64,3 +65,16 @@ def report_markdown(report_id: str, db: Session = Depends(get_db)) -> Response:
         media_type="text/markdown; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="report-{report_id}.md"'},
     )
+
+
+@router.post("/{report_id}/notify")
+def notify_report(report_id: str, payload: ReportNotifyRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    try:
+        return ReportService(db).notify_report(
+            report_id,
+            mode=payload.mode,
+            channel_alias=payload.channel_alias,
+            dry_run=payload.dry_run,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -34,8 +34,8 @@
 | Sellable quantity inquiry | 국내주식 `매도가능수량조회` category는 확인 | 확인 필요 | 미구현 | short/oversell guard field 확인 필요 |
 | Paper portfolio/account snapshot | 관련 계좌 조회 category는 확인 | 확인 필요 | local view 구현 | `/api/paper/portfolio`는 `paper_portfolio_snapshots`와 `paper_positions` 요약만 반환. raw account number 노출 금지 |
 | Broker audit events | KIS API 아님 | 해당 없음 | local paper submit audit opt-in 구현 | raw account/token/webhook redaction 필수 |
-| Notification delivery | KIS API 아님 | 해당 없음 | 미구현 | Discord/Telegram secret은 env only |
-| Report notification | KIS API 아님 | 해당 없음 | 미구현 | notification failure는 report 생성 rollback 금지 |
+| Notification delivery | KIS API 아님 | 해당 없음 | disabled/mock/live adapter foundation 구현 | Discord/Telegram secret은 env only |
+| Report notification | KIS API 아님 | 해당 없음 | 구현 | `/api/reports/{report_id}/notify`, channel-safe split, optional attachment metadata, sanitized delivery logs |
 | Paper bot scheduler | KIS API 아님 | 해당 없음 | 미구현 | default scheduler disabled, `PAPER_BOT_AUTO_SUBMIT=false` |
 | KIS live broker adapter | 현재 범위 제외 | 해당 없음 | 미구현 | disabled placeholder only |
 | KIS WebSocket trading | 공식 WebSocket 방식은 확인 | 확인 필요 | 미구현 | live WebSocket trading은 non-goal |

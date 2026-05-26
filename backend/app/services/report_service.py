@@ -90,6 +90,24 @@ class ReportService:
             raise ValueError("리포트를 찾을 수 없습니다.")
         return self._read_markdown(report)
 
+    def notify_report(
+        self,
+        report_id: str,
+        *,
+        mode: Literal["summary", "summary_and_file"] = "summary",
+        channel_alias: str | None = None,
+        dry_run: bool | None = None,
+    ) -> dict[str, object]:
+        """저장된 report를 notification channel로 전달하고 delivery log를 남긴다."""
+        from backend.app.services.report_notification_service import ReportNotificationService
+
+        return ReportNotificationService(self.db).notify(
+            report_id=report_id,
+            mode=mode,
+            channel_alias=channel_alias,
+            dry_run=dry_run,
+        )
+
     def _generate_markdown_report(self, report_type: ReportType, report_date: date | None) -> dict[str, object]:
         target_date = self._resolve_report_date(report_date)
         context = self._build_context(target_date)
