@@ -4,7 +4,17 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { PaperModeBanner } from "../../components/paper-mode-banner";
-import { callApi, type ApiStatus, type NotificationStatus, type PaperStatus, type SettingsPayload } from "../../lib/api";
+import {
+  callApi,
+  type ApiStatus,
+  type NotificationStatus,
+  type NotificationTestResponse,
+  type PaperBotStatus,
+  type PaperStatus,
+  type SettingsPayload
+} from "../../lib/api";
+import { getNotificationStatus, sendNotificationTest } from "../../lib/notificationApi";
+import { getBotStatus, getPaperStatus } from "../../lib/paperApi";
 
 const sections = ["strategies", "risk", "backtest", "app", "data_sources", "notifications", "bot"] as const;
 
@@ -27,6 +37,9 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingsPayload | null>(null);
   const [notifications, setNotifications] = useState<NotificationStatus | null>(null);
   const [paperStatus, setPaperStatus] = useState<PaperStatus | null>(null);
+  const [botStatus, setBotStatus] = useState<PaperBotStatus | null>(null);
+  const [notificationTest, setNotificationTest] = useState<NotificationTestResponse | null>(null);
+  const [notificationTestStatus, setNotificationTestStatus] = useState<ApiStatus>("idle");
 
   const loadSettings = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -36,12 +49,14 @@ export default function SettingsPage() {
     try {
       const [data, notificationStatus, paperRuntimeStatus] = await Promise.all([
         callApi<SettingsPayload>("/api/settings"),
-        callApi<NotificationStatus>("/api/notifications/status"),
-        callApi<PaperStatus>("/api/paper/status")
+        getNotificationStatus(),
+        getPaperStatus()
       ]);
+      const botRuntimeStatus = await getBotStatus();
       setSettings(data);
       setNotifications(notificationStatus);
       setPaperStatus(paperRuntimeStatus);
+      setBotStatus(botRuntimeStatus);
       setStatus("ok");
       setMessage("조회 완료");
     } catch (error) {
@@ -50,6 +65,7 @@ export default function SettingsPage() {
       setSettings(null);
       setNotifications(null);
       setPaperStatus(null);
+      setBotStatus(null);
     }
   }, []);
 
@@ -63,11 +79,34 @@ export default function SettingsPage() {
   const botSettings = asRecord(settings?.bot);
   const botConfig = asRecord(botSettings.bot);
 
+  async function runNotificationTest() {
+    setNotificationTestStatus("loading");
+    try {
+      const result = await sendNotificationTest({
+        channel_alias: null,
+        message: "paper notification dry-run",
+        dry_run: true
+      });
+      setNotificationTest(result);
+      setNotificationTestStatus(result.ok ? "ok" : "error");
+    } catch (error) {
+      setNotificationTest({
+        ok: false,
+        status: error instanceof Error ? error.message : "notification test failed",
+        attempted: false,
+        delivered: false,
+        dry_run: true,
+        reason_codes: ["FRONTEND_NOTIFICATION_TEST_FAILED"]
+      });
+      setNotificationTestStatus("error");
+    }
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 8 · Settings</p>
+          <p className="eyebrow">Phase 10 · Settings</p>
           <h1>Settings</h1>
         </div>
         <nav className="nav">
@@ -78,6 +117,7 @@ export default function SettingsPage() {
           <Link href="/backtest">Backtest</Link>
           <Link href="/portfolio">Portfolio</Link>
           <Link href="/paper">Paper</Link>
+          <Link href="/bot">Bot</Link>
         </nav>
         <span className={`status ${status}`}>{message}</span>
       </header>
@@ -106,14 +146,23 @@ export default function SettingsPage() {
             <Metric label="dry_run" value={notifications?.default_dry_run} />
             <Metric label="redacted" value={notifications?.secrets_redacted} />
             <Metric label="channels" value={notifications?.channels.length} />
+            <Metric label="events" value={notifications?.supported_events.length} />
+            <Metric label="test_status" value={notificationTest?.status ?? notificationTestStatus} />
+          </div>
+          <div className="toolbar compactToolbar">
+            <button type="button" onClick={runNotificationTest}>
+              알림 dry-run test
+            </button>
           </div>
         </article>
         <article>
           <h2>Bot summary</h2>
           <div className="metricGrid">
-            <Metric label="enabled" value={String(botConfig.enabled ?? false)} />
-            <Metric label="scheduler" value={String(botConfig.scheduler_enabled ?? false)} />
-            <Metric label="auto_submit" value={String(botConfig.auto_submit ?? false)} />
+            <Metric label="config_enabled" value={String(botConfig.enabled ?? false)} />
+            <Metric label="runtime_enabled" value={botStatus?.enabled} />
+            <Metric label="kill_switch" value={botStatus?.kill_switch_enabled} />
+            <Metric label="auto_submit_allowed" value={botStatus?.auto_submit_allowed} />
+            <Metric label="mode" value={botStatus?.mode} />
             <Metric label="paper only" value="실거래 아님" />
           </div>
         </article>
@@ -127,6 +176,8 @@ export default function SettingsPage() {
               {notifications.enabled ? "enabled" : "disabled"} · {notifications.default_dry_run ? "dry-run" : "direct"} ·
               {notifications.secrets_redacted ? " redacted" : " unredacted"}
             </p>
+            <p className="muted">supported events: {notifications.supported_events.join(", ")}</p>
+            {notificationTest ? <pre className="tinyPre">{JSON.stringify(notificationTest, null, 2)}</pre> : null}
           </section>
 
           <section className="cardGrid">

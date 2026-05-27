@@ -54,9 +54,10 @@
 - KIS Paper Broker Phase 4 Paper Order Preview/Submit/Cancel: `POST /api/paper/orders/submit`, `POST /api/paper/orders/cancel`, `GET /api/paper/orders`, confirm/idempotency/kill-switch gated local paper order lifecycle.
 - KIS Paper Broker Phase 5 Fill/Position/Portfolio Sync: `GET /api/paper/fills`, `GET /api/paper/positions`, `GET /api/paper/portfolio`, `POST /api/paper/sync` fail-closed/idempotent no-op until official KIS sync contract is confirmed.
 - KIS Paper Broker Phase 6 Report Notification: `POST /api/reports/{report_id}/notify`, channel-safe summary splitting, optional attachment metadata, sanitized notification event/delivery logs.
-- KIS Paper Broker Phase 7 Bot Scheduler: disabled-by-default paper bot config, safe once/loop runner, `/api/paper/bot/status`, `/api/paper/bot/run`, launcher check integration without automatic scheduler start.
+- KIS Paper Broker Phase 7 Bot Scheduler: disabled-by-default paper bot config, safe once/loop runner, `/api/bot/status`, `/api/bot/run-once`, `/api/bot/stop`, launcher check integration without automatic scheduler start.
 - KIS Paper Broker Phase 8 Frontend Integration: `/paper`, `/portfolio`, `/reports`, `/settings`에 `모의투자`, `실거래 아님`, `paper only` boundary를 표시하고 paper submit/history/snapshot/sync/report notify controls를 backend safety API로만 연결.
 - KIS Paper Broker Phase 9 Validation & Hardening: `tools/secret_scan.py`, `backend/tests/test_secret_redaction.py`, CI secret scan, key-name redaction hardening, `docs/PAPER_TRADING_OPERATION.md`, full backend/frontend acceptance 검증.
+- Goal.md Phase 10 Frontend Integration: `/bot` 화면, paper/notification API wrapper, `/paper` bot/kill-switch indicator, `/settings` notification dry-run test, `/reports` report notify action을 paper-only UI로 연결.
 - KIS Paper Balance Inquiry Read-only: `/api/paper/portfolio`에서 공식 `주식잔고조회[v1_국내주식-006]` paper TR `VTTC8434R`를 조건부 호출하고, disabled/mock 상태는 기존 local snapshot fallback 유지.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
 - Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration, strategy parameter snapshot migration, paper trading persistence migration.
@@ -253,6 +254,9 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `POST` | `/api/paper/orders/cancel` | KIS cancel payload 공식 확인 전 disabled |
 | `GET` | `/api/paper/orders`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio` | paper_* table 전용 조회, `/api/paper/portfolio`는 KIS paper balance 조건부 read-only 호출 후 local fallback |
 | `POST` | `/api/paper/sync` | 공식 KIS sync contract 확인 전 fail-closed no-op |
+| `GET` | `/api/bot/status` | paper-only bot runtime status, kill-switch/session/auto-submit gate 표시 |
+| `POST` | `/api/bot/run-once` | paper-only preview decision loop, auto-submit은 명시 opt-in과 backend gate 통과 시에만 허용 |
+| `POST` | `/api/bot/stop` | paper-only scheduler stop marker, live/order side effect 없음 |
 | `POST` | `/api/screener/run` | rule-based screener run |
 | `GET` | `/api/screener/strategies` | frontend strategy selector metadata |
 | `GET` | `/api/screener/results` | screener result list with explanation contract |

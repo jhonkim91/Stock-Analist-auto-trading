@@ -12,10 +12,12 @@
 | Goal.md Phase 7 | Notification outbox non-blocking/retry contract 보강 |
 | Goal.md Phase 8 | Report notification에 local paper portfolio snapshot 요약 추가 |
 | Goal.md Phase 9 | Paper bot run/decision preview path와 `/api/bot/*` safety route 추가 |
+| Goal.md Phase 10 | `/bot` UI, paper dashboard positions/bot indicators, report notify/settings notification test controls 추가 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; KIS paper balance read-only 조건부 지원; live/real order disabled |
-| 최신 backend pytest | Phase 9 지정 `7 passed`, migration `4 passed`, no-live/paper regression `13 passed` |
+| 최신 backend pytest | Phase 10 route smoke `12 passed` |
+| 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; rendered smoke 통과 |
 | 다음 권장 Phase | KIS paper submit/cancel/sync network 구현은 보류. balance 조회는 read-only 조건부 경로만 허용 |
 
 ## 구현 완료 항목
@@ -73,6 +75,7 @@
 - Goal.md Phase 7 Notification Implementation: Telegram-first notification service ordering, supported event list, non-blocking/retriable `NotificationOutboxService`, Discord webhook wrapper, schema/API request model 정리를 추가.
 - Goal.md Phase 8 Report Portfolio Alerts: `/api/reports/{report_id}/notify` report summary에 local `paper_portfolio_snapshots`/`paper_positions` 기반 portfolio snapshot 요약을 추가하고 KIS network 호출 없이 전달하도록 보강.
 - Goal.md Phase 9 Paper Bot Activation: `paper_bot_runs`, `paper_bot_decisions`, `/api/bot/status`, `/api/bot/run-once`, `/api/bot/stop`, preview decision loop, explicit auto-submit gates를 추가.
+- Goal.md Phase 10 Frontend Integration: `/bot` 화면과 `frontend/lib/paperApi.ts`, `frontend/lib/notificationApi.ts` wrapper를 추가하고 `/paper`, `/reports`, `/settings`에서 bot/kill switch/notification/report notify controls를 paper-only로 연결.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -239,6 +242,7 @@
 - Phase 7 Bot Scheduler는 완료했다. scheduler/auto-submit은 기본 disabled이고 runner/API는 주문 없이 safe no-op을 반환한다.
 - Phase 8 Frontend Integration은 완료했다. `/paper`, `/portfolio`, `/reports`, `/settings`는 `모의투자`, `실거래 아님`, `paper only`를 명시하고 backend safety API만 호출한다.
 - Phase 9 Validation & Hardening은 완료했다. `tools/secret_scan.py`와 `backend/tests/test_secret_redaction.py`가 secret 원문과 민감 key-name 노출을 검증하며 CI에도 secret scan을 추가했다.
+- Goal.md Phase 10 Frontend Integration은 완료했다. `/bot` route와 paper/notification API wrapper를 추가했고, `/paper`, `/reports`, `/settings`는 bot enabled/kill switch/notification test/report notify controls를 paper-only label로 노출한다.
 
 ## 검증 명령
 

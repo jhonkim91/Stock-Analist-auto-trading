@@ -12,6 +12,7 @@ import {
   type ReportItem,
   type ReportNotifyResponse
 } from "../../lib/api";
+import { notifyReport } from "../../lib/notificationApi";
 
 function Metric({ label, value }: { label: string; value: string | number | boolean | null | undefined }) {
   return (
@@ -95,13 +96,7 @@ export default function ReportsPage() {
     setNotifyStatus("loading");
     setNotifyMessage("모의투자 리포트 notify 요청 중");
     try {
-      const result = await callApi<ReportNotifyResponse>(
-        `/api/reports/${encodeURIComponent(selectedReport.id)}/notify`,
-        {
-          method: "POST",
-          body: JSON.stringify({ mode: "summary", dry_run: true })
-        }
-      );
+      const result = await notifyReport(selectedReport.id, { mode: "summary", dry_run: true });
       setNotifyResult(result);
       setNotifyStatus(result.ok ? "ok" : "error");
       setNotifyMessage(result.ok ? `notify ${result.status}` : "notify 실패");
@@ -116,7 +111,7 @@ export default function ReportsPage() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 8 · Reports</p>
+          <p className="eyebrow">Phase 10 · Reports</p>
           <h1>Reports</h1>
         </div>
         <nav className="nav">
@@ -126,6 +121,7 @@ export default function ReportsPage() {
           <Link href="/backtest">Backtest</Link>
           <Link href="/portfolio">Portfolio</Link>
           <Link href="/paper">Paper</Link>
+          <Link href="/bot">Bot</Link>
           <Link href="/settings">Settings</Link>
         </nav>
         <span className={`status ${status}`}>{message}</span>
@@ -203,7 +199,7 @@ export default function ReportsPage() {
                   Raw Markdown
                 </button>
                 <button type="button" className="secondary" onClick={notifySelectedReport}>
-                  Notify dry-run
+                  모의투자 report notify dry-run
                 </button>
               </div>
               <div className="metricGrid">
@@ -211,6 +207,8 @@ export default function ReportsPage() {
                 <Metric label="dry_run" value={notifyResult?.dry_run ?? true} />
                 <Metric label="secrets_redacted" value={notifyResult?.secrets_redacted ?? "-"} />
                 <Metric label="message_count" value={notifyResult?.message_count ?? "-"} />
+                <Metric label="portfolio_source" value={String(notifyResult?.portfolio_snapshot?.source ?? "-")} />
+                <Metric label="positions_count" value={String(notifyResult?.portfolio_snapshot?.positions_count ?? "-")} />
               </div>
               <span className={`status ${notifyStatus}`}>{notifyMessage}</span>
               <pre className={showRaw ? "markdownPreview rawMarkdown" : "markdownPreview"}>{selectedReport.markdown}</pre>

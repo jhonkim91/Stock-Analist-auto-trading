@@ -5,14 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 
 import { PaperModeBanner } from "../../components/paper-mode-banner";
 import {
-  callApi,
   formatNumber,
   type ApiStatus,
   type PaperCancelResponse,
   type PaperFill,
-  type PaperFillsResponse,
+  type PaperBotStatus,
   type PaperOrder,
-  type PaperOrderListResponse,
+  type PaperPosition,
   type PaperPortfolioResponse,
   type PaperPreviewRequest,
   type PaperPreviewResponse,
@@ -20,6 +19,18 @@ import {
   type PaperSubmitResponse,
   type PaperSyncResponse
 } from "../../lib/api";
+import {
+  cancelPaperOrder,
+  getBotStatus,
+  getPaperPortfolio,
+  getPaperStatus,
+  listPaperFills,
+  listPaperOrders,
+  listPaperPositions,
+  previewPaperOrder,
+  submitPaperOrder,
+  syncPaperState
+} from "../../lib/paperApi";
 
 function StatusPill({ status, text }: { status: ApiStatus; text: string }) {
   return <span className={`status ${status}`}>{text}</span>;
@@ -74,6 +85,24 @@ function PaperFillRows({ fills }: { fills: PaperFill[] }) {
   );
 }
 
+function PaperPositionRows({ positions }: { positions: PaperPosition[] }) {
+  return (
+    <tbody>
+      {positions.slice(0, 8).map((position) => (
+        <tr key={`${position.symbol}-${position.strategy_tag ?? "default"}`}>
+          <td>{position.symbol}</td>
+          <td>{position.strategy_tag ?? "-"}</td>
+          <td>{formatNumber(position.qty)}</td>
+          <td>{formatNumber(position.avg_price, 2)}</td>
+          <td>{formatNumber(position.market_value, 0)}</td>
+          <td>{formatNumber(position.unrealized_pnl, 0)}</td>
+          <td>{position.account_alias ?? "-"}</td>
+        </tr>
+      ))}
+    </tbody>
+  );
+}
+
 export default function PaperPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [message, setMessage] = useState("모의투자 상태 조회 중");
@@ -84,7 +113,9 @@ export default function PaperPage() {
   const [syncResult, setSyncResult] = useState<PaperSyncResponse | null>(null);
   const [orders, setOrders] = useState<PaperOrder[]>([]);
   const [fills, setFills] = useState<PaperFill[]>([]);
+  const [positions, setPositions] = useState<PaperPosition[]>([]);
   const [paperPortfolio, setPaperPortfolio] = useState<PaperPortfolioResponse | null>(null);
+  const [botStatus, setBotStatus] = useState<PaperBotStatus | null>(null);
   const [submitConfirm, setSubmitConfirm] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [submitIdempotencyKey, setSubmitIdempotencyKey] = useState("paper-ui-submit-1");
@@ -107,16 +138,20 @@ export default function PaperPage() {
       setMessage("모의투자 상태 조회 중");
     }
     try {
-      const [statusData, orderData, fillData, portfolioData] = await Promise.all([
-        callApi<PaperStatus>("/api/paper/status"),
-        callApi<PaperOrderListResponse>("/api/paper/orders"),
-        callApi<PaperFillsResponse>("/api/paper/fills"),
-        callApi<PaperPortfolioResponse>("/api/paper/portfolio")
+      const [statusData, orderData, fillData, positionData, portfolioData, botData] = await Promise.all([
+        getPaperStatus(),
+        listPaperOrders(),
+        listPaperFills(),
+        listPaperPositions(),
+        getPaperPortfolio(),
+        getBotStatus()
       ]);
       setPaperStatus(statusData);
       setOrders(orderData.orders);
       setFills(fillData.fills);
+      setPositions(positionData.positions);
       setPaperPortfolio(portfolioData);
+      setBotStatus(botData);
       setStatus("ok");
       setMessage("모의투자 상태 조회 완료");
     } catch (error) {
@@ -125,7 +160,9 @@ export default function PaperPage() {
       setPaperStatus(null);
       setOrders([]);
       setFills([]);
+      setPositions([]);
       setPaperPortfolio(null);
+      setBotStatus(null);
     }
   }, []);
 
@@ -144,10 +181,7 @@ export default function PaperPage() {
     setStatus("loading");
     setMessage("모의투자 preview 실행 중");
     try {
-      const data = await callApi<PaperPreviewResponse>("/api/paper/orders/preview", {
-        method: "POST",
-        body: JSON.stringify(form)
-      });
+      const data = await previewPaperOrder(form);
       setPreview(data);
       setPaperStatus(data);
       setStatus("ok");
@@ -165,13 +199,10 @@ export default function PaperPage() {
     const idempotencyKey = submitIdempotencyKey.trim() || `paper-ui-submit-${Date.now()}`;
     setSubmitIdempotencyKey(idempotencyKey);
     try {
-      const data = await callApi<PaperSubmitResponse>("/api/paper/orders/submit", {
-        method: "POST",
-        body: JSON.stringify({
-          ...form,
-          confirm: submitConfirm,
-          idempotency_key: idempotencyKey
-        })
+      const data = await submitPaperOrder({
+        ...form,
+        confirm: submitConfirm,
+        idempotency_key: idempotencyKey
       });
       setSubmitResult(data);
       setStatus("ok");
@@ -190,13 +221,10 @@ export default function PaperPage() {
     const idempotencyKey = cancelIdempotencyKey.trim() || `paper-ui-cancel-${Date.now()}`;
     setCancelIdempotencyKey(idempotencyKey);
     try {
-      const data = await callApi<PaperCancelResponse>("/api/paper/orders/cancel", {
-        method: "POST",
-        body: JSON.stringify({
-          paper_order_id: cancelOrderId,
-          confirm: cancelConfirm,
-          idempotency_key: idempotencyKey
-        })
+      const data = await cancelPaperOrder({
+        paper_order_id: cancelOrderId,
+        confirm: cancelConfirm,
+        idempotency_key: idempotencyKey
       });
       setCancelResult(data);
       setStatus("ok");
@@ -213,10 +241,7 @@ export default function PaperPage() {
     setStatus("loading");
     setMessage("모의투자 sync 요청 중");
     try {
-      const data = await callApi<PaperSyncResponse>("/api/paper/sync", {
-        method: "POST",
-        body: JSON.stringify({ scope: "all" })
-      });
+      const data = await syncPaperState("all");
       setSyncResult(data);
       setStatus("ok");
       setMessage(data.sync_performed ? "모의투자 sync 완료" : `모의투자 sync 차단: ${data.reason}`);
@@ -240,7 +265,7 @@ export default function PaperPage() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 8 · 모의투자</p>
+          <p className="eyebrow">Phase 10 · 모의투자</p>
           <h1>Paper Trading</h1>
         </div>
         <nav className="nav">
@@ -251,6 +276,7 @@ export default function PaperPage() {
           <Link href="/backtest">Backtest</Link>
           <Link href="/portfolio">Portfolio</Link>
           <Link href="/paper">Paper</Link>
+          <Link href="/bot">Bot</Link>
           <Link href="/settings">Settings</Link>
         </nav>
         <StatusPill status={status} text={message} />
@@ -260,7 +286,7 @@ export default function PaperPage() {
 
       <section className="cardGrid">
         <article>
-          <h2>Paper Status</h2>
+          <h2>모의투자 상태</h2>
           <div className="metricGrid">
             <Metric label="enabled" value={paperStatus?.enabled} />
             <Metric label="can_create" value={paperStatus?.can_create} />
@@ -269,21 +295,21 @@ export default function PaperPage() {
           </div>
         </article>
         <article>
-          <h2>Safety Flags</h2>
+          <h2>Kill Switch / Safety</h2>
           <div className="metricGrid">
+            <Metric label="kill_switch" value={paperStatus?.kill_switch.blocking} />
             <Metric label="live_order_created" value={paperStatus?.live_order_created} />
             <Metric label="broker_order_created" value={paperStatus?.broker_order_created} />
             <Metric label="network_call" value={paperStatus?.network_call_performed} />
-            <Metric label="token_issued" value={paperStatus?.token_issued} />
           </div>
         </article>
         <article>
-          <h2>Paper Counts</h2>
+          <h2>Bot / Paper Counts</h2>
           <div className="metricGrid">
+            <Metric label="bot_enabled" value={botStatus?.enabled} />
+            <Metric label="auto_submit_allowed" value={botStatus?.auto_submit_allowed} />
             <Metric label="paper_orders" value={formatNumber(paperStatus?.counts.paper_orders_count)} />
             <Metric label="paper_fills" value={formatNumber(paperStatus?.counts.paper_fills_count)} />
-            <Metric label="paper_positions" value={formatNumber(paperStatus?.counts.paper_positions_count)} />
-            <Metric label="orders table" value={formatNumber(paperStatus?.counts.orders_count)} />
           </div>
         </article>
       </section>
@@ -341,7 +367,7 @@ export default function PaperPage() {
               Preview
             </button>
             <button type="button" className="secondary" onClick={runSubmit}>
-              Paper submit
+              모의투자 submit
             </button>
           </div>
           <div className="formRow compactToolbar">
@@ -371,10 +397,10 @@ export default function PaperPage() {
               <input value={cancelIdempotencyKey} onChange={(event) => setCancelIdempotencyKey(event.target.value)} />
             </label>
             <button type="button" className="secondary" onClick={runCancel}>
-              Paper cancel
+              모의투자 cancel
             </button>
             <button type="button" onClick={runSync}>
-              Sync paper snapshot
+              모의투자 snapshot sync
             </button>
           </div>
           <div className="metricGrid">
@@ -459,6 +485,44 @@ export default function PaperPage() {
               <PaperFillRows fills={fills} />
             </table>
           </div>
+        </article>
+      </section>
+
+      <section className="grid">
+        <article>
+          <h2>모의투자 Positions</h2>
+          <div className="tableWrap compactTable">
+            <table className="miniTable">
+              <thead>
+                <tr>
+                  <th>symbol</th>
+                  <th>strategy</th>
+                  <th>qty</th>
+                  <th>avg_price</th>
+                  <th>market_value</th>
+                  <th>unrealized_pnl</th>
+                  <th>account_alias</th>
+                </tr>
+              </thead>
+              <PaperPositionRows positions={positions} />
+            </table>
+          </div>
+        </article>
+        <article>
+          <h2>Paper Bot Indicator</h2>
+          <div className="metricGrid">
+            <Metric label="enabled" value={botStatus?.enabled} />
+            <Metric label="mode" value={botStatus?.mode} />
+            <Metric label="kill_switch" value={botStatus?.kill_switch_enabled} />
+            <Metric label="loop_allowed" value={botStatus?.loop_allowed} />
+            <Metric label="auto_submit" value={botStatus?.auto_submit} />
+            <Metric label="session_passed" value={botStatus?.session_check_passed} />
+          </div>
+          <ul className="plainList">
+            {(botStatus?.reason_codes ?? []).map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
         </article>
       </section>
 

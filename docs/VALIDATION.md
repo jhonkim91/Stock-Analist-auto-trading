@@ -1,5 +1,20 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 10 Frontend Integration
+
+이번 변경은 `goal.md`의 `Phase 10: Frontend Integration` 범위만 수행했다. 기존 `/paper`, `/reports`, `/settings` 화면 구조를 유지하면서 `frontend/lib/paperApi.ts`, `frontend/lib/notificationApi.ts` wrapper를 추가하고, `/bot` 화면에서 paper-only bot status/run-once/stop route를 조작할 수 있게 했다. 모든 UI 문구는 `모의투자`, `paper only`, `실거래 아님` 경계를 유지하며 `.env`/`.env.local`은 수정하지 않았다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 10 frontend lint | 통과 | `cd frontend; npm.cmd run lint` |
+| Phase 10 frontend typecheck | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit` |
+| Phase 10 frontend build | 통과 | `cd frontend; npm.cmd run build`: `/bot` 포함 12 static pages 생성 |
+| Phase 10 backend route smoke | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_paper_order_api.py backend/tests/test_notification_api.py backend/tests/test_report_notify.py -q`: 12 passed in 1.20s |
+| Phase 10 rendered smoke | 통과 | Browser plugin은 연결 가능한 browser가 없어 fallback Playwright로 확인. `127.0.0.1:8001` backend + `127.0.0.1:3000` frontend에서 `/bot` run-once, `/paper` preview, `/settings` notification dry-run, `/reports`, `/bot` mobile viewport 확인. framework overlay 없음, console issue 0. |
+| Phase 10 screenshot evidence | 생성 | `%TEMP%\stock-analyst-phase10-bot-desktop.png`, `%TEMP%\stock-analyst-phase10-paper-desktop.png`, `%TEMP%\stock-analyst-phase10-settings-desktop.png`, `%TEMP%\stock-analyst-phase10-reports-desktop.png`, `%TEMP%\stock-analyst-phase10-bot-mobile.png` |
+| Phase 10 secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Phase 10 diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 9 Paper Bot Activation
 
 이번 변경은 `goal.md`의 `Phase 9: Paper Bot Activation` 범위만 수행했다. `paper_bot_runs`, `paper_bot_decisions`를 추가하고 `/api/bot/status`, `/api/bot/run-once`, `/api/bot/stop`을 추가했다. bot은 기본 disabled/kill-switch active 상태이며, preview decision은 저장하되 paper submit은 config와 요청이 모두 명시 opt-in이고 session/risk gate가 통과해야만 시도한다.
@@ -424,12 +439,12 @@ git diff --check
 | `orders_count == 0` 정책 변경 | 없음 |
 | paper sync network/fetch | 없음. `POST /api/paper/sync`는 공식 KIS sync contract 확인 전 `KIS_PAPER_SYNC_CONFIRMATION_REQUIRED` no-op |
 | paper bot scheduler auto-start | 없음. launcher는 check-only 상태만 표시하며 scheduler/auto-submit은 기본 disabled |
-| frontend paper-mode boundary | `/paper`, `/portfolio`, `/reports`, `/settings`는 `모의투자`, `실거래 아님`, `paper only`를 명시하고 backend safety API만 호출 |
+| frontend paper-mode boundary | `/paper`, `/bot`, `/portfolio`, `/reports`, `/settings`는 `모의투자`, `실거래 아님`, `paper only`를 명시하고 backend safety API만 호출 |
 | settings secret key-name exposure | 없음. `/api/settings`는 민감 key 이름도 `redacted_field_*`로 익명화 |
 | repo secret scan | `tools/secret_scan.py`와 CI backend job에서 실행 |
 
 ## 남은 검증
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
-- `goal.md` 기준 Phase 9까지 완료됐다.
+- `goal.md` 기준 Phase 10까지 완료됐다.
 - KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.

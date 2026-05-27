@@ -246,6 +246,8 @@ export type PaperCounts = {
   paper_audit_events_count: number;
   paper_portfolio_snapshots_count?: number;
   synthetic_positions_count?: number;
+  paper_bot_runs_count?: number;
+  paper_bot_decisions_count?: number;
   orders_count: number;
 };
 
@@ -516,6 +518,96 @@ export type PaperSyncResponse = {
   synthetic_positions_touched: boolean;
 };
 
+export type PaperBotSessionStatus = {
+  session_checked: boolean;
+  session_check_passed: boolean;
+  session_state?: string | null;
+  session?: string | null;
+  trade_date?: string | null;
+  reason_codes: string[];
+};
+
+export type PaperBotStep = {
+  name: string;
+  status: string;
+  reason: string;
+};
+
+export type PaperBotDecision = {
+  symbol: string;
+  strategy_tag: string;
+  action: string;
+  total_score: number | null;
+  qty: number;
+  limit_price: number | null;
+  stop_price: number | null;
+  target_price: number | null;
+  risk_passed: boolean;
+  reason_codes: string[];
+  paper_order_id: string | null;
+};
+
+export type PaperBotStatus = {
+  enabled: boolean;
+  scheduler_enabled: boolean;
+  auto_submit: boolean;
+  kill_switch_enabled: boolean;
+  mode: string;
+  supported_modes: string[];
+  loop_allowed: boolean;
+  auto_submit_allowed: boolean;
+  session: PaperBotSessionStatus;
+  session_check_passed: boolean;
+  loop_interval_seconds: number;
+  max_candidates: number;
+  default_strategy: string;
+  sync_enabled: boolean;
+  notification_enabled: boolean;
+  report_generation_enabled: boolean;
+  reason_codes: string[];
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  counts: PaperCounts;
+};
+
+export type PaperBotRunRequest = {
+  auto_submit?: boolean | null;
+};
+
+export type PaperBotRunResponse = {
+  ok: boolean;
+  status: string;
+  run_id?: string;
+  run_once: boolean;
+  mode: string;
+  auto_submit_requested: boolean;
+  auto_submit_allowed: boolean;
+  paper_order_submitted: boolean;
+  submitted_count: number;
+  decision_count: number;
+  decisions: PaperBotDecision[];
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  steps: PaperBotStep[];
+  reason_codes: string[];
+  session: PaperBotSessionStatus;
+  counts: PaperCounts;
+};
+
+export type PaperBotStopResponse = {
+  ok: boolean;
+  status: string;
+  mode: string;
+  scheduler_enabled: boolean;
+  loop_allowed: boolean;
+  reason_codes: string[];
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+};
+
 export type PortfolioRisk = {
   account_equity: number;
   risk_per_trade: number;
@@ -766,7 +858,27 @@ export type NotificationStatus = {
   reason_codes: string[];
   network_delivery_allowed: boolean;
   secrets_redacted: boolean;
+  supported_events: string[];
   channels: NotificationChannelStatus[];
+};
+
+export type NotificationTestRequest = {
+  channel_alias?: string | null;
+  message: string;
+  dry_run: boolean;
+};
+
+export type NotificationTestResponse = {
+  ok: boolean;
+  status: string;
+  attempted: boolean;
+  delivered: boolean;
+  dry_run: boolean;
+  message_length?: number;
+  payload_shape?: JsonRecord;
+  channel?: NotificationChannelStatus;
+  reason_codes: string[];
+  secrets_redacted?: boolean;
 };
 
 export type ReportNotifyRequest = {
@@ -791,6 +903,10 @@ export type ReportNotifyResponse = {
   report_preserved: boolean;
   attachment?: JsonRecord;
   payload_shape?: JsonRecord;
+  portfolio_snapshot?: JsonRecord;
+  notification_event_id?: string;
+  attempted?: boolean;
+  channel_limits?: JsonRecord;
 };
 
 export type SettingsPayload = Record<string, unknown>;
