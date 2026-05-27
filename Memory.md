@@ -16,8 +16,8 @@
 - [x] 현재 goal.md Phase 8 report portfolio alerts: report notify에 local paper portfolio snapshot 요약 추가
 - [x] 현재 goal.md Phase 9 paper bot activation: preview decision loop, bot audit tables, `/api/bot/*` safety route 추가
 - [x] 현재 goal.md Phase 10 frontend integration: `/bot` UI와 paper/notification wrapper, paper-only controls 추가
-- [x] 최근 전체 backend pytest: `342 passed in 327.46s`
-- [x] 최신 backend pytest: Phase 10 route smoke `12 passed in 1.20s`
+- [x] 현재 goal.md Phase 11 e2e mock validation: mock-only paper flow E2E 테스트 추가
+- [x] 최신 backend pytest: `370 passed in 316.27s`
 - [x] 최신 frontend 검증: lint, typecheck, build, rendered smoke 통과
 - [x] 최신 secret scan: `NO_SECRET_FINDINGS`
 - [x] 최신 diff check: `git diff --check` exit 0, CRLF warning만 있음
@@ -44,11 +44,12 @@
 - Phase 8: `ReportNotificationService` report summary에 local paper portfolio snapshot 요약을 추가하고 KIS network 호출 없이 전달하도록 보강했다.
 - Phase 9: `paper_bot_runs`, `paper_bot_decisions`, `/api/bot/status`, `/api/bot/run-once`, `/api/bot/stop`, preview decision loop, explicit auto-submit gates를 추가했다.
 - Phase 10: `frontend/app/bot/page.tsx`, `frontend/lib/paperApi.ts`, `frontend/lib/notificationApi.ts`를 추가하고 `/paper`, `/reports`, `/settings`에 bot/kill switch/notification/report notify controls를 paper-only로 연결했다.
+- Phase 11: `backend/tests/test_e2e_paper_mock_flow.py`를 추가해 preview, local submit, order poll, mock fill/position/portfolio, notification outbox, report notify를 KIS credential 없이 검증했다.
 
 ## 최신 검증 결과
 
-- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 342 passed in 327.46s.
-- 2026-05-27 Phase 10 backend route smoke: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_paper_order_api.py backend/tests/test_notification_api.py backend/tests/test_report_notify.py -q`: 12 passed in 1.20s.
+- 2026-05-27 Phase 11 지정 pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_e2e_paper_mock_flow.py -q`: 1 passed in 0.75s.
+- 2026-05-27 Phase 11 full backend: `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 370 passed in 316.27s.
 - 2026-05-27 Phase 10 frontend: `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.
 - 2026-05-27 Phase 10 rendered smoke: Browser plugin에 연결 가능한 in-app browser가 없어 Playwright fallback 사용. `/bot` run-once, `/paper` preview, `/settings` notification dry-run, `/reports`, `/bot` mobile 확인. overlay 없음, console issue 0.
 - 2026-05-27 `git diff --check`: 통과, CRLF warning만 있음.

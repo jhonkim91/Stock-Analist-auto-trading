@@ -9,8 +9,11 @@ from backend.app.main import app
 ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_FILES = [
     "frontend/lib/api.ts",
+    "frontend/lib/paperApi.ts",
+    "frontend/lib/notificationApi.ts",
     "frontend/components/paper-mode-banner.tsx",
     "frontend/app/paper/page.tsx",
+    "frontend/app/bot/page.tsx",
     "frontend/app/portfolio/page.tsx",
     "frontend/app/reports/page.tsx",
     "frontend/app/settings/page.tsx",
@@ -39,7 +42,6 @@ def _frontend_text(relative_path: str) -> str:
 def test_frontend_static_contracts_are_paper_only_and_redacted():
     combined = "\n".join(_frontend_text(path) for path in FRONTEND_FILES)
     paper_page = _frontend_text("frontend/app/paper/page.tsx")
-    reports_page = _frontend_text("frontend/app/reports/page.tsx")
 
     for endpoint in (
         "/api/paper/status",
@@ -48,12 +50,18 @@ def test_frontend_static_contracts_are_paper_only_and_redacted():
         "/api/paper/orders/cancel",
         "/api/paper/orders",
         "/api/paper/fills",
+        "/api/paper/positions",
         "/api/paper/portfolio",
         "/api/paper/sync",
+        "/api/bot/status",
+        "/api/bot/run-once",
+        "/api/bot/stop",
+        "/api/notifications/status",
+        "/api/notifications/test",
     ):
         assert endpoint in combined
 
-    assert "/api/reports/${encodeURIComponent(selectedReport.id)}/notify" in reports_page
+    assert "/api/reports/${encodeURIComponent(reportId)}/notify" in combined
     assert "모의투자" in combined
     assert "실거래 아님" in combined
     assert "paper only" in combined

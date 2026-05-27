@@ -1,5 +1,17 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 11 End-to-End Mock Validation
+
+이번 변경은 `goal.md`의 `Phase 11: End-to-End Mock Validation` 범위만 수행했다. `backend/tests/test_e2e_paper_mock_flow.py`를 추가해 preview -> local paper submit -> order poll -> mock fill/position/portfolio snapshot -> fail-closed sync -> notification outbox -> report notify 흐름을 KIS credential 없이 검증한다. Phase 10 wrapper 이동으로 기존 frontend static contract 테스트가 실패해 스캔 대상에 `frontend/lib/paperApi.ts`, `frontend/lib/notificationApi.ts`, `/bot` page를 additive로 포함시켰다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 11 지정 pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_e2e_paper_mock_flow.py -q`: 1 passed in 0.75s |
+| Phase 11 E2E + frontend contract regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_e2e_paper_mock_flow.py backend/tests/test_frontend_api_contracts.py -q`: 3 passed in 0.84s |
+| Phase 11 full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 370 passed in 316.27s |
+| Phase 11 secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Phase 11 diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 10 Frontend Integration
 
 이번 변경은 `goal.md`의 `Phase 10: Frontend Integration` 범위만 수행했다. 기존 `/paper`, `/reports`, `/settings` 화면 구조를 유지하면서 `frontend/lib/paperApi.ts`, `frontend/lib/notificationApi.ts` wrapper를 추가하고, `/bot` 화면에서 paper-only bot status/run-once/stop route를 조작할 수 있게 했다. 모든 UI 문구는 `모의투자`, `paper only`, `실거래 아님` 경계를 유지하며 `.env`/`.env.local`은 수정하지 않았다.
@@ -446,5 +458,5 @@ git diff --check
 ## 남은 검증
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
-- `goal.md` 기준 Phase 10까지 완료됐다.
+- `goal.md` 기준 Phase 11까지 완료됐다.
 - KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.
