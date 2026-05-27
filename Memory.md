@@ -14,6 +14,7 @@
 - [x] 현재 goal.md Phase 6 notification decision: Telegram-first primary, Discord follow-up path 문서화
 - [x] 현재 goal.md Phase 7 notification implementation: non-blocking/retriable outbox 보강
 - [x] 현재 goal.md Phase 8 report portfolio alerts: report notify에 local paper portfolio snapshot 요약 추가
+- [x] 현재 goal.md Phase 9 paper bot activation: preview decision loop, bot audit tables, `/api/bot/*` safety route 추가
 - [x] 최신 backend pytest: `342 passed in 327.46s`
 - [x] 최신 frontend 검증: lint, typecheck, build 통과
 - [x] 최신 secret scan: `NO_SECRET_FINDINGS`
@@ -52,9 +53,11 @@
 - `backend/app/services/notification_outbox_service.py`, `backend/app/services/discord_webhook_notifier.py`, `backend/app/services/notification_service.py`: Phase 7 supported events, Telegram-first ordering, non-blocking retry outbox, Discord webhook wrapper 보강.
 - `backend/tests/test_notification_service.py`, `backend/tests/test_notification_outbox.py`: Phase 7 notifier status/event list, mock dispatch, outbox redaction, retry isolation 검증 추가.
 - `backend/app/services/report_notification_service.py`, `backend/tests/test_report_notify.py`: Phase 8 report notification summary에 local paper portfolio snapshot 요약을 추가하고 metadata raw marker 비노출을 검증.
+- `backend/app/services/paper_bot_service.py`, `backend/app/api/bot.py`, `backend/alembic/versions/b9c0d1e2f3a4_add_paper_bot_tables.py`: Phase 9 bot run/decision preview path, `/api/bot/*`, explicit auto-submit gates 추가.
+- `backend/tests/test_paper_bot_decision.py`, `backend/tests/test_paper_bot_scheduler.py`: Phase 9 preview decision persistence, default disabled/kill-switch, bot API no-submit 회귀 검증 추가.
 - `docs/PROJECT_STATUS.md`: Goal Phase 0 감사 문서 위치와 main/current branch 분리 기준 추가.
-- `docs/VALIDATION.md`: Goal Phase 0/1/2/3/4/5/6/7/8 검증 결과 추가.
-- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1/2/3/4/5/6/7/8에서는 DB schema, `.env` 계열 파일을 변경하지 않았다.
+- `docs/VALIDATION.md`: Goal Phase 0/1/2/3/4/5/6/7/8/9 검증 결과 추가.
+- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1/2/3/4/5/6/7/8/9에서는 `.env` 계열 파일을 변경하지 않았다.
 
 ## 최신 검증 결과
 
@@ -71,6 +74,9 @@
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_alembic_migrations.py backend/tests/test_paper_persistence_migration.py -q`: 4 passed in 4.52s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_notify.py -q`: 3 passed in 0.68s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_api.py backend/tests/test_report_quality.py backend/tests/test_no_live_trading_regression.py -q`: 19 passed in 29.51s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_decision.py backend/tests/test_paper_bot_scheduler.py -q`: 7 passed in 1.19s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_alembic_migrations.py backend/tests/test_paper_persistence_migration.py -q`: 4 passed in 4.57s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_paper_order_api.py -q`: 13 passed in 0.94s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 14 passed in 0.87s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_phase3c_kis_readonly.py backend/tests/test_no_live_trading_regression.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 22 passed in 3.29s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 20 passed in 0.97s.

@@ -6,6 +6,7 @@
 - Latest schema addition: additive paper trading persistence tables and broker-sync metadata columns.
 - The ledger is a backtest/report artifact only and is not connected to live orders, paper orders, broker adapters, KIS routes, or `orders` rows.
 - KIS paper broker Phase 3 added `paper_portfolio_snapshots`, `broker_audit_events`, `notification_events`, `notification_delivery_logs`, `kis_token_status_metadata`, plus nullable broker-sync metadata on `paper_orders`, `paper_fills`, and `paper_positions`. Service-level writes remain disabled until later phases explicitly enable paper submit/sync.
+- Goal Phase 9 added `paper_bot_runs` and `paper_bot_decisions` in Alembic revision `b9c0d1e2f3a4` for preview-only bot run/decision audit. These tables do not store raw credentials or account identifiers.
 
 ## 현재 정책
 

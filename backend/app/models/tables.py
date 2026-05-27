@@ -559,3 +559,36 @@ class KisTokenStatusMetadata(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PaperBotRun(Base):
+    __tablename__ = "paper_bot_runs"
+
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(32), default="manual")
+    status: Mapped[str] = mapped_column(String(32), default="created")
+    auto_submit_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_submit_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
+    decision_count: Mapped[int] = mapped_column(Integer, default=0)
+    submitted_count: Mapped[int] = mapped_column(Integer, default=0)
+    reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PaperBotDecision(Base):
+    __tablename__ = "paper_bot_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(64), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    strategy_tag: Mapped[str] = mapped_column(String(64), index=True)
+    action: Mapped[str] = mapped_column(String(32), default="preview")
+    total_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    qty: Mapped[int] = mapped_column(Integer, default=0)
+    limit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stop_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    risk_passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    paper_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

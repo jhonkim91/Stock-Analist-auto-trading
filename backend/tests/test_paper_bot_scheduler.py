@@ -72,6 +72,26 @@ def test_paper_bot_api_and_settings_are_safe_by_default(client):
     assert _counts() == before
 
 
+def test_bot_api_routes_are_safe_by_default(client):
+    before = _counts()
+
+    status = client.get("/api/bot/status")
+    run = client.post("/api/bot/run-once", json={"auto_submit": True})
+    stop = client.post("/api/bot/stop")
+
+    assert status.status_code == 200
+    assert status.json()["supported_modes"] == ["manual", "run_once", "scheduled"]
+    assert status.json()["auto_submit_allowed"] is False
+    assert run.status_code == 200
+    assert run.json()["paper_order_submitted"] is False
+    assert run.json()["auto_submit_allowed"] is False
+    assert run.json()["network_call_performed"] is False
+    assert stop.status_code == 200
+    assert stop.json()["status"] == "stopped"
+    assert stop.json()["loop_allowed"] is False
+    assert _counts() == before
+
+
 def test_paper_bot_runner_once_and_loop_are_gated(capsys):
     before = _counts()
 

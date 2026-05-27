@@ -90,6 +90,21 @@ class ScreenerService:
             "strategies": enabled,
         }
 
+    def latest_passed_results(self, *, limit: int, strategy_tag: str | None = None) -> list[ScreenResult]:
+        """bot preview decision에 사용할 최신 passed screen 결과를 조회한다."""
+        latest_date = self.db.scalar(select(ScreenResult.trade_date).order_by(ScreenResult.trade_date.desc()).limit(1))
+        if latest_date is None:
+            return []
+        statement = (
+            select(ScreenResult)
+            .where(ScreenResult.trade_date == latest_date, ScreenResult.passed.is_(True))
+            .order_by(ScreenResult.total_score.desc(), ScreenResult.symbol.asc())
+            .limit(max(0, limit))
+        )
+        if strategy_tag:
+            statement = statement.where(ScreenResult.strategy_tag == strategy_tag)
+        return list(self.db.scalars(statement).all())
+
     @staticmethod
     def _attach_risk_plan(result: StrategyResult, risk) -> StrategyResult:
         metadata = dict(result.metadata)

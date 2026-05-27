@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api import (
     backtest,
+    bot,
     broker,
     data,
     indicators,
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(screener.router)
     app.include_router(reports.router)
     app.include_router(backtest.router)
+    app.include_router(bot.router)
     app.include_router(portfolio.router)
     app.include_router(broker.router)
     app.include_router(paper.router)

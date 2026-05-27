@@ -6,7 +6,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
-PHASE3_HEAD = "a8b9c0d1e2f3"
+ALEMBIC_HEAD = "b9c0d1e2f3a4"
 FORBIDDEN_RAW_SECRET_COLUMNS = {
     "access" + "_token",
     "refresh" + "_token",
@@ -51,6 +51,8 @@ def test_phase3_paper_persistence_migration_is_additive(tmp_path: Path, monkeypa
         "notification_events",
         "notification_delivery_logs",
         "kis_token_status_metadata",
+        "paper_bot_runs",
+        "paper_bot_decisions",
     }.issubset(table_names)
 
     paper_orders = {column["name"]: column for column in inspector.get_columns("paper_orders")}
@@ -89,7 +91,7 @@ def test_phase3_paper_persistence_migration_is_additive(tmp_path: Path, monkeypa
     assert "account_alias" not in synthetic_positions
 
     with engine.connect() as connection:
-        assert connection.scalar(text("select version_num from alembic_version")) == PHASE3_HEAD
+        assert connection.scalar(text("select version_num from alembic_version")) == ALEMBIC_HEAD
     engine.dispose()
 
 
@@ -113,6 +115,8 @@ def test_phase3_persistence_tables_do_not_add_raw_secret_columns(tmp_path: Path,
         "notification_events",
         "notification_delivery_logs",
         "kis_token_status_metadata",
+        "paper_bot_runs",
+        "paper_bot_decisions",
     }
     for table_name in checked_tables:
         column_names = {column["name"] for column in inspector.get_columns(table_name)}
