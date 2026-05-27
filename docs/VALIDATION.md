@@ -1,5 +1,26 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 12C Controlled KIS Paper Dry-run Preflight
+
+이번 작업은 `goal.md`의 `Phase 12C: Controlled KIS Paper Submit/Cancel/Query/Sync Dry-run` 진입 조건을 점검했다. 먼저 Phase 12B 구현분을 `bcd40fac2a67e8c06aad32bd1f1f386b3abcab8e` 커밋으로 고정했다.
+
+Phase 12C 실제 KIS paper network submit/cancel/query/sync dry-run은 실행하지 않았다. 현재 프로세스 환경에 KIS paper credential과 runtime network gate가 없고, repo config도 fail-closed 상태라서 controlled dry-run의 필수 조건을 충족하지 못했다. `.env`, `.env.local`은 생성/수정하지 않았고, raw credential/account/token 값은 출력하거나 기록하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Phase 12B commit | 완료 | `bcd40fac2a67e8c06aad32bd1f1f386b3abcab8e Implement KIS paper phase 12B adapter` |
+| Branch preflight | 통과 | `feature/kis-paper-goal-phases`, `main` 아님 |
+| Worktree preflight | 통과 | 12B 커밋 직후 clean 상태에서 12C preflight 시작 |
+| Credential preflight | 중단 | `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCOUNT_NO`, `KIS_PRODUCT_CODE` 모두 configured=false |
+| Runtime gate preflight | 중단 | `PAPER_TRADING_ENABLED`, `PAPER_TRADING_CAN_CREATE`, `PAPER_TRADING_NETWORK_ENABLED`, `PAPER_TRADING_KILL_SWITCH` 모두 configured=false |
+| Config gate preflight | 중단 | `backend/config/paper.yaml`: `mode=safety_scaffold`, `enabled=false`, `can_create=false`, `network_enabled=false`, `kill_switch_enabled=true`, `broker_adapter.enabled=false`, `official_endpoint_confirmed=false` |
+| Live safety | 통과 | `ENABLE_REAL_ORDER` absent, `PAPER_BOT_AUTO_SUBMIT` absent, `live_order_enabled=false`, `live_fallback_enabled=false`, paper base URL live host 아님 |
+| KIS network call | 미실행 | submit/cancel/query/sync 모두 credential/runtime/config gate 미충족으로 호출하지 않음 |
+| Phase 12C completion | 미완료 | redacted controlled submit/cancel/query/sync dry-run result가 없으므로 Phase 13 진입 불가 |
+| Phase 12C safety pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`: 10 passed in 1.89s |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 12B KIS Paper Adapter Implementation
 
 이번 작업은 `goal.md`의 `Phase 12B: KIS Paper Submit/Cancel/Query/Sync Adapter Implementation` 범위만 수행했다. 실제 KIS credential, `.env`, `.env.local`, live adapter, live endpoint, paper→live fallback은 사용하지 않았다. KIS paper network dry-run은 실행하지 않았고, adapter 동작은 mock HTTP client와 service-level fake adapter로만 검증했다.

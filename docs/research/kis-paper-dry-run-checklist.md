@@ -7,28 +7,28 @@ as a single dry-run step. It is split into:
 
 | Phase | Name | Status |
 |---|---|---|
-| Phase 12A | KIS paper read-only balance dry-run | Next executable phase |
-| Phase 12B | KIS paper submit/cancel/query/sync adapter implementation | Not started |
-| Phase 12C | Controlled KIS paper submit/cancel/query/sync dry-run | Blocked until 12B completes |
+| Phase 12A | KIS paper read-only balance dry-run | Not executed in this run |
+| Phase 12B | KIS paper submit/cancel/query/sync adapter implementation | Implemented and committed in `bcd40fac2a67e8c06aad32bd1f1f386b3abcab8e`; mock tests passed |
+| Phase 12C | Controlled KIS paper submit/cancel/query/sync dry-run | Preflight stopped: required process credential/runtime/config gates are not open |
 
 Phase 13 must not start until Phase 12C has a redacted successful dry-run
 record. Phase 12 must not be marked complete from env flags alone.
 
 ## Current Code Finding
 
-Status: Phase 12 remains incomplete and stopped before submit/cancel/sync network execution.
+Status: Phase 12 remains incomplete. Phase 12B adapter implementation is present, but Phase 12C real-network dry-run stopped at preflight.
 
-The current code supports only a gated read-only KIS paper balance inquiry path.
-KIS paper submit/cancel/list/sync network execution is still unsupported or
-confirmation-required by design.
+The current code has paper-only KIS submit/cancel/list/sync adapter paths behind
+explicit gates. Default runtime remains fail-closed, and no real KIS paper
+network call has been executed in this review.
 
 | Area | Current code behavior | Evidence |
 |---|---|---|
 | KIS paper balance | Can call read-only `/uapi/domestic-stock/v1/trading/inquire-balance` only when all config/env/credential gates pass | `PaperSyncService.portfolio()` and `KisPaperBalanceClient` |
-| Paper submit | Local `paper_orders` submit only after confirm/idempotency/config gates; network submit is rejected with `PAPER_NETWORK_UNSUPPORTED` when network is enabled | `PaperOrderService._submit_config_reasons()` |
-| Paper cancel | Always disabled after confirm/idempotency checks until KIS paper cancel contract is implemented | `KIS_PAPER_CANCEL_CONFIRMATION_REQUIRED` |
-| Paper sync | `POST /api/paper/sync` returns idempotent `sync_disabled`; no KIS network sync is performed | `KIS_PAPER_SYNC_CONFIRMATION_REQUIRED` |
-| KIS paper adapter | `submit_order`, `cancel_order`, `list_orders`, and `sync` raise confirmation-required errors | `KisPaperBrokerAdapter` |
+| Paper submit | Local submit remains default. KIS paper network submit exists only when paper mode, process env flags, config gate, adapter gate, credential gate, kill switch off, `confirm=true`, and idempotency key all pass | `PaperOrderService` and `KisPaperBrokerAdapter.submit_order()` |
+| Paper cancel | KIS paper network cancel exists only for a stored paper order with broker order id and all cancel gates passing | `PaperOrderService.cancel_order()` and `KisPaperBrokerAdapter.cancel_order()` |
+| Paper query/sync | KIS paper query/sync exists only when paper network/config/adapter/credential gates pass, and persists only dedicated paper tables | `KisPaperBrokerAdapter.list_orders()` and `PaperSyncService.sync()` |
+| KIS paper adapter | Uses paper endpoint/TR ID mappers, redacted trace, timeout/retry/rate-limit/error handling; unconfirmed cancelable-order query remains unimplemented/fail-closed | `KisPaperBrokerAdapter` |
 | Live adapter | Placeholder only and always disabled | `KisLiveBrokerAdapter` |
 
 ## Required Env/Config Items
@@ -185,12 +185,16 @@ git diff --check
 
 | Item | Result |
 |---|---|
-| Execution status | Phase 12 preflight stopped |
-| Reason | Required KIS paper credential/process env gates are not present, and submit/cancel/query/sync network adapter is still unsupported/confirmation required |
-| Network calls | None in this review |
+| Execution status | Phase 12C preflight stopped |
+| Phase 12B commit | `bcd40fac2a67e8c06aad32bd1f1f386b3abcab8e` |
+| Reason | Required KIS paper credential/process env gates are not present, and repo config remains fail-closed |
+| Credential gate | `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCOUNT_NO`, `KIS_PRODUCT_CODE` all not configured in the current process |
+| Runtime gate | `PAPER_TRADING_ENABLED`, `PAPER_TRADING_CAN_CREATE`, `PAPER_TRADING_NETWORK_ENABLED`, `PAPER_TRADING_KILL_SWITCH` not configured in the current process |
+| Config gate | `backend/config/paper.yaml` remains `mode=safety_scaffold`, `enabled=false`, `can_create=false`, `network_enabled=false`, `kill_switch_enabled=true`, adapter disabled |
+| Network calls | None in this Phase 12C preflight |
 | Live endpoint calls | None |
-| Secret exposure | None observed in this review |
-| Next executable phase | Phase 12A: KIS paper read-only balance dry-run |
+| Secret exposure | None observed; no raw credential/account/token value was printed or written |
+| Next executable phase | Phase 12C retry after process credential/runtime/config gates are prepared, or Phase 12A if read-only balance dry-run is required first |
 | Phase 13 eligibility | Not eligible |
 
 ## Rollback Rule
