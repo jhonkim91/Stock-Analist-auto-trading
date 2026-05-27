@@ -62,6 +62,7 @@
 - Goal.md Phase 1 KIS Paper API Confirmation Matrix: `docs/research/kis-paper-api-confirmation-matrix.md`에서 공식 KIS 포털/공식 GitHub 샘플 기반 확인 항목과 `확인 필요` 항목을 분리하고, Phase 2 adapter 설계는 disabled/fail-closed capability로만 진행하도록 제한.
 - Goal.md Phase 2 Paper Broker Adapter Hardening: `backend/app/services/broker_adapter.py`, `kis_paper_broker_adapter.py`, `kis_live_broker_adapter.py` 서비스 경계를 추가하고, `BrokerService`/`PaperTradingService`가 해당 경계를 사용하도록 전환. live adapter는 disabled placeholder 유지.
 - Goal.md Phase 3 Token Hashkey Request Signing: metadata-only `KisTokenManager`, fail-closed `KisRequestSigner`, `CredentialRedactionService`를 추가하고, hashkey 미확인/토큰 metadata 미충족 시 submit prerequisite를 reject하도록 구성.
+- Goal.md Phase 4 Paper Order Submit Cancel: `/api/paper/orders/submit`과 `/api/paper/orders/cancel` 응답에 paper-only marker와 redacted broker trace를 추가하고, 기본 disabled/kill-switch 상태에서 no-live/no-network/no-write 회귀를 검증.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.

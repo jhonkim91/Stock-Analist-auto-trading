@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
+from backend.app.api.paper_execution_helpers import paper_only_execution_response
 from backend.app.models.schemas import (
     PaperOrderCancelRequest,
     PaperOrderPreviewRequest,
@@ -37,7 +38,7 @@ def preview_paper_order(payload: PaperOrderPreviewRequest, db: Session = Depends
 
 @router.post("/orders/submit")
 def submit_paper_order(payload: PaperOrderSubmitRequest, db: Session = Depends(get_db)) -> dict[str, object]:
-    return PaperTradingService(db).submit_order(
+    result = PaperTradingService(db).submit_order(
         symbol=payload.symbol,
         side=payload.side,
         qty=payload.qty,
@@ -49,15 +50,17 @@ def submit_paper_order(payload: PaperOrderSubmitRequest, db: Session = Depends(g
         confirm=payload.confirm,
         idempotency_key=payload.idempotency_key,
     )
+    return paper_only_execution_response(result, operation="paper_order_submit")
 
 
 @router.post("/orders/cancel")
 def cancel_paper_order(payload: PaperOrderCancelRequest, db: Session = Depends(get_db)) -> dict[str, object]:
-    return PaperTradingService(db).cancel_order(
+    result = PaperTradingService(db).cancel_order(
         paper_order_id=payload.paper_order_id,
         confirm=payload.confirm,
         idempotency_key=payload.idempotency_key,
     )
+    return paper_only_execution_response(result, operation="paper_order_cancel")
 
 
 @router.get("/orders")

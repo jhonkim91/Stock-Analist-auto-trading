@@ -1,5 +1,17 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 4 Paper Order Submit Cancel
+
+이번 변경은 `goal.md`의 `Phase 4: Paper Order Submit Cancel` 범위만 수행했다. 기존 paper submit/cancel API를 유지하면서 API 응답에 `paper_only`, `execution_mode="paper"`, `live_fallback_enabled=false`, redacted `broker_trace`를 추가했다. 기본 config에서는 kill-switch/config gate로 submit이 blocked되고 cancel은 공식 KIS cancel payload 확인 전 disabled 상태를 유지한다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 4 지정 pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_submit_cancel_api.py backend/tests/test_no_live_trading_regression.py -q`: 9 passed in 0.68s |
+| Phase 4 related regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 14 passed in 0.87s |
+| Phase 4 secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Phase 4 live enable scan | 통과 | static scan: live/paper auto-submit true pattern 없음. 문서의 `ENABLE_REAL_ORDER=true` 언급은 차단 동작 설명이다. |
+| Phase 4 diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 3 Token Hashkey Request Signing
 
 이번 변경은 `goal.md`의 `Phase 3: Token Hashkey Request Signing` 범위만 수행했다. token raw value를 저장하지 않는 metadata-only manager, hashkey 미확인 시 fail-closed signer, credential/account/header redaction utility를 추가했다. 실제 token 발급, hashkey 네트워크 호출, 주문 submit은 구현하지 않았다.
