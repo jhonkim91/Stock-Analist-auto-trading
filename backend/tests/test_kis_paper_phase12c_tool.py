@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
+
 from tools import kis_paper_phase12c_dry_run as phase12c
 
 
@@ -58,6 +60,16 @@ class _FakeAdapter:
         }
 
 
+class _QueryFailingAdapter(_FakeAdapter):
+    def list_orders(self, *, status: str | None = None) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "status": "query_failed",
+            "reason_codes": ["QUERY_CONTRACT_MISMATCH"],
+            "network_call_performed": True,
+        }
+
+
 def _ready_env() -> dict[str, str]:
     return {
         "KIS_APP_KEY": "TESTVALUE123456",
@@ -66,8 +78,10 @@ def _ready_env() -> dict[str, str]:
         "KIS_ACCOUNT_NO": "12345678",
         "KIS_PRODUCT_CODE": "01",
         "KIS_PAPER_BASE_URL": "https://openapivts.koreainvestment.com:29443",
+        "BROKER_MODE": "paper_kis",
         "ENABLE_REAL_ORDER": "false",
         "PAPER_BOT_AUTO_SUBMIT": "false",
+        "PAPER_ORDER_SUBMIT_ENABLED": "true",
         "PAPER_TRADING_ENABLED": "true",
         "PAPER_TRADING_CAN_CREATE": "true",
         "PAPER_TRADING_NETWORK_ENABLED": "true",
@@ -78,11 +92,15 @@ def _ready_env() -> dict[str, str]:
 def _ready_config() -> dict[str, object]:
     return {
         "mode": "paper",
+        "broker_mode": "paper_kis",
         "enabled": True,
         "configured_can_create": True,
+        "paper_order_submit_enabled": True,
         "network_enabled": True,
+        "balance_inquiry_enabled": True,
         "broker_adapter_enabled": True,
         "official_endpoint_confirmed": True,
+        "official_balance_endpoint_confirmed": True,
         "kill_switch_enabled": False,
         "live_order_enabled": False,
         "live_fallback_enabled": False,
@@ -126,6 +144,117 @@ def test_phase12c_execute_missing_env_stops_before_adapter() -> None:
     assert "KIS_ACCESS_TOKEN_MISSING" in record["reason_codes"]
 
 
+def test_phase12c_preflight_requires_broker_mode_and_submit_flag() -> None:
+    env = _ready_env()
+    env.pop("BROKER_MODE")
+    env.pop("PAPER_ORDER_SUBMIT_ENABLED")
+
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="005930",
+        side="buy",
+        qty=1,
+        limit_price=None,
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        env=env,
+        config=_ready_config(),
+        adapter_factory=lambda config: (_ for _ in ()).throw(AssertionError("adapter must not be called")),
+    )
+
+    assert record["status"] == "preflight_stopped"
+    assert record["network_call_performed"] is False
+    assert "BROKER_MODE_PAPER_KIS_REQUIRED" in record["reason_codes"]
+    assert "PAPER_ORDER_SUBMIT_ENABLED_REQUIRED" in record["reason_codes"]
+
+
+def test_phase12c_temporary_config_is_process_only_and_requires_confirmation() -> None:
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="005930",
+        side="buy",
+        qty=1,
+        limit_price=None,
+        confirm_submit=None,
+        confirm_cancel=None,
+        env=_ready_env(),
+        config={"mode": "safety_scaffold", "kill_switch_enabled": True},
+        use_temporary_paper_config=True,
+        adapter_factory=lambda config: (_ for _ in ()).throw(AssertionError("adapter must not be called")),
+    )
+
+    assert record["status"] == "confirmation_required"
+    assert record["temporary_config_used"] is True
+    assert record["network_call_performed"] is False
+    assert record["preflight"]["ok"] is True
+    assert record["preflight"]["config_gates"]["mode"] == "paper"
+
+
+def test_phase12c_cli_execute_without_confirmation_returns_failure(capsys) -> None:
+    exit_code = phase12c.main(["--execute", "--temporary-paper-config"])
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 2
+    assert output["status"] == "confirmation_required"
+    assert output["network_call_performed"] is False
+    assert "PHASE12C_SUBMIT_CANCEL_CONFIRMATION_REQUIRED" in output["reason_codes"]
+
+
+def test_phase12c_requires_trading_window_confirmation_before_adapter() -> None:
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="005930",
+        side="buy",
+        qty=1,
+        limit_price=70000,
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        env=_ready_env(),
+        config=_ready_config(),
+        adapter_factory=lambda config: (_ for _ in ()).throw(AssertionError("adapter must not be called")),
+    )
+
+    assert record["status"] == "trading_window_confirmation_required"
+    assert record["network_call_performed"] is False
+    assert record["steps"] == []
+    assert "PHASE12C_TRADING_WINDOW_CONFIRMATION_REQUIRED" in record["reason_codes"]
+
+
+def test_phase12c_attempts_cancel_after_query_failure_and_redacts_identifier() -> None:
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="005930",
+        side="buy",
+        qty=1,
+        limit_price=70000,
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        confirm_trading_window=phase12c.TRADING_WINDOW_CONFIRMATION_TOKEN,
+        env=_ready_env(),
+        config=_ready_config(),
+        adapter_factory=lambda config: _QueryFailingAdapter(config),
+    )
+    serialized = json.dumps(record, sort_keys=True)
+
+    assert record["status"] == "query_failed"
+    assert [step["name"] for step in record["steps"]] == [
+        "kill_switch_block",
+        "submit",
+        "list_orders",
+        "cancel_after_query_failed",
+    ]
+    assert record["kill_switch_reenabled"] is True
+    assert "001|000001|1|70000|00|KRX" not in serialized
+    assert "sha256:" in serialized
+
+
+def test_phase12c_record_path_must_stay_inside_repo() -> None:
+    outside_path = phase12c.PROJECT_ROOT.parent / "phase12c-outside.json"
+
+    with pytest.raises(ValueError, match="inside the repository"):
+        phase12c.write_record({"status": "blocked"}, outside_path)
+
+
 def test_phase12c_execute_uses_kill_switch_proof_and_redacts_identifiers() -> None:
     record = phase12c.run_controlled_dry_run(
         execute=True,
@@ -135,6 +264,7 @@ def test_phase12c_execute_uses_kill_switch_proof_and_redacts_identifiers() -> No
         limit_price=70000,
         confirm_submit=phase12c.CONFIRMATION_TOKEN,
         confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        confirm_trading_window=phase12c.TRADING_WINDOW_CONFIRMATION_TOKEN,
         env=_ready_env(),
         config=_ready_config(),
         adapter_factory=lambda config: _FakeAdapter(config),

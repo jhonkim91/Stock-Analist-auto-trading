@@ -9,18 +9,19 @@ as a single dry-run step. It is split into:
 |---|---|---|
 | Phase 12A | KIS paper read-only balance dry-run | Not executed in this run |
 | Phase 12B | KIS paper submit/cancel/query/sync adapter implementation | Implemented and committed in `bcd40fac2a67e8c06aad32bd1f1f386b3abcab8e`; mock tests passed |
-| Phase 12C | Controlled KIS paper submit/cancel/query/sync dry-run | Preflight stopped: required process credential/runtime/config gates are not open |
+| Phase 12C | Controlled KIS paper submit/cancel/query/sync dry-run | Actual paper submit attempted after human confirmation; KIS rejected during market-closed window before broker order creation |
 
 Phase 13 must not start until Phase 12C has a redacted successful dry-run
 record. Phase 12 must not be marked complete from env flags alone.
 
 ## Current Code Finding
 
-Status: Phase 12 remains incomplete. Phase 12B adapter implementation is present, but Phase 12C real-network dry-run stopped at preflight.
+Status: Phase 12 remains incomplete. Phase 12B adapter implementation is present, and Phase 12C reached the KIS paper submit endpoint after human confirmation. KIS returned `40580000` / `모의투자 장종료 입니다.`, so no broker order id was created and cancel/query/sync did not run.
 
 The current code has paper-only KIS submit/cancel/list/sync adapter paths behind
-explicit gates. Default runtime remains fail-closed, and no real KIS paper
-network call has been executed in this review.
+explicit gates. Default runtime remains fail-closed. A controlled Phase 12C KIS
+paper submit call was executed only after human confirmation and produced a
+redacted failure record; no live endpoint was called.
 
 | Area | Current code behavior | Evidence |
 |---|---|---|
@@ -151,6 +152,7 @@ Phase 12C is blocked until Phase 12B is implemented and tested.
 - [ ] Run `.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py` first and confirm it reports only redacted preflight status with no network call.
 - [ ] Verify kill switch blocks submit while enabled.
 - [ ] Obtain explicit human confirmation immediately before submit.
+- [ ] Confirm KIS paper trading window immediately before submit, then pass `--confirm-trading-window CONFIRM_KIS_PAPER_TRADING_WINDOW`.
 - [ ] Use a minimum-size paper order only.
 - [ ] Temporarily disable kill switch only for the single controlled paper submit attempt.
 - [ ] Confirm paper mode, paper base URL, and paper TR ID are used.
@@ -163,7 +165,7 @@ Phase 12C is blocked until Phase 12B is implemented and tested.
 
 ### Redacted record
 
-- [ ] If using the helper, execute with `--execute --confirm-submit CONFIRM_KIS_PAPER_PHASE12C --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C` only after all process env/runtime gates are prepared.
+- [ ] If using the helper, execute with `--execute --confirm-submit CONFIRM_KIS_PAPER_PHASE12C --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C --confirm-trading-window CONFIRM_KIS_PAPER_TRADING_WINDOW` only after all process env/runtime gates are prepared and the KIS paper trading window is currently open.
 - [ ] Record submit attempt ID, symbol, side, quantity, sanitized order identifier, status, and error code if any.
 - [ ] Record query/sync scope, status, redacted broker trace, and row counts.
 - [ ] Record cancel status and sanitized order identifier only.
@@ -189,18 +191,22 @@ git diff --check
 
 | Item | Result |
 |---|---|
-| Execution status | Phase 12C preflight stopped |
+| Execution status | Phase 12C submit stopped after KIS paper market-closed response |
 | Phase 12B commit | `bcd40fac2a67e8c06aad32bd1f1f386b3abcab8e` |
-| Reason | Required KIS paper credential/process env gates are not present, and repo config remains fail-closed |
-| Credential gate | `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCOUNT_NO`, `KIS_PRODUCT_CODE` all not configured in the current process |
-| Runtime gate | `PAPER_TRADING_ENABLED`, `PAPER_TRADING_CAN_CREATE`, `PAPER_TRADING_NETWORK_ENABLED`, `PAPER_TRADING_KILL_SWITCH` not configured in the current process |
+| Reason | KIS paper submit returned `40580000` / `모의투자 장종료 입니다.` before broker order creation |
+| Credential gate | `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCOUNT_NO`, `KIS_PRODUCT_CODE` all configured by redacted boolean check; raw values were not printed or recorded |
+| Runtime gate | `PAPER_TRADING_ENABLED`, `PAPER_TRADING_CAN_CREATE`, `PAPER_TRADING_NETWORK_ENABLED` enabled and `PAPER_TRADING_KILL_SWITCH` explicitly false by redacted boolean check |
 | Config gate | `backend/config/paper.yaml` remains `mode=safety_scaffold`, `enabled=false`, `can_create=false`, `network_enabled=false`, `kill_switch_enabled=true`, adapter disabled |
 | 12C helper | `tools/kis_paper_phase12c_dry_run.py` added; default mode is preflight-only and performs no network call |
-| 12C helper preflight | Current run reported `preflight_only` with credential/runtime/config blockers and `network_call_performed=false` |
-| Network calls | None in this Phase 12C preflight |
+| 12C temporary config | `--temporary-paper-config` uses a process-only config override and does not write `backend/config/paper.yaml` |
+| 12C helper preflight | `--temporary-paper-config` reported `preflight_only`, `preflight.ok=true`, and `network_call_performed=false` |
+| Execute confirmation gate | `--temporary-paper-config --execute` without submit/cancel tokens stopped with `confirmation_required` and `network_call_performed=false` |
+| Trading-window confirmation gate | `--temporary-paper-config --execute --confirm-submit CONFIRM_KIS_PAPER_PHASE12C --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C` stopped with `trading_window_confirmation_required` and `network_call_performed=false` |
+| Controlled submit | `--temporary-paper-config --execute --confirm-submit CONFIRM_KIS_PAPER_PHASE12C --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C --qty 1 --limit-price 230000` reached `/uapi/domestic-stock/v1/trading/order-cash`, `tr_id=VTTC0012U`, `status_code=200`, then failed with `KIS_PAPER_RESPONSE_ERROR` |
+| Network calls | One KIS paper submit call; no cancel/query/sync network call because no broker order id was created |
 | Live endpoint calls | None |
 | Secret exposure | None observed; no raw credential/account/token value was printed or written |
-| Next executable phase | Phase 12C retry after process credential/runtime/config gates are prepared, or Phase 12A if read-only balance dry-run is required first |
+| Next executable phase | Phase 12C controlled dry-run must be retried during a KIS paper trading window; Phase 13 remains blocked |
 | Phase 13 eligibility | Not eligible |
 
 ## Rollback Rule

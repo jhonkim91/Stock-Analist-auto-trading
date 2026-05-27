@@ -49,6 +49,9 @@ class PaperBotConfigService:
                     "mode": str(bot.get("mode") or "manual"),
                     "loop_interval_seconds": int(bot.get("loop_interval_seconds") or 300),
                     "max_candidates": int(bot.get("max_candidates") or 5),
+                    "max_auto_submit_orders": int(bot.get("max_auto_submit_orders") or 1),
+                    "max_order_qty": int(bot.get("max_order_qty") or 1),
+                    "max_order_notional": float(bot.get("max_order_notional") or 100000.0),
                     "default_strategy": str(bot.get("default_strategy") or "trend_breakout"),
                     "sync_enabled": bool(bot.get("sync_enabled", False)),
                     "notification_enabled": bool(bot.get("notification_enabled", False)),
@@ -60,6 +63,15 @@ class PaperBotConfigService:
         config["auto_submit"] = self._env_bool("PAPER_BOT_AUTO_SUBMIT", bool(config["auto_submit"]))
         config["scheduler_enabled"] = self._env_bool("PAPER_BOT_SCHEDULER_ENABLED", bool(config["scheduler_enabled"]))
         config["kill_switch_enabled"] = self._env_bool("PAPER_BOT_KILL_SWITCH", bool(config["kill_switch_enabled"]))
+        config["max_auto_submit_orders"] = self._env_int(
+            "PAPER_BOT_MAX_SUBMITS_PER_RUN",
+            int(config["max_auto_submit_orders"]),
+        )
+        config["max_order_qty"] = self._env_int("PAPER_BOT_MAX_ORDER_QTY", int(config["max_order_qty"]))
+        config["max_order_notional"] = self._env_float(
+            "PAPER_BOT_MAX_ORDER_NOTIONAL",
+            float(config["max_order_notional"]),
+        )
         if config["mode"] not in BOT_MODES:
             config["mode"] = "manual"
         return config, []
@@ -74,6 +86,9 @@ class PaperBotConfigService:
             "mode": "manual",
             "loop_interval_seconds": 300,
             "max_candidates": 5,
+            "max_auto_submit_orders": 1,
+            "max_order_qty": 1,
+            "max_order_notional": 100000.0,
             "default_strategy": "trend_breakout",
             "sync_enabled": False,
             "notification_enabled": False,
@@ -87,10 +102,31 @@ class PaperBotConfigService:
             return default
         return value.strip().lower() in {"1", "true", "yes", "on"}
 
+    @staticmethod
+    def _env_int(name: str, default: int) -> int:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+
+    @staticmethod
+    def _env_float(name: str, default: float) -> float:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        try:
+            return float(value)
+        except ValueError:
+            return 0.0
+
 
 class PaperBotService:
     def __init__(self, db: Session, *, config_dir: Path = CONFIG_DIR) -> None:
         self.db = db
+        self.config_dir = config_dir
         self.config_service = PaperBotConfigService(config_dir)
 
     def status(self) -> dict[str, Any]:
@@ -111,6 +147,9 @@ class PaperBotService:
             "session_check_passed": bool(session["session_check_passed"]),
             "loop_interval_seconds": int(config["loop_interval_seconds"]),
             "max_candidates": int(config["max_candidates"]),
+            "max_auto_submit_orders": int(config["max_auto_submit_orders"]),
+            "max_order_qty": int(config["max_order_qty"]),
+            "max_order_notional": float(config["max_order_notional"]),
             "default_strategy": str(config["default_strategy"]),
             "sync_enabled": bool(config["sync_enabled"]),
             "notification_enabled": bool(config["notification_enabled"]),
@@ -156,6 +195,9 @@ class PaperBotService:
                 run_id=run.run_id,
                 candidates=candidates,
                 auto_submit_allowed=auto_submit_allowed,
+                max_auto_submit_orders=int(status["max_auto_submit_orders"]),
+                max_order_qty=int(status["max_order_qty"]),
+                max_order_notional=float(status["max_order_notional"]),
             )
 
         steps = self._steps(
@@ -216,7 +258,14 @@ class PaperBotService:
 
     @staticmethod
     def _auto_submit_allowed(config: dict[str, Any]) -> bool:
-        return bool(config["enabled"]) and bool(config["auto_submit"]) and not bool(config["kill_switch_enabled"])
+        return (
+            bool(config["enabled"])
+            and bool(config["auto_submit"])
+            and not bool(config["kill_switch_enabled"])
+            and int(config["max_auto_submit_orders"]) > 0
+            and int(config["max_order_qty"]) > 0
+            and float(config["max_order_notional"]) > 0
+        )
 
     def stop(self) -> dict[str, Any]:
         """실행 중인 scheduler process를 만들지 않는 현재 MVP에서 stop 요청을 안전하게 수용한다."""
@@ -239,37 +288,51 @@ class PaperBotService:
         run_id: str,
         candidates: list[ScreenResult],
         auto_submit_allowed: bool,
+        max_auto_submit_orders: int,
+        max_order_qty: int,
+        max_order_notional: float,
     ) -> tuple[list[dict[str, Any]], int]:
         decisions: list[dict[str, Any]] = []
         submitted_count = 0
-        seen: set[tuple[str, str]] = set()
+        seen_symbols: set[str] = set()
         for candidate in candidates:
-            identity = (candidate.symbol, candidate.strategy_tag)
-            if identity in seen:
+            symbol = candidate.symbol.strip()
+            if symbol in seen_symbols:
                 continue
-            seen.add(identity)
+            seen_symbols.add(symbol)
             risk_gate = RiskService().bot_candidate_gate(candidate)
             action = "preview" if risk_gate["passed"] else "rejected"
             paper_order_id = None
             reason_codes = list(risk_gate["reason_codes"])
             if auto_submit_allowed and risk_gate["passed"]:
-                submit_result = PaperOrderService(self.db).submit_order(
-                    symbol=candidate.symbol,
-                    side="buy",
-                    qty=int(candidate.position_size or 0),
-                    confirm=True,
-                    idempotency_key=f"{run_id}:{candidate.symbol}:{candidate.strategy_tag}",
-                    limit_price=candidate.entry_price,
-                    stop_price=candidate.stop_price,
-                    strategy_tag=candidate.strategy_tag,
+                cap_reasons = self._bot_submit_cap_reasons(
+                    candidate,
+                    submitted_count=submitted_count,
+                    max_auto_submit_orders=max_auto_submit_orders,
+                    max_order_qty=max_order_qty,
+                    max_order_notional=max_order_notional,
                 )
-                if submit_result.get("ok") and submit_result.get("order"):
-                    action = "submitted"
-                    paper_order_id = str(submit_result["order"]["paper_order_id"])
-                    submitted_count += 1
-                else:
+                if cap_reasons:
                     action = "submit_blocked"
-                    reason_codes = self._merge_reason_codes(reason_codes, list(submit_result.get("reason_codes") or []))
+                    reason_codes = self._merge_reason_codes(reason_codes, cap_reasons)
+                else:
+                    submit_result = PaperOrderService(self.db, config_dir=self.config_dir).submit_order(
+                        symbol=candidate.symbol,
+                        side="buy",
+                        qty=int(candidate.position_size or 0),
+                        confirm=True,
+                        idempotency_key=f"{run_id}:{candidate.symbol}:{candidate.strategy_tag}",
+                        limit_price=candidate.entry_price,
+                        stop_price=candidate.stop_price,
+                        strategy_tag=candidate.strategy_tag,
+                    )
+                    if submit_result.get("ok") and submit_result.get("order"):
+                        action = "submitted"
+                        paper_order_id = str(submit_result["order"]["paper_order_id"])
+                        submitted_count += 1
+                    else:
+                        action = "submit_blocked"
+                        reason_codes = self._merge_reason_codes(reason_codes, list(submit_result.get("reason_codes") or []))
 
             decision = PaperBotDecision(
                 run_id=run_id,
@@ -289,6 +352,26 @@ class PaperBotService:
             decisions.append(self._decision_payload(decision, reason_codes))
         self.db.commit()
         return decisions, submitted_count
+
+    @staticmethod
+    def _bot_submit_cap_reasons(
+        candidate: ScreenResult,
+        *,
+        submitted_count: int,
+        max_auto_submit_orders: int,
+        max_order_qty: int,
+        max_order_notional: float,
+    ) -> list[str]:
+        reasons: list[str] = []
+        qty = int(candidate.position_size or 0)
+        notional = float(candidate.position_notional or 0.0)
+        if submitted_count >= max_auto_submit_orders:
+            reasons.append("PAPER_BOT_MAX_SUBMITS_PER_RUN_REACHED")
+        if qty > max_order_qty:
+            reasons.append("PAPER_BOT_ORDER_QTY_LIMIT_EXCEEDED")
+        if notional > max_order_notional:
+            reasons.append("PAPER_BOT_ORDER_NOTIONAL_LIMIT_EXCEEDED")
+        return reasons
 
     @staticmethod
     def _decision_payload(decision: PaperBotDecision, reason_codes: list[str]) -> dict[str, Any]:
@@ -356,6 +439,12 @@ class PaperBotService:
             reasons.append("PAPER_BOT_AUTO_SUBMIT_DISABLED")
         if bool(config["kill_switch_enabled"]):
             reasons.append("PAPER_BOT_KILL_SWITCH_ACTIVE")
+        if int(config["max_auto_submit_orders"]) <= 0:
+            reasons.append("PAPER_BOT_MAX_SUBMITS_PER_RUN_REQUIRED")
+        if int(config["max_order_qty"]) <= 0:
+            reasons.append("PAPER_BOT_MAX_ORDER_QTY_REQUIRED")
+        if float(config["max_order_notional"]) <= 0:
+            reasons.append("PAPER_BOT_MAX_ORDER_NOTIONAL_REQUIRED")
         return PaperBotService._merge_reason_codes(reasons, [])
 
     def _counts(self) -> dict[str, int]:

@@ -18,6 +18,9 @@ from backend.app.services.token_manager import TokenLifecycleService
 PAPER_CONFIG_NAME = "paper.yaml"
 TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 FALSE_ENV_VALUES = {"0", "false", "no", "off"}
+BROKER_MODE_ENV = "BROKER_MODE"
+PAPER_ORDER_SUBMIT_ENABLED_ENV = "PAPER_ORDER_SUBMIT_ENABLED"
+REQUIRED_PAPER_BROKER_MODE = "paper_kis"
 
 
 class LocalPaperSimulator:
@@ -69,11 +72,15 @@ class PaperConfigService:
             runtime_can_create = self._env_flag_true("PAPER_TRADING_CAN_CREATE")
             runtime_network_enabled = self._env_flag_true("PAPER_TRADING_NETWORK_ENABLED")
             runtime_kill_switch_off = self._env_flag_false("PAPER_TRADING_KILL_SWITCH")
+            runtime_broker_mode = os.getenv(BROKER_MODE_ENV, "").strip().lower()
+            runtime_order_submit_enabled = self._env_flag_true(PAPER_ORDER_SUBMIT_ENABLED_ENV)
             config.update(
                 {
                     "mode": str(paper.get("mode") or "disabled"),
+                    "broker_mode": runtime_broker_mode,
                     "enabled": config_enabled and runtime_enabled,
                     "configured_can_create": config_can_create and runtime_can_create,
+                    "paper_order_submit_enabled": runtime_order_submit_enabled,
                     "configured_can_simulate_fills": bool(paper.get("can_simulate_fills", False)),
                     "preview_only": bool(paper.get("preview_only", True)),
                     "kill_switch_enabled": config_kill_switch_enabled or not runtime_kill_switch_off,
@@ -122,8 +129,10 @@ class PaperConfigService:
     def _closed_config() -> dict[str, object]:
         return {
             "mode": "disabled",
+            "broker_mode": "",
             "enabled": False,
             "configured_can_create": False,
+            "paper_order_submit_enabled": False,
             "configured_can_simulate_fills": False,
             "preview_only": True,
             "kill_switch_enabled": True,

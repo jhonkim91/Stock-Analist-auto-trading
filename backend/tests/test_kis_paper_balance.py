@@ -15,6 +15,7 @@ from backend.app.services.paper_sync_service import PaperConfigService
 
 def _set_kis_balance_env(monkeypatch, secret: str = "PAPER_BALANCE_SECRET_SENTINEL") -> None:
     monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
+    monkeypatch.setenv("BROKER_MODE", "paper_kis")
     monkeypatch.setenv("KIS_APP_KEY", secret)
     monkeypatch.setenv("KIS_APP_SECRET", secret)
     monkeypatch.setenv("KIS_ACCESS_TOKEN", secret)
@@ -26,6 +27,7 @@ def _set_kis_balance_env(monkeypatch, secret: str = "PAPER_BALANCE_SECRET_SENTIN
 def _enabled_paper_config() -> dict[str, object]:
     return {
         "mode": "paper",
+        "broker_mode": "paper_kis",
         "enabled": True,
         "network_enabled": True,
         "balance_inquiry_enabled": True,

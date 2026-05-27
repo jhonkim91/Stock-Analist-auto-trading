@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `MVP v0.26.0 / KIS Paper Balance Inquiry Read-only`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실주문, 주문 취소, 체결, 계좌 자금 이동, websocket, live broker, KIS credential/token 저장은 구현하지 않습니다. KIS 모의투자 잔고조회는 env credential과 paper balance flag가 모두 안전 조건을 만족할 때만 read-only로 호출합니다.
+현재 기준선은 `MVP v0.26.0 / KIS Paper Network Adapter Mock-verified`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실전투자 주문, 실전 주문 취소, 실계좌 체결/자금 이동, 실거래 websocket, live broker, KIS credential/token 저장은 구현하지 않습니다. KIS 모의투자 submit/cancel/query/sync는 paper-only network gate가 모두 열릴 때만 허용되며 실제 KIS dry-run은 Phase 12C로 남겨둡니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -11,14 +11,14 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.26.0` |
-| Phase | `KIS Paper Balance Inquiry Read-only` |
+| Phase | `KIS Paper Network Adapter Mock-verified` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
-| Trading state | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; KIS paper balance read-only 조건부 지원; real/live order 미구현 |
-| Latest backend pytest | full backend `342 passed`; KIS balance/no-live/secret targeted suites 통과 |
+| Trading state | paper-only local submit + KIS paper network submit/cancel/query/sync adapter mock 검증; live order/fallback 미구현 |
+| Latest backend pytest | KIS Phase 12B targeted `22 passed`; bot/order/balance 추가 `11 passed` |
 | Latest secret scan | `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
-| Next recommended phase | KIS paper submit/cancel/sync network 구현은 보류. balance 조회는 read-only 조건부 경로만 허용 |
+| Next recommended phase | 실제 KIS 모의투자 최소 주문 dry-run은 Phase 12C에서 별도 human confirmation 후 수행 |
 
 ## Implemented Scope
 
@@ -60,6 +60,7 @@
 - Goal.md Phase 10 Frontend Integration: `/bot` 화면, paper/notification API wrapper, `/paper` bot/kill-switch indicator, `/settings` notification dry-run test, `/reports` report notify action을 paper-only UI로 연결.
 - Goal.md Phase 11 End-to-End Mock Validation: `backend/tests/test_e2e_paper_mock_flow.py`로 preview, local paper submit, order poll, mock fill/position/portfolio, notification outbox, report notify를 KIS credential 없이 검증.
 - KIS Paper Balance Inquiry Read-only: `/api/paper/portfolio`에서 공식 `주식잔고조회[v1_국내주식-006]` paper TR `VTTC8434R`를 조건부 호출하고, disabled/mock 상태는 기존 local snapshot fallback 유지.
+- Goal.md Phase 12B KIS Paper Network Adapter: `KisPaperBrokerAdapter`가 공식 paper endpoint/TR ID 기반 submit/cancel/daily order-fill/balance/sync를 mock HTTP client로 검증하며, `BROKER_MODE=paper_kis`, runtime flags, kill switch, idempotency, duplicate guard, risk cap, `ENABLE_REAL_ORDER=false` 조건 없이는 network submit을 차단한다.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
 - Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration, strategy parameter snapshot migration, paper trading persistence migration.
 

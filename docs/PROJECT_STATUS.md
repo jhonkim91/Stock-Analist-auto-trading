@@ -5,7 +5,7 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.26.0` |
-| Phase | `KIS Paper Balance Inquiry Read-only` |
+| Phase | `KIS Paper Network Adapter Mock-verified` |
 | Goal.md Phase 0 | `docs/research/kis-paper-baseline-audit.md`에서 main 기준선과 현재 작업 브랜치 차이를 분리 감사 |
 | Goal.md Phase 5 | `PaperRepository` 기반 paper fills/positions/portfolio sync 조회 경계 보강 |
 | Goal.md Phase 6 | Telegram-first notification channel decision 문서화 |
@@ -16,10 +16,10 @@
 | Goal.md Phase 11 | mock-only preview/submit/fill/portfolio/outbox/report notify E2E 테스트 추가 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
-| 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; KIS paper balance read-only 조건부 지원; live/real order disabled |
-| 최신 backend pytest | Phase 11 full backend `370 passed` |
+| 거래 상태 | paper-only local submit + KIS paper network submit/cancel/query/sync adapter mock 검증; live/real order/fallback disabled |
+| 최신 backend pytest | Phase 12B targeted `22 passed`; bot/order/balance 추가 `11 passed` |
 | 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; rendered smoke 통과 |
-| 다음 권장 Phase | Phase 12 controlled KIS paper dry-run checklist. 자동 submit/live/order path는 여전히 기본 disabled |
+| 다음 권장 Phase | Phase 12C controlled KIS paper minimum-order dry-run. 실제 KIS 호출은 별도 human confirmation 전까지 미실행 |
 
 ## 구현 완료 항목
 
@@ -66,6 +66,7 @@
 - KIS Paper Broker Phase 8 Frontend Integration: `/paper`, `/portfolio`, `/reports`, `/settings`에 paper-only banner와 backend-gated submit/cancel/sync/notify controls를 추가하고 live readiness copy를 배제.
 - KIS Paper Broker Phase 9 Validation & Hardening: repo secret scan 도구, CI secret scan, settings key-name redaction hardening, operation doc, full backend/frontend acceptance 검증.
 - KIS Paper Balance Inquiry Read-only: `/api/paper/portfolio`에서 paper mode와 env credential 조건이 모두 맞을 때만 KIS `주식잔고조회` paper TR `VTTC8434R`를 호출하고, 기본 disabled/mock 상태는 local snapshot fallback을 유지.
+- Goal.md Phase 12B Paper-only Network Adapter: `KisPaperBrokerAdapter` submit/cancel/list_orders/query_balance/sync를 mock HTTP client로 검증했고, network submit은 `BROKER_MODE=paper_kis`, explicit runtime flags, kill switch off, confirm/idempotency, duplicate guard, risk gate, `ENABLE_REAL_ORDER=false` 조건 없이는 차단한다.
 - Goal.md Phase 0 Baseline Audit Refresh: `docs/research/kis-paper-baseline-audit.md`에 main ref `bfcb1691e56dbdbbfc18b043bc65ec447acafa3e`와 현재 작업 브랜치 `ffd7f52a4745df2b99c8dae694796eab5e8f024d`를 분리 기록하고, Phase 0 범위가 문서 감사뿐임을 확정.
 - Goal.md Phase 1 KIS Paper API Confirmation Matrix: `docs/research/kis-paper-api-confirmation-matrix.md`에서 공식 KIS 포털/공식 GitHub 샘플 기반 확인 항목과 `확인 필요` 항목을 분리하고, Phase 2 adapter 설계는 disabled/fail-closed capability로만 진행하도록 제한.
 - Goal.md Phase 2 Paper Broker Adapter Hardening: `backend/app/services/broker_adapter.py`, `kis_paper_broker_adapter.py`, `kis_live_broker_adapter.py` 서비스 경계를 추가하고, `BrokerService`/`PaperTradingService`가 해당 경계를 사용하도록 전환. live adapter는 disabled placeholder 유지.

@@ -44,10 +44,18 @@ cd ..
 
 | 변수 | 기본값 | 의미 |
 |---|---|---|
+| `BROKER_MODE` | `disabled` | KIS paper network adapter는 `paper_kis`일 때만 허용 |
+| `PAPER_TRADING_ENABLED` | `false` | paper trading runtime enable gate |
+| `PAPER_TRADING_CAN_CREATE` | `false` | paper order 생성 runtime gate |
+| `PAPER_TRADING_NETWORK_ENABLED` | `false` | KIS paper network 호출 runtime gate |
 | `PAPER_TRADING_KILL_SWITCH` | `true` | local paper submit 차단 우선 |
+| `PAPER_ORDER_SUBMIT_ENABLED` | `false` | KIS paper network submit 전용 gate |
 | `PAPER_BOT_AUTO_SUBMIT` | `false` | bot 자동 submit 비활성 |
 | `PAPER_BOT_SCHEDULER_ENABLED` | `false` | scheduler 비활성 |
 | `PAPER_BOT_KILL_SWITCH` | `true` | bot 실행 안전 차단 |
+| `PAPER_BOT_MAX_SUBMITS_PER_RUN` | `1` | bot 1회 실행 최대 submit 수 |
+| `PAPER_BOT_MAX_ORDER_QTY` | `1` | bot 자동 submit 종목별 최대 수량 |
+| `PAPER_BOT_MAX_ORDER_NOTIONAL` | `100000` | bot 자동 submit 1건 최대 주문금액 |
 | `ENABLE_REAL_ORDER` | `false` | KIS balance 조회 포함 실전/주문 경로 차단 |
 | `KIS_ACCESS_TOKEN` | `<placeholder>` | KIS paper balance 조회에 필요한 env-only token placeholder |
 | `KIS_ACCOUNT_NO` | `<placeholder>` | KIS paper balance 조회 CANO env placeholder |

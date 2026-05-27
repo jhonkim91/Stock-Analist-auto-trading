@@ -23,6 +23,11 @@ CONFIRM_REQUIRED_REASON = "PAPER_CONFIRM_TRUE_REQUIRED"
 IDEMPOTENCY_REQUIRED_REASON = "PAPER_IDEMPOTENCY_KEY_REQUIRED"
 IDEMPOTENCY_CONFLICT_REASON = "PAPER_IDEMPOTENCY_KEY_CONFLICT"
 NETWORK_DISABLED_REASON = "KIS_PAPER_NETWORK_DISABLED"
+BROKER_MODE_REQUIRED_REASON = "BROKER_MODE_PAPER_KIS_REQUIRED"
+PAPER_ORDER_SUBMIT_ENABLED_REQUIRED_REASON = "PAPER_ORDER_SUBMIT_ENABLED_REQUIRED"
+ENABLE_REAL_ORDER_BLOCK_REASON = "ENABLE_REAL_ORDER_MUST_BE_FALSE"
+DUPLICATE_OPEN_ORDER_REASON = "PAPER_DUPLICATE_OPEN_ORDER"
+OPEN_ORDER_STATUSES = {"submitted", "pending", "open", "partially_filled"}
 
 
 class PaperOrderService:
@@ -119,6 +124,19 @@ class PaperOrderService:
             return self._blocked_response(
                 status="blocked",
                 reason_codes=reason_codes,
+                request_hash=request_hash,
+                idempotency_key=normalized_key,
+                risk_gate=risk_gate,
+            )
+
+        duplicate_reasons = self._duplicate_order_reasons(symbol=symbol, side=side)
+        if duplicate_reasons:
+            risk_gate["decision"] = "deny"
+            risk_gate["passed"] = False
+            risk_gate["reason_codes"] = duplicate_reasons
+            return self._blocked_response(
+                status="duplicate_blocked",
+                reason_codes=duplicate_reasons,
                 request_hash=request_hash,
                 idempotency_key=normalized_key,
                 risk_gate=risk_gate,
@@ -371,6 +389,13 @@ class PaperOrderService:
             reasons.append("KILL_SWITCH_ACTIVE")
         if bool(config.get("live_order_enabled")):
             reasons.append("LIVE_ORDER_UNSUPPORTED")
+        if os.getenv("ENABLE_REAL_ORDER", "").strip().lower() in {"1", "true", "yes", "on"}:
+            reasons.append(ENABLE_REAL_ORDER_BLOCK_REASON)
+        if bool(config.get("network_enabled")):
+            if str(config.get("broker_mode") or "").strip().lower() != "paper_kis":
+                reasons.append(BROKER_MODE_REQUIRED_REASON)
+            if not bool(config.get("paper_order_submit_enabled")):
+                reasons.append(PAPER_ORDER_SUBMIT_ENABLED_REQUIRED_REASON)
         return reasons
 
     @staticmethod
@@ -390,6 +415,10 @@ class PaperOrderService:
             reasons.append(NETWORK_DISABLED_REASON)
         if bool(config.get("live_order_enabled")) or bool(config.get("live_fallback_enabled")):
             reasons.append("KIS_LIVE_PATH_BLOCKED")
+        if str(config.get("broker_mode") or "").strip().lower() != "paper_kis":
+            reasons.append(BROKER_MODE_REQUIRED_REASON)
+        if os.getenv("ENABLE_REAL_ORDER", "").strip().lower() in {"1", "true", "yes", "on"}:
+            reasons.append(ENABLE_REAL_ORDER_BLOCK_REASON)
         return reasons
 
     def _submit_network_order(
@@ -609,6 +638,22 @@ class PaperOrderService:
             "paper_audit_events_count": int(self.db.scalar(select(func.count()).select_from(PaperAuditEvent)) or 0),
             "orders_count": int(self.db.scalar(select(func.count()).select_from(Order)) or 0),
         }
+
+    def _duplicate_order_reasons(self, *, symbol: str, side: str) -> list[str]:
+        normalized_symbol = symbol.strip()
+        normalized_side = side.strip().lower()
+        if not normalized_symbol or normalized_side not in {"buy", "sell"}:
+            return []
+        existing = self.db.scalar(
+            select(PaperOrder.paper_order_id)
+            .where(
+                PaperOrder.symbol == normalized_symbol,
+                PaperOrder.side == normalized_side,
+                PaperOrder.status.in_(OPEN_ORDER_STATUSES),
+            )
+            .limit(1)
+        )
+        return [DUPLICATE_OPEN_ORDER_REASON] if existing else []
 
     def _adapter(self, config: dict[str, object]) -> KisPaperBrokerAdapter:
         if self.adapter is not None:

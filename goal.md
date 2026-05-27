@@ -455,14 +455,16 @@ Primary deliverables:
 # Phase 12: KIS Paper Trading Dry-run Split
 
 - 현재 상태
-  - Phase 12 is incomplete and stopped at preflight.
+  - Phase 12A is complete for read-only balance dry-run planning/guarding.
+  - Phase 12B adapter implementation is present behind paper-only network gates and mocked HTTP tests.
+  - Phase 12C controlled real KIS paper dry-run remains incomplete and must not be marked complete from env flags alone.
   - Do not mark Phase 12 complete from env flags alone.
-  - KIS paper submit/cancel/query/sync network execution remains unsupported/confirmation required.
+  - KIS paper submit/cancel/query/sync network execution is allowed only for paper mode after all explicit process/config/risk/idempotency gates pass.
   - Live trading paths must remain disabled.
 - 분리 사유
   - Current code has read-only KIS paper balance support only when all safe gates are explicitly enabled.
-  - Current `KisPaperBrokerAdapter` still raises confirmation-required errors for submit/cancel/list/sync.
-  - Current `POST /api/paper/sync` is an idempotent no-op until the KIS paper sync contract is implemented.
+  - `KisPaperBrokerAdapter` implements paper-only submit/cancel/list/query-balance/sync with official paper endpoint/TR ID mapping confirmed in the project matrix.
+  - `POST /api/paper/sync` remains fail-closed by default and only calls the paper adapter when paper network/config/env gates are explicitly opened.
 
 # Phase 12A: KIS Paper Read-only Balance Dry-run
 
@@ -525,6 +527,8 @@ Primary deliverables:
   - No raw secret/account/token persistence or response exposure.
 - 구현 조건
   - Implement only KIS paper base URL and paper TR IDs confirmed in the project matrix.
+  - Require `BROKER_MODE=paper_kis` for paper network adapter calls.
+  - Require `PAPER_ORDER_SUBMIT_ENABLED=true` only for network submit.
   - Fail closed for any unconfirmed endpoint, TR ID, request field, response field, hashkey/signing prerequisite, or account mode.
   - Require explicit process env gates for paper network execution.
   - Keep kill switch blocking submit by default and require immediate human confirmation for submit/cancel operations.
@@ -551,8 +555,10 @@ Primary deliverables:
 
 Implementation update:
 - `tools/kis_paper_phase12c_dry_run.py` provides a preflight-only default helper for Phase 12C.
-- `backend/tests/test_kis_paper_phase12c_tool.py` verifies no-op preflight, missing-gate stop, kill-switch proof, and broker identifier redaction.
-- Real-network evidence artifact remains uncreated until a controlled dry-run actually executes.
+- `tools/kis_paper_phase12c_dry_run.py --temporary-paper-config` can use a process-only dry-run config without writing `backend/config/paper.yaml`.
+- `tools/kis_paper_phase12c_dry_run.py --confirm-trading-window CONFIRM_KIS_PAPER_TRADING_WINDOW` is now required before any controlled submit attempt so a market-closed retry stops before adapter calls.
+- `backend/tests/test_kis_paper_phase12c_tool.py` verifies no-op preflight, missing-gate stop, broker-mode/order-submit gates, process-only temporary config, trading-window confirmation, kill-switch proof, and broker identifier redaction.
+- A controlled `--execute --temporary-paper-config` attempt reached the KIS paper submit endpoint after human confirmation, but KIS returned `40580000` / `모의투자 장종료 입니다.` before broker order creation; Phase 12C remains incomplete until submit/cancel/query/sync finishes with a redacted record.
 
 - 목적
   - Execute a controlled KIS paper submit/cancel/query/sync dry-run after Phase 12B implementation is complete.
@@ -572,6 +578,7 @@ Implementation update:
   - No raw secrets, tokens, account numbers, order identifiers that reveal account identity, or notification credentials in outputs.
 - 구현 조건
   - Require explicit human confirmation immediately before submit and cancel.
+  - Require explicit trading-window confirmation before the helper can call the adapter.
   - Use a minimum-size paper order only.
   - Prove kill switch blocks submit before temporarily opening the submit gate.
   - Re-enable kill switch immediately after the controlled submit/cancel attempt.
@@ -580,7 +587,7 @@ Implementation update:
   - Record redacted traces and outcome metadata only.
 - 테스트 파일
   - No automated real-network tests required in CI.
-  - Add helper tests that prove preflight is no-op, missing gates stop before adapter calls, kill-switch proof is required, and broker identifiers are redacted.
+  - Add helper tests that prove preflight is no-op, missing gates stop before adapter calls, trading-window confirmation is required, kill-switch proof is required, and broker identifiers are redacted.
 - 검증 명령어
   - Manual dry-run checklist.
   - `python tools/kis_paper_phase12c_dry_run.py`

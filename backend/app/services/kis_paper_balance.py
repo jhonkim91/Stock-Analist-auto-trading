@@ -21,6 +21,8 @@ KIS_PAPER_BALANCE_PATH = "/uapi/domestic-stock/v1/trading/inquire-balance"
 KIS_PAPER_BALANCE_TR_ID = "VTTC8434R"
 KIS_CUSTOMER_TYPE = "P"
 KIS_LIVE_HOST = "openapi.koreainvestment.com"
+KIS_PAPER_HOST = "openapivts.koreainvestment.com"
+KIS_PAPER_BASE_URL_REQUIRED = "KIS_PAPER_BASE_URL_REQUIRED"
 
 
 class KisPaperBalanceConfigError(RuntimeError):
@@ -67,6 +69,8 @@ class KisPaperBalanceCredentials:
             raise KisPaperBalanceConfigError("KIS_PAPER_BALANCE_ENV_MISSING")
         if _is_live_base_url(credentials.base_url):
             raise KisPaperBalanceConfigError("KIS_LIVE_BASE_URL_BLOCKED")
+        if not _is_paper_base_url(credentials.base_url):
+            raise KisPaperBalanceConfigError(KIS_PAPER_BASE_URL_REQUIRED)
         return credentials
 
     @classmethod
@@ -186,6 +190,11 @@ def kis_real_order_enabled() -> bool:
 def _is_live_base_url(base_url: str) -> bool:
     parsed = urlparse(base_url)
     return (parsed.hostname or "").lower() == KIS_LIVE_HOST
+
+
+def _is_paper_base_url(base_url: str) -> bool:
+    parsed = urlparse(base_url)
+    return (parsed.hostname or "").lower() == KIS_PAPER_HOST
 
 
 def _first_mapping(value: Any) -> dict[str, Any]:

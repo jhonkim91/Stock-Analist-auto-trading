@@ -138,6 +138,16 @@ def test_submit_creates_local_paper_order_idempotently_without_live_side_effects
         confirm=True,
         idempotency_key="phase4-submit-1",
     )
+    duplicate = service.submit_order(
+        symbol="KR009",
+        side="buy",
+        qty=10,
+        limit_price=100.0,
+        stop_price=90.0,
+        strategy_tag="phase4",
+        confirm=True,
+        idempotency_key="phase4-submit-duplicate",
+    )
     listed = service.list_orders()
 
     assert created["ok"] is True
@@ -153,6 +163,9 @@ def test_submit_creates_local_paper_order_idempotently_without_live_side_effects
     assert replay["order"]["paper_order_id"] == created["order"]["paper_order_id"]
     assert conflict["status"] == "idempotency_conflict"
     assert conflict["paper_order_created"] is False
+    assert duplicate["status"] == "duplicate_blocked"
+    assert "PAPER_DUPLICATE_OPEN_ORDER" in duplicate["reason_codes"]
+    assert duplicate["paper_order_created"] is False
     assert listed["orders"][0]["paper_order_id"] == created["order"]["paper_order_id"]
     assert _count(db_session, PaperOrder) == 1
     assert _count(db_session, PaperAuditEvent) == 1

@@ -1,0 +1,148 @@
+{
+  "execute_requested": true,
+  "generated_at": "2026-05-27T13:47:20.261914+00:00",
+  "live_order_created": false,
+  "network_call_performed": true,
+  "paper_only": true,
+  "phase": "12C",
+  "preflight": {
+    "blockers": [],
+    "config_gates": {
+      "broker_adapter_enabled": {
+        "enabled": true
+      },
+      "configured_can_create": {
+        "enabled": true
+      },
+      "enabled": {
+        "enabled": true
+      },
+      "kill_switch_enabled": false,
+      "live_fallback_enabled": false,
+      "live_order_enabled": false,
+      "mode": "paper",
+      "network_enabled": {
+        "enabled": true
+      },
+      "official_endpoint_confirmed": {
+        "enabled": true
+      }
+    },
+    "credential_fields": {
+      "KIS_ACCESS_TOKEN": {
+        "configured": true
+      },
+      "KIS_ACCOUNT_NO": {
+        "configured": true
+      },
+      "KIS_APP_KEY": {
+        "configured": true
+      },
+      "KIS_APP_SECRET": {
+        "configured": true
+      },
+      "KIS_PRODUCT_CODE": {
+        "configured": true
+      }
+    },
+    "ok": true,
+    "runtime_gates": {
+      "BROKER_MODE": {
+        "paper_kis": true
+      },
+      "PAPER_ORDER_SUBMIT_ENABLED": {
+        "enabled": true
+      },
+      "PAPER_TRADING_CAN_CREATE": {
+        "enabled": true
+      },
+      "PAPER_TRADING_ENABLED": {
+        "enabled": true
+      },
+      "PAPER_TRADING_KILL_SWITCH": {
+        "explicit_false": true
+      },
+      "PAPER_TRADING_NETWORK_ENABLED": {
+        "enabled": true
+      }
+    },
+    "safety_gates": {
+      "ENABLE_REAL_ORDER": {
+        "enabled": false
+      },
+      "KIS_PAPER_BASE_URL": {
+        "configured": true,
+        "live_host": false
+      },
+      "PAPER_BOT_AUTO_SUBMIT": {
+        "enabled": false
+      }
+    }
+  },
+  "reason_codes": [
+    "KIS_PAPER_RESPONSE_ERROR"
+  ],
+  "status": "submit_failed",
+  "steps": [
+    {
+      "name": "kill_switch_block",
+      "result": {
+        "broker_order_created": false,
+        "broker_trace": {
+          "adapter": "kis_paper",
+          "network_call_performed": false,
+          "operation": "submit",
+          "paper_only": true,
+          "reason_codes": [
+            "KILL_SWITCH_ACTIVE"
+          ],
+          "secrets_redacted": "***REDACTED***"
+        },
+        "live_order_created": false,
+        "network_call_performed": false,
+        "ok": false,
+        "order_cancelled": false,
+        "paper_only": true,
+        "reason": "KILL_SWITCH_ACTIVE",
+        "reason_codes": [
+          "KILL_SWITCH_ACTIVE"
+        ],
+        "status": "submit_blocked",
+        "sync_performed": false
+      }
+    },
+    {
+      "name": "submit",
+      "result": {
+        "broker_message": "\ubaa8\uc758\ud22c\uc790 \uc7a5\uc885\ub8cc \uc785\ub2c8\ub2e4.",
+        "broker_message_code": "40580000",
+        "broker_order_created": false,
+        "broker_trace": {
+          "broker_message": "\ubaa8\uc758\ud22c\uc790 \uc7a5\uc885\ub8cc \uc785\ub2c8\ub2e4.",
+          "broker_message_code": "40580000",
+          "correlation_id": "kis-paper-3f7f0dde78594de9",
+          "elapsed_ms": 152.147,
+          "endpoint_path": "/uapi/domestic-stock/v1/trading/order-cash",
+          "live_fallback_enabled": false,
+          "mode": "paper",
+          "paper_only": true,
+          "secrets_redacted": "***REDACTED***",
+          "status_code": 200,
+          "tr_id": "VTTC0012U"
+        },
+        "live_order_created": false,
+        "network_call_performed": true,
+        "ok": false,
+        "order_cancelled": false,
+        "paper_only": true,
+        "reason": "KIS_PAPER_RESPONSE_ERROR",
+        "reason_codes": [
+          "KIS_PAPER_RESPONSE_ERROR"
+        ],
+        "status": "submit_failed",
+        "sync_performed": false
+      }
+    }
+  ],
+  "temporary_config_used": true
+}

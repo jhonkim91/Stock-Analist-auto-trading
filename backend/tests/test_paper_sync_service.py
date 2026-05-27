@@ -120,10 +120,12 @@ def _write_network_paper_config(tmp_path) -> None:
 
 
 def _enable_network_runtime(monkeypatch) -> None:
+    monkeypatch.setenv("BROKER_MODE", "paper_kis")
     monkeypatch.setenv("PAPER_TRADING_ENABLED", "true")
     monkeypatch.setenv("PAPER_TRADING_CAN_CREATE", "true")
     monkeypatch.setenv("PAPER_TRADING_NETWORK_ENABLED", "true")
     monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "false")
+    monkeypatch.setenv("PAPER_ORDER_SUBMIT_ENABLED", "true")
     monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
 
 

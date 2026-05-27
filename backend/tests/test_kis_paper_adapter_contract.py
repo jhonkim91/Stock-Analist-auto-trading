@@ -39,8 +39,10 @@ class _FakeHttpClient:
 def _enabled_config() -> dict[str, object]:
     return {
         "mode": "paper",
+        "broker_mode": "paper_kis",
         "enabled": True,
         "configured_can_create": True,
+        "paper_order_submit_enabled": True,
         "preview_only": False,
         "kill_switch_enabled": False,
         "network_enabled": True,
@@ -53,6 +55,8 @@ def _enabled_config() -> dict[str, object]:
 
 def _set_kis_env(monkeypatch, secret: str = "PHASE12B_SENTINEL_SECRET") -> None:
     monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
+    monkeypatch.setenv("BROKER_MODE", "paper_kis")
+    monkeypatch.setenv("PAPER_ORDER_SUBMIT_ENABLED", "true")
     monkeypatch.setenv("KIS_APP_KEY", secret)
     monkeypatch.setenv("KIS_APP_SECRET", secret)
     monkeypatch.setenv("KIS_ACCESS_TOKEN", secret)
@@ -140,6 +144,24 @@ def test_kis_paper_adapter_submit_cancel_query_sync_with_mock_http(monkeypatch):
                     "msg1": "OK",
                     "output1": [
                         {
+                            "pdno": "005930",
+                            "hldg_qty": "2",
+                            "pchs_avg_pric": "70000",
+                            "prpr": "71000",
+                            "evlu_amt": "142000",
+                            "evlu_pfls_amt": "2000",
+                        }
+                    ],
+                    "output2": [{"dnca_tot_amt": "100000", "scts_evlu_amt": "142000", "tot_evlu_amt": "242000"}],
+                }
+            ),
+            _FakeResponse(
+                {
+                    "rt_cd": "0",
+                    "msg_cd": "0",
+                    "msg1": "OK",
+                    "output1": [
+                        {
                             "ord_gno_brno": "001",
                             "odno": "000001",
                             "pdno": "005930",
@@ -177,16 +199,21 @@ def test_kis_paper_adapter_submit_cancel_query_sync_with_mock_http(monkeypatch):
     submit = adapter.submit_order(request)
     cancel = adapter.cancel_order(broker_order_id=submit["broker_order_id"], confirm=True)
     listed = adapter.list_orders(status="filled")
+    balance = adapter.query_balance()
     synced = adapter.sync(scope="all")
 
     assert submit["ok"] is True
     assert submit["broker_order_created"] is True
     assert submit["network_call_performed"] is True
     assert submit["broker_trace"]["endpoint_path"] == "/uapi/domestic-stock/v1/trading/order-cash"
+    assert submit["broker_trace"]["correlation_id"].startswith("kis-paper-")
     assert cancel["ok"] is True
     assert cancel["order_cancelled"] is True
     assert listed["orders"][0]["symbol"] == "005930"
     assert listed["fills"][0]["qty"] == 1
+    assert balance["ok"] is True
+    assert balance["positions"][0]["symbol"] == "005930"
+    assert balance["portfolio"]["total_equity"] == 242000.0
     assert synced["sync_performed"] is True
     assert synced["orders"][0]["broker_order_id"]
     assert synced["positions"][0]["symbol"] == "005930"
@@ -194,7 +221,8 @@ def test_kis_paper_adapter_submit_cancel_query_sync_with_mock_http(monkeypatch):
     assert client.calls[0]["headers"]["tr_id"] == "VTTC0012U"
     assert client.calls[1]["headers"]["tr_id"] == "VTTC0013U"
     assert client.calls[2]["headers"]["tr_id"] == "VTTC0081R"
-    assert client.calls[4]["headers"]["tr_id"] == "VTTC8434R"
+    assert client.calls[3]["headers"]["tr_id"] == "VTTC8434R"
+    assert client.calls[5]["headers"]["tr_id"] == "VTTC8434R"
 
 
 def test_kis_paper_adapter_blocks_live_base_url(monkeypatch):
@@ -207,3 +235,45 @@ def test_kis_paper_adapter_blocks_live_base_url(monkeypatch):
     assert result["ok"] is False
     assert "KIS_LIVE_BASE_URL_BLOCKED" in result["reason_codes"]
     assert result["network_call_performed"] is False
+
+
+def test_kis_paper_adapter_requires_paper_broker_mode_and_submit_flag(monkeypatch):
+    _set_kis_env(monkeypatch)
+    monkeypatch.delenv("BROKER_MODE", raising=False)
+    monkeypatch.delenv("PAPER_ORDER_SUBMIT_ENABLED", raising=False)
+    adapter = KisPaperBrokerAdapter(config={**_enabled_config(), "broker_mode": "", "paper_order_submit_enabled": False})
+
+    result = adapter.submit_order(BrokerOrderRequest(symbol="005930", side="buy", qty=1, limit_price=70000))
+
+    assert result["ok"] is False
+    assert "BROKER_MODE_PAPER_KIS_REQUIRED" in result["reason_codes"]
+    assert "PAPER_ORDER_SUBMIT_ENABLED_REQUIRED" in result["reason_codes"]
+    assert result["network_call_performed"] is False
+
+
+def test_kis_paper_adapter_redacts_and_surfaces_kis_error_message(monkeypatch):
+    secret = "PHASE12C_SENTINEL_SECRET"
+    _set_kis_env(monkeypatch, secret=secret)
+    client = _FakeHttpClient(
+        [
+            _FakeResponse(
+                {
+                    "rt_cd": "1",
+                    "msg_cd": "40580000",
+                    "msg1": "mock paper order rejected",
+                    "output": {"raw_account": secret},
+                }
+            )
+        ]
+    )
+    adapter = KisPaperBrokerAdapter(config=_enabled_config(), http_client=client, max_retries=0)
+
+    result = adapter.submit_order(BrokerOrderRequest(symbol="005930", side="buy", qty=1, limit_price=70000))
+
+    assert result["ok"] is False
+    assert result["status"] == "submit_failed"
+    assert result["broker_message_code"] == "40580000"
+    assert result["broker_message"] == "mock paper order rejected"
+    assert result["broker_trace"]["broker_message_code"] == "40580000"
+    assert result["broker_trace"]["broker_message"] == "mock paper order rejected"
+    assert secret not in str(result)

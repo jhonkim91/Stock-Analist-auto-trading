@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import httpx
 
@@ -23,15 +24,22 @@ KIS_PAPER_RATE_LIMITED = "KIS_PAPER_RATE_LIMITED"
 KIS_PAPER_TIMEOUT = "KIS_PAPER_TIMEOUT"
 KIS_PAPER_TRANSPORT_ERROR = "KIS_PAPER_TRANSPORT_ERROR"
 KIS_LIVE_BASE_URL_BLOCKED = "KIS_LIVE_BASE_URL_BLOCKED"
+KIS_PAPER_BASE_URL_REQUIRED = "KIS_PAPER_BASE_URL_REQUIRED"
+BROKER_MODE_PAPER_KIS_REQUIRED = "BROKER_MODE_PAPER_KIS_REQUIRED"
+PAPER_ORDER_SUBMIT_ENABLED_REQUIRED = "PAPER_ORDER_SUBMIT_ENABLED_REQUIRED"
 
 KIS_ACCESS_TOKEN_ENV = "KIS_ACCESS_TOKEN"
 KIS_ACCOUNT_NO_ENV = "KIS_ACCOUNT_NO"
 KIS_PRODUCT_CODE_ENV = "KIS_PRODUCT_CODE"
 KIS_PAPER_BASE_URL_ENV = "KIS_PAPER_BASE_URL"
 ENABLE_REAL_ORDER_ENV = "ENABLE_REAL_ORDER"
+BROKER_MODE_ENV = "BROKER_MODE"
+PAPER_ORDER_SUBMIT_ENABLED_ENV = "PAPER_ORDER_SUBMIT_ENABLED"
+REQUIRED_PAPER_BROKER_MODE = "paper_kis"
 
 DEFAULT_KIS_PAPER_BASE_URL = "https://openapivts.koreainvestment.com:29443"
 KIS_LIVE_HOST = "openapi.koreainvestment.com"
+KIS_PAPER_HOST = "openapivts.koreainvestment.com"
 KIS_CUSTOMER_TYPE = "P"
 
 KIS_ORDER_CASH_PATH = "/uapi/domestic-stock/v1/trading/order-cash"
@@ -80,6 +88,8 @@ class KisPaperCredentials:
             raise KisPaperBrokerRequestError(KIS_PAPER_CREDENTIALS_MISSING)
         if _is_live_base_url(credentials.base_url):
             raise KisPaperBrokerRequestError(KIS_LIVE_BASE_URL_BLOCKED)
+        if not _is_paper_base_url(credentials.base_url):
+            raise KisPaperBrokerRequestError(KIS_PAPER_BASE_URL_REQUIRED)
         return credentials
 
     @classmethod
@@ -283,6 +293,16 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         network_enabled = bool(self.config.get("network_enabled", False))
         endpoint_confirmed = bool(self.config.get("official_endpoint_confirmed", False))
         enabled = self._status_enabled(credentials)
+        can_submit = not self._gate_reasons(
+            require_create=True,
+            require_kill_switch_off=True,
+            require_submit_enabled=True,
+        )
+        can_cancel = not self._gate_reasons(
+            require_create=True,
+            require_kill_switch_off=True,
+            require_submit_enabled=False,
+        )
         return {
             "name": self.name,
             "mode": self.mode,
@@ -291,8 +311,8 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             "live_trading_enabled": False,
             "network_enabled": network_enabled,
             "can_preview": False,
-            "can_submit": enabled and bool(self.config.get("configured_can_create", False)),
-            "can_cancel": enabled and bool(self.config.get("configured_can_create", False)),
+            "can_submit": can_submit,
+            "can_cancel": can_cancel,
             "can_list_orders": enabled,
             "can_sync": enabled,
             "token_required": True,
@@ -309,7 +329,7 @@ class KisPaperBrokerAdapter(BrokerAdapter):
 
     def submit_order(self, request: BrokerOrderRequest) -> dict[str, Any]:
         """KIS 모의투자 현금 주문을 paper-only gate 통과 시에만 전송한다."""
-        gate = self._gate_reasons(require_create=True, require_kill_switch_off=True)
+        gate = self._gate_reasons(require_create=True, require_kill_switch_off=True, require_submit_enabled=True)
         if gate:
             return self._blocked_payload("submit_blocked", gate, operation="submit")
         try:
@@ -343,7 +363,7 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         """KIS 모의투자 주문취소를 paper-only gate 통과 시에만 전송한다."""
         if not confirm:
             return self._blocked_payload("confirm_required", ["PAPER_CONFIRM_TRUE_REQUIRED"], operation="cancel")
-        gate = self._gate_reasons(require_create=True, require_kill_switch_off=True)
+        gate = self._gate_reasons(require_create=True, require_kill_switch_off=True, require_submit_enabled=False)
         if gate:
             cancel_gate = [CANCEL_CONFIRMATION_REQUIRED if code == CONFIRMATION_REQUIRED else code for code in gate]
             return self._blocked_payload("cancel_blocked", cancel_gate, operation="cancel")
@@ -407,6 +427,41 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             "paper_only": True,
             "orders": mapped["orders"],
             "fills": mapped["fills"],
+            "live_order_created": False,
+            "broker_order_created": False,
+            "network_call_performed": True,
+            "reason": None,
+            "reason_codes": [],
+            "broker_message_code": mapped["broker_message_code"],
+            "broker_message": mapped["broker_message"],
+            "broker_trace": response["trace"],
+        }
+
+    def query_balance(self) -> dict[str, Any]:
+        """KIS 모의투자 잔고/포트폴리오 조회를 paper-only gate 뒤에서만 수행한다."""
+        gate = self._gate_reasons(require_create=False, require_kill_switch_off=False)
+        if gate:
+            return self._blocked_payload("query_blocked", gate, operation="query_balance")
+        try:
+            credentials = KisPaperCredentials.from_env()
+            response = self._request(
+                "GET",
+                KIS_BALANCE_PATH,
+                tr_id=KIS_PAPER_BALANCE_TR_ID,
+                params=KisPaperRequestMapper.balance_params(credentials),
+                credentials=credentials,
+            )
+            if not response["ok"]:
+                return self._error_payload("query_failed", response, operation="query_balance")
+            mapped = KisPaperResponseMapper.balance_response(response["body"])
+        except KisPaperBrokerRequestError as exc:
+            return self._blocked_payload("query_blocked", [str(exc)], operation="query_balance")
+        return {
+            "ok": True,
+            "status": "query_ok",
+            "paper_only": True,
+            "positions": mapped["positions"],
+            "portfolio": mapped["portfolio"],
             "live_order_created": False,
             "broker_order_created": False,
             "network_call_performed": True,
@@ -520,6 +575,7 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         last_error = KIS_PAPER_TRANSPORT_ERROR
         started = time.perf_counter()
         status_code: int | None = None
+        correlation_id = f"kis-paper-{uuid4().hex[:16]}"
         try:
             for attempt in range(max_attempts):
                 try:
@@ -540,11 +596,11 @@ class KisPaperBrokerAdapter(BrokerAdapter):
                         credentials=credentials,
                         status_code=status_code,
                         started=started,
+                        correlation_id=correlation_id,
                         retry_count=attempt,
                         request_fields=body or params or {},
                     )
                     if status_code == 429:
-                        trace["rate_limited"] = True
                         return {"ok": False, "reason": KIS_PAPER_RATE_LIMITED, "trace": trace, "body": {}}
                     if status_code >= 500 and attempt + 1 < max_attempts:
                         last_error = KIS_PAPER_TRANSPORT_ERROR
@@ -556,6 +612,7 @@ class KisPaperBrokerAdapter(BrokerAdapter):
                         return {"ok": False, "reason": KIS_PAPER_RESPONSE_ERROR, "trace": trace, "body": {}}
                     if str(response_body.get("rt_cd", "0")) != "0":
                         trace["broker_message_code"] = str(response_body.get("msg_cd") or "")
+                        trace["broker_message"] = str(response_body.get("msg1") or "").strip()
                         return {
                             "ok": False,
                             "reason": KIS_PAPER_RESPONSE_ERROR,
@@ -582,6 +639,7 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             credentials=credentials,
             status_code=status_code,
             started=started,
+            correlation_id=correlation_id,
             retry_count=max_attempts - 1,
             request_fields=body or params or {},
         )
@@ -612,7 +670,13 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             "content-type": "application/json; charset=utf-8",
         }
 
-    def _gate_reasons(self, *, require_create: bool, require_kill_switch_off: bool) -> list[str]:
+    def _gate_reasons(
+        self,
+        *,
+        require_create: bool,
+        require_kill_switch_off: bool,
+        require_submit_enabled: bool = False,
+    ) -> list[str]:
         reasons: list[str] = []
         if str(self.config.get("mode") or "disabled") != "paper":
             reasons.append("KIS_PAPER_MODE_REQUIRED")
@@ -632,12 +696,18 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             reasons.append("KILL_SWITCH_ACTIVE")
         if bool(self.config.get("live_order_enabled", False)) or bool(self.config.get("live_fallback_enabled", False)):
             reasons.append("KIS_LIVE_PATH_BLOCKED")
+        if str(self.config.get("broker_mode") or os.getenv(BROKER_MODE_ENV, "")).strip().lower() != REQUIRED_PAPER_BROKER_MODE:
+            reasons.append(BROKER_MODE_PAPER_KIS_REQUIRED)
+        if require_submit_enabled and not _env_true(PAPER_ORDER_SUBMIT_ENABLED_ENV, self.config.get("paper_order_submit_enabled")):
+            reasons.append(PAPER_ORDER_SUBMIT_ENABLED_REQUIRED)
         if _real_order_enabled():
             reasons.append("ENABLE_REAL_ORDER_MUST_BE_FALSE")
         if not all(KisPaperCredentials.configured_fields().values()):
             reasons.append(KIS_PAPER_CREDENTIALS_MISSING)
         if _is_live_base_url(os.getenv(KIS_PAPER_BASE_URL_ENV, DEFAULT_KIS_PAPER_BASE_URL)):
             reasons.append(KIS_LIVE_BASE_URL_BLOCKED)
+        if not _is_paper_base_url(os.getenv(KIS_PAPER_BASE_URL_ENV, DEFAULT_KIS_PAPER_BASE_URL)):
+            reasons.append(KIS_PAPER_BASE_URL_REQUIRED)
         return _merge_reason_codes(reasons)
 
     def _status_enabled(self, credentials: dict[str, bool]) -> bool:
@@ -677,19 +747,28 @@ class KisPaperBrokerAdapter(BrokerAdapter):
 
     def _error_payload(self, status: str, response: dict[str, Any], *, operation: str) -> dict[str, Any]:
         reason = str(response.get("reason") or KIS_PAPER_RESPONSE_ERROR)
-        return {
+        trace = response.get("trace", {}) if isinstance(response.get("trace"), dict) else {}
+        body = response.get("body", {}) if isinstance(response.get("body"), dict) else {}
+        broker_message_code = str(trace.get("broker_message_code") or body.get("msg_cd") or "")
+        broker_message = str(trace.get("broker_message") or body.get("msg1") or "").strip()
+        payload = {
             "ok": False,
             "status": status,
             "paper_only": True,
             "live_order_created": False,
             "broker_order_created": False,
-            "network_call_performed": bool(response.get("trace", {}).get("network_call_performed", True)),
+            "network_call_performed": bool(trace.get("network_call_performed", True)),
             "sync_performed": False,
             "order_cancelled": False,
             "reason": reason,
             "reason_codes": [reason],
-            "broker_trace": response.get("trace", {}),
+            "broker_trace": self.redaction_service.redact(trace),
         }
+        if broker_message_code:
+            payload["broker_message_code"] = broker_message_code
+        if broker_message:
+            payload["broker_message"] = broker_message
+        return payload
 
     def _trace(
         self,
@@ -701,26 +780,19 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         credentials: KisPaperCredentials,
         status_code: int | None,
         started: float,
+        correlation_id: str,
         retry_count: int,
         request_fields: dict[str, Any],
     ) -> dict[str, Any]:
-        parsed = urlparse(credentials.base_url)
         trace = {
-            "operation": operation.lower(),
-            "adapter": self.name,
             "mode": self.mode,
             "paper_only": True,
             "live_fallback_enabled": False,
-            "method": method.upper(),
             "endpoint_path": path,
             "tr_id": tr_id,
-            "base_host": parsed.hostname,
             "status_code": status_code,
             "elapsed_ms": round((time.perf_counter() - started) * 1000, 3),
-            "retry_count": retry_count,
-            "rate_limited": False,
-            "network_call_performed": True,
-            "request_field_names": sorted(key for key in request_fields if key not in SENSITIVE_RESPONSE_KEYS),
+            "correlation_id": correlation_id,
             "secrets_redacted": True,
         }
         return self.redaction_service.redact(trace)
@@ -925,6 +997,18 @@ def _real_order_enabled() -> bool:
     return os.getenv(ENABLE_REAL_ORDER_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_true(name: str, configured_value: Any = None) -> bool:
+    value = os.getenv(name)
+    if value is not None:
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(configured_value)
+
+
 def _is_live_base_url(base_url: str) -> bool:
     parsed = urlparse(base_url)
     return (parsed.hostname or "").lower() == KIS_LIVE_HOST
+
+
+def _is_paper_base_url(base_url: str) -> bool:
+    parsed = urlparse(base_url)
+    return (parsed.hostname or "").lower() == KIS_PAPER_HOST

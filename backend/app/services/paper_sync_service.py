@@ -204,6 +204,8 @@ class PaperSyncService:
         reason_codes = list(config_reasons)
         if str(config.get("mode")) != "paper":
             reason_codes.append("KIS_PAPER_BALANCE_MODE_NOT_PAPER")
+        if str(config.get("broker_mode") or "").strip().lower() != "paper_kis":
+            reason_codes.append("BROKER_MODE_PAPER_KIS_REQUIRED")
         if not bool(config.get("enabled")):
             reason_codes.append("PAPER_TRADING_DISABLED")
         if not bool(config.get("network_enabled")):
@@ -339,6 +341,8 @@ class PaperSyncService:
             reason_codes.append(SYNC_CONFIRMATION_REQUIRED)
         if str(config.get("mode")) != "paper":
             reason_codes.append("KIS_PAPER_MODE_REQUIRED")
+        if str(config.get("broker_mode") or "").strip().lower() != "paper_kis":
+            reason_codes.append("BROKER_MODE_PAPER_KIS_REQUIRED")
         if not bool(config.get("enabled")):
             reason_codes.append("PAPER_TRADING_DISABLED")
         if not bool(config.get("network_enabled")):

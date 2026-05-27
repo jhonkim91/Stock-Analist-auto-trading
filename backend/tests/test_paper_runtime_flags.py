@@ -55,6 +55,8 @@ def _clear_runtime_flags(monkeypatch) -> None:
         "PAPER_TRADING_CAN_CREATE",
         "PAPER_TRADING_NETWORK_ENABLED",
         "PAPER_TRADING_KILL_SWITCH",
+        "BROKER_MODE",
+        "PAPER_ORDER_SUBMIT_ENABLED",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -64,6 +66,8 @@ def _enable_local_submit_flags(monkeypatch) -> None:
     monkeypatch.setenv("PAPER_TRADING_CAN_CREATE", "true")
     monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "false")
     monkeypatch.delenv("PAPER_TRADING_NETWORK_ENABLED", raising=False)
+    monkeypatch.delenv("BROKER_MODE", raising=False)
+    monkeypatch.delenv("PAPER_ORDER_SUBMIT_ENABLED", raising=False)
 
 
 def _paper_order_count(db_session) -> int:
@@ -140,7 +144,7 @@ def test_network_enabled_requires_explicit_flag_but_submit_network_stays_unsuppo
     )
 
     monkeypatch.setenv("PAPER_TRADING_NETWORK_ENABLED", "true")
-    unsupported_network_submit = PaperOrderService(db_session, config_dir=tmp_path).submit_order(
+    missing_broker_submit_flags = PaperOrderService(db_session, config_dir=tmp_path).submit_order(
         symbol="KR009",
         side="buy",
         qty=1,
@@ -148,9 +152,22 @@ def test_network_enabled_requires_explicit_flag_but_submit_network_stays_unsuppo
         confirm=True,
         idempotency_key="runtime-flags-network-enabled",
     )
+    monkeypatch.setenv("BROKER_MODE", "paper_kis")
+    monkeypatch.setenv("PAPER_ORDER_SUBMIT_ENABLED", "true")
+    unsupported_network_submit = PaperOrderService(db_session, config_dir=tmp_path).submit_order(
+        symbol="KR009",
+        side="buy",
+        qty=1,
+        limit_price=100.0,
+        confirm=True,
+        idempotency_key="runtime-flags-network-confirmed-gates",
+    )
 
     assert "PAPER_NETWORK_ENV_FLAG_REQUIRED" in missing_network_flag["reason_codes"]
     assert missing_network_flag["network_call_performed"] is False
+    assert "BROKER_MODE_PAPER_KIS_REQUIRED" in missing_broker_submit_flags["reason_codes"]
+    assert "PAPER_ORDER_SUBMIT_ENABLED_REQUIRED" in missing_broker_submit_flags["reason_codes"]
+    assert missing_broker_submit_flags["network_call_performed"] is False
     assert "KIS_PAPER_OFFICIAL_ENDPOINT_CONFIRMATION_REQUIRED" in unsupported_network_submit["reason_codes"]
     assert "KIS_PAPER_CREDENTIALS_MISSING" in unsupported_network_submit["reason_codes"]
     assert unsupported_network_submit["network_call_performed"] is False

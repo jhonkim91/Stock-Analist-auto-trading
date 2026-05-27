@@ -15,11 +15,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from backend.app.brokers.base import BrokerOrderRequest
 from backend.app.brokers.kis_paper import (
+    BROKER_MODE_ENV,
     DEFAULT_KIS_PAPER_BASE_URL,
     KIS_ACCESS_TOKEN_ENV,
     KIS_ACCOUNT_NO_ENV,
     KIS_PAPER_BASE_URL_ENV,
     KIS_PRODUCT_CODE_ENV,
+    PAPER_ORDER_SUBMIT_ENABLED_ENV,
+    REQUIRED_PAPER_BROKER_MODE,
     KisPaperBrokerAdapter,
     KisPaperCredentials,
     _is_live_base_url,
@@ -29,6 +32,7 @@ from backend.app.services.paper_trading_service import PaperConfigService
 from backend.app.services.token_manager import KIS_APP_KEY_ENV, KIS_APP_SECRET_ENV
 
 CONFIRMATION_TOKEN = "CONFIRM_KIS_PAPER_PHASE12C"
+TRADING_WINDOW_CONFIRMATION_TOKEN = "CONFIRM_KIS_PAPER_TRADING_WINDOW"
 KIS_CREDENTIAL_ENV_KEYS = (
     KIS_APP_KEY_ENV,
     KIS_APP_SECRET_ENV,
@@ -40,6 +44,7 @@ RUNTIME_GATE_ENV_KEYS = (
     "PAPER_TRADING_ENABLED",
     "PAPER_TRADING_CAN_CREATE",
     "PAPER_TRADING_NETWORK_ENABLED",
+    PAPER_ORDER_SUBMIT_ENABLED_ENV,
 )
 CONFIG_GATE_KEYS = (
     "enabled",
@@ -81,6 +86,7 @@ def phase12c_preflight(
     config_status = {key: bool(loaded_config.get(key, False)) for key in CONFIG_GATE_KEYS}
     kill_switch_off = _is_false(current_env.get("PAPER_TRADING_KILL_SWITCH", ""))
     config_kill_switch_off = not bool(loaded_config.get("kill_switch_enabled", True))
+    broker_mode_paper = str(current_env.get(BROKER_MODE_ENV, "")).strip().lower() == REQUIRED_PAPER_BROKER_MODE
     real_order_enabled = _is_true(current_env.get("ENABLE_REAL_ORDER", ""))
     bot_auto_submit_enabled = _is_true(current_env.get("PAPER_BOT_AUTO_SUBMIT", ""))
     base_url = current_env.get(KIS_PAPER_BASE_URL_ENV, "").strip() or DEFAULT_KIS_PAPER_BASE_URL
@@ -92,6 +98,8 @@ def phase12c_preflight(
     blockers.extend(config_reasons)
     if str(loaded_config.get("mode") or "") != "paper":
         blockers.append("PAPER_CONFIG_MODE_PAPER_REQUIRED")
+    if not broker_mode_paper:
+        blockers.append("BROKER_MODE_PAPER_KIS_REQUIRED")
     if not kill_switch_off:
         blockers.append("PAPER_TRADING_KILL_SWITCH_FALSE_REQUIRED")
     if not config_kill_switch_off:
@@ -110,6 +118,7 @@ def phase12c_preflight(
         "runtime_gates": {
             **{key: {"enabled": enabled} for key, enabled in runtime_status.items()},
             "PAPER_TRADING_KILL_SWITCH": {"explicit_false": kill_switch_off},
+            BROKER_MODE_ENV: {"paper_kis": broker_mode_paper},
         },
         "config_gates": {
             "mode": str(loaded_config.get("mode") or "disabled"),
@@ -136,13 +145,17 @@ def run_controlled_dry_run(
     limit_price: float | None,
     confirm_submit: str | None,
     confirm_cancel: str | None,
+    confirm_trading_window: str | None = None,
     env: Mapping[str, str] | None = None,
     config: Mapping[str, Any] | None = None,
     adapter_factory: Callable[[dict[str, Any]], Any] | None = None,
+    use_temporary_paper_config: bool = False,
 ) -> dict[str, Any]:
     """Run Phase 12C preflight or a fully gated controlled paper-network dry-run."""
     current_env = os.environ if env is None else env
     loaded_config, _ = _load_config(config)
+    if use_temporary_paper_config:
+        loaded_config = _temporary_phase12c_config(loaded_config)
     factory = adapter_factory or (lambda config: KisPaperBrokerAdapter(config=config))
     preflight = phase12c_preflight(current_env, config=loaded_config)
     record: dict[str, Any] = {
@@ -152,6 +165,7 @@ def run_controlled_dry_run(
         "paper_only": True,
         "live_order_created": False,
         "network_call_performed": False,
+        "temporary_config_used": use_temporary_paper_config,
         "preflight": preflight,
         "steps": [],
     }
@@ -168,6 +182,14 @@ def run_controlled_dry_run(
         return record
     if not preflight["ok"]:
         record.update({"status": "preflight_stopped", "reason_codes": preflight["blockers"]})
+        return record
+    if confirm_trading_window != TRADING_WINDOW_CONFIRMATION_TOKEN:
+        record.update(
+            {
+                "status": "trading_window_confirmation_required",
+                "reason_codes": ["PHASE12C_TRADING_WINDOW_CONFIRMATION_REQUIRED"],
+            }
+        )
         return record
 
     request = BrokerOrderRequest(
@@ -200,19 +222,41 @@ def run_controlled_dry_run(
     listed = open_adapter.list_orders(status="open")
     record["steps"].append({"name": "list_orders", "result": sanitize_payload(listed)})
     if not listed.get("ok"):
-        record.update({"status": "query_failed", "reason_codes": listed.get("reason_codes", [])})
+        cancel_result = _attempt_cancel(open_adapter, broker_order_id)
+        record["steps"].append({"name": "cancel_after_query_failed", "result": sanitize_payload(cancel_result)})
+        record.update(
+            {
+                "status": "query_failed",
+                "reason_codes": listed.get("reason_codes", []),
+                "kill_switch_reenabled": True,
+            }
+        )
         return record
 
     synced = open_adapter.sync(scope="all")
     record["steps"].append({"name": "sync", "result": sanitize_payload(synced)})
     if not synced.get("ok"):
-        record.update({"status": "sync_failed", "reason_codes": synced.get("reason_codes", [])})
+        cancel_result = _attempt_cancel(open_adapter, broker_order_id)
+        record["steps"].append({"name": "cancel_after_sync_failed", "result": sanitize_payload(cancel_result)})
+        record.update(
+            {
+                "status": "sync_failed",
+                "reason_codes": synced.get("reason_codes", []),
+                "kill_switch_reenabled": True,
+            }
+        )
         return record
 
-    cancel_result = open_adapter.cancel_order(broker_order_id=broker_order_id, confirm=True)
+    cancel_result = _attempt_cancel(open_adapter, broker_order_id)
     record["steps"].append({"name": "cancel", "result": sanitize_payload(cancel_result)})
     if not cancel_result.get("ok"):
-        record.update({"status": "cancel_failed", "reason_codes": cancel_result.get("reason_codes", [])})
+        record.update(
+            {
+                "status": "cancel_failed",
+                "reason_codes": cancel_result.get("reason_codes", []),
+                "kill_switch_reenabled": True,
+            }
+        )
         return record
 
     record.update(
@@ -224,6 +268,18 @@ def run_controlled_dry_run(
         }
     )
     return record
+
+
+def _attempt_cancel(adapter: Any, broker_order_id: str) -> dict[str, Any]:
+    """Attempt to cancel only the broker order created by this Phase 12C run."""
+    if not broker_order_id:
+        return {
+            "ok": False,
+            "status": "cancel_skipped",
+            "reason_codes": ["BROKER_ORDER_ID_MISSING"],
+            "network_call_performed": False,
+        }
+    return adapter.cancel_order(broker_order_id=broker_order_id, confirm=True)
 
 
 def sanitize_payload(value: Any) -> Any:
@@ -269,7 +325,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit-price", type=float, default=None, help="optional paper limit price")
     parser.add_argument("--confirm-submit", default=None, help=f"must equal {CONFIRMATION_TOKEN} when executing")
     parser.add_argument("--confirm-cancel", default=None, help=f"must equal {CONFIRMATION_TOKEN} when executing")
+    parser.add_argument(
+        "--confirm-trading-window",
+        default=None,
+        help=f"must equal {TRADING_WINDOW_CONFIRMATION_TOKEN} when executing",
+    )
     parser.add_argument("--record-path", default=None, help="optional redacted .json record path inside the repo")
+    parser.add_argument(
+        "--temporary-paper-config",
+        action="store_true",
+        help="use a process-only Phase 12C paper config override without writing backend/config/paper.yaml",
+    )
     return parser
 
 
@@ -286,6 +352,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         limit_price=args.limit_price,
         confirm_submit=args.confirm_submit,
         confirm_cancel=args.confirm_cancel,
+        confirm_trading_window=args.confirm_trading_window,
+        use_temporary_paper_config=bool(args.temporary_paper_config),
     )
     if args.record_path:
         write_record(record, PROJECT_ROOT / args.record_path)
@@ -298,13 +366,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _adapter_config(config: Mapping[str, Any], *, kill_switch_enabled: bool) -> dict[str, Any]:
     adapter_config = {
         "mode": "paper",
+        "broker_mode": REQUIRED_PAPER_BROKER_MODE,
         "enabled": True,
         "configured_can_create": True,
+        "paper_order_submit_enabled": True,
         "preview_only": False,
         "kill_switch_enabled": kill_switch_enabled,
         "network_enabled": True,
+        "balance_inquiry_enabled": True,
         "broker_adapter_enabled": True,
         "official_endpoint_confirmed": True,
+        "official_balance_endpoint_confirmed": True,
         "live_order_enabled": False,
         "live_fallback_enabled": False,
     }
@@ -314,6 +386,30 @@ def _adapter_config(config: Mapping[str, Any], *, kill_switch_enabled: bool) -> 
     adapter_config["live_order_enabled"] = False
     adapter_config["live_fallback_enabled"] = False
     return adapter_config
+
+
+def _temporary_phase12c_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a process-only paper config for one controlled Phase 12C dry-run."""
+    temporary = dict(config)
+    temporary.update(
+        {
+            "mode": "paper",
+            "broker_mode": REQUIRED_PAPER_BROKER_MODE,
+            "enabled": True,
+            "configured_can_create": True,
+            "paper_order_submit_enabled": True,
+            "preview_only": False,
+            "kill_switch_enabled": False,
+            "network_enabled": True,
+            "balance_inquiry_enabled": True,
+            "broker_adapter_enabled": True,
+            "official_endpoint_confirmed": True,
+            "official_balance_endpoint_confirmed": True,
+            "live_order_enabled": False,
+            "live_fallback_enabled": False,
+        }
+    )
+    return temporary
 
 
 def _load_config(config: Mapping[str, Any] | None = None) -> tuple[dict[str, Any], list[str]]:
