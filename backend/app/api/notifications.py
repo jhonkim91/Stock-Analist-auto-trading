@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
 from fastapi import APIRouter
 
+from backend.app.models.schemas import NotificationTestRequest
 from backend.app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
-
-
-class NotificationTestRequest(BaseModel):
-    channel_alias: str | None = None
-    message: str = Field(default="notification test", max_length=1000)
-    dry_run: bool = True
 
 
 @router.get("/status")

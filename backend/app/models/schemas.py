@@ -198,6 +198,19 @@ class PaperBotRunRequest(BaseModel):
     auto_submit: bool | None = None
 
 
+class NotificationTestRequest(BaseModel):
+    channel_alias: str | None = None
+    message: str = Field(default="notification test", max_length=1000)
+    dry_run: bool = True
+
+
+class NotificationOutboxEventRequest(BaseModel):
+    event_type: str
+    channel_alias: str | None = None
+    subject: str | None = None
+    payload_summary: dict[str, Any] = Field(default_factory=dict)
+
+
 class ReportNotifyRequest(BaseModel):
     mode: Literal["summary", "summary_and_file"] = "summary"
     channel_alias: str | None = None

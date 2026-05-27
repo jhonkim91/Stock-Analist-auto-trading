@@ -9,10 +9,11 @@
 | Goal.md Phase 0 | `docs/research/kis-paper-baseline-audit.md`에서 main 기준선과 현재 작업 브랜치 차이를 분리 감사 |
 | Goal.md Phase 5 | `PaperRepository` 기반 paper fills/positions/portfolio sync 조회 경계 보강 |
 | Goal.md Phase 6 | Telegram-first notification channel decision 문서화 |
+| Goal.md Phase 7 | Notification outbox non-blocking/retry contract 보강 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; KIS paper balance read-only 조건부 지원; live/real order disabled |
-| 최신 backend pytest | Phase 5 지정 `5 passed`, paper/no-live regression `13 passed`, migration/order regression `4 passed` |
+| 최신 backend pytest | Phase 7 지정 `6 passed`, notification/report/no-live regression `18 passed`, migration regression `4 passed` |
 | 다음 권장 Phase | KIS paper submit/cancel/sync network 구현은 보류. balance 조회는 read-only 조건부 경로만 허용 |
 
 ## 구현 완료 항목
@@ -67,6 +68,7 @@
 - Goal.md Phase 4 Paper Order Submit Cancel: `/api/paper/orders/submit`과 `/api/paper/orders/cancel` 응답에 paper-only marker와 redacted broker trace를 추가하고, 기본 disabled/kill-switch 상태에서 no-live/no-network/no-write 회귀를 검증.
 - Goal.md Phase 5 Order Fills Positions Portfolio Sync: `PaperRepository`를 추가하고 `PaperSyncService`가 paper 전용 fills/positions/portfolio snapshot과 Phase 5 persistence count를 repository 경계로 조회하도록 보강.
 - Goal.md Phase 6 Notification Channel Decision: `docs/research/notification-channel-decision.md`에 Telegram-first primary와 Discord follow-up path, non-blocking/security constraints를 문서화.
+- Goal.md Phase 7 Notification Implementation: Telegram-first notification service ordering, supported event list, non-blocking/retriable `NotificationOutboxService`, Discord webhook wrapper, schema/API request model 정리를 추가.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.

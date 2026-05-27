@@ -7,12 +7,29 @@ from typing import Any
 import yaml
 
 from backend.app.core.paths import CONFIG_DIR
-from backend.app.services.discord_notifier import DiscordNotifier
+from backend.app.services.discord_webhook_notifier import DiscordWebhookNotifier
 from backend.app.services.telegram_notifier import TelegramNotifier
 
 NOTIFICATIONS_CONFIG_NAME = "notifications.yaml"
-DEFAULT_ALIASES = ("discord_ops", "telegram_main")
+DEFAULT_ALIASES = ("telegram_main", "discord_ops")
 PLACEHOLDER_VALUES = {"", "<placeholder>", "placeholder", "***REDACTED***"}
+SUPPORTED_NOTIFICATION_EVENTS = (
+    "bot_started",
+    "bot_stopped",
+    "order_signal_created",
+    "paper_order_previewed",
+    "paper_order_submitted",
+    "paper_order_rejected",
+    "paper_order_filled",
+    "paper_order_cancelled",
+    "portfolio_snapshot",
+    "daily_report_generated",
+    "weekly_report_generated",
+    "risk_limit_warning",
+    "kis_token_error",
+    "broker_error",
+    "kill_switch_triggered",
+)
 
 
 class NotificationConfigService:
@@ -86,6 +103,7 @@ class NotificationService:
             "reason_codes": reasons,
             "network_delivery_allowed": any(channel["can_dispatch"] for channel in channels),
             "secrets_redacted": True,
+            "supported_events": list(SUPPORTED_NOTIFICATION_EVENTS),
             "channels": channels,
         }
 
@@ -263,7 +281,7 @@ class NotificationService:
         channel_type = str(raw.get("type") or "")
         if channel_type == "discord":
             webhook_url = os.getenv(str(raw.get("webhook_env") or ""), "").strip()
-            return DiscordNotifier(raw).send(webhook_url=webhook_url, message=message)
+            return DiscordWebhookNotifier(raw).send(webhook_url=webhook_url, message=message)
         if channel_type == "telegram":
             token = os.getenv(str(raw.get("bot_token_env") or ""), "").strip()
             chat_id = os.getenv(str(raw.get("chat_id_env") or ""), "").strip()

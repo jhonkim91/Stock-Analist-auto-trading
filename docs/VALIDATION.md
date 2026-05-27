@@ -1,5 +1,18 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 7 Notification Implementation
+
+이번 변경은 `goal.md`의 `Phase 7: Notification Implementation` 범위만 수행했다. 기존 notification skeleton을 교체하지 않고 Telegram-first channel ordering, supported event list, `NotificationOutboxService`, Discord webhook wrapper, schema/API request model 정리를 additive로 보강했다. outbox dispatch 실패는 caller로 예외를 전파하지 않고 event를 `retry` 상태로 남긴다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 7 지정 pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notification_service.py backend/tests/test_notification_outbox.py -q`: 6 passed in 0.63s |
+| Phase 7 notification/report/no-live regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_api.py backend/tests/test_report_notify.py backend/tests/test_no_live_trading_regression.py -q`: 18 passed in 0.93s |
+| Phase 7 migration regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_alembic_migrations.py backend/tests/test_paper_persistence_migration.py -q`: 4 passed in 4.52s |
+| Phase 7 secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Phase 7 live enable scan | 통과 | static scan: live/paper auto-submit true pattern 없음. 문서의 `ENABLE_REAL_ORDER=true` 언급은 차단 동작 설명이다. |
+| Phase 7 diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 6 Notification Channel Decision
 
 이번 변경은 `goal.md`의 `Phase 6: Notification Channel Decision` 범위만 수행했다. notifier 구현, route, migration, config 변경은 하지 않았고, Telegram-first primary channel 결정과 Discord follow-up path를 문서화했다.

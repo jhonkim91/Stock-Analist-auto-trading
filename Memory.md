@@ -12,6 +12,7 @@
 - [x] 현재 goal.md Phase 4 submit/cancel: paper-only API marker와 redacted broker trace 추가
 - [x] 현재 goal.md Phase 5 sync: `PaperRepository` 기반 paper 전용 fills/positions/portfolio 조회 경계 보강
 - [x] 현재 goal.md Phase 6 notification decision: Telegram-first primary, Discord follow-up path 문서화
+- [x] 현재 goal.md Phase 7 notification implementation: non-blocking/retriable outbox 보강
 - [x] 최신 backend pytest: `342 passed in 327.46s`
 - [x] 최신 frontend 검증: lint, typecheck, build 통과
 - [x] 최신 secret scan: `NO_SECRET_FINDINGS`
@@ -47,9 +48,11 @@
 - `backend/app/repositories/paper_repository.py`, `backend/app/services/paper_sync_service.py`: Phase 5 paper persistence 조회/count 경계를 repository로 분리하고 sync no-op 응답의 count를 보강.
 - `backend/tests/test_paper_sync_service.py`: paper repository, sync service payload, idempotent fail-closed sync, metadata marker 비노출 검증 추가.
 - `docs/research/notification-channel-decision.md`, `docs/research/kis-paper-api-confirmation-matrix.md`: Phase 6 Telegram-first notification decision, Discord follow-up path, security/non-blocking constraints 문서화.
+- `backend/app/services/notification_outbox_service.py`, `backend/app/services/discord_webhook_notifier.py`, `backend/app/services/notification_service.py`: Phase 7 supported events, Telegram-first ordering, non-blocking retry outbox, Discord webhook wrapper 보강.
+- `backend/tests/test_notification_service.py`, `backend/tests/test_notification_outbox.py`: Phase 7 notifier status/event list, mock dispatch, outbox redaction, retry isolation 검증 추가.
 - `docs/PROJECT_STATUS.md`: Goal Phase 0 감사 문서 위치와 main/current branch 분리 기준 추가.
-- `docs/VALIDATION.md`: Goal Phase 0/1/2/3/4/5/6 검증 결과 추가.
-- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1/2/3/4/5/6에서는 DB schema, `.env` 계열 파일을 변경하지 않았다.
+- `docs/VALIDATION.md`: Goal Phase 0/1/2/3/4/5/6/7 검증 결과 추가.
+- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1/2/3/4/5/6/7에서는 DB schema, `.env` 계열 파일을 변경하지 않았다.
 
 ## 최신 검증 결과
 
@@ -61,6 +64,9 @@
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py backend/tests/test_no_live_trading_regression.py -q`: 13 passed in 0.81s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_persistence_migration.py backend/tests/test_paper_order_api.py -q`: 4 passed in 2.65s.
 - 2026-05-27 Phase 6 문서 구조 확인: `docs/research/notification-channel-decision.md`, `docs/research/kis-paper-api-confirmation-matrix.md`에 Telegram-first, Discord follow-up, security/non-blocking constraints 반영.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notification_service.py backend/tests/test_notification_outbox.py -q`: 6 passed in 0.63s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_api.py backend/tests/test_report_notify.py backend/tests/test_no_live_trading_regression.py -q`: 18 passed in 0.93s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_alembic_migrations.py backend/tests/test_paper_persistence_migration.py -q`: 4 passed in 4.52s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 14 passed in 0.87s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_phase3c_kis_readonly.py backend/tests/test_no_live_trading_regression.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 22 passed in 3.29s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 20 passed in 0.97s.
