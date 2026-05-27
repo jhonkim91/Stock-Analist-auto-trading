@@ -473,7 +473,7 @@ Primary deliverables:
   - `Memory.md`
   - `docs/research/kis-paper-dry-run-checklist.md`
 - 새로 생성할 파일
-  - None unless a redacted manual dry-run evidence artifact is explicitly requested.
+  - None unless a redacted read-only evidence artifact is explicitly requested.
 - 금지 사항
   - No submit/cancel/query/sync adapter implementation.
   - No live endpoint calls.
@@ -549,14 +549,21 @@ Primary deliverables:
 
 # Phase 12C: Controlled KIS Paper Submit/Cancel/Query/Sync Dry-run
 
+Implementation update:
+- `tools/kis_paper_phase12c_dry_run.py` provides a preflight-only default helper for Phase 12C.
+- `backend/tests/test_kis_paper_phase12c_tool.py` verifies no-op preflight, missing-gate stop, kill-switch proof, and broker identifier redaction.
+- Real-network evidence artifact remains uncreated until a controlled dry-run actually executes.
+
 - 목적
   - Execute a controlled KIS paper submit/cancel/query/sync dry-run after Phase 12B implementation is complete.
 - 수정 대상 파일
   - `docs/VALIDATION.md`
   - `Memory.md`
   - `docs/research/kis-paper-dry-run-checklist.md`
+  - `tools/kis_paper_phase12c_dry_run.py`
 - 새로 생성할 파일
-  - None unless a redacted manual dry-run evidence artifact is explicitly requested.
+  - `backend/tests/test_kis_paper_phase12c_tool.py`
+  - No redacted real-network evidence artifact unless a controlled dry-run actually executes.
 - 금지 사항
   - No Phase 13 work.
   - No live endpoint calls.
@@ -573,8 +580,11 @@ Primary deliverables:
   - Record redacted traces and outcome metadata only.
 - 테스트 파일
   - No automated real-network tests required in CI.
+  - Add helper tests that prove preflight is no-op, missing gates stop before adapter calls, kill-switch proof is required, and broker identifiers are redacted.
 - 검증 명령어
   - Manual dry-run checklist.
+  - `python tools/kis_paper_phase12c_dry_run.py`
+  - `python -m pytest backend/tests/test_kis_paper_phase12c_tool.py -q`
   - `python -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`
   - `python tools/secret_scan.py`
   - `git diff --check`

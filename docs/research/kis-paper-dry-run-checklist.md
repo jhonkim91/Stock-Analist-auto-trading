@@ -148,6 +148,7 @@ Phase 12C is blocked until Phase 12B is implemented and tested.
 
 ### Controlled execution
 
+- [ ] Run `.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py` first and confirm it reports only redacted preflight status with no network call.
 - [ ] Verify kill switch blocks submit while enabled.
 - [ ] Obtain explicit human confirmation immediately before submit.
 - [ ] Use a minimum-size paper order only.
@@ -162,6 +163,7 @@ Phase 12C is blocked until Phase 12B is implemented and tested.
 
 ### Redacted record
 
+- [ ] If using the helper, execute with `--execute --confirm-submit CONFIRM_KIS_PAPER_PHASE12C --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C` only after all process env/runtime gates are prepared.
 - [ ] Record submit attempt ID, symbol, side, quantity, sanitized order identifier, status, and error code if any.
 - [ ] Record query/sync scope, status, redacted broker trace, and row counts.
 - [ ] Record cancel status and sanitized order identifier only.
@@ -170,6 +172,8 @@ Phase 12C is blocked until Phase 12B is implemented and tested.
 ### 12C validation
 
 ```powershell
+.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase12c_tool.py -q
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q
 .\.venv\Scripts\python.exe tools\secret_scan.py
 git diff --check
@@ -191,6 +195,8 @@ git diff --check
 | Credential gate | `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCOUNT_NO`, `KIS_PRODUCT_CODE` all not configured in the current process |
 | Runtime gate | `PAPER_TRADING_ENABLED`, `PAPER_TRADING_CAN_CREATE`, `PAPER_TRADING_NETWORK_ENABLED`, `PAPER_TRADING_KILL_SWITCH` not configured in the current process |
 | Config gate | `backend/config/paper.yaml` remains `mode=safety_scaffold`, `enabled=false`, `can_create=false`, `network_enabled=false`, `kill_switch_enabled=true`, adapter disabled |
+| 12C helper | `tools/kis_paper_phase12c_dry_run.py` added; default mode is preflight-only and performs no network call |
+| 12C helper preflight | Current run reported `preflight_only` with credential/runtime/config blockers and `network_call_performed=false` |
 | Network calls | None in this Phase 12C preflight |
 | Live endpoint calls | None |
 | Secret exposure | None observed; no raw credential/account/token value was printed or written |

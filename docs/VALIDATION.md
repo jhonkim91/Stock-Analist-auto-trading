@@ -15,9 +15,12 @@ Phase 12C 실제 KIS paper network submit/cancel/query/sync dry-run은 실행하
 | Runtime gate preflight | 중단 | `PAPER_TRADING_ENABLED`, `PAPER_TRADING_CAN_CREATE`, `PAPER_TRADING_NETWORK_ENABLED`, `PAPER_TRADING_KILL_SWITCH` 모두 configured=false |
 | Config gate preflight | 중단 | `backend/config/paper.yaml`: `mode=safety_scaffold`, `enabled=false`, `can_create=false`, `network_enabled=false`, `kill_switch_enabled=true`, `broker_adapter.enabled=false`, `official_endpoint_confirmed=false` |
 | Live safety | 통과 | `ENABLE_REAL_ORDER` absent, `PAPER_BOT_AUTO_SUBMIT` absent, `live_order_enabled=false`, `live_fallback_enabled=false`, paper base URL live host 아님 |
+| 12C helper | 추가 | `tools/kis_paper_phase12c_dry_run.py`: default preflight-only, `--execute`와 submit/cancel 확인 토큰 없이는 네트워크 호출 없음 |
+| 12C helper preflight | 통과 | `.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py`: `status=preflight_only`, `network_call_performed=false`, credential/runtime/config blockers만 redacted 출력 |
+| 12C helper pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase12c_tool.py -q`: 3 passed in 0.17s |
 | KIS network call | 미실행 | submit/cancel/query/sync 모두 credential/runtime/config gate 미충족으로 호출하지 않음 |
 | Phase 12C completion | 미완료 | redacted controlled submit/cancel/query/sync dry-run result가 없으므로 Phase 13 진입 불가 |
-| Phase 12C safety pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`: 10 passed in 1.89s |
+| Phase 12C safety pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`: 10 passed in 1.51s |
 | Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
 | Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
 

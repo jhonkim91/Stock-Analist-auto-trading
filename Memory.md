@@ -31,13 +31,16 @@
 - Phase 12B: `KisPaperBrokerAdapter`에 `order-cash`, `order-rvsecncl`, `inquire-daily-ccld`, `inquire-balance` mapper와 redacted trace를 추가하고, `PaperOrderService`/`PaperSyncService`에 explicit network gate 분기를 연결했다.
 - Phase 12B commit: `bcd40fac2a67e8c06aad32bd1f1f386b3abcab8e Implement KIS paper phase 12B adapter`.
 - Phase 12C preflight: 12B commit 후 현재 프로세스에 KIS credential/runtime flag가 없고 `backend/config/paper.yaml`도 fail-closed라 실제 KIS paper submit/cancel/query/sync dry-run 없이 중단했다.
+- Phase 12C helper: `tools/kis_paper_phase12c_dry_run.py`와 `backend/tests/test_kis_paper_phase12c_tool.py`를 추가해 preflight-only no-op, missing gate stop, kill-switch proof, broker identifier redaction을 검증한다.
 
 ## 최신 검증 결과
 
 - 2026-05-27 Phase 12B 지정 pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_paper_submit_cancel_api.py backend/tests/test_paper_sync_service.py backend/tests/test_no_live_trading_regression.py -q`: 18 passed in 2.53s.
 - 2026-05-27 Phase 12B 추가 paper regression: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py backend/tests/test_paper_runtime_flags.py backend/tests/test_paper_sync.py backend/tests/test_frontend_api_contracts.py -q`: 16 passed in 1.62s.
 - 2026-05-27 Phase 12C preflight: 실제 KIS network call 없음. `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCOUNT_NO`, `KIS_PRODUCT_CODE`, `PAPER_TRADING_ENABLED`, `PAPER_TRADING_CAN_CREATE`, `PAPER_TRADING_NETWORK_ENABLED` 모두 current process에서 미설정.
-- 2026-05-27 Phase 12C safety pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`: 10 passed in 1.89s.
+- 2026-05-27 Phase 12C helper pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase12c_tool.py -q`: 3 passed in 0.17s.
+- 2026-05-27 Phase 12C helper preflight: `.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py`: `status=preflight_only`, `network_call_performed=false`, credential/runtime/config blockers redacted.
+- 2026-05-27 Phase 12C safety pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`: 10 passed in 1.51s.
 - 2026-05-27 `git diff --check`: 통과, CRLF warning만 있음.
 - 2026-05-27 `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS`.
 
