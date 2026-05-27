@@ -10,8 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.paths import CONFIG_DIR
-from backend.app.brokers.kis_paper import KisPaperBrokerAdapter
 from backend.app.models.tables import Order, PaperAuditEvent, PaperFill, PaperOrder, PaperPosition
+from backend.app.services.kis_paper_broker_adapter import KisPaperBrokerAdapter
 from backend.app.services.market_session_service import MarketSessionService
 from backend.app.services.token_manager import TokenLifecycleService
 

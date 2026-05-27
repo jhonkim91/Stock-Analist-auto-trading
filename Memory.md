@@ -7,6 +7,7 @@
 - [x] 현재 branch: `feature/kis-paper-goal-phases` (baseline: `main`)
 - [x] 현재 goal.md Phase 0 감사: `docs/research/kis-paper-baseline-audit.md`
 - [x] 현재 goal.md Phase 1 matrix: `docs/research/kis-paper-api-confirmation-matrix.md`
+- [x] 현재 goal.md Phase 2 adapter hardening: service adapter boundary 추가, live disabled 유지
 - [x] 최신 backend pytest: `342 passed in 327.46s`
 - [x] 최신 frontend 검증: lint, typecheck, build 통과
 - [x] 최신 secret scan: `NO_SECRET_FINDINGS`
@@ -31,13 +32,18 @@
 
 - `docs/research/kis-paper-baseline-audit.md`: `goal.md` Phase 0 산출물로 main 기준 route/table/service/test/UI와 no-live-trading 불변식 문서화.
 - `docs/research/kis-paper-api-confirmation-matrix.md`: `goal.md` Phase 1 산출물로 공식 KIS 포털/공식 GitHub 샘플 기반 확인 항목과 `확인 필요` 항목 분리.
+- `backend/app/services/broker_adapter.py`, `backend/app/services/kis_paper_broker_adapter.py`, `backend/app/services/kis_live_broker_adapter.py`: Phase 2 service adapter boundary 추가.
+- `backend/app/services/broker_service.py`, `backend/app/services/paper_trading_service.py`: 기존 broker implementation 대신 service adapter boundary import로 전환.
+- `backend/tests/test_kis_paper_adapter_contract.py`, `backend/tests/test_no_live_adapter.py`: paper adapter fail-closed와 live adapter hard-disabled 회귀 추가.
 - `docs/PROJECT_STATUS.md`: Goal Phase 0 감사 문서 위치와 main/current branch 분리 기준 추가.
-- `docs/VALIDATION.md`: Goal Phase 0/1 검증 결과 추가.
-- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1에서는 runtime code, API route, DB schema, `.env` 계열 파일을 변경하지 않았다.
+- `docs/VALIDATION.md`: Goal Phase 0/1/2 검증 결과 추가.
+- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1/2에서는 API route, DB schema, `.env` 계열 파일을 변경하지 않았다.
 
 ## 최신 검증 결과
 
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 342 passed in 327.46s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 5 passed in 0.08s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 20 passed in 0.97s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 17 passed in 3.36s.
 - 2026-05-27 frontend `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.
 - 2026-05-27 `git diff --check`: 통과, CRLF warning만 있음.

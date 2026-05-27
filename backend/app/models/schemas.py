@@ -146,6 +146,23 @@ class PaperSyncRequest(BaseModel):
     scope: Literal["orders", "fills", "positions", "portfolio", "all"] = "all"
 
 
+class BrokerAdapterStatus(BaseModel):
+    """broker adapter 상태를 secret 없이 표현하는 공통 schema다."""
+
+    name: str
+    mode: str
+    enabled: bool = False
+    paper_trading_enabled: bool = False
+    live_trading_enabled: bool = False
+    network_enabled: bool = False
+    can_submit: bool = False
+    can_cancel: bool = False
+    can_sync: bool = False
+    reason: str | None = None
+    adapter_boundary: str | None = None
+    live_fallback_enabled: bool = False
+
+
 class PaperBotRunRequest(BaseModel):
     auto_submit: bool | None = None
 

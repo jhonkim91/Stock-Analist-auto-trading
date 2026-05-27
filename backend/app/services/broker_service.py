@@ -11,10 +11,10 @@ import yaml
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.brokers.kis_live import KisLiveBrokerAdapter
-from backend.app.brokers.kis_paper import KisPaperBrokerAdapter
 from backend.app.core.paths import CONFIG_DIR
 from backend.app.models.tables import Position
+from backend.app.services.kis_live_broker_adapter import KisLiveBrokerAdapter
+from backend.app.services.kis_paper_broker_adapter import KisPaperBrokerAdapter
 from backend.app.services.market_data_import_service import DataSourceService
 from backend.app.services.market_session_service import MarketSessionService
 from backend.app.services.token_manager import TokenLifecycleService
