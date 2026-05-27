@@ -1,5 +1,22 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 12B KIS Paper Adapter Implementation
+
+이번 작업은 `goal.md`의 `Phase 12B: KIS Paper Submit/Cancel/Query/Sync Adapter Implementation` 범위만 수행했다. 실제 KIS credential, `.env`, `.env.local`, live adapter, live endpoint, paper→live fallback은 사용하지 않았다. KIS paper network dry-run은 실행하지 않았고, adapter 동작은 mock HTTP client와 service-level fake adapter로만 검증했다.
+
+`KisPaperBrokerAdapter`는 공식 샘플에서 확인된 KIS paper endpoint/TR ID/request field만 사용해 `order-cash`, `order-rvsecncl`, `inquire-daily-ccld`, `inquire-balance` request mapper와 response mapper를 추가했다. `inquire-psbl-rvsecncl`의 paper TR ID는 현재 프로젝트 matrix에서 직접 확인되지 않은 상태이므로 adapter 구현에 사용하지 않았다. submit/cancel/query/sync는 paper mode, process env flag, config gate, live-block, credential, kill-switch/confirm/idempotency 조건을 통과해야만 network path로 이동하며, 모든 trace는 endpoint/TR ID/status/retry 중심의 redacted metadata만 반환한다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Adapter submit/cancel/query/sync | 구현 | `backend/app/brokers/kis_paper.py`에 paper-only request/response mapper, redacted trace, timeout/retry/rate-limit/error handling 추가 |
+| Service 연결 | 구현 | `PaperOrderService`는 network gate가 열릴 때만 adapter submit/cancel을 호출하고, `PaperSyncService`는 network gate가 열릴 때만 paper 전용 table에 sync 결과 반영 |
+| Live trading path | disabled 유지 | `KisLiveBrokerAdapter` 변경 없음, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*` route 없음 |
+| Real KIS network dry-run | 미실행 | mock HTTP client/fake adapter 테스트만 수행. Phase 12C로 보류 |
+| 지정 backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_paper_submit_cancel_api.py backend/tests/test_paper_sync_service.py backend/tests/test_no_live_trading_regression.py -q`: 18 passed in 2.53s |
+| 추가 paper regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py backend/tests/test_paper_runtime_flags.py backend/tests/test_paper_sync.py backend/tests/test_frontend_api_contracts.py -q`: 16 passed in 1.62s |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 12 Split Review
 
 이번 작업은 preflight에서 중단된 Phase 12를 완료 처리하지 않고 재검토했다. 코드 기준으로 현재 KIS paper submit/cancel/query/sync network execution은 아직 unsupported/confirmation required 상태이며, Phase 13으로 진행하지 않는다. `.env`, `.env.local`, runtime code, API route, DB schema는 수정하지 않았다.

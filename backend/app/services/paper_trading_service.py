@@ -85,6 +85,7 @@ class PaperConfigService:
                     ),
                     "broker_adapter_name": str(broker_adapter.get("name") or "kis_paper"),
                     "broker_adapter_enabled": bool(broker_adapter.get("enabled", False)),
+                    "official_endpoint_confirmed": bool(broker_adapter.get("official_endpoint_confirmed", False)),
                     "official_balance_endpoint_confirmed": bool(
                         broker_adapter.get("official_balance_endpoint_confirmed", False)
                     ),
@@ -132,6 +133,7 @@ class PaperConfigService:
             "balance_inquiry_enabled": False,
             "broker_adapter_name": "kis_paper",
             "broker_adapter_enabled": False,
+            "official_endpoint_confirmed": False,
             "official_balance_endpoint_confirmed": False,
             "live_fallback_enabled": False,
             "allow_buy_preview": True,
@@ -266,7 +268,7 @@ class PaperTradingService:
             "kill_switch": {"blocking": True, "reason_codes": reason_codes},
             "risk_gate": {"decision": "deny", "passed": False, "reason_codes": reason_codes},
             "token_lifecycle": token_status,
-            "broker_adapter": self.paper_adapter.status(),
+            "broker_adapter": KisPaperBrokerAdapter(config=dict(config)).status(),
             "simulator": self.simulator.status(),
             "counts": self._counts(),
         }

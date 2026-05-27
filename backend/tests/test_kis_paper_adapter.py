@@ -33,14 +33,19 @@ def test_kis_paper_adapter_blocks_unconfirmed_capabilities():
 
     with pytest.raises(BrokerCapabilityError, match=CONFIRMATION_REQUIRED):
         adapter.preview_order(order)
-    with pytest.raises(BrokerCapabilityError, match=CONFIRMATION_REQUIRED):
-        adapter.submit_order(order)
-    with pytest.raises(BrokerCapabilityError, match=CANCEL_CONFIRMATION_REQUIRED):
-        adapter.cancel_order(broker_order_id="paper-1", confirm=True)
-    with pytest.raises(BrokerCapabilityError, match=CONFIRMATION_REQUIRED):
-        adapter.list_orders(status="open")
-    with pytest.raises(BrokerCapabilityError, match=SYNC_CONFIRMATION_REQUIRED):
-        adapter.sync(scope="all")
+    submit = adapter.submit_order(order)
+    cancel = adapter.cancel_order(broker_order_id="paper-1", confirm=True)
+    listed = adapter.list_orders(status="open")
+    synced = adapter.sync(scope="all")
+
+    assert submit["ok"] is False
+    assert submit["network_call_performed"] is False
+    assert CONFIRMATION_REQUIRED in submit["reason_codes"]
+    assert cancel["ok"] is False
+    assert cancel["network_call_performed"] is False
+    assert listed["ok"] is False
+    assert synced["ok"] is False
+    assert synced["sync_performed"] is False
 
 
 def test_kis_live_adapter_is_separate_disabled_placeholder():

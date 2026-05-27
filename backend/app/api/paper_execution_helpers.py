@@ -18,6 +18,7 @@ def paper_only_execution_response(payload: dict[str, Any], *, operation: str) ->
             "broker_order_created": payload.get("broker_order_created", False),
             "network_call_performed": payload.get("network_call_performed", False),
             "reason_codes": payload.get("reason_codes", []),
+            "adapter_trace": payload.get("broker_trace"),
         }
     )
     return {

@@ -1,15 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from sqlalchemy import func, select
 
-from backend.app.brokers.base import BrokerCapabilityError
-from backend.app.brokers.kis_paper import (
-    CANCEL_CONFIRMATION_REQUIRED,
-    CONFIRMATION_REQUIRED,
-    SYNC_CONFIRMATION_REQUIRED,
-    KisPaperBrokerAdapter,
-)
+from backend.app.brokers.kis_paper import CONFIRMATION_REQUIRED, SYNC_CONFIRMATION_REQUIRED, KisPaperBrokerAdapter
 from backend.app.models.tables import PaperFill, PaperOrder, PaperPortfolioSnapshot, PaperPosition, Position, utc_now
 from backend.app.services.paper_sync_service import PaperSyncService
 
@@ -132,9 +125,15 @@ def test_paper_sync_rejects_unknown_scope_without_mutation(db_session):
 def test_kis_paper_adapter_sync_and_cancel_remain_confirmation_required():
     adapter = KisPaperBrokerAdapter()
 
-    with pytest.raises(BrokerCapabilityError, match=CONFIRMATION_REQUIRED):
-        adapter.list_orders(status="open")
-    with pytest.raises(BrokerCapabilityError, match=CANCEL_CONFIRMATION_REQUIRED):
-        adapter.cancel_order(broker_order_id="paper-1", confirm=True)
-    with pytest.raises(BrokerCapabilityError, match=SYNC_CONFIRMATION_REQUIRED):
-        adapter.sync(scope="all")
+    listed = adapter.list_orders(status="open")
+    cancelled = adapter.cancel_order(broker_order_id="paper-1", confirm=True)
+    synced = adapter.sync(scope="all")
+
+    assert listed["status"] == "query_blocked"
+    assert CONFIRMATION_REQUIRED in listed["reason_codes"]
+    assert listed["network_call_performed"] is False
+    assert cancelled["status"] == "cancel_blocked"
+    assert cancelled["network_call_performed"] is False
+    assert synced["status"] == "sync_blocked"
+    assert synced["sync_performed"] is False
+    assert SYNC_CONFIRMATION_REQUIRED in synced["reason_codes"]

@@ -151,7 +151,8 @@ def test_network_enabled_requires_explicit_flag_but_submit_network_stays_unsuppo
 
     assert "PAPER_NETWORK_ENV_FLAG_REQUIRED" in missing_network_flag["reason_codes"]
     assert missing_network_flag["network_call_performed"] is False
-    assert "PAPER_NETWORK_UNSUPPORTED" in unsupported_network_submit["reason_codes"]
+    assert "KIS_PAPER_OFFICIAL_ENDPOINT_CONFIRMATION_REQUIRED" in unsupported_network_submit["reason_codes"]
+    assert "KIS_PAPER_CREDENTIALS_MISSING" in unsupported_network_submit["reason_codes"]
     assert unsupported_network_submit["network_call_performed"] is False
     assert unsupported_network_submit["live_order_created"] is False
     assert unsupported_network_submit["broker_order_created"] is False

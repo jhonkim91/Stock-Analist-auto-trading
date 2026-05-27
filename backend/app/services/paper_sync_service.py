@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
 from backend.app.core.paths import CONFIG_DIR
-from backend.app.models.tables import PaperFill, PaperPortfolioSnapshot, PaperPosition
+from backend.app.models.tables import BrokerAuditEvent, PaperFill, PaperOrder, PaperPortfolioSnapshot, PaperPosition, utc_now
 from backend.app.repositories.paper_repository import PaperRepository
+from backend.app.services.credential_redaction import CredentialRedactionService
+from backend.app.services.kis_paper_broker_adapter import KisPaperBrokerAdapter
 from backend.app.services.kis_paper_balance import (
     KIS_PAPER_BALANCE_PATH,
     KIS_PAPER_BALANCE_TR_ID,
@@ -32,14 +38,17 @@ class PaperSyncService:
         *,
         config_dir: Path = CONFIG_DIR,
         balance_client: KisPaperBalanceClient | None = None,
+        adapter: KisPaperBrokerAdapter | None = None,
     ) -> None:
         self.db = db
         self.config_dir = config_dir
         self.balance_client = balance_client or KisPaperBalanceClient()
+        self.adapter = adapter
         self.repository = PaperRepository(db)
+        self.redactor = CredentialRedactionService()
 
     def sync(self, *, scope: str = "all") -> dict[str, Any]:
-        """공식 KIS paper sync contract 확인 전에는 idempotent no-op으로 차단한다."""
+        """network gate가 열릴 때만 KIS paper 조회 결과를 paper 전용 테이블에 반영한다."""
         normalized_scope = scope.strip().lower() if scope else "all"
         if normalized_scope not in SUPPORTED_SYNC_SCOPES:
             return {
@@ -57,21 +66,59 @@ class PaperSyncService:
                 "network_call_performed": False,
                 "synthetic_positions_touched": False,
             }
+        config, config_reasons = PaperConfigService(self.config_dir).load()
+        if not self._network_sync_enabled(config, config_reasons):
+            reason_codes = self._sync_block_reasons(config, config_reasons)
+            return {
+                "ok": False,
+                "status": "sync_disabled",
+                "scope": normalized_scope,
+                "supported_scopes": sorted(SUPPORTED_SYNC_SCOPES),
+                "sync_performed": False,
+                "synced_scopes": self._expanded_scopes(normalized_scope),
+                "reason": reason_codes[0] if reason_codes else SYNC_CONFIRMATION_REQUIRED,
+                "reason_codes": reason_codes,
+                "counts": self._counts(),
+                "dedupe": self._dedupe_payload(),
+                "live_order_created": False,
+                "broker_order_created": False,
+                "network_call_performed": False,
+                "synthetic_positions_touched": False,
+            }
+        adapter = self.adapter or KisPaperBrokerAdapter(config=dict(config))
+        result = adapter.sync(scope=normalized_scope)
+        if not result.get("ok"):
+            return {
+                **result,
+                "status": result.get("status") or "sync_blocked",
+                "scope": normalized_scope,
+                "supported_scopes": sorted(SUPPORTED_SYNC_SCOPES),
+                "sync_performed": False,
+                "synced_scopes": self._expanded_scopes(normalized_scope),
+                "counts": self._counts(),
+                "dedupe": self._dedupe_payload(),
+                "live_order_created": False,
+                "broker_order_created": False,
+                "network_call_performed": bool(result.get("network_call_performed", False)),
+                "synthetic_positions_touched": False,
+            }
+        dedupe = self._persist_sync_result(result, normalized_scope)
         return {
-            "ok": False,
-            "status": "sync_disabled",
+            "ok": True,
+            "status": "sync_ok",
             "scope": normalized_scope,
             "supported_scopes": sorted(SUPPORTED_SYNC_SCOPES),
-            "sync_performed": False,
+            "sync_performed": True,
             "synced_scopes": self._expanded_scopes(normalized_scope),
-            "reason": SYNC_CONFIRMATION_REQUIRED,
-            "reason_codes": [SYNC_CONFIRMATION_REQUIRED],
+            "reason": None,
+            "reason_codes": [],
             "counts": self._counts(),
-            "dedupe": self._dedupe_payload(),
+            "dedupe": dedupe,
             "live_order_created": False,
             "broker_order_created": False,
-            "network_call_performed": False,
+            "network_call_performed": True,
             "synthetic_positions_touched": False,
+            "broker_trace": result.get("broker_trace"),
         }
 
     def list_fills(self, *, symbol: str | None = None) -> dict[str, Any]:
@@ -280,6 +327,181 @@ class PaperSyncService:
 
     def _counts(self) -> dict[str, int]:
         return self.repository.counts()
+
+    @staticmethod
+    def _network_sync_enabled(config: dict[str, object], config_reasons: list[str]) -> bool:
+        return not PaperSyncService._sync_block_reasons(config, config_reasons)
+
+    @staticmethod
+    def _sync_block_reasons(config: dict[str, object], config_reasons: list[str]) -> list[str]:
+        reason_codes = list(config_reasons)
+        if not bool(config.get("official_endpoint_confirmed")):
+            reason_codes.append(SYNC_CONFIRMATION_REQUIRED)
+        if str(config.get("mode")) != "paper":
+            reason_codes.append("KIS_PAPER_MODE_REQUIRED")
+        if not bool(config.get("enabled")):
+            reason_codes.append("PAPER_TRADING_DISABLED")
+        if not bool(config.get("network_enabled")):
+            reason_codes.append("PAPER_NETWORK_DISABLED")
+        if str(config.get("broker_adapter_name") or "") != "kis_paper":
+            reason_codes.append("KIS_PAPER_ADAPTER_REQUIRED")
+        if not bool(config.get("broker_adapter_enabled")):
+            reason_codes.append("KIS_PAPER_ADAPTER_DISABLED")
+        if bool(config.get("live_order_enabled")) or bool(config.get("live_fallback_enabled")):
+            reason_codes.append("KIS_LIVE_PATH_BLOCKED")
+        if bool(config.get("broker_order_enabled")):
+            reason_codes.append("KIS_ORDER_PATH_BLOCKED")
+        if kis_real_order_enabled():
+            reason_codes.append("ENABLE_REAL_ORDER_MUST_BE_FALSE")
+        return PaperSyncService._merge_reason_codes(reason_codes)
+
+    def _persist_sync_result(self, result: dict[str, Any], scope: str) -> dict[str, Any]:
+        dedupe = self._dedupe_payload()
+        now = utc_now()
+        if scope in {"orders", "all"}:
+            for order_payload in result.get("orders") or []:
+                if isinstance(order_payload, dict) and self._upsert_order(order_payload, now):
+                    dedupe["orders_inserted"] += 1
+        if scope in {"fills", "all"}:
+            for fill_payload in result.get("fills") or []:
+                if isinstance(fill_payload, dict) and self._insert_fill(fill_payload, now):
+                    dedupe["fills_inserted"] += 1
+        if scope in {"positions", "all"}:
+            for position_payload in result.get("positions") or []:
+                if isinstance(position_payload, dict) and self._upsert_position(position_payload, now):
+                    dedupe["positions_upserted"] += 1
+        if scope in {"portfolio", "all"} and isinstance(result.get("portfolio"), dict):
+            if self._insert_portfolio_snapshot(result["portfolio"], result.get("broker_trace")):
+                dedupe["portfolio_snapshots_inserted"] += 1
+        self.db.add(
+            BrokerAuditEvent(
+                event_type="paper_sync",
+                broker_name="kis_paper",
+                broker_mode="paper",
+                account_alias="kis_paper",
+                decision="allow",
+                reason_codes_json="[]",
+                sanitized_payload_json=json.dumps(
+                    self.redactor.redact(
+                        {
+                            "scope": scope,
+                            "orders": len(result.get("orders") or []),
+                            "fills": len(result.get("fills") or []),
+                            "positions": len(result.get("positions") or []),
+                            "portfolio": bool(result.get("portfolio")),
+                            "broker_trace": result.get("broker_trace"),
+                        }
+                    ),
+                    sort_keys=True,
+                    default=str,
+                ),
+            )
+        )
+        self.db.commit()
+        return dedupe
+
+    def _upsert_order(self, payload: dict[str, Any], now: datetime) -> bool:
+        broker_order_id = str(payload.get("broker_order_id") or "").strip()
+        symbol = str(payload.get("symbol") or "").strip()
+        if not broker_order_id or not symbol:
+            return False
+        order = self.db.query(PaperOrder).filter(PaperOrder.broker_order_id == broker_order_id).one_or_none()
+        created = order is None
+        if order is None:
+            request_hash = hashlib.sha256(broker_order_id.encode("utf-8")).hexdigest()
+            order = PaperOrder(
+                paper_order_id=f"paper-sync-{uuid4().hex[:16]}",
+                created_ts=now,
+                symbol=symbol,
+                side=str(payload.get("side") or ""),
+                qty=int(payload.get("qty") or 0),
+                idempotency_key=f"sync-{request_hash[:24]}",
+                request_hash=request_hash,
+            )
+        order.updated_ts = now
+        order.filled_qty = int(payload.get("filled_qty") or 0)
+        order.remaining_qty = int(payload.get("remaining_qty") or 0)
+        order.limit_price = payload.get("limit_price")
+        order.status = str(payload.get("status") or order.status)
+        order.broker_order_created = True
+        order.network_call_performed = True
+        order.broker_order_id = broker_order_id
+        order.broker_order_status = str(payload.get("broker_order_status") or order.status)
+        order.account_alias = "kis_paper"
+        order.broker_status_json = json.dumps(self.redactor.redact(payload), sort_keys=True, default=str)
+        self.db.add(order)
+        return created
+
+    def _insert_fill(self, payload: dict[str, Any], now: datetime) -> bool:
+        broker_fill_id = str(payload.get("broker_fill_id") or "").strip()
+        if not broker_fill_id:
+            return False
+        fill_id = f"paper-fill-{hashlib.sha256(broker_fill_id.encode('utf-8')).hexdigest()[:16]}"
+        if self.db.get(PaperFill, fill_id) is not None:
+            return False
+        fill = PaperFill(
+            paper_fill_id=fill_id,
+            paper_order_id=str(payload.get("broker_order_id") or broker_fill_id),
+            symbol=str(payload.get("symbol") or ""),
+            side=str(payload.get("side") or ""),
+            qty=int(payload.get("qty") or 0),
+            price=float(payload.get("price") or 0.0),
+            fill_ts=now,
+            fill_source="kis_paper_sync",
+            live_order_created=False,
+            broker_order_created=True,
+            network_call_performed=True,
+            broker_fill_id=broker_fill_id,
+            broker_order_id=str(payload.get("broker_order_id") or ""),
+            broker_fill_ts=now,
+            broker_status_json=json.dumps(self.redactor.redact(payload), sort_keys=True, default=str),
+        )
+        self.db.add(fill)
+        return True
+
+    def _upsert_position(self, payload: dict[str, Any], now: datetime) -> bool:
+        symbol = str(payload.get("symbol") or "").strip()
+        if not symbol:
+            return False
+        broker_position_key = str(payload.get("broker_position_key") or f"kis_paper|{symbol}")
+        position = (
+            self.db.query(PaperPosition).filter(PaperPosition.broker_position_key == broker_position_key).one_or_none()
+        )
+        created = position is None
+        if position is None:
+            position = PaperPosition(symbol=symbol, broker_position_key=broker_position_key)
+        position.qty = int(payload.get("qty") or 0)
+        position.avg_price = float(payload.get("avg_price") or 0.0)
+        position.last_price = payload.get("last_price")
+        position.market_value = payload.get("market_value")
+        position.unrealized_pnl = payload.get("unrealized_pnl")
+        position.account_alias = "kis_paper"
+        position.broker_synced_at = now
+        position.updated_at = now
+        position.broker_status_json = json.dumps(self.redactor.redact(payload), sort_keys=True, default=str)
+        self.db.add(position)
+        return created
+
+    def _insert_portfolio_snapshot(self, payload: dict[str, Any], broker_trace: dict[str, Any] | None) -> bool:
+        snapshot_id = str(payload.get("snapshot_id") or f"kis-paper-sync-{uuid4().hex[:12]}")
+        if self.db.get(PaperPortfolioSnapshot, snapshot_id) is not None:
+            return False
+        snapshot = PaperPortfolioSnapshot(
+            snapshot_id=snapshot_id,
+            snapshot_ts=utc_now(),
+            account_alias="kis_paper",
+            cash_balance=payload.get("cash_balance"),
+            buying_power=payload.get("buying_power"),
+            market_value=payload.get("market_value"),
+            total_equity=payload.get("total_equity"),
+            unrealized_pnl=payload.get("unrealized_pnl"),
+            realized_pnl=payload.get("realized_pnl"),
+            source="kis_paper",
+            status=str(payload.get("status") or "synced"),
+            metadata_json=json.dumps(self.redactor.redact({"broker_trace": broker_trace}), sort_keys=True, default=str),
+        )
+        self.db.add(snapshot)
+        return True
 
     @staticmethod
     def _merge_reason_codes(codes: list[str]) -> list[str]:
