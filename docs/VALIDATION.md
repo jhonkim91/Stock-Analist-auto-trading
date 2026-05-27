@@ -1,5 +1,100 @@
 # Validation
 
+## 2026-05-28 Phase 19-20 Publish Validation
+
+커밋/푸시 전 현재 작업트리 기준으로 backend, frontend, secret, whitespace 검증을 재확인했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp %TEMP%\stock_goal_phase19_20_backend_full_*`: 405 passed in 302.67s |
+| Phase 19/20 targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_live_canary_preflight.py backend/tests/test_final_safety_hardening.py -q`: 16 passed in 0.80s |
+| Frontend lint | 통과 | `cd frontend; npm.cmd run lint` |
+| Frontend typecheck | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit` |
+| Frontend build | 통과 | `cd frontend; npm.cmd run build` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning only |
+
+## 2026-05-28 Phase 19-20 Plan And Preflight
+
+사용자 요청으로 Phase 19와 Phase 20을 계획 후 진행했다. Phase 19는 disabled live adapter scaffold 강화까지 완료했고, Phase 20은 runbook과 no-network preflight record까지 진행했다. 실제 live 주문, live endpoint 호출, WebSocket 체결은 수행하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Phase 19 disabled scaffold | 완료 | `KisLiveBrokerAdapter` live operation method가 예외 대신 `status=live_disabled`, `network_call_performed=false`, `live_order_created=false`, `endpoint_called=false` payload 반환 |
+| Phase 20 runbook | 완료 | `docs/LIVE_CANARY_RUNBOOK.md` 추가. KIS 공식 포털/GitHub 샘플/Telegram Bot API 재확인 기준과 금지 조건 기록 |
+| Phase 20 preflight | 차단 | `.\.venv\Scripts\python.exe tools\live_canary_preflight.py --write-record`: `status=blocked`, `canary_execution_allowed=false`, `network_call_performed=false`, `live_order_created=false` |
+| Redacted record | 완료 | `docs/research/live-canary-phase20-preflight-record.json` 생성. credential은 configured boolean만 기록 |
+| Targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_live_canary_preflight.py backend/tests/test_final_safety_hardening.py -q`: 16 passed in 0.80s |
+| Backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp %TEMP%\stock_goal_phase19_20_backend_full_*`: 405 passed in 302.67s |
+| No-live static scan | 통과 | `rg -n '/api/live|/api/kis/orders|/api/kis/broker|/api/kis/websocket|ENABLE_LIVE_SUBMIT\s*=\s*true|live_fallback_enabled\s*[:=]\s*true' backend/app frontend -g '!frontend/.next/**'`: `NO_MATCHES` |
+
+결론: Phase 19는 완료됐다. Phase 20은 canary 계획과 preflight record까지 완료됐지만, 현재 저장소에는 live adapter 실행, live route, reviewer, 환경 분리, rollback proof가 없어 실제 controlled live canary는 차단 상태다.
+
+## 2026-05-28 Phase 19-20 Approval Gate Audit
+
+이 섹션은 Phase 19/20 진행 승인 전 상태의 감사 기록이다. 이후 사용자 요청으로 Phase 19 scaffold와 Phase 20 preflight는 위 섹션까지 진행됐다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Phase 19 상태 | 대기 | `goal.md`에 `승인 조건: 사용자의 별도 명시 승인 필요`가 남아 있어 disabled live scaffold 확장 작업은 시작하지 않음 |
+| Phase 20 상태 | 대기 | controlled live canary는 별도 명시 승인, 환경 분리, required reviewer, rollback 절차 전까지 시작 금지 |
+| No-live targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q`: 13 passed |
+| No-live static scan | 통과 | `rg -n '/api/live|/api/kis/orders|/api/kis/broker|/api/kis/websocket|ENABLE_LIVE_SUBMIT\s*=\s*true|live_fallback_enabled\s*[:=]\s*true' backend/app frontend -g '!frontend/.next/**'`: no matches |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning only |
+
+결론: 이 시점에는 Phase 19~20을 진행하지 않았다. 이후 최신 상태는 `2026-05-28 Phase 19-20 Plan And Preflight` 섹션을 우선한다.
+
+## 2026-05-28 Goal.md Phase 13-18 Progress
+
+이번 변경은 `goal.md` 기준 Phase 13~18 범위를 안전 계약 안에서 진행했다. Phase 12C는 기존 redacted KIS 장종료 거부 응답과 최신 no-network preflight로 종결 상태를 문서화했고, Phase 19~20은 별도 명시 승인 전까지 진행하지 않는다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Phase 12C default preflight | 통과 | `.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py`: `status=preflight_only`, `network_call_performed=false`, 기본 config/env blocker 유지 |
+| Phase 13 final safety | 통과 | `backend/tests/test_final_safety_hardening.py` 포함 targeted suite 통과 |
+| Phase 14 Telegram opt-in | 통과 | Telegram live mode config에서도 `dry_run=true`, `attempted=false`, token/chat id 원문 미노출 검증 |
+| Phase 15 report automation | 구현/통과 | `GET /api/reports/automation/status`, `POST /api/reports/automation/run-once`, `tools/report_automation_runner.py`, automation 완료/실패 outbox event 추가 |
+| Phase 16 paper bot soak | 통과 | `.\.venv\Scripts\python.exe -m backend.app.jobs.paper_bot_runner --once`: `paper_order_submitted=false`, `network_call_performed=false`; `--loop --max-iterations 1`: `status=loop_disabled` |
+| Phase 17 runbook | 완료 | `docs/PAPER_OPERATIONS_RUNBOOK.md` 추가 |
+| Phase 18 readiness design | 완료 | `docs/LIVE_TRADING_READINESS.md` 추가. live 구현/route/network call 없음 |
+| Targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_automation.py backend/tests/test_final_safety_hardening.py backend/tests/test_notification_service.py backend/tests/test_notification_templates.py -q`: 13 passed |
+| Safety pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase12c_tool.py backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py backend/tests/test_report_automation.py backend/tests/test_final_safety_hardening.py -q`: 27 passed |
+| Bot/notification pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notification_service.py backend/tests/test_paper_bot_scheduler.py -q`: 8 passed |
+| Backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp %TEMP%\stock_goal_phase13_18_backend_full_final_*`: 402 passed in 352.11s |
+| Report automation CLI | 통과 | `.\.venv\Scripts\python.exe tools\report_automation_runner.py`: disabled status, `execute_required=true`, `network_call_performed=false` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning only |
+
+## 2026-05-28 GUI Mockup Tone Match
+
+이번 변경은 사용자가 제공한 `녹음 2026-05-28 005845.mp4`와 `stock_analyst_gui_mockup.html`을 기준으로 frontend GUI 색감과 밀도를 맞춘 작업이다. 영상 프레임 기준으로 흰 본문, 따뜻한 회백색 sidebar `#F4F3EC`, 얇은 border, compact mono typography, green active/accent tone을 전역 token으로 반영했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Reference 확인 | 통과 | 영상 13.59초에서 6개 프레임 추출, HTML 목업 구조 확인. 대표 reference: `%TEMP%\stock_analyst_gui_ref\frame_01_0.2s.png` |
+| Frontend lint | 통과 | `cd frontend; npm.cmd run lint` |
+| Frontend typecheck | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit` |
+| Frontend build | 통과 | `cd frontend; npm.cmd run build` -> `next build --webpack`, 12 static pages 생성 |
+| Production rendered smoke | 통과 | Browser plugin `iab` 연결 불가로 Playwright fallback 사용. `127.0.0.1:8001` backend + `127.0.0.1:3000` frontend에서 `/screener`, `/backtest`, mobile `/data` 확인, console/http issue 0 |
+| Screenshot evidence | 생성 | `%TEMP%\stock_analyst_gui_ref\final_screener_prod_desktop.png`, `%TEMP%\stock_analyst_gui_ref\final_backtest_prod_desktop.png`, `%TEMP%\stock_analyst_gui_ref\final_data_prod_mobile.png` |
+| Production build note | 조치 | 기본 Turbopack build 산출물은 `next start`에서 route chunk 404가 재현되어 hydrate가 막혔다. `frontend/package.json`의 build script를 `next build --webpack`으로 고정해 production rendered smoke를 통과시켰다. |
+| Diff whitespace check | 기존 이슈 | `git diff --check`: `goal.md:7 trailing whitespace`. 이번 GUI 변경 파일에는 whitespace error 없음 |
+
+## 2026-05-28 Goal.md Phase 2 Telegram Notifier
+
+이번 변경은 `goal.md`의 `Phase 2: Telegram 거래 알림 및 포트폴리오 리포트 구현` 중 Telegram notifier 범위만 수행했다. 기존 notification skeleton을 교체하지 않고 `TelegramNotifier`, `NotificationService`, `NotificationOutboxService`에 메시지 템플릿 렌더링을 additive로 연결했으며, `backend/config/notifications.yaml` 기본값은 계속 `enabled: false`, `mode: disabled`, `dry_run: true`이다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 지정 명령 확인 | 환경 이슈 | `python -m pytest backend/tests`: 현재 PowerShell에서 `Python`만 출력하고 exit 1. 로컬 `python` launcher가 테스트 실행 가능한 interpreter로 연결되지 않음 |
+| Targeted notification pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_service.py backend/tests/test_notification_templates.py backend/tests/test_notification_outbox.py`: 15 passed in 3.22s |
+| Backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests`: 393 passed in 647.04s |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 기존 이슈 | `git diff --check`: `goal.md:7 trailing whitespace`. 해당 공백은 작업 전 존재한 `goal.md` Markdown hard-break 변경분이며 이번 notifier 구현 파일에는 whitespace error 없음 |
+| Telegram template contract | 통과 | template missing field는 `not_available`로 대체, sensitive key payload는 제거, status API는 `template_events`만 노출 |
+| Safety contract | 유지 | KIS 주문 API, live submit, WebSocket 경로 변경 없음. `.env.example`은 Telegram placeholder 설명만 추가했고 token/chat id 원문은 문서/API/테스트 출력에 기록하지 않음 |
+
 ## 2026-05-27 Goal.md Phase 12C Controlled KIS Paper Dry-run Attempt
 
 이번 실행은 사용자 승인 후 `goal.md`의 `Phase 12C: Controlled KIS Paper Submit/Cancel/Query/Sync Dry-run` 범위에서 실제 KIS 모의투자 paper host까지 도달했다. `.env.local`은 생성/수정하지 않았고, 현재 PowerShell 프로세스 환경으로만 값을 주입했다. raw KIS AppKey/AppSecret/access token/account number는 출력하거나 기록하지 않았다.

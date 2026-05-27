@@ -1,0 +1,42 @@
+# Live Trading Readiness Design
+
+## 핵심 요약
+
+이 문서는 `goal.md` Phase 18 범위의 설계 전용 산출물이다. 현재 저장소에서 live trading은 구현, 실행, endpoint 호출 모두 금지된다. Phase 19와 Phase 20은 별도 명시 승인 전까지 진행하지 않는다.
+
+## 현재 금지 상태
+
+| 항목 | 상태 |
+|---|---|
+| live submit route | 없음 |
+| live cancel route | 없음 |
+| live broker fallback | 없음 |
+| WebSocket execution | 없음 |
+| 실계좌 체결 처리 | 없음 |
+| token raw persistence | 없음 |
+| paper-to-live fallback | 금지 |
+
+## Live 전환 전 필수 조건
+
+| 영역 | 조건 |
+|---|---|
+| 승인 | 사용자 별도 명시 승인, 실행 직전 human confirmation |
+| 환경 | paper, prod-readonly, prod-live 분리 |
+| secrets | environment-level secret, raw value 출력 금지 |
+| 주문 | idempotency key, duplicate guard, kill switch proof |
+| 리스크 | 일손실, position, symbol, sector, strategy, notional limit |
+| 감사 | redacted broker trace, event id, correlation id |
+| 롤백 | kill switch, scheduler stop, notifier-only mode |
+| 검증 | no-live regression, secret scan, paper soak 결과 |
+
+## Phase 19 허용 범위
+
+Phase 19는 disabled live adapter scaffold와 no-live regression만 허용한다. live endpoint URL, live order mapper, live route, live network call은 넣지 않는다.
+
+## Phase 20 허용 범위
+
+Phase 20은 별도 승인형 controlled live canary다. 승인 없이는 시작하지 않는다. 승인 후에도 단일 전략, 단일 market, minimum-size, 수동 확인, 즉시 rollback 기준으로 제한한다.
+
+## 완료 판정
+
+Phase 18 완료는 live 기능 구현이 아니라, 전환 조건과 금지 조건이 decision-complete로 문서화되고 no-live 상태가 유지되는 것으로 판정한다.

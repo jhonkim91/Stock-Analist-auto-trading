@@ -217,6 +217,17 @@ class ReportNotifyRequest(BaseModel):
     dry_run: bool | None = None
 
 
+class ReportAutomationRunRequest(BaseModel):
+    """일간/주간 report automation run-once 요청이다."""
+
+    report_types: list[Literal["daily", "weekly"]] = Field(default_factory=lambda: ["daily", "weekly"])
+    report_date: date | None = None
+    notify: bool = False
+    channel_alias: str | None = None
+    dry_run: bool | None = None
+    confirm: bool = False
+
+
 class ImportConfirmRequest(BaseModel):
     run_id: str
 

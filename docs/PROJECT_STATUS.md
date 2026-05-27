@@ -14,12 +14,22 @@
 | Goal.md Phase 9 | Paper bot run/decision preview path와 `/api/bot/*` safety route 추가 |
 | Goal.md Phase 10 | `/bot` UI, paper dashboard positions/bot indicators, report notify/settings notification test controls 추가 |
 | Goal.md Phase 11 | mock-only preview/submit/fill/portfolio/outbox/report notify E2E 테스트 추가 |
+| Goal.md Phase 12C | KIS paper submit 장종료 거부 응답 redacted record와 현재 fail-closed preflight 확인 |
+| Goal.md Phase 13 | final paper safety hardening regression 추가 |
+| Goal.md Phase 14 | Telegram live opt-in dry-run/redaction 검증 |
+| Goal.md Phase 15 | daily/weekly report automation API/CLI와 outbox event 추가 |
+| Goal.md Phase 16 | paper bot once/loop gate와 no-submit soak 확인 |
+| Goal.md Phase 17 | KIS paper operations runbook 추가 |
+| Goal.md Phase 18 | live trading readiness design-only 문서 추가 |
+| Goal.md Phase 19 | disabled live adapter scaffold가 예외 대신 redacted disabled payload를 반환하도록 강화 |
+| Goal.md Phase 20 | controlled live canary runbook/preflight record 추가. 현재 live adapter/route/reviewer/env/rollback 조건 미충족으로 blocked |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | paper-only local submit + KIS paper network submit/cancel/query/sync adapter mock 검증; live/real order/fallback disabled |
-| 최신 backend pytest | Phase 12B targeted `22 passed`; bot/order/balance 추가 `11 passed` |
+| 최신 backend pytest | full backend `405 passed`, Phase 13-18 targeted `27 passed`, notification/bot `8 passed` |
 | 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; rendered smoke 통과 |
-| 다음 권장 Phase | Phase 12C controlled KIS paper minimum-order dry-run. 실제 KIS 호출은 별도 human confirmation 전까지 미실행 |
+| 최신 승인 게이트 감사 | Phase 19 완료, Phase 20 preflight blocked. live 주문/route/network call 없음 |
+| 다음 권장 Phase | Phase 20 실제 canary는 live implementation 별도 승인, reviewer, 환경 분리, rollback proof 확보 전까지 진행 금지 |
 
 ## 구현 완료 항목
 
@@ -79,6 +89,13 @@
 - Goal.md Phase 9 Paper Bot Activation: `paper_bot_runs`, `paper_bot_decisions`, `/api/bot/status`, `/api/bot/run-once`, `/api/bot/stop`, preview decision loop, explicit auto-submit gates를 추가.
 - Goal.md Phase 10 Frontend Integration: `/bot` 화면과 `frontend/lib/paperApi.ts`, `frontend/lib/notificationApi.ts` wrapper를 추가하고 `/paper`, `/reports`, `/settings`에서 bot/kill switch/notification/report notify controls를 paper-only로 연결.
 - Goal.md Phase 11 End-to-End Mock Validation: `backend/tests/test_e2e_paper_mock_flow.py`로 preview, local submit, order poll, mock fill/position/portfolio, sync no-op, notification outbox, report notify를 KIS credential 없이 검증.
+- Goal.md Phase 12C Controlled KIS Paper Dry-run Closure: 기존 redacted record는 KIS paper submit endpoint 도달 후 `40580000` / `모의투자 장종료 입니다.` 응답으로 submit 실패를 기록했고, 최신 preflight는 기본 config/env에서 network call 없이 fail-closed를 유지한다.
+- Goal.md Phase 13 Final Paper Safety Hardening: `backend/tests/test_final_safety_hardening.py`로 goal live 승인 gate, live route 부재, Phase 12C redacted record를 검증한다.
+- Goal.md Phase 14 Telegram Live Delivery Opt-in Validation: Telegram live mode도 config/env opt-in과 dry-run 기본값에서 원문 token/chat id를 노출하지 않고 dispatch attempt 없이 검증된다.
+- Goal.md Phase 15 Daily/Weekly Report Automation: `GET /api/reports/automation/status`, `POST /api/reports/automation/run-once`, `tools/report_automation_runner.py`, automation 완료/실패 notification event를 추가했다. 기본값은 disabled/manual gate 전까지 report를 생성하지 않는다.
+- Goal.md Phase 16 Paper Bot Operating Loop And Soak: `paper_bot_runner --once`와 `--loop --max-iterations 1`은 기본 disabled/kill-switch 상태에서 paper/live 주문 없이 종료된다.
+- Goal.md Phase 17 KIS Paper Monitoring And Incident Runbook: `docs/PAPER_OPERATIONS_RUNBOOK.md`에 상태 확인 순서, 장애 유형, 중단 절차를 기록했다.
+- Goal.md Phase 18 Live Trading Readiness Design Only: `docs/LIVE_TRADING_READINESS.md`에 live 전환 조건과 Phase 19/20 승인 gate를 문서화했다.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
@@ -310,4 +327,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-`goal.md` 기준 KIS paper broker phase는 완료됐다. 이후 작업은 공식 KIS paper endpoint/TR-ID/request field 확인 또는 운영 절차 고도화를 별도 승인 범위로 진행한다.
+`goal.md` 기준 Phase 19까지 진행됐다. Phase 20은 runbook/preflight record까지 완료됐지만, 실제 controlled live canary는 live implementation 별도 승인, reviewer, 환경 분리, rollback proof 확보 전까지 진행하지 않는다.

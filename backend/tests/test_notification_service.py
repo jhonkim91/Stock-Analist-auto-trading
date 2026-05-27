@@ -44,6 +44,7 @@ def test_notification_status_is_telegram_first_and_lists_supported_events(tmp_pa
 
     assert [channel["alias"] for channel in payload["channels"]][:2] == ["telegram_main", "discord_ops"]
     assert payload["supported_events"] == list(SUPPORTED_NOTIFICATION_EVENTS)
+    assert "paper_order_submitted" in payload["template_events"]
     assert "paper_order_submitted" in payload["supported_events"]
     assert "kill_switch_triggered" in payload["supported_events"]
     assert payload["secrets_redacted"] is True
@@ -70,6 +71,42 @@ def test_notification_test_defaults_to_telegram_mock_without_network(tmp_path, m
     assert payload["payload_shape"]["parse_mode"] is None
     assert "PHASE7_TOKEN_SHOULD_NOT_LEAK" not in serialized
     assert "PHASE7_CHAT_SHOULD_NOT_LEAK" not in serialized
+
+
+def test_telegram_live_opt_in_is_redacted_and_still_dry_run_by_default(tmp_path, monkeypatch) -> None:
+    tmp_path.joinpath("notifications.yaml").write_text(
+        """
+notifications:
+  enabled: true
+  default_dry_run: true
+  channels:
+    telegram_main:
+      type: telegram
+      enabled: true
+      mode: live
+      bot_token_env: TELEGRAM_BOT_TOKEN
+      chat_id_env: TELEGRAM_CHAT_ID
+      dry_run: true
+      parse_mode: null
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123456789:PHASE14_TOKEN_SHOULD_NOT_LEAK")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "PHASE14_CHAT_SHOULD_NOT_LEAK")
+
+    status = NotificationService(config_dir=tmp_path).status()
+    result = NotificationService(config_dir=tmp_path).send_test(message="phase14", dry_run=True)
+    serialized = json.dumps({"status": status, "result": result}, ensure_ascii=False)
+
+    assert status["enabled"] is True
+    assert status["network_delivery_allowed"] is True
+    assert status["channels"][0]["configured"] is True
+    assert status["channels"][0]["dry_run"] is True
+    assert result["status"] == "dry_run"
+    assert result["attempted"] is False
+    assert result["payload_shape"]["parse_mode"] is None
+    assert "PHASE14_TOKEN_SHOULD_NOT_LEAK" not in serialized
+    assert "PHASE14_CHAT_SHOULD_NOT_LEAK" not in serialized
 
 
 def test_discord_webhook_wrapper_keeps_allowed_mentions_disabled() -> None:

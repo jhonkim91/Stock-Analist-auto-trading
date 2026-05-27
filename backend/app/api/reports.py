@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.models.schemas import ReportNotifyRequest
+from backend.app.models.schemas import ReportAutomationRunRequest, ReportNotifyRequest
+from backend.app.services.report_automation_service import ReportAutomationService
 from backend.app.services.report_service import ReportService
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -44,6 +45,25 @@ def latest_report(db: Session = Depends(get_db)) -> dict[str, object]:
         return ReportService(db).latest_markdown()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/automation/status")
+def report_automation_status(db: Session = Depends(get_db)) -> dict[str, object]:
+    """report automation gate와 public surface 상태를 secret 없이 반환한다."""
+    return ReportAutomationService(db).status()
+
+
+@router.post("/automation/run-once")
+def run_report_automation(payload: ReportAutomationRunRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    """disabled-by-default report automation을 명시적 확인 요청으로 1회 실행한다."""
+    return ReportAutomationService(db).run_once(
+        report_types=payload.report_types,
+        report_date=payload.report_date,
+        notify=payload.notify,
+        channel_alias=payload.channel_alias,
+        dry_run=payload.dry_run,
+        confirm=payload.confirm,
+    )
 
 
 @router.get("/{report_id}")

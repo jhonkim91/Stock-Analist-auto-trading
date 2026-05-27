@@ -1,74 +1,76 @@
 # Stock Analyst Auto Trading Memory
 
-## Latest Phase 12C Status
+## 2026-05-28 GUI 체크포인트
 
-- [ ] 현재 goal.md Phase 12C는 미완료다. 사용자 승인 후 실제 KIS paper submit endpoint까지 도달했지만, KIS가 `40580000` / `모의투자 장종료 입니다.`를 반환해 broker order id가 생성되지 않았다.
-- [x] kill switch 차단 증명은 통과했다. `KILL_SWITCH_ACTIVE` 상태에서 submit은 network call 없이 차단됐다.
-- [x] redacted attempt record: `docs/research/kis-paper-phase12c-redacted-record.json`
-- [x] Phase 12C helper는 이제 `--confirm-trading-window CONFIRM_KIS_PAPER_TRADING_WINDOW` 없이는 preflight 통과 후에도 adapter 호출 전 중단한다.
-- [x] `.env` / `.env.local`은 생성 또는 수정하지 않았다. raw KIS credential/account/token 값은 코드, 문서, 로그, DB, API 응답에 기록하지 않는다.
-- [ ] Phase 13은 Phase 12C submit/cancel/query/sync 성공 기록 전까지 진입 금지다.
+- [x] 영상 `녹음 2026-05-28 005845.mp4`와 `stock_analyst_gui_mockup.html` 기준 GUI tone match 작업 완료.
+- [x] Frontend 전역 App Chrome을 추가해 `/dashboard`, `/screener`, `/backtest`, `/portfolio`, `/reports`, `/data`, `/paper`, `/bot`, `/settings`에 영상형 sidebar/navigation을 적용했다.
+- [x] 색감 기준: body/panel `#FFFFFF`, sidebar `#F4F3EC`, active surface `#FAF9F4`, success accent `#1D8F6B`, danger `#9A2432`, thin border `#CFCAC0/#E6E2D8`.
+- [x] `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과. build script는 production chunk 404 회피를 위해 `next build --webpack`으로 고정했다.
+- [x] Rendered smoke: Browser plugin `iab` 불가로 Playwright fallback 사용. `127.0.0.1:8001` backend + `127.0.0.1:3000` frontend에서 `/screener`, `/backtest`, mobile `/data` console/http issue 0.
+- [x] 대표 screenshot: `%TEMP%\stock_analyst_gui_ref\final_screener_prod_desktop.png`, `%TEMP%\stock_analyst_gui_ref\final_backtest_prod_desktop.png`, `%TEMP%\stock_analyst_gui_ref\final_data_prod_mobile.png`.
+- [x] 최신 `git diff --check`는 통과하며 CRLF warning만 남는다.
 
-## Checkpoint
+## 현재 체크포인트
 
-- [ ] 현재 goal.md Phase 12: Phase 12B paper-only network adapter와 gate hardening은 mock 검증 완료. Phase 12C 실제 KIS paper submit은 장 종료 응답으로 broker order 생성 전 실패.
-- [x] 현재 상태명: `KIS Paper Phase 12C Market-closed Submit Stopped`
-- [x] 현재 version: `MVP v0.26.0`
-- [x] 현재 branch: `feature/kis-paper-goal-phases` (baseline: `main`)
-- [x] 현재 goal.md Phase 12B adapter implementation: KIS paper submit/cancel/query_balance/list_orders/sync adapter와 paper-only gate hardening을 mocked HTTP/fake adapter tests로 검증. 기존 commit `bcd40fac2a67e8c06aad32bd1f1f386b3abcab8e`, 현재 변경은 아직 미커밋.
-- [ ] 현재 goal.md Phase 12C controlled dry-run: KIS paper credential/runtime gate와 process-only temporary config preflight는 redacted 기준 통과했고, 승인 후 submit network call은 수행됐지만 `40580000` / `모의투자 장종료 입니다.`로 cancel/query/sync 전 중단
-- [x] 최신 secret scan: `NO_SECRET_FINDINGS`
-- [x] 최신 diff check: `git diff --check` exit 0, CRLF warning만 있음
+- [x] 현재 작업: `goal.md` 기준 Phase 13-19 진행 완료. Phase 20은 runbook/preflight record까지 진행했으나 실제 live canary는 조건 미충족으로 blocked.
+- [x] 현재 branch: `feature/kis-paper-goal-phases`.
+- [x] 최신 backend 전체 검증: `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp %TEMP%\stock_goal_phase19_20_backend_full_*` -> 405 passed in 302.67s.
+- [x] 최신 targeted 검증: report automation/final safety/Phase 12C/no-live suite 27 passed, notification/bot suite 8 passed.
+- [x] 최신 Phase 19/20 검증: live scaffold/preflight targeted suite 16 passed, app/frontend no-live static scan no matches.
+- [x] 최신 secret scan: `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
+- [x] 최신 `git diff --check` 통과. CRLF warning only.
+- [x] Goal continuation 상태: Phase 20 실제 canary는 live implementation 별도 승인, reviewer, 환경 분리, rollback proof 전까지 완료 불가.
+- [ ] 현재 PowerShell의 `python -m pytest backend/tests`는 `Python`만 출력하고 exit 1로 종료된다. 검증은 로컬 `.venv` Python으로 수행했다.
+- [ ] 실제 Telegram live delivery는 config/env opt-in 전까지 비활성이다.
 
 ## 현재 프로젝트 상태
 
-- Backend: FastAPI + SQLite, sample seed, CSV import, external daily OHLCV preview/confirm, KIS read-only foundation, broker safety scaffold, paper trading local lifecycle, report notification, paper bot scheduler, validation/report/backtest 기능.
+- Backend: FastAPI + SQLite, sample seed, CSV import, KIS read-only foundation, broker safety scaffold, paper trading local lifecycle, report notification, report automation, paper bot scheduler, validation/report/backtest 기능.
 - Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/bot`, `/settings`.
-- Paper trading은 사전 안전장치가 기본이며 live broker, live websocket, real-account mutation은 구현/활성화하지 않는다.
-- `/api/paper/orders/submit`은 기본 fail-closed/local-only이며, `BROKER_MODE=paper_kis`, paper config/env/network/kill-switch/confirm/idempotency/risk/duplicate/`PAPER_ORDER_SUBMIT_ENABLED`/`ENABLE_REAL_ORDER=false` gate가 모두 열릴 때만 KIS paper adapter submit으로 이동한다.
-- `/api/paper/sync`는 기본 fail-closed no-op이며, paper network/config/env/adapter gate가 모두 열릴 때만 KIS paper query 결과를 paper 전용 table에 반영한다.
-- `/api/paper/portfolio`는 기본 disabled/mock 상태에서 기존 `paper_portfolio_snapshots` fallback을 유지한다.
-- KIS paper balance 조건이 모두 만족될 때만 paper base host의 `/uapi/domestic-stock/v1/trading/inquire-balance`를 `tr_id=VTTC8434R`로 read-only 호출한다.
-- KIS credential과 access token은 env에서만 주입한다. 코드, fixture, 문서, 로그, DB, API 응답에 raw 값을 남기지 않는다.
-- `ENABLE_REAL_ORDER=true`이면 KIS balance/query/order 경로를 차단한다.
-- 실전투자 TR ID와 live base URL 경로는 사용하지 않는다.
+- Notification: `backend/config/notifications.yaml` 기본값은 `enabled=false`, `default_dry_run=true`, `telegram_main.mode=disabled`, `telegram_main.dry_run=true`.
+- Telegram secret은 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 환경 변수명만 참조하고 원문 값은 코드/문서/DB/API 응답에 저장하지 않는다.
+- Paper/KIS execution은 fail-closed 기본값을 유지한다. live broker, live websocket, 실계좌 주문/취소/체결은 활성화하지 않는다.
+- Phase 12C는 기존 redacted record의 KIS 장종료 거부 응답과 최신 no-network preflight로 종결 처리했다. 현재 기본 config/env는 fail-closed다.
 
 ## 최근 변경 요약
 
-- Phase 11: `backend/tests/test_e2e_paper_mock_flow.py`로 preview, local submit, order poll, mock fill/position/portfolio, notification outbox, report notify를 KIS credential 없이 검증했다.
-- Phase 12 split review: `goal.md`와 `docs/research/kis-paper-dry-run-checklist.md`를 12A/12B/12C 구조로 재정리했다.
-- Phase 12B: `KisPaperBrokerAdapter`에 `order-cash`, `order-rvsecncl`, `inquire-daily-ccld`, `inquire-balance` mapper와 redacted trace를 추가하고, `PaperOrderService`/`PaperSyncService`에 explicit network gate 분기를 연결했다.
-- Phase 12B hardening: `BROKER_MODE=paper_kis`, `PAPER_ORDER_SUBMIT_ENABLED`, paper base host 강제, duplicate open order guard, bot max submit/qty/notional cap, trace correlation id를 추가했다.
-- Phase 12B commit: `bcd40fac2a67e8c06aad32bd1f1f386b3abcab8e Implement KIS paper phase 12B adapter`.
-- Phase 12C attempt: 최신 재시도에서 현재 프로세스의 KIS credential/runtime flag 존재 여부는 redacted boolean 기준 통과했고, `--temporary-paper-config` process-only override도 blockers 없이 통과했다. 승인 후 paper submit endpoint까지 도달했으나 KIS 장 종료 응답으로 broker order id가 생성되지 않았다. `backend/config/paper.yaml`은 fail-closed 그대로 둔다.
-- Phase 12C helper: `tools/kis_paper_phase12c_dry_run.py`와 `backend/tests/test_kis_paper_phase12c_tool.py`를 추가/보강해 preflight-only no-op, missing gate stop, broker-mode/order-submit gate, process-only temporary config, kill-switch proof, broker identifier redaction을 검증한다.
-- Phase 12C trading-window gate: submit/cancel 확인 토큰이 있어도 `CONFIRM_KIS_PAPER_TRADING_WINDOW`가 없으면 adapter 호출 전 `trading_window_confirmation_required`로 중단한다.
+- `NotificationTemplateService`를 추가해 notification event payload를 plain text 템플릿으로 렌더링한다.
+- `NotificationService.status()`가 `template_events`를 secret 없이 반환하고, outbox dispatch가 템플릿 메시지를 사용한다.
+- `TelegramNotifier`는 plain text 기본값, unsafe MarkdownV2 기본 차단, 4096자 메시지 한도, 양수 timeout만 허용한다.
+- `backend/config/notifications.yaml`에 기본 템플릿을 추가했다.
+- `.env.example`에는 Telegram notifier가 config opt-in 전까지 disabled/dry-run임을 설명하고 placeholder만 유지했다.
+- `docs/TELEGRAM_NOTIFIER.md`를 추가해 설정, 템플릿, 안전 계약, 검증 방법을 문서화했다.
+- `ReportAutomationService`, `/api/reports/automation/status`, `/api/reports/automation/run-once`, `tools/report_automation_runner.py`를 추가했다. 기본값은 disabled이며 `confirm=true`와 env gate 없이는 report를 생성하지 않는다.
+- report automation 완료/실패 notification event `daily_report_automation_completed`, `weekly_report_automation_completed`, `report_automation_failed`를 추가했다.
+- `docs/REPORT_AUTOMATION.md`, `docs/PAPER_OPERATIONS_RUNBOOK.md`, `docs/LIVE_TRADING_READINESS.md`를 추가했다.
+- `KisLiveBrokerAdapter`는 live operation 호출 시 예외 대신 `status=live_disabled` redacted payload를 반환한다.
+- `tools/live_canary_preflight.py`, `docs/LIVE_CANARY_RUNBOOK.md`, `docs/research/live-canary-phase20-preflight-record.json`를 추가했다. 현재 Phase 20 실제 canary는 blocked다.
 
 ## 최신 검증 결과
 
-- 2026-05-27 Phase 12B 지정 pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_paper_submit_cancel_api.py backend/tests/test_paper_sync_service.py backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`: 22 passed in 3.10s.
-- 2026-05-27 Phase 12B 추가 bot/order/balance pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_decision.py backend/tests/test_paper_order_service.py backend/tests/test_kis_paper_balance.py -q`: 11 passed in 3.10s.
-- 2026-05-27 Phase 12C controlled submit attempt: KIS paper `/uapi/domestic-stock/v1/trading/order-cash`, `tr_id=VTTC0012U`, `status_code=200`, `msg_cd=40580000`, `msg1=모의투자 장종료 입니다.`. broker order id 미생성, cancel/query/sync 미실행.
-- 2026-05-27 Phase 12C temporary config preflight: `.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py --temporary-paper-config`: `status=preflight_only`, `preflight.ok=true`, `temporary_config_used=true`, `network_call_performed=false`.
-- 2026-05-27 Phase 12C execute confirmation gate: `.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py --temporary-paper-config --execute`: `status=confirmation_required`, `network_call_performed=false`, exit code 2.
-- 2026-05-27 Phase 12C helper pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase12c_tool.py -q -p no:cacheprovider`: 9 passed in 0.06s.
-- 2026-05-27 Phase 12C trading-window gate smoke: `.env.local` 값을 현재 프로세스에만 주입한 뒤 `.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py --execute --temporary-paper-config --confirm-submit CONFIRM_KIS_PAPER_PHASE12C --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C`: `status=trading_window_confirmation_required`, `network_call_performed=false`, exit code 2.
-- 2026-05-27 Phase 12C targeted pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase12c_tool.py backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q -p no:cacheprovider`: 19 passed in 0.86s.
-- 2026-05-27 backend full pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp %TEMP%\stock_phase12c_backend_full_*`: 389 passed in 325.65s. repo 내부 basetemp는 secret scan fixture와 충돌할 수 있으므로 workspace 밖 temp 사용.
-- 2026-05-27 Phase 12C safety pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q -p no:cacheprovider --basetemp .pytest_tmp\phase12c`: 10 passed in 0.80s. 임시 디렉터리는 제거함.
-- 2026-05-27 `git diff --check`: 통과, CRLF warning만 있음.
-- 2026-05-27 `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS`.
+- 2026-05-28 targeted notification pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_service.py backend/tests/test_notification_templates.py backend/tests/test_notification_outbox.py` -> 15 passed in 3.22s.
+- 2026-05-28 Phase 13-18 targeted pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase12c_tool.py backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py backend/tests/test_report_automation.py backend/tests/test_final_safety_hardening.py -q` -> 27 passed in 30.76s.
+- 2026-05-28 notification/bot pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notification_service.py backend/tests/test_paper_bot_scheduler.py -q` -> 8 passed in 0.86s.
+- 2026-05-28 report automation CLI: `.\.venv\Scripts\python.exe tools\report_automation_runner.py` -> disabled status, `execute_required=true`, `network_call_performed=false`.
+- 2026-05-28 backend full pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp %TEMP%\stock_goal_phase19_20_backend_full_*` -> 405 passed in 302.67s.
+- 2026-05-28 Phase 19/20 gate audit: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q` -> 13 passed in 0.76s; app/frontend static scan for live routes/default enablement -> no matches.
+- 2026-05-28 Phase 19/20 plan/preflight: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_live_canary_preflight.py backend/tests/test_final_safety_hardening.py -q` -> 16 passed in 0.80s; `tools/live_canary_preflight.py --write-record` -> `status=blocked`, `canary_execution_allowed=false`, `network_call_performed=false`.
+- 2026-05-28 publish frontend validation: `cd frontend; npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` -> 통과.
+- 2026-05-28 secret scan: `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
+- 2026-05-28 `git diff --check` -> exit 0, CRLF warning only.
+- `python -m pytest backend/tests` 직접 실행은 현재 셸의 `python` alias 문제로 실패했다. 출력: `Python`, exit 1.
 
-## 주의 사항
+## 안전 계약
 
-- `paper.yaml`의 KIS 관련 flag는 기본 disabled다. 실제 KIS paper dry-run을 켜려면 paper mode, network, adapter enable, official endpoint confirmation을 모두 명시해야 한다.
-- KIS credential과 access token은 env에서만 주입한다. 코드, fixture, 문서, 로그, DB, API 응답에 raw 값을 남기지 않는다.
-- KIS paper submit/cancel/query/sync network path는 Phase 12B에서 구현됐지만 기본 disabled/fail-closed다. Phase 12C 실제 dry-run 재시도는 KIS paper trading window에서만 수행한다.
-- `ENABLE_REAL_ORDER=false`를 유지한다. true이면 KIS paper 경로를 차단한다.
-- `.cache/kis/token.json` 같은 token cache 파일은 생성하지 않는다.
+- KIS 주문 API 구현 없음.
+- live submit 활성화 없음.
+- WebSocket 구현 없음.
+- Phase 20 controlled live canary는 live implementation 별도 승인, reviewer, 환경 분리, rollback proof 전까지 실제 실행 금지.
+- 계좌번호, KIS token, Telegram bot token/chat id 원문 출력 없음.
+- notification failure는 trading/report 상태 commit을 막지 않고 delivery 상태만 기록한다.
 
 ## 남은 작업
 
-- [ ] Phase 12C controlled submit/cancel/query/sync dry-run은 KIS paper trading window에 KIS paper credential, process runtime flags, repo config gate, 즉시 human confirm, `CONFIRM_KIS_PAPER_TRADING_WINDOW` 준비 후 재시도한다.
-- [ ] Phase 13 final safety hardening은 Phase 12C redacted 성공 기록 전까지 시작하지 않는다.
-- [ ] 실제 KIS paper balance/order 운영 전 env credential 주입 방식과 token 발급/갱신 운영 절차를 별도 확인한다.
+- [ ] 실제 Telegram delivery가 필요하면 별도 승인 후 로컬/배포 secret과 `notifications.yaml` opt-in을 분리 검증한다.
+- [ ] Phase 20 실제 controlled live canary는 live implementation 별도 승인, reviewer, 환경 분리, rollback proof 전까지 진행하지 않는다.
+- [ ] `python` launcher 문제가 계속 필요하면 Windows PATH/App execution alias를 별도 환경 작업으로 정리한다.

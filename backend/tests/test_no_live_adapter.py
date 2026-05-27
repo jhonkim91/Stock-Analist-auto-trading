@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from backend.app.main import app
-from backend.app.services.broker_adapter import BrokerDisabledError, BrokerOrderRequest
+from backend.app.services.broker_adapter import BrokerOrderRequest
 from backend.app.services.broker_service import BrokerService
 from backend.app.services.kis_live_broker_adapter import LIVE_DISABLED_REASON, KisLiveBrokerAdapter
 
@@ -24,16 +22,20 @@ def test_service_live_adapter_is_hard_disabled():
     assert status["adapter_boundary"] == "live_disabled_placeholder"
     assert status["live_fallback_enabled"] is False
 
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.preview_order(request)
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.submit_order(request)
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.cancel_order(broker_order_id="live-1", confirm=True)
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.list_orders(status="open")
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.sync(scope="all")
+    for operation, payload in {
+        "preview_order": adapter.preview_order(request),
+        "submit_order": adapter.submit_order(request),
+        "cancel_order": adapter.cancel_order(broker_order_id="live-1", confirm=True),
+        "list_orders": adapter.list_orders(status="open"),
+        "sync": adapter.sync(scope="all"),
+    }.items():
+        assert payload["ok"] is False
+        assert payload["operation"] == operation
+        assert payload["status"] == "live_disabled"
+        assert payload["live_order_created"] is False
+        assert payload["network_call_performed"] is False
+        assert payload["endpoint_called"] is False
+        assert payload["reason"] == LIVE_DISABLED_REASON
 
 
 def test_broker_service_reports_disabled_live_adapter_without_secrets(monkeypatch):

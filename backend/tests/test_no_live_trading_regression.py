@@ -3,9 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
-from backend.app.brokers.base import BrokerDisabledError, BrokerOrderRequest
+from backend.app.brokers.base import BrokerOrderRequest
 from backend.app.brokers.kis_live import LIVE_DISABLED_REASON, KisLiveBrokerAdapter
 from backend.app.main import app
 
@@ -18,16 +16,19 @@ def test_live_adapter_methods_are_unreachable():
 
     assert adapter.status()["enabled"] is False
     assert adapter.status()["live_trading_enabled"] is False
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.preview_order(order)
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.submit_order(order)
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.cancel_order(broker_order_id="live-1", confirm=True)
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.list_orders(status="open")
-    with pytest.raises(BrokerDisabledError, match=LIVE_DISABLED_REASON):
-        adapter.sync(scope="all")
+    for payload in (
+        adapter.preview_order(order),
+        adapter.submit_order(order),
+        adapter.cancel_order(broker_order_id="live-1", confirm=True),
+        adapter.list_orders(status="open"),
+        adapter.sync(scope="all"),
+    ):
+        assert payload["ok"] is False
+        assert payload["status"] == "live_disabled"
+        assert payload["live_order_created"] is False
+        assert payload["network_call_performed"] is False
+        assert payload["endpoint_called"] is False
+        assert payload["reason"] == LIVE_DISABLED_REASON
 
 
 def test_kis_execution_routes_remain_unregistered_after_adapter_contract(client):

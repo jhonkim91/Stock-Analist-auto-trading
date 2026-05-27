@@ -159,9 +159,18 @@ class NotificationOutboxService:
         cleaned = self.redactor.remove_sensitive(payload_summary)
         return cleaned if isinstance(cleaned, dict) else {}
 
-    @staticmethod
-    def _message_for_event(event: NotificationEvent) -> str:
-        return f"{event.event_type}: {event.subject or event.event_id}"
+    def _message_for_event(self, event: NotificationEvent) -> str:
+        try:
+            payload_summary = json.loads(event.payload_summary_json or "{}")
+        except json.JSONDecodeError:
+            payload_summary = {}
+        if not isinstance(payload_summary, dict):
+            payload_summary = {}
+        return self.notification_service.render_event_message(
+            event_type=event.event_type,
+            subject=event.subject or event.event_id,
+            payload_summary=payload_summary,
+        )
 
     @staticmethod
     def _safe_text(text: str | None) -> str | None:

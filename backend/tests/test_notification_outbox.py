@@ -98,6 +98,42 @@ def test_outbox_dispatch_failure_is_isolated_and_retriable(db_session, tmp_path,
     assert log.last_error_code == "DELIVERY_FAILED"
 
 
+def test_outbox_dispatch_uses_configured_template(db_session, tmp_path, monkeypatch) -> None:
+    _write_config(tmp_path, mode="live")
+    config_path = tmp_path / "notifications.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8")
+        + """
+  templates:
+    paper_order_submitted: "paper {symbol} {qty} {missing_field}"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "PHASE2_TOKEN_SHOULD_NOT_LEAK")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "PHASE2_CHAT_SHOULD_NOT_LEAK")
+    notification_service = NotificationService(config_dir=tmp_path)
+    service = NotificationOutboxService(db_session, notification_service=notification_service)
+    queued = service.enqueue_event(
+        event_type="paper_order_submitted",
+        payload_summary={"symbol": "KR001", "qty": 4},
+    )
+    captured: dict[str, str] = {}
+
+    def _capture_delivery(raw, message):
+        captured["message"] = message
+        return {"delivered": True}
+
+    monkeypatch.setattr(notification_service, "dispatch", _capture_delivery)
+    result = service.dispatch_pending()
+    event = db_session.scalar(select(NotificationEvent).where(NotificationEvent.event_id == queued["event_id"]))
+
+    assert result["ok"] is True
+    assert result["sent_count"] == 1
+    assert event.status == "sent"
+    assert captured["message"] == "paper KR001 4 not_available"
+    assert "PHASE2_TOKEN_SHOULD_NOT_LEAK" not in json.dumps(result, ensure_ascii=False)
+
+
 def test_outbox_rejects_unknown_event_without_persistence(db_session, tmp_path) -> None:
     _write_config(tmp_path, mode="mock")
     service = NotificationOutboxService(

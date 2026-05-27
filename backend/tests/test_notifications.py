@@ -91,3 +91,13 @@ def test_telegram_payload_uses_plain_text_by_default():
 
     assert payload["text"] == "plain * text"
     assert "parse_mode" not in payload
+
+
+def test_telegram_payload_trims_to_send_message_limit():
+    payload = TelegramNotifier().build_payload(
+        chat_id="redacted-chat",
+        message="x" * 5000,
+    )
+
+    assert len(payload["text"]) == 4096
+    assert payload["disable_web_page_preview"] is True

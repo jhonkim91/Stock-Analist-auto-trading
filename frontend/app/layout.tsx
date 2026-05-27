@@ -1,5 +1,7 @@
 import "./globals.css";
 
+import { AppChrome } from "../components/app-chrome";
+
 export const metadata = {
   title: "Stock Analyst MVP",
   description: "Phase 2 MVP web flow"
@@ -12,7 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <AppChrome>{children}</AppChrome>
+      </body>
     </html>
   );
 }

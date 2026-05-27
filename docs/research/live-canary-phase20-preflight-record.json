@@ -1,0 +1,76 @@
+{
+  "account_redacted": true,
+  "blockers": [
+    "CONFIRMATION_REQUIRED",
+    "ENVIRONMENT_IS_PROD_LIVE_REQUIRED",
+    "KILL_SWITCH_READY_REQUIRED",
+    "KIS_LIVE_BROKER_DISABLED_PLACEHOLDER",
+    "KIS_LIVE_ORDER_ROUTE_ABSENT",
+    "LIVE_CANCEL_NOT_IMPLEMENTED",
+    "LIVE_NETWORK_DISABLED",
+    "LIVE_PUBLIC_ROUTE_ABSENT",
+    "LIVE_SUBMIT_NOT_IMPLEMENTED",
+    "MINIMUM_SIZE_CONFIRMED_REQUIRED",
+    "REVIEWER_PRESENT_REQUIRED",
+    "ROLLBACK_READY_REQUIRED"
+  ],
+  "canary_execution_allowed": false,
+  "credential_fields": {
+    "KIS_ACCESS_TOKEN": {
+      "configured": false
+    },
+    "KIS_ACCOUNT_NO": {
+      "configured": false
+    },
+    "KIS_APP_KEY": {
+      "configured": true
+    },
+    "KIS_APP_SECRET": {
+      "configured": true
+    },
+    "KIS_PRODUCT_CODE": {
+      "configured": false
+    },
+    "TELEGRAM_BOT_TOKEN": {
+      "configured": false
+    },
+    "TELEGRAM_CHAT_ID": {
+      "configured": false
+    }
+  },
+  "endpoint_called": false,
+  "generated_at": "2026-05-27T22:08:00.266805+00:00",
+  "live_adapter_status": {
+    "adapter_boundary": "live_disabled_placeholder",
+    "can_cancel": false,
+    "can_submit": false,
+    "enabled": false,
+    "live_fallback_enabled": false,
+    "live_trading_enabled": false,
+    "mode": "live",
+    "name": "kis_live",
+    "network_enabled": false,
+    "reason": "KIS_LIVE_BROKER_DISABLED_PLACEHOLDER"
+  },
+  "live_order_created": false,
+  "network_call_performed": false,
+  "next_required_action": "live canary execution remains blocked in this repository; add no live endpoint until a separate implementation approval, reviewer, environment isolation, and rollback proof are available",
+  "operator_gates": {
+    "confirmation": false,
+    "environment_is_prod_live": false,
+    "kill_switch_ready": false,
+    "minimum_size_confirmed": false,
+    "reviewer_present": false,
+    "rollback_ready": false
+  },
+  "order_cancelled": false,
+  "phase": "Phase 20",
+  "public_route_checks": {
+    "api_live_route_present": false,
+    "kis_broker_route_present": false,
+    "kis_order_route_present": false,
+    "kis_websocket_route_present": false
+  },
+  "secrets_redacted": true,
+  "status": "blocked"
+}

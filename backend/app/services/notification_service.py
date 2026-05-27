@@ -8,6 +8,7 @@ import yaml
 
 from backend.app.core.paths import CONFIG_DIR
 from backend.app.services.discord_webhook_notifier import DiscordWebhookNotifier
+from backend.app.services.notification_template_service import DEFAULT_NOTIFICATION_TEMPLATES, NotificationTemplateService
 from backend.app.services.telegram_notifier import TelegramNotifier
 
 NOTIFICATIONS_CONFIG_NAME = "notifications.yaml"
@@ -25,6 +26,9 @@ SUPPORTED_NOTIFICATION_EVENTS = (
     "portfolio_snapshot",
     "daily_report_generated",
     "weekly_report_generated",
+    "daily_report_automation_completed",
+    "weekly_report_automation_completed",
+    "report_automation_failed",
     "risk_limit_warning",
     "kis_token_error",
     "broker_error",
@@ -57,6 +61,7 @@ class NotificationConfigService:
                 "enabled": bool(notifications.get("enabled", False)),
                 "default_dry_run": bool(notifications.get("default_dry_run", True)),
                 "channels": notifications.get("channels") if isinstance(notifications.get("channels"), dict) else {},
+                "templates": self._merge_templates(notifications.get("templates")),
             }
         )
         return config, []
@@ -85,7 +90,18 @@ class NotificationConfigService:
                     "parse_mode": None,
                 },
             },
+            "templates": dict(DEFAULT_NOTIFICATION_TEMPLATES),
         }
+
+    @staticmethod
+    def _merge_templates(raw_templates: Any) -> dict[str, str]:
+        templates = dict(DEFAULT_NOTIFICATION_TEMPLATES)
+        if not isinstance(raw_templates, dict):
+            return templates
+        for event_type, template in raw_templates.items():
+            if isinstance(template, str) and template.strip():
+                templates[str(event_type)] = template.strip()
+        return templates
 
 
 class NotificationService:
@@ -104,6 +120,7 @@ class NotificationService:
             "network_delivery_allowed": any(channel["can_dispatch"] for channel in channels),
             "secrets_redacted": True,
             "supported_events": list(SUPPORTED_NOTIFICATION_EVENTS),
+            "template_events": sorted(str(key) for key in config.get("templates", {}).keys()),
             "channels": channels,
         }
 
@@ -202,6 +219,22 @@ class NotificationService:
     def dispatch(self, raw: dict[str, Any], message: str) -> dict[str, Any]:
         """검증된 channel raw config로 실제 dispatch를 수행한다."""
         return self._dispatch(raw, message)
+
+    def render_event_message(
+        self,
+        *,
+        event_type: str,
+        subject: str | None = None,
+        payload_summary: dict[str, Any] | None = None,
+    ) -> str:
+        """notifications.yaml 템플릿으로 event 메시지를 secret-safe plain text로 렌더링한다."""
+        config, _ = self.config_service.load()
+        templates = config.get("templates") if isinstance(config.get("templates"), dict) else {}
+        return NotificationTemplateService(templates).render(
+            event_type=event_type,
+            subject=subject,
+            payload_summary=payload_summary,
+        )
 
     def _iter_channels(self, config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         raw_channels = config.get("channels")
