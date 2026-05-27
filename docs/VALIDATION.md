@@ -1,5 +1,17 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 8 Report Portfolio Alerts
+
+이번 변경은 `goal.md`의 `Phase 8: Report Portfolio Alerts` 범위만 수행했다. 기존 `/api/reports/{report_id}/notify` 경로를 유지하면서 report summary에 local paper portfolio snapshot 요약을 추가했다. 이 요약은 KIS 네트워크를 호출하지 않고 `paper_portfolio_snapshots`/`paper_positions`만 읽으며, snapshot metadata raw payload는 notification payload에 포함하지 않는다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 8 지정 pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_notify.py -q`: 3 passed in 0.68s |
+| Phase 8 report/notification/no-live regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_api.py backend/tests/test_report_quality.py backend/tests/test_no_live_trading_regression.py -q`: 19 passed in 29.51s |
+| Phase 8 secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Phase 8 live enable scan | 통과 | static scan: live/paper auto-submit true pattern 없음. 문서의 `ENABLE_REAL_ORDER=true` 언급은 차단 동작 설명이다. |
+| Phase 8 diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 7 Notification Implementation
 
 이번 변경은 `goal.md`의 `Phase 7: Notification Implementation` 범위만 수행했다. 기존 notification skeleton을 교체하지 않고 Telegram-first channel ordering, supported event list, `NotificationOutboxService`, Discord webhook wrapper, schema/API request model 정리를 additive로 보강했다. outbox dispatch 실패는 caller로 예외를 전파하지 않고 event를 `retry` 상태로 남긴다.

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.paths import CONFIG_DIR
 from backend.app.models.tables import NotificationDeliveryLog, NotificationEvent
+from backend.app.repositories.paper_repository import PaperRepository
 from backend.app.services.notification_service import NotificationService
 from backend.app.services.report_service import ReportService
 
@@ -45,6 +46,8 @@ class ReportNotificationService:
         channel_type = str(channel.get("type") or "disabled")
         limit = self._safe_limit(channel_type)
         summary = self._summary(markdown=markdown, report=report)
+        portfolio_snapshot = self._portfolio_snapshot_payload()
+        summary = self._append_portfolio_summary(summary, portfolio_snapshot)
         message_chunks = self._split_message(summary, limit)
         attachment = self._attachment_payload(report=report, markdown=markdown, channel_type=channel_type, mode=mode)
         effective_dry_run = bool(dry_run) if dry_run is not None else bool(resolved.get("default_dry_run", True))
@@ -88,6 +91,7 @@ class ReportNotificationService:
             reason_codes=reason_codes,
             message_chunks=message_chunks,
             attachment=attachment,
+            portfolio_snapshot=portfolio_snapshot,
             attempted=attempted,
         )
         return {
@@ -105,6 +109,7 @@ class ReportNotificationService:
             "channel_limits": {"telegram": TELEGRAM_MESSAGE_LIMIT, "discord": DISCORD_MESSAGE_LIMIT},
             "payload_shape": self._payload_shape_with_attachment(resolved.get("payload_shape") or {}, attachment),
             "attachment": attachment,
+            "portfolio_snapshot": portfolio_snapshot,
             "reason_codes": reason_codes,
             "notification_event_id": event.event_id,
             "secrets_redacted": True,
@@ -121,6 +126,7 @@ class ReportNotificationService:
         reason_codes: list[str],
         message_chunks: list[str],
         attachment: dict[str, Any],
+        portfolio_snapshot: dict[str, Any],
         attempted: bool,
     ) -> NotificationEvent:
         payload_summary = {
@@ -130,6 +136,7 @@ class ReportNotificationService:
             "message_count": len(message_chunks),
             "message_lengths": [len(chunk) for chunk in message_chunks],
             "attachment": attachment,
+            "portfolio_snapshot": portfolio_snapshot,
             "reason_codes": reason_codes,
         }
         payload_hash = hashlib.sha256(json.dumps(payload_summary, sort_keys=True).encode("utf-8")).hexdigest()
@@ -156,6 +163,53 @@ class ReportNotificationService:
         self.db.commit()
         self.db.refresh(event)
         return event
+
+    def _portfolio_snapshot_payload(self) -> dict[str, Any]:
+        """KIS 네트워크 없이 local paper portfolio snapshot 요약만 반환한다."""
+        repository = PaperRepository(self.db)
+        snapshot = repository.latest_portfolio_snapshot()
+        positions = repository.list_positions()
+        positions_market_value = sum(float(position.market_value or 0.0) for position in positions)
+        if snapshot is None:
+            return {
+                "source": "paper_portfolio_snapshots",
+                "snapshot_id": None,
+                "snapshot_ts": None,
+                "positions_count": len(positions),
+                "positions_market_value": positions_market_value,
+                "reason": "PAPER_PORTFOLIO_SNAPSHOT_NOT_FOUND",
+                "network_call_performed": False,
+                "secrets_redacted": True,
+            }
+        return {
+            "source": "paper_portfolio_snapshots",
+            "snapshot_id": snapshot.snapshot_id,
+            "snapshot_ts": snapshot.snapshot_ts.isoformat() if snapshot.snapshot_ts else None,
+            "account_alias": snapshot.account_alias,
+            "cash_balance": snapshot.cash_balance,
+            "buying_power": snapshot.buying_power,
+            "market_value": snapshot.market_value,
+            "total_equity": snapshot.total_equity,
+            "unrealized_pnl": snapshot.unrealized_pnl,
+            "realized_pnl": snapshot.realized_pnl,
+            "positions_count": len(positions),
+            "positions_market_value": positions_market_value,
+            "reason": None,
+            "network_call_performed": False,
+            "secrets_redacted": True,
+        }
+
+    @staticmethod
+    def _append_portfolio_summary(summary: str, portfolio_snapshot: dict[str, Any]) -> str:
+        lines = [
+            "",
+            "Portfolio Snapshot",
+            f"- source: {portfolio_snapshot['source']}",
+            f"- snapshot_id: {portfolio_snapshot.get('snapshot_id') or 'not_available'}",
+            f"- total_equity: {portfolio_snapshot.get('total_equity')}",
+            f"- positions_count: {portfolio_snapshot.get('positions_count')}",
+        ]
+        return ReportNotificationService._redact(summary.rstrip() + "\n" + "\n".join(lines))
 
     @staticmethod
     def _summary(*, markdown: str, report: dict[str, Any]) -> str:

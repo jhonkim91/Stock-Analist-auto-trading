@@ -7,7 +7,7 @@ from textwrap import dedent
 from sqlalchemy import func, select
 
 from backend.app.core.database import SessionLocal
-from backend.app.models.tables import NotificationDeliveryLog, NotificationEvent, Report
+from backend.app.models.tables import NotificationDeliveryLog, NotificationEvent, PaperPortfolioSnapshot, PaperPosition, Report, utc_now
 from backend.app.services.notification_service import NotificationService
 from backend.app.services.report_notification_service import ReportNotificationService
 from backend.app.services.report_service import REPORT_DIR, ReportService
@@ -63,6 +63,37 @@ def _write_mock_config(tmp_path, *, channel_type: str = "discord", mode: str = "
     )
 
 
+def _seed_portfolio_snapshot(db_session) -> None:
+    now = utc_now()
+    db_session.add_all(
+        [
+            PaperPortfolioSnapshot(
+                snapshot_id="phase8-portfolio-snapshot",
+                snapshot_ts=now,
+                account_alias="paper-demo",
+                cash_balance=1000.0,
+                buying_power=900.0,
+                market_value=330.0,
+                total_equity=1330.0,
+                unrealized_pnl=30.0,
+                realized_pnl=0.0,
+                metadata_json='{"raw_account_marker":"PHASE8_ACCOUNT_SHOULD_NOT_LEAK"}',
+            ),
+            PaperPosition(
+                symbol="KR009",
+                strategy_tag="phase8",
+                qty=3,
+                avg_price=100.0,
+                last_price=110.0,
+                market_value=330.0,
+                unrealized_pnl=30.0,
+                account_alias="paper-demo",
+            ),
+        ]
+    )
+    db_session.commit()
+
+
 def test_report_notify_endpoint_logs_disabled_delivery_without_secret_leak(client):
     report_id = "phase6-disabled-report"
     secret_marker = "PHASE6_SECRET_SHOULD_NOT_LEAK"
@@ -97,6 +128,7 @@ def test_long_report_is_split_and_summary_file_metadata_is_channel_safe(db_sessi
     report_id = "phase6-long-report"
     long_body = "\n".join(f"- row {idx}: {'x' * 120}" for idx in range(120))
     _create_report(report_id, f"# Weekly Strategy Review\n\n{long_body}", report_type="weekly")
+    _seed_portfolio_snapshot(db_session)
     _write_mock_config(tmp_path, channel_type="discord", mode="mock")
 
     result = ReportNotificationService(db_session, config_dir=tmp_path).notify(
@@ -114,9 +146,16 @@ def test_long_report_is_split_and_summary_file_metadata_is_channel_safe(db_sessi
     assert result["payload_shape"]["attachment_method"] == "file"
     assert result["attachment"]["included"] is True
     assert result["attachment"]["filename"] == f"{report_id}.md"
+    assert result["portfolio_snapshot"]["source"] == "paper_portfolio_snapshots"
+    assert result["portfolio_snapshot"]["snapshot_id"] == "phase8-portfolio-snapshot"
+    assert result["portfolio_snapshot"]["total_equity"] == 1330.0
+    assert result["portfolio_snapshot"]["positions_count"] == 1
+    assert result["portfolio_snapshot"]["network_call_performed"] is False
 
     events, logs = _notification_rows()
     assert events[-1].status == "mock_sent"
+    assert "phase8-portfolio-snapshot" in events[-1].payload_summary_json
+    assert "PHASE8_ACCOUNT_SHOULD_NOT_LEAK" not in events[-1].payload_summary_json
     assert logs[-1].status == "mock_sent"
     assert logs[-1].delivered_at is not None
 
