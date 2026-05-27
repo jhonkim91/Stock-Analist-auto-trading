@@ -3,18 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.paths import CONFIG_DIR
-from backend.app.models.tables import (
-    Order,
-    PaperFill,
-    PaperOrder,
-    PaperPortfolioSnapshot,
-    PaperPosition,
-    Position,
-)
+from backend.app.models.tables import PaperFill, PaperPortfolioSnapshot, PaperPosition
+from backend.app.repositories.paper_repository import PaperRepository
 from backend.app.services.kis_paper_balance import (
     KIS_PAPER_BALANCE_PATH,
     KIS_PAPER_BALANCE_TR_ID,
@@ -43,6 +36,7 @@ class PaperSyncService:
         self.db = db
         self.config_dir = config_dir
         self.balance_client = balance_client or KisPaperBalanceClient()
+        self.repository = PaperRepository(db)
 
     def sync(self, *, scope: str = "all") -> dict[str, Any]:
         """공식 KIS paper sync contract 확인 전에는 idempotent no-op으로 차단한다."""
@@ -82,10 +76,7 @@ class PaperSyncService:
 
     def list_fills(self, *, symbol: str | None = None) -> dict[str, Any]:
         """`paper_fills` 전용 조회 결과를 반환한다."""
-        statement = select(PaperFill).order_by(PaperFill.fill_ts.desc())
-        if symbol:
-            statement = statement.where(PaperFill.symbol == symbol.strip())
-        fills = list(self.db.scalars(statement).all())
+        fills = self.repository.list_fills(symbol=symbol)
         return {
             "ok": True,
             "fills": [self._fill_payload(fill) for fill in fills],
@@ -98,10 +89,7 @@ class PaperSyncService:
 
     def list_positions(self, *, symbol: str | None = None) -> dict[str, Any]:
         """`paper_positions` 전용 조회 결과를 반환한다."""
-        statement = select(PaperPosition).order_by(PaperPosition.symbol.asc(), PaperPosition.id.asc())
-        if symbol:
-            statement = statement.where(PaperPosition.symbol == symbol.strip())
-        positions = list(self.db.scalars(statement).all())
+        positions = self.repository.list_positions(symbol=symbol)
         return {
             "ok": True,
             "positions": [self._position_payload(position) for position in positions],
@@ -149,13 +137,8 @@ class PaperSyncService:
 
     def _local_portfolio_payload(self) -> dict[str, Any]:
         """기존 `paper_portfolio_snapshots`와 `paper_positions` 조회 응답을 유지한다."""
-        snapshot = self.db.scalar(
-            select(PaperPortfolioSnapshot).order_by(
-                PaperPortfolioSnapshot.snapshot_ts.desc(),
-                PaperPortfolioSnapshot.created_at.desc(),
-            )
-        )
-        positions = list(self.db.scalars(select(PaperPosition)).all())
+        snapshot = self.repository.latest_portfolio_snapshot()
+        positions = self.repository.list_positions()
         return {
             "ok": True,
             "source": "paper_portfolio_snapshots",
@@ -296,16 +279,7 @@ class PaperSyncService:
         }
 
     def _counts(self) -> dict[str, int]:
-        return {
-            "paper_orders_count": int(self.db.scalar(select(func.count()).select_from(PaperOrder)) or 0),
-            "paper_fills_count": int(self.db.scalar(select(func.count()).select_from(PaperFill)) or 0),
-            "paper_positions_count": int(self.db.scalar(select(func.count()).select_from(PaperPosition)) or 0),
-            "paper_portfolio_snapshots_count": int(
-                self.db.scalar(select(func.count()).select_from(PaperPortfolioSnapshot)) or 0
-            ),
-            "orders_count": int(self.db.scalar(select(func.count()).select_from(Order)) or 0),
-            "synthetic_positions_count": int(self.db.scalar(select(func.count()).select_from(Position)) or 0),
-        }
+        return self.repository.counts()
 
     @staticmethod
     def _merge_reason_codes(codes: list[str]) -> list[str]:

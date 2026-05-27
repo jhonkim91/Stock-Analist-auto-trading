@@ -10,6 +10,7 @@
 - [x] 현재 goal.md Phase 2 adapter hardening: service adapter boundary 추가, live disabled 유지
 - [x] 현재 goal.md Phase 3 token/signing: metadata-only token, fail-closed signer, credential redaction 추가
 - [x] 현재 goal.md Phase 4 submit/cancel: paper-only API marker와 redacted broker trace 추가
+- [x] 현재 goal.md Phase 5 sync: `PaperRepository` 기반 paper 전용 fills/positions/portfolio 조회 경계 보강
 - [x] 최신 backend pytest: `342 passed in 327.46s`
 - [x] 최신 frontend 검증: lint, typecheck, build 통과
 - [x] 최신 secret scan: `NO_SECRET_FINDINGS`
@@ -42,9 +43,11 @@
 - `backend/tests/test_kis_token_manager.py`, `backend/tests/test_kis_request_signer.py`, `backend/tests/test_secret_redaction.py`: raw token 미저장, signing prerequisite reject, nested credential redaction 검증 추가.
 - `backend/app/api/paper_execution_helpers.py`, `backend/app/api/paper.py`: submit/cancel API 응답에 `paper_only`, `execution_mode`, `live_fallback_enabled=false`, redacted `broker_trace` 추가.
 - `backend/tests/test_paper_submit_cancel_api.py`: default kill-switch blocked submit, cancel disabled, no-live/no-network/no-secret 응답 검증 추가.
+- `backend/app/repositories/paper_repository.py`, `backend/app/services/paper_sync_service.py`: Phase 5 paper persistence 조회/count 경계를 repository로 분리하고 sync no-op 응답의 count를 보강.
+- `backend/tests/test_paper_sync_service.py`: paper repository, sync service payload, idempotent fail-closed sync, metadata marker 비노출 검증 추가.
 - `docs/PROJECT_STATUS.md`: Goal Phase 0 감사 문서 위치와 main/current branch 분리 기준 추가.
-- `docs/VALIDATION.md`: Goal Phase 0/1/2/3/4 검증 결과 추가.
-- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1/2/3/4에서는 DB schema, `.env` 계열 파일을 변경하지 않았다.
+- `docs/VALIDATION.md`: Goal Phase 0/1/2/3/4/5 검증 결과 추가.
+- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1/2/3/4/5에서는 DB schema, `.env` 계열 파일을 변경하지 않았다.
 
 ## 최신 검증 결과
 
@@ -52,6 +55,9 @@
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 5 passed in 0.08s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_token_manager.py backend/tests/test_kis_request_signer.py backend/tests/test_secret_redaction.py -q`: 10 passed in 0.94s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_submit_cancel_api.py backend/tests/test_no_live_trading_regression.py -q`: 9 passed in 0.68s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync_service.py backend/tests/test_alembic_migrations.py -q`: 5 passed in 3.16s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py backend/tests/test_no_live_trading_regression.py -q`: 13 passed in 0.81s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_persistence_migration.py backend/tests/test_paper_order_api.py -q`: 4 passed in 2.65s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 14 passed in 0.87s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_phase3c_kis_readonly.py backend/tests/test_no_live_trading_regression.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 22 passed in 3.29s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 20 passed in 0.97s.

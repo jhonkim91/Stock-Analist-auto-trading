@@ -1,5 +1,18 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 5 Order Fills Positions Portfolio Sync
+
+이번 변경은 `goal.md`의 `Phase 5: Order Fills Positions Portfolio Sync` 범위만 수행했다. 기존 paper persistence schema와 `/api/paper/*` read/sync route는 유지하고, `PaperRepository`를 추가해 `paper_orders`, `paper_fills`, `paper_positions`, `paper_portfolio_snapshots`, `broker_audit_events`, `kis_token_status_metadata` 조회/count 경계를 고정했다. `POST /api/paper/sync`는 공식 KIS sync 계약 확인 전까지 fail-closed/idempotent no-op을 유지한다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 5 지정 pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync_service.py backend/tests/test_alembic_migrations.py -q`: 5 passed in 3.16s |
+| Phase 5 paper/no-live regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py backend/tests/test_no_live_trading_regression.py -q`: 13 passed in 0.81s |
+| Phase 5 migration/order regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_persistence_migration.py backend/tests/test_paper_order_api.py -q`: 4 passed in 2.65s |
+| Phase 5 secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Phase 5 live enable scan | 통과 | static scan: live/paper auto-submit true pattern 없음. 문서의 `ENABLE_REAL_ORDER=true` 언급은 차단 동작 설명이다. |
+| Phase 5 diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 4 Paper Order Submit Cancel
 
 이번 변경은 `goal.md`의 `Phase 4: Paper Order Submit Cancel` 범위만 수행했다. 기존 paper submit/cancel API를 유지하면서 API 응답에 `paper_only`, `execution_mode="paper"`, `live_fallback_enabled=false`, redacted `broker_trace`를 추가했다. 기본 config에서는 kill-switch/config gate로 submit이 blocked되고 cancel은 공식 KIS cancel payload 확인 전 disabled 상태를 유지한다.
