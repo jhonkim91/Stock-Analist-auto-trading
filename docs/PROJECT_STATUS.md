@@ -8,6 +8,7 @@
 | Phase | `KIS Paper Balance Inquiry Read-only` |
 | Goal.md Phase 0 | `docs/research/kis-paper-baseline-audit.md`에서 main 기준선과 현재 작업 브랜치 차이를 분리 감사 |
 | Goal.md Phase 5 | `PaperRepository` 기반 paper fills/positions/portfolio sync 조회 경계 보강 |
+| Goal.md Phase 6 | Telegram-first notification channel decision 문서화 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; KIS paper balance read-only 조건부 지원; live/real order disabled |
@@ -65,6 +66,7 @@
 - Goal.md Phase 3 Token Hashkey Request Signing: metadata-only `KisTokenManager`, fail-closed `KisRequestSigner`, `CredentialRedactionService`를 추가하고, hashkey 미확인/토큰 metadata 미충족 시 submit prerequisite를 reject하도록 구성.
 - Goal.md Phase 4 Paper Order Submit Cancel: `/api/paper/orders/submit`과 `/api/paper/orders/cancel` 응답에 paper-only marker와 redacted broker trace를 추가하고, 기본 disabled/kill-switch 상태에서 no-live/no-network/no-write 회귀를 검증.
 - Goal.md Phase 5 Order Fills Positions Portfolio Sync: `PaperRepository`를 추가하고 `PaperSyncService`가 paper 전용 fills/positions/portfolio snapshot과 Phase 5 persistence count를 repository 경계로 조회하도록 보강.
+- Goal.md Phase 6 Notification Channel Decision: `docs/research/notification-channel-decision.md`에 Telegram-first primary와 Discord follow-up path, non-blocking/security constraints를 문서화.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.

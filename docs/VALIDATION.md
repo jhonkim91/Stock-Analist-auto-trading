@@ -1,5 +1,17 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 6 Notification Channel Decision
+
+이번 변경은 `goal.md`의 `Phase 6: Notification Channel Decision` 범위만 수행했다. notifier 구현, route, migration, config 변경은 하지 않았고, Telegram-first primary channel 결정과 Discord follow-up path를 문서화했다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 6 테스트 | N/A | `goal.md` 기준 테스트 파일과 검증 명령어 없음. 문서 결정만 수행 |
+| Phase 6 문서 구조 확인 | 통과 | `rg -n "Telegram-first|Discord|Security Handling|Interface Contract|Phase 6 Notification Channel Decision" docs/research/notification-channel-decision.md docs/research/kis-paper-api-confirmation-matrix.md` |
+| Phase 6 secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Phase 6 live enable scan | 통과 | static scan: live/paper auto-submit true pattern 없음. 문서의 `ENABLE_REAL_ORDER=true` 언급은 차단 동작 설명이다. |
+| Phase 6 diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 5 Order Fills Positions Portfolio Sync
 
 이번 변경은 `goal.md`의 `Phase 5: Order Fills Positions Portfolio Sync` 범위만 수행했다. 기존 paper persistence schema와 `/api/paper/*` read/sync route는 유지하고, `PaperRepository`를 추가해 `paper_orders`, `paper_fills`, `paper_positions`, `paper_portfolio_snapshots`, `broker_audit_events`, `kis_token_status_metadata` 조회/count 경계를 고정했다. `POST /api/paper/sync`는 공식 KIS sync 계약 확인 전까지 fail-closed/idempotent no-op을 유지한다.

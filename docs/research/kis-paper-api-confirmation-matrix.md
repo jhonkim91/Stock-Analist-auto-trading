@@ -22,6 +22,9 @@
 | 공식 샘플 `kis_devlp.yaml` | 실전/모의 REST domain, 실전/모의 WebSocket domain placeholder 구조 확인 |
 | 공식 샘플 `examples_llm/kis_auth.py` | REST token path, WebSocket approval path, hashkey path, paper mode 전환 방식 확인 |
 | 공식 샘플 `examples_llm/domestic_stock/*` | 국내주식 주문/정정취소/잔고/주문체결/가능조회 endpoint와 일부 TR ID 확인 |
+| Telegram Bot API: https://core.telegram.org/bots/api | Phase 6 notification primary channel 결정을 위해 HTTPS Bot API와 `sendMessage` text contract 확인 |
+| Discord Webhooks: https://docs.discord.com/developers/platform/webhooks | Phase 6 follow-up channel 결정을 위해 incoming webhook one-way delivery contract 확인 |
+| Discord Webhook Resource: https://docs.discord.com/developers/resources/webhook | Phase 6 follow-up channel 제약 확인. content length, required payload, `allowed_mentions` 고려 |
 
 ## 공식 확인 항목
 
@@ -59,6 +62,18 @@
 | hashkey 필수 여부 | 공식 샘플 주석상 주문 API에서 사용할 수 있으나 현재 필수 여부는 구현 근거로 확정하지 않음 |
 | Phase 3 signer 정책 | request signing prerequisites가 완전하지 않으면 submit을 reject하는 fail-closed utility만 허용 |
 | raw body logging | 금지 |
+
+## Phase 6 Notification Channel Decision
+
+| 항목 | 결정 | 근거/정책 |
+|---|---|---|
+| primary notifier | Telegram-first | 공식 Telegram Bot API는 HTTPS 기반 `sendMessage` text delivery를 제공하며 짧은 trading/report alert에 적합 |
+| follow-up notifier | Discord incoming webhook | 공식 Discord 문서는 one-way incoming webhook POST를 지원하지만 webhook URL 자체가 bearer secret이므로 mirror/fallback 후보로 둔다 |
+| 구현 범위 | 문서 결정만 수행 | Phase 6에서는 notifier service/route/migration/config를 추가하지 않는다 |
+| secret handling | env-only | Telegram token/chat identifier와 Discord webhook URL 원문은 코드/문서/DB/API/log에 저장하지 않는다 |
+| formatting policy | plain text first | Telegram `parse_mode=null`, Discord `allowed_mentions.parse=[]`를 후속 구현 기준으로 둔다 |
+| failure policy | non-blocking | notifier 실패가 paper submit/sync/portfolio snapshot 상태를 rollback하거나 변경하면 안 된다 |
+| 상세 결정 문서 | `docs/research/notification-channel-decision.md` | Telegram-first 결정, Discord follow-up path, constraints, security handling 기록 |
 
 ## mock-only 제한 및 미확인 항목
 
