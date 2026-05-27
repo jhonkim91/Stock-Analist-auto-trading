@@ -1,711 +1,523 @@
 # Project Goal
 
-Implement KIS paper-trading support on top of the current fail-closed preview-only baseline.
-Deliver a safe paper-only broker abstraction, KIS paper order/sync flow, Telegram/Discord notifications, daily/weekly report delivery, an optional paper-bot scheduler, and minimal frontend integration.
-Keep live trading disabled by default and out of scope.
+Implement a paper-only KIS mock-trading bot on top of the current main branch.
 
-## Non-Goals
+Primary deliverables:
+- KIS mock account order submit
+- KIS mock order cancel
+- KIS mock order/fill/balance/account/portfolio sync
+- paper trading bot activation
+- duplicate order prevention
+- risk-guarded sizing
+- Telegram-first notifications
+- daily/weekly report notification
+- goal.md driven Codex phase execution
 
-- No real trading order submission
-- No live-account balance mutation
-- No live WebSocket trading
-- No automatic live-mode fallback
-- No secret persistence in code, docs, logs, DB, or reports
-- No destructive refactor of existing screener/backtest/report/portfolio baseline
-- No breaking change to existing APIs unless strictly additive and backward-compatible
-- No toolchain major-version refactor unrelated to this feature
+# Non-Goals
 
-## Safety Rules
+- Live trading
+- Real account order submit/cancel/balance mutation
+- Live trading websocket order execution
+- Live broker fallback from paper mode
+- Secret persistence in code/docs/logs/DB/API responses
+- Replacing existing report/backtest/screener contracts
+- Breaking current preview-only safety behavior before paper-specific safeguards are complete
 
-- Keep `live trading` disabled by default everywhere
-- Keep `KisLiveBrokerAdapter` as a disabled placeholder only
-- Paper and live code paths must be physically separated
-- If official KIS endpoint details are not confirmed, do not guess; keep the capability disabled and document it as `확인 필요`
-- Keep existing `preview-only` behavior intact until the paper submit phase explicitly enables paper submission
-- Never store raw `KIS AppKey`, `KIS AppSecret`, `access token`, `refresh token`, `account number`, `Discord webhook URL`, `Telegram bot token`, or `chat_id` in code, docs, logs, DB, or reports
-- `.env.example` may contain placeholders only
-- Real values may only come from `.env.local` or local environment variables
-- Do not log full Telegram request URLs because the token is embedded in the URL path
-- Do not log raw Discord webhook URLs
-- Do not expose raw account numbers in API responses, logs, reports, or notifications; use aliases only
-- Notification failures must not roll back or block paper-trading state transitions
-- Use additive DB migrations only; do not drop existing tables for this project
-- Keep `positions` / `portfolio risk` synthetic baseline separate from `paper_positions` / paper account snapshots
-- Default `PAPER_BOT_AUTO_SUBMIT=false`
-- Default scheduler disabled
-- Preserve existing lint, typecheck, pytest, build, and CI behavior
+# Safety Rules
 
-## Current Baseline
+- Default trading mode must remain non-live.
+- `KisLiveBrokerAdapter` must stay disabled placeholder only.
+- Do not create live submit endpoints.
+- Do not make paper mode fall back to live mode.
+- `PAPER_BOT_ENABLED` default is false.
+- `PAPER_BOT_AUTO_SUBMIT` default is false.
+- If kill switch is on, no submit path may place an order.
+- Never store KIS app key, app secret, access token, refresh token, account number, Telegram token, chat_id, or Discord webhook URL in code, docs, logs, DB, or API responses.
+- `.env.example` may contain placeholders only.
+- Do not create or modify `.env` or `.env.local`.
+- Redact all secrets and account identifiers in logs, reports, notifications, and API errors.
+- All submit/cancel routes must be explicitly paper-only.
 
-- Backend: FastAPI app with routers for `broker`, `paper`, `kis`, `reports`, `portfolio`, `settings`, and related core features
-- Frontend: Next.js App Router with `/paper`, `/portfolio`, `/reports`, `/settings`
-- Existing KIS code is read-only only
-- Existing broker and paper services are preview-only / fail-closed
-- Existing report service generates daily/weekly markdown reports
-- Existing portfolio service provides synthetic risk summary
-- Existing paper DB tables already exist:
-  - `paper_orders`
-  - `paper_fills`
-  - `paper_positions`
-  - `paper_audit_events`
-- Existing docs are inconsistent; Phase 0 must reconcile them
-- Current launcher manages backend/frontend only
+# Current Baseline
 
-## Target Architecture
+- Backend has `/api/kis/status`, `/api/kis/config`, `/api/kis/config/validate`.
+- Backend has `/api/broker/status`, `/api/broker/orders/preview`.
+- Backend has `/api/paper/status`, `/api/paper/orders/preview`.
+- Frontend has `/paper` preview UI and safety flags.
+- Existing trading state is preview/read-only/fail-closed.
+- Current DB has `orders`, `positions`, `reports`, `backtest_trade_ledger`, but not dedicated KIS paper persistence tables.
+- Notification, outbox, bot scheduler, token manager, paper submit/cancel/sync are not implemented.
 
-- `backend/app/brokers/base.py`
-  - Defines `BrokerAdapter` contract
-- `backend/app/brokers/kis_paper.py`
-  - Implements KIS paper-only REST adapter
-- `backend/app/brokers/kis_live.py`
-  - Disabled placeholder only
-- `backend/app/services/token_manager.py`
-  - In-memory token lifecycle handling with no raw-token persistence
-- `backend/app/services/paper_order_service.py`
-  - Preview/submit/cancel lifecycle
-- `backend/app/services/paper_sync_service.py`
-  - Orders/fills/positions/portfolio sync
-- `backend/app/services/notification_service.py`
-  - Channel selection, outbox dispatch, retry, and redaction
-- `backend/app/services/report_notification_service.py`
-  - Report summary rendering, split, and file attachment policy
-- `backend/app/services/paper_bot_service.py`
-  - Screening to order orchestration
-- `backend/app/jobs/paper_bot_runner.py`
-  - `--once` and `--loop` bot runner
-- Existing `PaperTradingService` remains the API facade and delegates internally
-- New DB objects:
-  - extend existing `paper_*` tables
-  - `paper_portfolio_snapshots`
-  - `broker_audit_events`
-  - `notification_events`
-  - `notification_delivery_logs`
-  - `kis_token_status_metadata`
-- Frontend changes remain minimal and focused on:
-  - `/paper`
-  - `/portfolio`
-  - `/reports`
-  - `/settings`
+# Target Architecture
 
-## Phase Plan
+- Introduce `BrokerAdapter` contract.
+- Implement `KisPaperBrokerAdapter`.
+- Keep `KisLiveBrokerAdapter` disabled placeholder.
+- Add `KisTokenManager` with metadata-only persistence.
+- Add `CredentialRedactionService`.
+- Add `NotificationService` abstraction.
+- Implement `TelegramNotifier` first.
+- Keep `DiscordWebhookNotifier` as optional follow-up implementation behind the same interface.
+- Add notification outbox so notifier failures never break trading state transitions.
+- Add dedicated tables for paper order/fill/position/portfolio/audit/notification/bot runs.
+- Add paper bot modes: `manual`, `run_once`, `scheduled`.
+- Use idempotency keys and duplicate-order checks for every submit path.
+- Use polling for fills/positions/portfolio sync.
+- Final behavior must remain fail-closed when config is incomplete or KIS mock capability is not confirmed.
 
-- Always execute phases in order
-- Do not skip a phase gate
-- If a phase fails its acceptance or rollback condition, stop and fix before continuing
-- At the end of each phase, keep diffs minimal and document only the delta relevant to that phase
+# Phase Plan
 
-### Phase 0: Baseline Audit
+- Phase 0: Latest Baseline Audit
+- Phase 1: KIS Paper API Confirmation Matrix
+- Phase 2: Paper Broker Adapter Hardening
+- Phase 3: Token Hashkey Request Signing
+- Phase 4: Paper Order Submit Cancel
+- Phase 5: Order Fills Positions Portfolio Sync
+- Phase 6: Notification Channel Decision
+- Phase 7: Notification Implementation
+- Phase 8: Report Portfolio Alerts
+- Phase 9: Paper Bot Activation
+- Phase 10: Frontend Integration
+- Phase 11: End-to-End Mock Validation
+- Phase 12: Controlled KIS Paper Trading Dry Run
+- Phase 13: Final Safety Hardening
+
+# Phase 0: Latest Baseline Audit
 
 - 목적
-  - Reconcile the current main-branch baseline before new implementation starts
-  - Identify stale docs and establish the source of truth
-  - Create a KIS paper API confirmation matrix for later phases
-
+  - Confirm actual main-branch baseline before touching execution paths.
 - 수정 대상 파일
-  - `goal.md`
-  - `README.md`
+  - `Memory.md`
   - `docs/PROJECT_STATUS.md`
   - `docs/VALIDATION.md`
-  - `docs/DB_MIGRATION.md`
-  - `docs/plans/README.md`
-  - `Memory.md`
-
 - 새로 생성할 파일
-  - `docs/plans/phase-paper-broker-baseline-audit.md`
-  - `docs/KIS_PAPER_API_MATRIX.md`
-
+  - `goal.md`
+  - `docs/research/kis-paper-baseline-audit.md`
 - 금지 사항
-  - No runtime behavior changes
-  - No new API endpoints
-  - No DB schema changes
-  - No live trading implementation
-  - No secret handling changes beyond documentation
-
+  - No submit/cancel logic.
+  - No DB schema changes.
 - 구현 조건
-  - Treat `docs/PROJECT_STATUS.md` and `docs/VALIDATION.md` as primary truth if README conflicts
-  - Explicitly mark stale information instead of silently deleting it
-  - `docs/KIS_PAPER_API_MATRIX.md` must list each planned capability with:
-    - capability name
-    - official doc confirmation status
-    - endpoint/path/TR-ID status
-    - implementation status
-    - note `확인 필요` where needed
-
+  - Document exact current routes, tables, services, tests, and UI baseline.
+  - Record no-live-trading invariant.
 - 테스트 파일
-  - No new dedicated test file required in this phase
-  - Existing safety suites must still pass
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py -q`
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_phase3d_broker_safety.py -q`
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`
-  - `git diff --check`
-
+  - None required beyond baseline verification notes.
+- 검증 명령어
+  - `python -m pytest backend/tests -q`
+  - `cd frontend && npm run lint && npm exec tsc -- --noEmit && npm run build`
 - 완료 기준
-  - Baseline source-of-truth is clearly documented
-  - Stale doc conflicts are reconciled or explicitly marked
-  - KIS paper API matrix exists and distinguishes confirmed vs unconfirmed details
-  - Safety regression tests pass with no behavior drift
-
-- 실패 시 rollback 기준
-  - Revert documentation-only changes if they introduce inconsistency
-  - Do not proceed if baseline truth remains ambiguous
-
+  - Baseline audit doc committed and consistent with main.
+- rollback 기준
+  - Revert doc-only changes if baseline text is inaccurate.
 - 다음 Phase 진입 조건
-  - Baseline audit doc completed
-  - KIS paper API matrix created
-  - Existing safety tests pass unchanged
+  - No unresolved contradiction in current baseline docs.
 
-### Phase 1: Notification Foundation
+# Phase 1: KIS Paper API Confirmation Matrix
 
 - 목적
-  - Add notifier abstraction and redacted channel configuration
-  - Provide disabled/mock notifier by default
-  - Add safe status/test endpoints without coupling them to trading flow
-
+  - Freeze official KIS paper capability matrix before implementation.
 - 수정 대상 파일
-  - `backend/app/main.py`
-  - `backend/app/api/settings.py`
-  - `backend/app/services/settings_service.py`
-  - `frontend/app/settings/page.tsx`
-  - `frontend/lib/api.ts`
-  - `.env.example`
-
+  - `docs/research/kis-paper-baseline-audit.md`
 - 새로 생성할 파일
-  - `backend/config/notifications.yaml`
-  - `backend/app/api/notifications.py`
-  - `backend/app/services/notification_service.py`
-  - `backend/app/services/discord_notifier.py`
-  - `backend/app/services/telegram_notifier.py`
-  - `backend/tests/test_notifications.py`
-  - `backend/tests/test_notification_api.py`
-
+  - `docs/research/kis-paper-api-confirmation-matrix.md`
 - 금지 사항
-  - No trade path coupling
-  - No real secret values in config files
-  - No blocking of trading state on notifier failure
-  - No raw webhook/token/chat_id logging
-
+  - No production code changes yet.
 - 구현 조건
-  - Support notifier aliases such as `discord_ops`, `telegram_main`
-  - Read actual webhook/token/chat_id values from env only
-  - `/api/notifications/status` must be fully redacted
-  - `/api/notifications/test` must support disabled/mock mode and safe dry-run behavior
-  - Discord notifier must set `allowed_mentions.parse=[]`
-  - Telegram formatter must avoid unsafe MarkdownV2 defaults unless explicitly handled
-
+  - Confirm mock base URL, token path, supported order/balance/account endpoints, mock-only limitations, TR IDs, hashkey requirement status, and known unconfirmed items.
+  - Mark anything not verified as `확인 필요`.
 - 테스트 파일
-  - `backend/tests/test_notifications.py`
-  - `backend/tests/test_notification_api.py`
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_api.py -q`
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`
-  - `cd frontend && npm.cmd run lint && npm.cmd exec tsc -- --noEmit && cd ..`
-  - `git diff --check`
-
+  - None
+- 검증 명령어
+  - N/A
 - 완료 기준
-  - Disabled notifier is the safe default
-  - Notification status/test endpoints work with redacted output
-  - Discord and Telegram adapters exist behind the abstraction
-  - No secret leakage in API or logs
-
-- 실패 시 rollback 기준
-  - Remove new notification routes/services if notifier behavior leaks secrets or affects trading logic
-  - Revert `.env.example` if any real-looking value appears
-
+  - Confirmation matrix exists and explicitly separates confirmed vs unconfirmed.
+- rollback 기준
+  - Remove matrix if it contains unsupported assumptions.
 - 다음 Phase 진입 조건
-  - Notification foundation exists
-  - Tests pass
-  - Default runtime remains safe and disabled
+  - Submit/cancel/sync API contract sufficiently confirmed to start adapter design.
 
-### Phase 2: KIS Paper Broker Contract
+# Phase 2: Paper Broker Adapter Hardening
 
 - 목적
-  - Define the broker abstraction contract
-  - Create `KisPaperBrokerAdapter`
-  - Create `KisLiveBrokerAdapter` disabled placeholder
-  - Introduce token manager contract without raw-token persistence
-
+  - Introduce paper-only broker adapter structure without enabling submit yet.
 - 수정 대상 파일
-  - `backend/app/services/kis_service.py`
   - `backend/app/services/broker_service.py`
   - `backend/app/services/paper_trading_service.py`
   - `backend/app/models/schemas.py`
-  - `backend/config/broker.yaml`
-  - `backend/config/paper.yaml`
-  - `.env.example`
-
 - 새로 생성할 파일
-  - `backend/app/brokers/base.py`
-  - `backend/app/brokers/kis_paper.py`
-  - `backend/app/brokers/kis_live.py`
-  - `backend/app/services/token_manager.py`
-  - `backend/tests/test_kis_paper_adapter.py`
-  - `backend/tests/test_token_manager.py`
-  - `backend/tests/test_no_live_trading_regression.py`
-
+  - `backend/app/services/broker_adapter.py`
+  - `backend/app/services/kis_paper_broker_adapter.py`
+  - `backend/app/services/kis_live_broker_adapter.py`
 - 금지 사항
-  - No live implementation
-  - No guessed KIS endpoint details
-  - No token persistence in DB/files/logs
-  - No hidden fallback from paper to live
-
+  - No live implementation.
+  - No real network order execution yet.
 - 구현 조건
-  - `BrokerAdapter` must define preview/submit/cancel/list/sync contract methods
-  - `KisPaperBrokerAdapter` may implement only document-confirmed capabilities
-  - Any unconfirmed capability must raise explicit disabled/confirmation-required errors
-  - `KisLiveBrokerAdapter` must remain disabled and fail-closed
-  - `KisTokenManager` must keep tokens in memory only and expose redacted metadata only
-
+  - Add explicit broker interface.
+  - Keep live adapter disabled.
+  - Route paper work through paper adapter boundary only.
 - 테스트 파일
-  - `backend/tests/test_kis_paper_adapter.py`
-  - `backend/tests/test_token_manager.py`
-  - `backend/tests/test_no_live_trading_regression.py`
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_kis_paper_adapter.py backend/tests/test_token_manager.py backend/tests/test_no_live_trading_regression.py -q`
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py -q`
-  - `git diff --check`
-
+  - `backend/tests/test_kis_paper_adapter_contract.py`
+  - `backend/tests/test_no_live_adapter.py`
+- 검증 명령어
+  - `python -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`
 - 완료 기준
-  - Adapter contract exists
-  - Paper adapter skeleton exists
-  - Live adapter exists only as disabled placeholder
-  - Token manager does not persist raw secrets
-
-- 실패 시 rollback 기준
-  - Revert adapter introduction if it changes current runtime behavior or weakens fail-closed defaults
-  - Revert any path that accidentally makes live mode reachable
-
+  - Adapter contract exists and live adapter is hard-disabled.
+- rollback 기준
+  - Revert any adapter path that can instantiate live execution.
 - 다음 Phase 진입 조건
-  - Contract and token manager tests pass
-  - Live-mode regression tests pass
+  - Adapter layer passes isolated mock tests.
 
-### Phase 3: Paper Trading Persistence
+# Phase 3: Token Hashkey Request Signing
 
 - 목적
-  - Extend existing paper tables for broker-synced use
-  - Add portfolio snapshot, outbox, delivery log, and generic broker audit tables
-  - Keep current synthetic tables untouched
+  - Add safe token lifecycle and request signing utilities for KIS mock calls.
+- 수정 대상 파일
+  - `backend/app/services/kis_service.py`
+  - `backend/app/models/schemas.py`
+- 새로 생성할 파일
+  - `backend/app/services/kis_token_manager.py`
+  - `backend/app/services/kis_request_signer.py`
+  - `backend/app/services/credential_redaction.py`
+- 금지 사항
+  - No token raw value persistence.
+  - No secret logging.
+- 구현 조건
+  - Store metadata only.
+  - If hashkey contract remains unconfirmed, keep signer pluggable and fail-closed.
+  - Reject submit if signing prerequisites are incomplete.
+- 테스트 파일
+  - `backend/tests/test_kis_token_manager.py`
+  - `backend/tests/test_kis_request_signer.py`
+  - `backend/tests/test_secret_redaction.py`
+- 검증 명령어
+  - `python -m pytest backend/tests/test_kis_token_manager.py backend/tests/test_kis_request_signer.py backend/tests/test_secret_redaction.py -q`
+- 완료 기준
+  - Token metadata lifecycle and redaction tests pass.
+- rollback 기준
+  - Revert if any raw secret reaches DB, logs, or API payload.
+- 다음 Phase 진입 조건
+  - Mock submit can be signed and gated safely.
 
+# Phase 4: Paper Order Submit Cancel
+
+- 목적
+  - Add paper-only submit and cancel endpoints.
+- 수정 대상 파일
+  - `backend/app/api/paper.py`
+  - `backend/app/models/schemas.py`
+  - `backend/app/services/paper_trading_service.py`
+- 새로 생성할 파일
+  - `backend/app/api/paper_execution_helpers.py`
+- 금지 사항
+  - No live routes.
+  - No submit when `PAPER_BOT_ENABLED=false`.
+  - No submit when `PAPER_BOT_AUTO_SUBMIT=false` for bot-driven paths.
+- 구현 조건
+  - Add `POST /api/paper/orders/submit`
+  - Add `POST /api/paper/orders/cancel`
+  - Enforce kill switch, paper mode, idempotency, duplicate prevention.
+  - Return redacted broker trace and paper-only markers.
+- 테스트 파일
+  - `backend/tests/test_paper_submit_cancel_api.py`
+  - `backend/tests/test_no_live_trading_regression.py`
+- 검증 명령어
+  - `python -m pytest backend/tests/test_paper_submit_cancel_api.py backend/tests/test_no_live_trading_regression.py -q`
+- 완료 기준
+  - Paper submit/cancel works against mock adapter tests and is blocked by safety gates when disabled.
+- rollback 기준
+  - Revert immediately if any route can hit live domain.
+- 다음 Phase 진입 조건
+  - Submit/cancel state transitions stable under tests.
+
+# Phase 5: Order Fills Positions Portfolio Sync
+
+- 목적
+  - Persist and synchronize paper trading state.
 - 수정 대상 파일
   - `backend/app/models/tables.py`
-  - `backend/tests/test_alembic_migrations.py`
-
-- 새로 생성할 파일
-  - `backend/alembic/versions/<new_revision>_paper_trading_persistence.py`
-  - `backend/tests/test_paper_persistence_migration.py`
-
-- 금지 사항
-  - No destructive migration
-  - No dropping existing tables
-  - No raw token columns
-  - No reuse of `positions` as paper mirror state
-
-- 구현 조건
-  - Extend existing:
-    - `paper_orders`
-    - `paper_fills`
-    - `paper_positions`
-  - Add new:
-    - `paper_portfolio_snapshots`
-    - `broker_audit_events`
-    - `notification_events`
-    - `notification_delivery_logs`
-    - `kis_token_status_metadata`
-  - Use nullable-first additive migration strategy
-  - Preserve zero-write assumptions until Phase 4 enables paper submit
-
-- 테스트 파일
-  - `backend/tests/test_paper_persistence_migration.py`
-  - `backend/tests/test_alembic_migrations.py`
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_paper_persistence_migration.py backend/tests/test_alembic_migrations.py -q`
-  - `.\\.venv\\Scripts\\python.exe -m alembic upgrade head`
-  - `git diff --check`
-
-- 완료 기준
-  - Migration upgrades cleanly
-  - Existing tables remain intact
-  - New tables exist with safe defaults
-  - No raw secret field exists
-
-- 실패 시 rollback 기준
-  - `alembic downgrade -1` if schema is not yet depended on
-  - Revert migration file if tests fail or data model violates safety rules
-
-- 다음 Phase 진입 조건
-  - Migration tests pass
-  - Schema is additive only
-
-### Phase 4: Paper Order Preview/Submit/Cancel
-
-- 목적
-  - Implement paper order lifecycle for preview, submit, and cancel
-  - Preserve preview separation
-  - Add audit + idempotency guarantees
-
-- 수정 대상 파일
-  - `backend/app/api/paper.py`
-  - `backend/app/services/paper_trading_service.py`
   - `backend/app/models/schemas.py`
-  - `backend/app/brokers/kis_paper.py`
-
-- 새로 생성할 파일
-  - `backend/app/services/paper_order_service.py`
-  - `backend/tests/test_paper_order_api.py`
-  - `backend/tests/test_paper_order_service.py`
-
-- 금지 사항
-  - No live submit path
-  - No silent submit without `confirm=true`
-  - No order creation if kill switch is on
-  - No guessed cancel payload if official fields are not confirmed
-
-- 구현 조건
-  - Keep `POST /api/paper/orders/preview`
-  - Add:
-    - `POST /api/paper/orders/submit`
-    - `POST /api/paper/orders/cancel`
-    - `GET /api/paper/orders`
-  - Require explicit `confirm=true` for submit/cancel
-  - Use `idempotency_key` and canonical request hash
-  - If cancel capability is not fully confirmed from official docs, keep the cancel path disabled with explicit reason instead of guessing
-
-- 테스트 파일
-  - `backend/tests/test_paper_order_api.py`
-  - `backend/tests/test_paper_order_service.py`
-  - `backend/tests/test_no_live_trading_regression.py`
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_paper_order_api.py backend/tests/test_paper_order_service.py backend/tests/test_no_live_trading_regression.py -q`
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_phase3e_paper_safety.py -q`
-  - `git diff --check`
-
-- 완료 기준
-  - Submit path exists for paper only
-  - Preview path remains separate
-  - Orders are idempotent
-  - Cancel behavior is either implemented from confirmed docs or safely disabled with explicit reason
-
-- 실패 시 rollback 기준
-  - Revert submit/cancel endpoints if any path can place live orders
-  - Revert if confirm/idempotency/kill-switch protections are bypassed
-
-- 다음 Phase 진입 조건
-  - Paper order lifecycle tests pass
-  - No-live regression passes
-
-### Phase 5: Fill/Position/Portfolio Sync
-
-- 목적
-  - Mirror KIS paper account state into local paper tables
-  - Add positions, fills, and account snapshot APIs
-  - Keep synthetic portfolio logic separate
-
-- 수정 대상 파일
   - `backend/app/api/paper.py`
-  - `backend/app/services/paper_trading_service.py`
-  - `backend/app/services/portfolio_service.py`
-  - `backend/app/brokers/kis_paper.py`
-
 - 새로 생성할 파일
+  - `backend/alembic/versions/<rev>_add_paper_trading_tables.py`
   - `backend/app/services/paper_sync_service.py`
-  - `backend/tests/test_paper_sync.py`
-  - `backend/tests/test_paper_portfolio_api.py`
-
+  - `backend/app/repositories/paper_repository.py`
 - 금지 사항
-  - No writes into synthetic `positions` as a mirror of KIS paper state
-  - No live sync paths
-  - No direct exposure of account numbers
-
+  - No raw credential persistence.
 - 구현 조건
-  - Add:
-    - `GET /api/paper/fills`
-    - `GET /api/paper/positions`
-    - `GET /api/paper/portfolio`
-    - `POST /api/paper/sync`
-  - Support sync scopes:
-    - `orders`
-    - `fills`
-    - `positions`
-    - `portfolio`
-    - `all`
-  - Sync must be idempotent and deduplicate repeated fetches
-  - Snapshot and position views must rely on `paper_*` tables only
-
+  - Add `paper_orders`, `paper_fills`, `paper_positions`, `paper_portfolio_snapshots`, `broker_audit_events`, `kis_token_status_metadata`.
+  - Add `GET /api/paper/orders`
+  - Add `GET /api/paper/fills`
+  - Add `GET /api/paper/positions`
+  - Add `GET /api/paper/portfolio`
+  - Add `POST /api/paper/sync`
 - 테스트 파일
-  - `backend/tests/test_paper_sync.py`
-  - `backend/tests/test_paper_portfolio_api.py`
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q`
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_no_live_trading_regression.py -q`
-  - `git diff --check`
-
+  - `backend/tests/test_paper_sync_service.py`
+  - `backend/tests/test_alembic_migrations.py`
+- 검증 명령어
+  - `python -m pytest backend/tests/test_paper_sync_service.py backend/tests/test_alembic_migrations.py -q`
 - 완료 기준
-  - Paper sync works idempotently
-  - Positions and portfolio snapshot endpoints return paper-only mirrored state
-  - Synthetic portfolio baseline remains unchanged
-
-- 실패 시 rollback 기준
-  - Revert sync if duplicate fills/orders/positions occur
-  - Revert if synthetic tables become coupled to paper mirrors
-
+  - Fill/position/portfolio snapshots are queryable and consistent.
+- rollback 기준
+  - Roll back migration if persistence contract is inconsistent or leaks secrets.
 - 다음 Phase 진입 조건
-  - Sync tests pass
-  - No data mixing between synthetic and paper states
+  - Stable synced paper state is available for notifications and bot logic.
 
-### Phase 6: Report Notification
+# Phase 6: Notification Channel Decision
 
 - 목적
-  - Deliver daily/weekly reports through Telegram/Discord
-  - Convert markdown reports into channel-safe summaries
-  - Support optional file attachment
-
+  - Freeze primary notifier channel and interface contract.
 - 수정 대상 파일
-  - `backend/app/api/reports.py`
-  - `backend/app/services/report_service.py`
-  - `backend/app/services/notification_service.py`
+  - `docs/research/kis-paper-api-confirmation-matrix.md`
+- 새로 생성할 파일
+  - `docs/research/notification-channel-decision.md`
+- 금지 사항
+  - No notifier implementation before decision record.
+- 구현 조건
+  - Record Telegram-first decision, Discord follow-up path, reason, constraints, and security handling.
+- 테스트 파일
+  - None
+- 검증 명령어
+  - N/A
+- 완료 기준
+  - Decision document committed.
+- rollback 기준
+  - Remove if unsupported by official docs.
+- 다음 Phase 진입 조건
+  - Primary channel finalized.
 
+# Phase 7: Notification Implementation
+
+- 목적
+  - Add robust non-blocking notification pipeline.
+- 수정 대상 파일
+  - `backend/app/models/tables.py`
+  - `backend/app/models/schemas.py`
+  - `backend/app/api/settings.py`
+- 새로 생성할 파일
+  - `backend/app/services/notification_service.py`
+  - `backend/app/services/telegram_notifier.py`
+  - `backend/app/services/discord_webhook_notifier.py`
+  - `backend/app/services/notification_outbox_service.py`
+  - `backend/app/api/notifications.py`
+  - `backend/alembic/versions/<rev>_add_notification_tables.py`
+- 금지 사항
+  - No notifier may block trading state commit.
+- 구현 조건
+  - Add `notification_events`, `notification_delivery_logs`.
+  - Add `GET /api/notifications/status`
+  - Add `POST /api/notifications/test`
+  - Implement events:
+    - `bot_started`
+    - `bot_stopped`
+    - `order_signal_created`
+    - `paper_order_previewed`
+    - `paper_order_submitted`
+    - `paper_order_rejected`
+    - `paper_order_filled`
+    - `paper_order_cancelled`
+    - `portfolio_snapshot`
+    - `daily_report_generated`
+    - `weekly_report_generated`
+    - `risk_limit_warning`
+    - `kis_token_error`
+    - `broker_error`
+    - `kill_switch_triggered`
+- 테스트 파일
+  - `backend/tests/test_notification_service.py`
+  - `backend/tests/test_notification_outbox.py`
+- 검증 명령어
+  - `python -m pytest backend/tests/test_notification_service.py backend/tests/test_notification_outbox.py -q`
+- 완료 기준
+  - Notification failures are isolated and retriable.
+- rollback 기준
+  - Revert if any order path fails because notifier delivery failed.
+- 다음 Phase 진입 조건
+  - Notification pipeline proven non-blocking.
+
+# Phase 8: Report Portfolio Alerts
+
+- 목적
+  - Send daily/weekly report summaries and portfolio snapshots to notifier channel.
+- 수정 대상 파일
+  - `backend/app/services/report_service.py`
+  - `backend/app/api/reports.py`
 - 새로 생성할 파일
   - `backend/app/services/report_notification_service.py`
-  - `backend/tests/test_report_notify.py`
-
 - 금지 사항
-  - No raw secret exposure in report-delivery logs
-  - No overly long unsplit messages
-  - No blocking of report generation because delivery fails
-
+  - No full secret dump in reports or notifications.
 - 구현 조건
   - Add `POST /api/reports/{report_id}/notify`
-  - Support:
-    - `summary`
-    - `summary_and_file`
-  - Telegram:
-    - split safely below 4096 chars
-    - file attachment via document when needed
-  - Discord:
-    - split safely below 2000 chars or use embed/file
-    - set `allowed_mentions.parse=[]`
-  - Delivery failures must be logged to delivery tables and not roll back report creation
-
+  - Convert markdown reports to delivery-friendly summaries.
+  - Split long messages.
+  - Optionally attach report files when safe and size-limited.
 - 테스트 파일
   - `backend/tests/test_report_notify.py`
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_report_notify.py backend/tests/test_notifications.py -q`
-  - `git diff --check`
-
+- 검증 명령어
+  - `python -m pytest backend/tests/test_report_notify.py -q`
 - 완료 기준
-  - Existing reports can be delivered to supported channels
-  - Long reports are summarized/split safely
-  - Delivery failure does not corrupt report generation
-
-- 실패 시 rollback 기준
-  - Revert report notify path if channel length or secret redaction rules are violated
-
+  - Daily/weekly report summaries and portfolio snapshots can be delivered safely.
+- rollback 기준
+  - Revert if report notification breaks existing report routes.
 - 다음 Phase 진입 조건
-  - Report notify tests pass
-  - Delivery logs are correctly recorded
+  - Notification channel ready for bot events and scheduled summaries.
 
-### Phase 7: Bot Scheduler
+# Phase 9: Paper Bot Activation
 
 - 목적
-  - Add paper-bot orchestration and scheduler runner
-  - Keep auto-submit opt-in only
-  - Support once/loop operation with kill switch
-
+  - Introduce bot decision loop with explicit enable flags.
 - 수정 대상 파일
-  - `launcher.py`
-  - `backend/app/services/paper_trading_service.py`
+  - `backend/app/services/screener_service.py`
+  - `backend/app/services/risk_service.py`
   - `backend/app/api/paper.py`
-  - `backend/app/services/settings_service.py`
-  - `frontend/app/settings/page.tsx`
-  - `.env.example`
-
 - 새로 생성할 파일
-  - `backend/config/bot.yaml`
   - `backend/app/services/paper_bot_service.py`
-  - `backend/app/jobs/paper_bot_runner.py`
-  - `backend/tests/test_paper_bot_scheduler.py`
-
+  - `backend/app/services/paper_bot_scheduler.py`
+  - `backend/app/api/bot.py`
+  - `backend/alembic/versions/<rev>_add_paper_bot_tables.py`
 - 금지 사항
-  - No default auto-submit
-  - No always-on scheduler by default
-  - No live trading path
-  - No implicit scheduling from API worker without explicit enable flag
-
+  - No auto-submit unless explicitly enabled.
 - 구현 조건
-  - Runner supports:
-    - `--once`
-    - `--loop`
-  - Bot flow:
-    - candidate screening
-    - signal selection
-    - risk guard
-    - order preview
-    - optional paper submit
-    - polling/sync
-    - notification
-    - report generation
-  - `PAPER_BOT_AUTO_SUBMIT=false` by default
-  - Scheduler remains disabled unless explicitly enabled
-  - Optional launcher integration must also remain disabled by default
-
+  - Add bot modes `manual`, `run_once`, `scheduled`.
+  - Add `paper_bot_runs`, `paper_bot_decisions`.
+  - Add `GET /api/bot/status`
+  - Add `POST /api/bot/run-once`
+  - Add `POST /api/bot/stop`
+  - Enforce session checks, duplicate prevention, kill switch, risk caps.
 - 테스트 파일
+  - `backend/tests/test_paper_bot_decision.py`
   - `backend/tests/test_paper_bot_scheduler.py`
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py -q`
-  - `git diff --check`
-
+- 검증 명령어
+  - `python -m pytest backend/tests/test_paper_bot_decision.py backend/tests/test_paper_bot_scheduler.py -q`
 - 완료 기준
-  - Bot runner exists and can run once safely
-  - Loop mode is gated and disabled by default
-  - Auto-submit remains explicit opt-in only
-
-- 실패 시 rollback 기준
-  - Revert runner integration if scheduler starts automatically or can bypass safety flags
-
+  - Bot can produce preview decisions and optional paper submits under explicit flags.
+- rollback 기준
+  - Revert if bot can auto-submit without explicit config.
 - 다음 Phase 진입 조건
-  - Bot scheduler tests pass
-  - Default runtime remains manual and safe
+  - Bot path stable under mock tests.
 
-### Phase 8: Frontend Integration
+# Phase 10: Frontend Integration
 
 - 목적
-  - Add minimal UI for paper submit/history/snapshot/notify control
-  - Keep the UI clearly labeled as mock trading
-  - Avoid any appearance of live-trading readiness
-
+  - Extend existing UI with minimal structural change.
 - 수정 대상 파일
   - `frontend/app/paper/page.tsx`
-  - `frontend/app/portfolio/page.tsx`
   - `frontend/app/reports/page.tsx`
   - `frontend/app/settings/page.tsx`
-  - `frontend/lib/api.ts`
-
+  - `frontend/lib/*`
 - 새로 생성할 파일
-  - `frontend/components/paper-mode-banner.tsx`
-  - `backend/tests/test_frontend_api_contracts.py`
-
+  - `frontend/app/bot/page.tsx`
+  - `frontend/lib/paperApi.ts`
+  - `frontend/lib/notificationApi.ts`
 - 금지 사항
-  - No UI copy that implies live trading
-  - No secret values rendered to the browser
-  - No frontend-only assumption that bypasses backend safety checks
-
+  - No UI language implying live trading.
 - 구현 조건
-  - `/paper`
-    - show paper-mode banner
-    - preview/submit/cancel controls
-    - recent orders/fills
-    - sync action
-    - current paper portfolio snapshot
-  - `/portfolio`
-    - separate synthetic vs paper sections
-  - `/reports`
-    - add notify button/status
-  - `/settings`
-    - show redacted `paper`, `notifications`, `bot` summary
-  - UI must use explicit labels such as:
-    - `모의투자`
-    - `실거래 아님`
-    - `paper only`
-
+  - Add paper dashboard sections for submit/cancel/orders/fills/positions/portfolio.
+  - Add bot enabled/disabled indicator.
+  - Add kill switch indicator.
+  - Add notification test and report notify actions.
+  - Add explicit `모의투자` labels.
 - 테스트 파일
-  - `backend/tests/test_frontend_api_contracts.py`
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q`
-  - `cd frontend && npm.cmd run lint && npm.cmd exec tsc -- --noEmit && npm.cmd run build && cd ..`
-  - `git diff --check`
-
+  - Frontend build/lint/typecheck only unless dedicated tests already exist.
+- 검증 명령어
+  - `cd frontend && npm run lint && npm exec tsc -- --noEmit && npm run build`
 - 완료 기준
-  - Frontend builds cleanly
-  - UI exposes paper-only controls with clear labeling
-  - No secret values appear in rendered pages
-
-- 실패 시 rollback 기준
-  - Revert UI features if they obscure the mock-trading boundary or fail build/typecheck
-
+  - Frontend can operate new paper-only backend routes.
+- rollback 기준
+  - Revert UI changes if they imply live trading or break build.
 - 다음 Phase 진입 조건
-  - Frontend lint/typecheck/build pass
-  - API contract tests pass
+  - Frontend fully aligned with backend additive routes.
 
-### Phase 9: Validation & Hardening
+# Phase 11: End-to-End Mock Validation
 
 - 목적
-  - Finalize docs, security checks, and regression coverage
-  - Ensure live trading remains disabled
-  - Prepare the project for controlled paper-mode use
-
+  - Validate full paper flow in mock-only environment.
 - 수정 대상 파일
-  - `README.md`
-  - `docs/PROJECT_STATUS.md`
+  - `docs/VALIDATION.md`
+- 새로 생성할 파일
+  - `backend/tests/test_e2e_paper_mock_flow.py`
+- 금지 사항
+  - No real KIS credentials in tests.
+- 구현 조건
+  - Cover preview -> submit -> poll -> fill sync -> portfolio snapshot -> notification outbox -> report notify.
+- 테스트 파일
+  - `backend/tests/test_e2e_paper_mock_flow.py`
+- 검증 명령어
+  - `python -m pytest backend/tests/test_e2e_paper_mock_flow.py -q`
+  - `python -m pytest backend/tests -q`
+- 완료 기준
+  - Full mock-only flow passes.
+- rollback 기준
+  - Revert new orchestration if end-to-end state becomes inconsistent.
+- 다음 Phase 진입 조건
+  - End-to-end mock flow stable.
+
+# Phase 12: Controlled KIS Paper Trading Dry Run
+
+- 목적
+  - Run controlled KIS mock-account validation without enabling live paths.
+- 수정 대상 파일
   - `docs/VALIDATION.md`
   - `Memory.md`
-  - `.github/workflows/ci.yml`
-  - `.env.example`
-
 - 새로 생성할 파일
-  - `backend/tests/test_secret_redaction.py`
-  - `tools/secret_scan.py`
-  - `docs/PAPER_TRADING_OPERATION.md`
-
+  - `docs/research/kis-paper-dry-run-checklist.md`
 - 금지 사항
-  - No weakening of safety defaults for convenience
-  - No real secret values in docs or examples
-  - No silent live-mode support
-
+  - No live endpoint calls.
+  - No unattended auto-submit during first dry run.
 - 구현 조건
-  - Update docs to reflect the new paper-only baseline
-  - Add explicit final acceptance notes
-  - Add/expand:
-    - security/redaction tests
-    - no-live-trading regression tests
-    - migration tests
-    - notifier mock tests
-    - KIS adapter mock tests
-  - Add secret scan step to local validation and CI if practical
-
+  - Require explicit human-enabled flags.
+  - Validate submit/cancel/query/sync on KIS mock account.
+  - Record only redacted traces and outcome metadata.
 - 테스트 파일
-  - `backend/tests/test_secret_redaction.py`
-  - `backend/tests/test_no_live_trading_regression.py`
-  - `backend/tests/test_alembic_migrations.py`
-
-- 실행할 검증 명령어
-  - `.\\.venv\\Scripts\\python.exe -m pytest backend/tests -q`
-  - `.\\.venv\\Scripts\\python.exe tools/secret_scan.py`
-  - `cd frontend && npm.cmd run lint && npm.cmd exec tsc -- --noEmit && npm.cmd run build && cd ..`
-  - `git diff --check`
-
+  - No automated live-network tests required in CI.
+- 검증 명령어
+  - Manual dry-run checklist only.
 - 완료 기준
-  - Full backend pytest passes
-  - Frontend lint/typecheck/build passes
-  - Secret scan passes
-  - Docs match actual code state
-  - Live trading remains disabled by default and fail-closed
-
-- 실패 시 rollback 기준
-  - Revert final hardening changes that break CI/build or weaken the safety boundary
-  - Do not declare the project complete unless full validation passes
-
+  - Redacted dry-run result documented.
+- rollback 기준
+  - Disable submit path if KIS mock contract mismatches implementation.
 - 다음 Phase 진입 조건
-  - None; this is the final phase
+  - Dry run completed without violating safety rules.
 
-## Final Acceptance Criteria
+# Phase 13: Final Safety Hardening
 
-- KIS paper broker path exists and is clearly separated from live
-- Live trading remains disabled by default and unreachable in normal flow
-- Existing preview-only baseline is preserved where expected
-- Paper submit/sync/report/notify flow works without mixing paper and synthetic portfolio state
-- Notifications support disabled/mock plus real Discord/Telegram implementations
-- No raw secrets or raw account numbers appear in code, docs, logs, DB, reports, or browser output
-- Scheduler exists but remains disabled by default
-- Frontend clearly labels all paper features as mock trading only
-- Backend tests pass
-- Frontend lint, typecheck, and build pass
-- Final docs accurately reflect the implemented state
+- 목적
+  - Freeze paper-only hardening and prevent accidental live drift.
+- 수정 대상 파일
+  - `Memory.md`
+  - `docs/PROJECT_STATUS.md`
+  - `docs/VALIDATION.md`
+  - `.env.example`
+- 새로 생성할 파일
+  - `backend/tests/test_final_safety_hardening.py`
+- 금지 사항
+  - No feature creep.
+- 구현 조건
+  - Add final no-live-trading regression checks.
+  - Ensure `.env.example` placeholders only for new secrets.
+  - Ensure redaction and kill switch coverage.
+- 테스트 파일
+  - `backend/tests/test_final_safety_hardening.py`
+- 검증 명령어
+  - `python -m pytest backend/tests -q`
+  - `cd frontend && npm run lint && npm exec tsc -- --noEmit && npm run build`
+  - `git diff --check`
+- 완료 기준
+  - Repository is paper-only, documented, validated, and CI-clean.
+- rollback 기준
+  - Revert if any final hardening weakens existing preview/read-only invariants.
+- 다음 Phase 진입 조건
+  - None
+
+# Final Acceptance Criteria
+
+- Paper-only submit/cancel/query/sync paths exist and are additive.
+- Live adapter remains disabled.
+- No live endpoints are callable.
+- No secret raw value is persisted or exposed.
+- KIS mock account paper orders can be submitted and cancelled under explicit flags only.
+- Fills, positions, cash, and portfolio snapshots can be synchronized.
+- Duplicate submit prevention and idempotency are enforced.
+- Telegram notifications work with non-blocking outbox behavior.
+- Reports can be notified safely.
+- Bot can run once or on schedule in paper-only mode.
+- Frontend clearly labels the feature as `모의투자`.
+- No-live-trading regression tests pass.

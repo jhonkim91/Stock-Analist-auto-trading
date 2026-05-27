@@ -5,7 +5,8 @@
 - [x] 현재 상태명: `KIS Paper Balance Inquiry Read-only`
 - [x] 현재 version: `MVP v0.26.0`
 - [x] 현재 branch: `feature/kis-paper-goal-phases` (baseline: `main`)
-- [x] 최신 backend pytest: `342 passed`
+- [x] 현재 goal.md Phase 0 감사: `docs/research/kis-paper-baseline-audit.md`
+- [x] 최신 backend pytest: `342 passed in 327.46s`
 - [x] 최신 frontend 검증: lint, typecheck, build 통과
 - [x] 최신 secret scan: `NO_SECRET_FINDINGS`
 - [x] 최신 diff check: `git diff --check` exit 0, CRLF warning만 있음
@@ -23,25 +24,21 @@
 - KIS balance 경로는 `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCOUNT_NO`, `KIS_PRODUCT_CODE`를 env에서만 읽고 응답/로그/문서에는 raw 값을 남기지 않는다.
 - `ENABLE_REAL_ORDER=true`이면 KIS balance client를 호출하지 않고 local snapshot fallback으로 차단한다.
 - 실전투자 TR ID와 live base URL 경로는 사용하지 않는다.
+- `goal.md` Phase 0는 main ref `bfcb1691e56dbdbbfc18b043bc65ec447acafa3e`와 현재 작업 브랜치 HEAD `ffd7f52a4745df2b99c8dae694796eab5e8f024d`를 분리해 감사했다.
 
 ## 최근 변경 요약
 
-- `backend/app/services/kis_paper_balance.py`: KIS 모의투자 잔고조회 GET client, env credential 로딩, 실전 base URL 차단, output1/output2 mapping 추가.
-- `backend/app/services/paper_sync_service.py`: `/api/paper/portfolio`에서 KIS paper balance 조건부 호출, 실패/비활성 시 local snapshot fallback 유지.
-- `backend/app/services/paper_trading_service.py`, `backend/config/paper.yaml`: paper balance inquiry enable flag와 official balance endpoint confirmation flag 추가. 기본값은 모두 disabled.
-- `.env.example`: `ENABLE_REAL_ORDER=false`, KIS access token/account/product/base URL placeholder 추가.
-- `frontend/lib/api.ts`: KIS balance `holdings`, `account_summary`, `kis_balance` optional response type 추가.
-- `backend/tests/test_kis_paper_balance.py`: required header/query mapping, disabled fallback, enabled paper mode client 호출, secret log 비노출, `ENABLE_REAL_ORDER` 차단 테스트 추가.
-- `docs/VALIDATION.md`: 이번 KIS paper balance 검증 결과 추가.
+- `docs/research/kis-paper-baseline-audit.md`: `goal.md` Phase 0 산출물로 main 기준 route/table/service/test/UI와 no-live-trading 불변식 문서화.
+- `docs/PROJECT_STATUS.md`: Goal Phase 0 감사 문서 위치와 main/current branch 분리 기준 추가.
+- `docs/VALIDATION.md`: Goal Phase 0 full backend/frontend/diff 검증 결과 추가.
+- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0에서는 runtime code, API route, DB schema, `.env` 계열 파일을 변경하지 않았다.
 
 ## 최신 검증 결과
 
-- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_balance.py backend/tests/test_paper_portfolio_api.py -q`: 7 passed in 0.96s.
-- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py backend/tests/test_secret_redaction.py backend/tests/test_kis_paper_adapter.py -q`: 13 passed in 1.20s.
-- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 342 passed in 631.22s.
-- 2026-05-27 `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS`.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 342 passed in 327.46s.
 - 2026-05-27 frontend `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.
 - 2026-05-27 `git diff --check`: 통과, CRLF warning만 있음.
+- 2026-05-27 `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS`.
 
 ## 주의 사항
 

@@ -6,6 +6,7 @@
 |---|---|
 | Version | `MVP v0.26.0` |
 | Phase | `KIS Paper Balance Inquiry Read-only` |
+| Goal.md Phase 0 | `docs/research/kis-paper-baseline-audit.md`에서 main 기준선과 현재 작업 브랜치 차이를 분리 감사 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
 | 거래 상태 | paper-only local submit gated by `confirm=true`, idempotency, kill-switch; KIS paper balance read-only 조건부 지원; live/real order disabled |
@@ -57,6 +58,7 @@
 - KIS Paper Broker Phase 8 Frontend Integration: `/paper`, `/portfolio`, `/reports`, `/settings`에 paper-only banner와 backend-gated submit/cancel/sync/notify controls를 추가하고 live readiness copy를 배제.
 - KIS Paper Broker Phase 9 Validation & Hardening: repo secret scan 도구, CI secret scan, settings key-name redaction hardening, operation doc, full backend/frontend acceptance 검증.
 - KIS Paper Balance Inquiry Read-only: `/api/paper/portfolio`에서 paper mode와 env credential 조건이 모두 맞을 때만 KIS `주식잔고조회` paper TR `VTTC8434R`를 호출하고, 기본 disabled/mock 상태는 local snapshot fallback을 유지.
+- Goal.md Phase 0 Baseline Audit Refresh: `docs/research/kis-paper-baseline-audit.md`에 main ref `bfcb1691e56dbdbbfc18b043bc65ec447acafa3e`와 현재 작업 브랜치 `ffd7f52a4745df2b99c8dae694796eab5e8f024d`를 분리 기록하고, Phase 0 범위가 문서 감사뿐임을 확정.
 - Frontend strategy selector: `/api/screener/strategies` metadata와 `/screener`, `/dashboard`, `/backtest` selector 연동.
 - GitHub Actions CI: backend pytest, frontend lint/typecheck/build.
 - Alembic migration scaffold: initial schema, weekly indicator fields, pullback EMA fields, screen metadata JSON, pattern engine fields, earnings event table, backtest trade ledger table, strategy parameter snapshot table.
