@@ -19,6 +19,7 @@
 - [x] 최신 Phase 19/20 검증: live scaffold/preflight targeted suite 16 passed, app/frontend no-live static scan no matches.
 - [x] 최신 secret scan: `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
 - [x] 최신 `git diff --check` 통과. CRLF warning only.
+- [x] 최신 로컬 실행 상태: 고아 Next/uvicorn 프로세스 종료 후 `py launcher.py run --no-browser`로 8000 backend와 3000 frontend를 launcher-owned 상태로 복구했다.
 - [x] Goal continuation 상태: Phase 20 실제 canary는 live implementation 별도 승인, reviewer, 환경 분리, rollback proof 전까지 완료 불가.
 - [ ] 현재 PowerShell의 `python -m pytest backend/tests`는 `Python`만 출력하고 exit 1로 종료된다. 검증은 로컬 `.venv` Python으로 수행했다.
 - [ ] 실제 Telegram live delivery는 config/env opt-in 전까지 비활성이다.
@@ -27,6 +28,7 @@
 
 - Backend: FastAPI + SQLite, sample seed, CSV import, KIS read-only foundation, broker safety scaffold, paper trading local lifecycle, report notification, report automation, paper bot scheduler, validation/report/backtest 기능.
 - Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/bot`, `/settings`.
+- Local launcher: 표준 실행 주소는 `http://127.0.0.1:3000/dashboard`이며 frontend build metadata의 API base는 `http://127.0.0.1:8000`이다.
 - Notification: `backend/config/notifications.yaml` 기본값은 `enabled=false`, `default_dry_run=true`, `telegram_main.mode=disabled`, `telegram_main.dry_run=true`.
 - Telegram secret은 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 환경 변수명만 참조하고 원문 값은 코드/문서/DB/API 응답에 저장하지 않는다.
 - Paper/KIS execution은 fail-closed 기본값을 유지한다. live broker, live websocket, 실계좌 주문/취소/체결은 활성화하지 않는다.
@@ -48,6 +50,7 @@
 
 ## 최신 검증 결과
 
+- 2026-05-28 local launcher recovery: 기존 3000 Next PID 19988, 8001 uvicorn PID 17860 종료 후 `py launcher.py run --no-browser`; `py launcher.py check` -> all OK, backend 8000/frontend 3000 launcher-owned; `/health` 200, `/dashboard` 200, `/api/data/status` 200 with `orders_count=0`, `/api/broker/status` -> `can_submit=False`, `live=False`, `paper=False`.
 - 2026-05-28 targeted notification pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notifications.py backend/tests/test_notification_service.py backend/tests/test_notification_templates.py backend/tests/test_notification_outbox.py` -> 15 passed in 3.22s.
 - 2026-05-28 Phase 13-18 targeted pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase12c_tool.py backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py backend/tests/test_report_automation.py backend/tests/test_final_safety_hardening.py -q` -> 27 passed in 30.76s.
 - 2026-05-28 notification/bot pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_notification_service.py backend/tests/test_paper_bot_scheduler.py -q` -> 8 passed in 0.86s.

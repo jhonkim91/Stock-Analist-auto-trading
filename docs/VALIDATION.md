@@ -1,5 +1,19 @@
 # Validation
 
+## 2026-05-28 Local Launcher Recovery
+
+`start_stock_analyst.cmd`/`py launcher.py run` 재실행 시 응답이 없어 보이는 상태를 점검했다. 원인은 3000 포트의 기존 Next 서버와 8001 백엔드가 런처 상태 파일 없이 남아 있어 표준 런처가 fail-closed로 중단된 것이다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 기존 포트 상태 | 원인 확인 | 3000: Next `node.exe` PID 19988, 8001: uvicorn PID 17860. `frontend/.next/launcher-state.json`과 `launcher-build.json`은 없음 |
+| 기존 API 상태 | 부분 정상 | 기존 frontend build는 `http://127.0.0.1:8001`을 호출했고, 8001 `/health`, `/api/data/status`, `/api/screener/strategies`는 200 응답 |
+| 복구 조치 | 완료 | PID 19988, 17860 종료 후 `py launcher.py run --no-browser` 실행. 의존성 확인, `npm.cmd run build`, backend/frontend start 완료 |
+| Launcher check | 통과 | `py launcher.py check`: python, venv, npm, frontend build, launcher build metadata, backend 8000, frontend 3000 all OK |
+| HTTP smoke | 통과 | `http://127.0.0.1:8000/health` 200, `http://127.0.0.1:3000/dashboard` 200 |
+| Safety smoke | 통과 | `/api/data/status`: `orders_count=0`; `/api/broker/status`: `can_submit=False`, `live=False`, `paper=False` |
+| Build API base | 통과 | `frontend/.next/launcher-build.json`: `next_public_api_base_url=http://127.0.0.1:8000` |
+
 ## 2026-05-28 Phase 19-20 Publish Validation
 
 커밋/푸시 전 현재 작업트리 기준으로 backend, frontend, secret, whitespace 검증을 재확인했다.
