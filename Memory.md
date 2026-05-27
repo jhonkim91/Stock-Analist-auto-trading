@@ -2,8 +2,8 @@
 
 ## Checkpoint
 
-- [ ] 현재 goal.md Phase 12 dry-run: preflight 중단. KIS paper credential과 explicit paper network/submit enable flag가 없어 실제 KIS 모의계좌 submit/cancel/query/sync 호출을 실행하지 않음. `PaperConfigService`는 이제 config true만으로 paper submit/network가 열리지 않도록 runtime env flag를 함께 요구한다.
-- [x] 현재 상태명: `KIS Paper Balance Inquiry Read-only`
+- [ ] 현재 goal.md Phase 12: 미완료 유지. preflight 중단 상태를 재검토해 Phase 12A read-only balance dry-run, Phase 12B submit/cancel/query/sync adapter implementation, Phase 12C controlled submit/cancel/query/sync dry-run으로 분리했다. Phase 13 진입 불가.
+- [x] 현재 상태명: `KIS Paper Phase 12 Split Review`
 - [x] 현재 version: `MVP v0.26.0`
 - [x] 현재 branch: `feature/kis-paper-goal-phases` (baseline: `main`)
 - [x] 현재 goal.md Phase 0 감사: `docs/research/kis-paper-baseline-audit.md`
@@ -18,7 +18,7 @@
 - [x] 현재 goal.md Phase 9 paper bot activation: preview decision loop, bot audit tables, `/api/bot/*` safety route 추가
 - [x] 현재 goal.md Phase 10 frontend integration: `/bot` UI와 paper/notification wrapper, paper-only controls 추가
 - [x] 현재 goal.md Phase 11 e2e mock validation: mock-only paper flow E2E 테스트 추가
-- [x] 최신 backend pytest: `373 passed in 344.18s`
+- [x] 최신 backend 검증: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`: 10 passed in 0.90s
 - [x] 최신 frontend 검증: lint, typecheck, build, rendered smoke 통과
 - [x] 최신 secret scan: `NO_SECRET_FINDINGS`
 - [x] 최신 diff check: `git diff --check` exit 0, CRLF warning만 있음
@@ -40,24 +40,19 @@
 
 ## 최근 변경 요약
 
-- Phase 6: `docs/research/notification-channel-decision.md`에 Telegram-first primary, Discord follow-up path, security/non-blocking constraints를 문서화했다.
-- Phase 7: `NotificationOutboxService`, Discord webhook wrapper, supported notification events를 추가하고 notifier 실패가 caller 상태를 망치지 않도록 분리했다.
-- Phase 8: `ReportNotificationService` report summary에 local paper portfolio snapshot 요약을 추가하고 KIS network 호출 없이 전달하도록 보강했다.
 - Phase 9: `paper_bot_runs`, `paper_bot_decisions`, `/api/bot/status`, `/api/bot/run-once`, `/api/bot/stop`, preview decision loop, explicit auto-submit gates를 추가했다.
 - Phase 10: `frontend/app/bot/page.tsx`, `frontend/lib/paperApi.ts`, `frontend/lib/notificationApi.ts`를 추가하고 `/paper`, `/reports`, `/settings`에 bot/kill switch/notification/report notify controls를 paper-only로 연결했다.
 - Phase 11: `backend/tests/test_e2e_paper_mock_flow.py`를 추가해 preview, local submit, order poll, mock fill/position/portfolio, notification outbox, report notify를 KIS credential 없이 검증했다.
 - Phase 12 preflight: `docs/research/kis-paper-dry-run-checklist.md`에 manual dry-run 절차와 redacted preflight 중단 결과를 기록했다. 실제 KIS network call은 실행하지 않았다. 문서상 explicit env gate와 코드상 config-only gate의 불일치를 패치했다.
+- Phase 12 split review: `goal.md`와 `docs/research/kis-paper-dry-run-checklist.md`를 12A/12B/12C 구조로 재정리했다. submit/cancel/query/sync network 구현은 하지 않았고 fail-closed 상태를 유지한다.
 
 ## 최신 검증 결과
 
-- 2026-05-27 Phase 11 지정 pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_e2e_paper_mock_flow.py -q`: 1 passed in 0.75s.
-- 2026-05-27 Phase 12 runtime flag patch full backend: `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 373 passed in 344.18s.
-- 2026-05-27 Phase 10 frontend: `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.
-- 2026-05-27 Phase 10 rendered smoke: Browser plugin에 연결 가능한 in-app browser가 없어 Playwright fallback 사용. `/bot` run-once, `/paper` preview, `/settings` notification dry-run, `/reports`, `/bot` mobile 확인. overlay 없음, console issue 0.
+- 2026-05-27 Phase 12 split review 지정 pytest: `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`: 10 passed in 0.90s.
 - 2026-05-27 `git diff --check`: 통과, CRLF warning만 있음.
 - 2026-05-27 `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS`.
 - 2026-05-27 Phase 12 preflight: KIS paper credential 및 explicit enable flag absent, `paper.yaml` fail-closed 상태 확인. 실제 KIS network call 없음.
-- 2026-05-27 Phase 12 runtime flag patch: `backend/tests/test_paper_runtime_flags.py` 추가. config true만으로 paper submit/network가 열리지 않고, explicit env flag가 있어도 network submit은 unsupported로 차단되는지 검증한다.
+- 2026-05-27 Phase 12 code basis: read-only KIS balance path만 gated 조건에서 가능하고, submit/cancel/query/sync network adapter는 unsupported/confirmation required 상태다.
 
 ## 주의 사항
 
@@ -71,7 +66,8 @@
 
 ## 남은 작업
 
-- [ ] KIS paper submit/cancel/sync network 구현은 계속 보류한다.
-- [ ] Phase 12 Controlled KIS paper dry-run은 credential/explicit human enable flag 준비 후 수동으로 다시 실행해야 한다.
+- [ ] 다음 실행 Phase는 Phase 12A KIS paper read-only balance dry-run이다.
+- [ ] Phase 12B에서 KIS paper submit/cancel/query/sync adapter 구현 조건과 mocked HTTP 테스트를 별도 범위로 진행한다.
+- [ ] Phase 12C controlled submit/cancel/query/sync dry-run은 Phase 12B 구현 및 테스트 완료 전까지 금지한다.
 - [ ] 실제 KIS paper balance 운영 전 env credential 주입 방식과 token 발급/갱신 운영 절차를 별도 승인 후 정리한다.
 - [ ] UI에서 KIS balance holdings 상세 목록을 보여줄지 별도 범위로 검토한다.

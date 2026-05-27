@@ -1,5 +1,27 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 12 Split Review
+
+이번 작업은 preflight에서 중단된 Phase 12를 완료 처리하지 않고 재검토했다. 코드 기준으로 현재 KIS paper submit/cancel/query/sync network execution은 아직 unsupported/confirmation required 상태이며, Phase 13으로 진행하지 않는다. `.env`, `.env.local`, runtime code, API route, DB schema는 수정하지 않았다.
+
+`goal.md`의 Phase 12를 `Phase 12A: KIS paper read-only balance dry-run`, `Phase 12B: KIS paper submit/cancel/query/sync adapter implementation`, `Phase 12C: controlled KIS paper submit/cancel/query/sync dry-run`으로 분리했고, `docs/research/kis-paper-dry-run-checklist.md`도 같은 구조로 재정리했다. 다음 실행 대상은 Phase 12A이며, Phase 12B 전에는 submit/cancel/query/sync network 구현을 하지 않는다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 12 상태 | 미완료 유지 | env flag만으로 완료 불가. 실제 KIS paper submit/cancel/query/sync dry-run 결과 없음 |
+| 코드 기준 미완료 사유 | 확인 | `KisPaperBrokerAdapter.submit_order/cancel_order/list_orders/sync`는 confirmation-required error를 발생시킴 |
+| Read-only balance 경로 | 제한적 가능 | 모든 config/env/credential gate 충족 시 `/uapi/domestic-stock/v1/trading/inquire-balance`, `tr_id=VTTC8434R`만 read-only 호출 |
+| Paper submit | fail-closed 유지 | network flag가 열려도 `PAPER_NETWORK_UNSUPPORTED`, local paper submit은 confirm/idempotency/config/kill-switch gate 필요 |
+| Paper cancel | fail-closed 유지 | `KIS_PAPER_CANCEL_CONFIRMATION_REQUIRED` |
+| Paper sync | fail-closed 유지 | `POST /api/paper/sync`는 `KIS_PAPER_SYNC_CONFIRMATION_REQUIRED` no-op |
+| Live trading path | disabled 유지 | `KisLiveBrokerAdapter`는 disabled placeholder, live route/fallback 사용 없음 |
+| 문서 변경 | 적용 | `goal.md`, `docs/research/kis-paper-dry-run-checklist.md`, `docs/VALIDATION.md`, `Memory.md` |
+| 지정 backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`: 10 passed in 0.90s |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+| KIS network call | 미실행 | submit/cancel/query/sync 구현 및 dry-run 실행 없음 |
+| Live endpoint call | 미실행 | 실전투자/live trading 경로 disabled 유지 |
+
 ## 2026-05-27 Goal.md Phase 12 Controlled KIS Paper Dry Run Preflight
 
 이번 작업은 `goal.md`의 `Phase 12: Controlled KIS Paper Trading Dry Run` 범위만 확인했다. 실제 KIS 모의계좌 dry-run은 실행하지 않았다. 로컬 프로세스 환경에 KIS paper credential과 명시적 paper network/submit enable flag가 없고, `backend/config/paper.yaml`도 `enabled=false`, `can_create=false`, `network_enabled=false`, `kill_switch_enabled=true`, `live_fallback_enabled=false`의 fail-closed 상태였기 때문이다.

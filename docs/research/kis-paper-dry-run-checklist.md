@@ -2,149 +2,199 @@
 
 ## Scope
 
-This checklist belongs to `goal.md` Phase 12: Controlled KIS Paper Trading Dry Run.
-It is a manual validation checklist only. It must not enable live trading paths and
-must not store raw KIS credentials, access tokens, account numbers, Telegram tokens,
-chat IDs, or Discord webhook URLs in code, documents, logs, DB rows, or API responses.
+This checklist belongs to `goal.md` Phase 12, but Phase 12 is no longer treated
+as a single dry-run step. It is split into:
 
-## Current preflight result
-
-Status: blocked before network execution.
-
-As of 2026-05-27, the local checkout did not have the required KIS paper credentials
-or explicit paper-network/submit enable flags in the process environment. `backend/config/paper.yaml`
-also remained on the safe default:
-
-| Gate | Current state | Required for dry-run |
-|---|---:|---:|
-| `KIS_APP_KEY` | absent | present via process env only |
-| `KIS_APP_SECRET` | absent | present via process env only |
-| `KIS_ACCESS_TOKEN` | absent | present via process env only |
-| `KIS_ACCOUNT_NO` | absent | present via process env only |
-| `KIS_PRODUCT_CODE` | absent | present via process env only |
-| `PAPER_TRADING_ENABLED` | absent | explicit human-enabled value |
-| `PAPER_TRADING_CAN_CREATE` | absent | explicit human-enabled value |
-| `PAPER_TRADING_NETWORK_ENABLED` | absent | explicit human-enabled value |
-| `PAPER_TRADING_KILL_SWITCH` | absent | must be explicitly off for submit test |
-| `PAPER_BOT_AUTO_SUBMIT` | absent | must stay off during first dry-run |
-| config `enabled` | false | explicit true only for manual test |
-| config `can_create` | false | explicit true only for manual test |
-| config `network_enabled` | false | explicit true only for manual test |
-| config `kill_switch_enabled` | true | must block all submit while true |
-| config `live_fallback_enabled` | false | must remain false |
-
-No KIS network call was executed in this preflight.
-
-## Official sample references checked
-
-The following capability references were checked against the official
-`koreainvestment/open-trading-api` sample repository before attempting the dry-run:
-
-| Capability | Official sample path | Paper-mode note |
+| Phase | Name | Status |
 |---|---|---|
-| Cash order submit | `examples_llm/domestic_stock/order_cash/order_cash.py` | `env_dv="demo"` selects paper TR IDs for buy/sell |
-| Order modify/cancel | `examples_llm/domestic_stock/order_rvsecncl/order_rvsecncl.py` | `env_dv="demo"` selects paper cancel/modify TR ID |
-| Cancelable order query | `examples_llm/domestic_stock/inquire_psbl_rvsecncl/inquire_psbl_rvsecncl.py` | sample currently uses a single TR ID and needs local policy review before enabling |
-| Daily order/fill query | `examples_llm/domestic_stock/inquire_daily_ccld/inquire_daily_ccld.py` | `env_dv="demo"` selects paper TR IDs |
-| Balance/position query | `examples_llm/domestic_stock/inquire_balance/inquire_balance.py` | `env_dv="demo"` selects paper balance TR ID |
+| Phase 12A | KIS paper read-only balance dry-run | Next executable phase |
+| Phase 12B | KIS paper submit/cancel/query/sync adapter implementation | Not started |
+| Phase 12C | Controlled KIS paper submit/cancel/query/sync dry-run | Blocked until 12B completes |
 
-The local application still treats submit/cancel/sync network execution as disabled
-unless all project safety gates are explicitly opened for a manual paper-only test.
+Phase 13 must not start until Phase 12C has a redacted successful dry-run
+record. Phase 12 must not be marked complete from env flags alone.
 
-## Runtime flag enforcement
+## Current Code Finding
 
-The backend enforces the manual flags through `PaperConfigService`.
+Status: Phase 12 remains incomplete and stopped before submit/cancel/sync network execution.
 
-| Config gate | Required env gate | Effective behavior |
+The current code supports only a gated read-only KIS paper balance inquiry path.
+KIS paper submit/cancel/list/sync network execution is still unsupported or
+confirmation-required by design.
+
+| Area | Current code behavior | Evidence |
 |---|---|---|
-| `paper.enabled=true` | `PAPER_TRADING_ENABLED=true` | without env, paper trading remains disabled |
-| `paper.can_create=true` | `PAPER_TRADING_CAN_CREATE=true` | without env, local paper submit remains blocked |
-| `paper.network_enabled=true` | `PAPER_TRADING_NETWORK_ENABLED=true` | without env, network stays disabled; with env, paper submit still rejects network order execution |
-| `paper.kill_switch_enabled=false` | `PAPER_TRADING_KILL_SWITCH=false` | without explicit false, kill switch remains blocking |
+| KIS paper balance | Can call read-only `/uapi/domestic-stock/v1/trading/inquire-balance` only when all config/env/credential gates pass | `PaperSyncService.portfolio()` and `KisPaperBalanceClient` |
+| Paper submit | Local `paper_orders` submit only after confirm/idempotency/config gates; network submit is rejected with `PAPER_NETWORK_UNSUPPORTED` when network is enabled | `PaperOrderService._submit_config_reasons()` |
+| Paper cancel | Always disabled after confirm/idempotency checks until KIS paper cancel contract is implemented | `KIS_PAPER_CANCEL_CONFIRMATION_REQUIRED` |
+| Paper sync | `POST /api/paper/sync` returns idempotent `sync_disabled`; no KIS network sync is performed | `KIS_PAPER_SYNC_CONFIRMATION_REQUIRED` |
+| KIS paper adapter | `submit_order`, `cancel_order`, `list_orders`, and `sync` raise confirmation-required errors | `KisPaperBrokerAdapter` |
+| Live adapter | Placeholder only and always disabled | `KisLiveBrokerAdapter` |
 
-This keeps configuration-file edits from accidentally opening paper submit/network
-paths. It also preserves the current no-live-trading boundary: live fallback remains
-disabled, and submit network execution remains unsupported until the KIS paper
-contract is separately confirmed.
+## Required Env/Config Items
 
-## Manual dry-run checklist
+Do not create or modify `.env` or `.env.local`. Inject runtime values through
+the current process environment only, and do not print raw values.
 
-### 1. Preflight
+| Item | Phase 12A | Phase 12B | Phase 12C |
+|---|---|---|---|
+| `KIS_APP_KEY` | Required for read-only balance dry-run | Mocked in tests only; real value not required | Required through process env only |
+| `KIS_APP_SECRET` | Required for read-only balance dry-run | Mocked in tests only; real value not required | Required through process env only |
+| `KIS_ACCESS_TOKEN` | Required for read-only balance dry-run | Mocked in tests only; real value not required | Required through process env only |
+| `KIS_ACCOUNT_NO` | Required for read-only balance dry-run | Mocked/redacted only | Required through process env only |
+| `KIS_PRODUCT_CODE` | Required for read-only balance dry-run | Mocked/redacted only | Required through process env only |
+| `KIS_PAPER_BASE_URL` | Optional; must not be live host | Mocked; live host must be rejected | Optional; must not be live host |
+| `ENABLE_REAL_ORDER` | Must be absent or false | Must be absent or false | Must be absent or false |
+| `PAPER_TRADING_ENABLED` | Explicit true only for manual read-only test | Required gate in implementation tests | Explicit true only for controlled dry-run |
+| `PAPER_TRADING_CAN_CREATE` | Keep false/not needed for read-only | Required for local submit path tests | Explicit true only around controlled submit |
+| `PAPER_TRADING_NETWORK_ENABLED` | Explicit true only for read-only balance network call | Required gate, but mocked HTTP only | Explicit true only for controlled paper network call |
+| `PAPER_TRADING_KILL_SWITCH` | Keep true/absent for read-only | Must default to blocking | Must prove block first, then explicit false only for one controlled attempt |
+| `PAPER_BOT_AUTO_SUBMIT` | Must stay false | Must default false | Must stay false |
+| `live_fallback_enabled` | Must remain false | Must remain false | Must remain false |
+
+## Phase 12A Checklist: Read-only Balance Dry-run
+
+### Preflight
 
 - [ ] Confirm current branch is not `main`.
-- [ ] Confirm worktree is clean before enabling any runtime flag.
+- [ ] Confirm worktree is clean before injecting any runtime credential.
 - [ ] Confirm `.env` and `.env.local` are not created or modified.
 - [ ] Inject KIS paper credentials only through the process environment.
-- [ ] Confirm no raw credential/account/token value is printed to terminal or stored in docs.
 - [ ] Confirm `ENABLE_REAL_ORDER` is absent or false.
-- [ ] Confirm live adapter remains disabled.
-- [ ] Confirm `live_fallback_enabled=false`.
 - [ ] Confirm `PAPER_BOT_AUTO_SUBMIT=false`.
-- [ ] Keep bot loop stopped during first dry-run.
-- [ ] Keep submit blocked while `kill_switch_enabled=true`; verify blocked submit first.
+- [ ] Confirm live adapter and live fallback remain disabled.
+- [ ] Confirm submit/cancel/sync paths remain blocked.
 
-### 2. Read-only query validation
+### Read-only execution
 
-- [ ] Validate `/api/paper/portfolio` read-only balance/position query with paper credentials.
-- [ ] Record only redacted request metadata: route name, paper/live mode, endpoint path, TR ID, status code, elapsed time, and correlation ID.
+- [ ] Enable only the read-only KIS paper balance path.
+- [ ] Call `/api/paper/portfolio` and verify the request uses paper base URL and paper balance TR ID only.
+- [ ] Record only redacted metadata: route, endpoint path, TR ID, status code, elapsed time, correlation ID, and result status.
 - [ ] Confirm API response does not include raw account number, token, app key, app secret, webhook URL, Telegram token, or chat ID.
-- [ ] Confirm fallback stays local snapshot when the read-only query is disabled or fails.
+- [ ] Confirm fallback stays local `paper_portfolio_snapshots` when read-only query is disabled or fails.
 
-### 3. Controlled submit validation
+### 12A validation
 
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_balance.py backend/tests/test_no_live_trading_regression.py -q
+.\.venv\Scripts\python.exe tools\secret_scan.py
+git diff --check
+```
+
+### 12A completion
+
+- [ ] `docs/VALIDATION.md` contains the redacted read-only dry-run result.
+- [ ] `Memory.md` says Phase 12A is complete but Phase 12 as a whole remains incomplete.
+- [ ] No submit/cancel/sync network implementation or execution happened.
+
+## Phase 12B Checklist: Adapter Implementation
+
+Phase 12B is an implementation phase, not a real-network dry-run phase.
+Real KIS paper submit/cancel/query/sync calls must not be executed during 12B.
+
+### Implementation conditions
+
+- [ ] Confirm official KIS paper submit, cancel, cancelable-order query, daily order/fill query, balance/position query, hashkey/signing, request fields, response fields, and paper TR IDs.
+- [ ] Keep unconfirmed endpoint/TR/request/response items fail-closed.
+- [ ] Implement only paper base URL support; reject live base URL.
+- [ ] Require explicit process env gates for paper network execution.
+- [ ] Keep kill switch blocking submit by default.
+- [ ] Preserve `confirm=true`, idempotency key, duplicate prevention, risk gate, and broker audit redaction.
+- [ ] Store/update only dedicated paper tables for broker-synced state.
+- [ ] Do not touch live account state or treat synthetic `positions` as broker truth.
+- [ ] Keep bot auto-submit disabled by default.
+
+### Required test conditions
+
+- [ ] Mocked HTTP success tests for submit/cancel/query/sync.
+- [ ] Missing credential/env flag tests fail closed.
+- [ ] Kill-switch tests block submit.
+- [ ] Live base URL tests fail closed.
+- [ ] Unsupported TR ID or unconfirmed field tests fail closed.
+- [ ] Secret/account/token redaction tests pass.
+- [ ] Idempotency and duplicate submit tests pass.
+- [ ] No-live regression tests pass.
+- [ ] CI does not require real KIS network calls.
+
+### 12B validation
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q
+.\.venv\Scripts\python.exe -m pytest backend/tests -q
+.\.venv\Scripts\python.exe tools\secret_scan.py
+git diff --check
+```
+
+### 12B completion
+
+- [ ] Mocked contract and safety tests pass.
+- [ ] Default runtime remains fail-closed.
+- [ ] No real KIS paper submit/cancel/query/sync dry-run has been executed yet.
+
+## Phase 12C Checklist: Controlled Submit/Cancel/Query/Sync Dry-run
+
+Phase 12C is blocked until Phase 12B is implemented and tested.
+
+### Preflight
+
+- [ ] Confirm Phase 12B commit is present and tests passed.
+- [ ] Confirm current branch is not `main`.
+- [ ] Confirm `.env` and `.env.local` are not created or modified.
+- [ ] Inject credentials only through process env.
+- [ ] Confirm `ENABLE_REAL_ORDER` is absent or false.
+- [ ] Confirm live adapter/fallback remain disabled.
+- [ ] Confirm `PAPER_BOT_AUTO_SUBMIT=false`.
+- [ ] Keep bot loop stopped during first controlled dry-run.
+
+### Controlled execution
+
+- [ ] Verify kill switch blocks submit while enabled.
 - [ ] Obtain explicit human confirmation immediately before submit.
 - [ ] Use a minimum-size paper order only.
-- [ ] Verify kill switch blocks submit when enabled.
-- [ ] Disable kill switch only for the single controlled submit attempt.
-- [ ] Confirm paper mode is selected and no live endpoint/base URL is used.
-- [ ] Record redacted outcome metadata only: submit attempt ID, symbol, side, quantity, sanitized order identifier, status, and error code if any.
-- [ ] Re-enable kill switch immediately after the submit attempt.
-
-### 4. Query/sync validation
-
-- [ ] Query cancelable/open orders before attempting cancel.
-- [ ] Query daily order/fill status after submit.
-- [ ] Run local sync only if the KIS paper query contract matches implementation assumptions.
-- [ ] Do not mutate live account, live balance, or live order state.
-- [ ] Record only redacted outcome metadata.
-
-### 5. Controlled cancel validation
-
-- [ ] Cancel only a paper order created during this dry-run.
+- [ ] Temporarily disable kill switch only for the single controlled paper submit attempt.
+- [ ] Confirm paper mode, paper base URL, and paper TR ID are used.
+- [ ] Query cancelable/open paper orders.
+- [ ] Query daily paper order/fill status.
+- [ ] Run paper sync only if query response contract matches implementation assumptions.
 - [ ] Obtain explicit human confirmation immediately before cancel.
-- [ ] Confirm cancel request uses paper endpoint/TR only.
-- [ ] Confirm cancel result through paper query path.
-- [ ] Record only sanitized order identifiers and status/error code.
+- [ ] Cancel only the paper order created during this dry-run.
+- [ ] Re-enable kill switch immediately after the controlled attempt.
 
-### 6. Notification and report validation
+### Redacted record
 
-- [ ] Verify notification failures stay non-blocking and outbox-backed.
-- [ ] Confirm notification payloads contain no raw credential/account/token/webhook/chat ID values.
-- [ ] Confirm report notification includes redacted outcome metadata only.
+- [ ] Record submit attempt ID, symbol, side, quantity, sanitized order identifier, status, and error code if any.
+- [ ] Record query/sync scope, status, redacted broker trace, and row counts.
+- [ ] Record cancel status and sanitized order identifier only.
+- [ ] Do not store raw KIS AppKey, AppSecret, token, account number, Telegram token, chat ID, webhook URL, or raw broker payload.
 
-### 7. Post-run validation
+### 12C validation
 
-- [ ] Run targeted backend tests.
-- [ ] Run `.\.venv\Scripts\python.exe tools\secret_scan.py`.
-- [ ] Run `git diff --check`.
-- [ ] Confirm no raw secrets in modified files.
-- [ ] Confirm no live trading path was enabled.
-- [ ] Document the redacted dry-run result in `docs/VALIDATION.md`.
-- [ ] Update `Memory.md` with the latest state and remaining risk.
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q
+.\.venv\Scripts\python.exe tools\secret_scan.py
+git diff --check
+```
 
-## Dry-run result record
+### 12C completion
+
+- [ ] `docs/VALIDATION.md` contains the redacted controlled submit/cancel/query/sync dry-run result.
+- [ ] `Memory.md` says Phase 12C completed and Phase 13 is eligible.
+- [ ] No live endpoint was called and no secret/account/token value was exposed.
+
+## Current Dry-run Result Record
 
 | Item | Result |
 |---|---|
-| Execution status | Not executed |
-| Reason | Required KIS paper credentials and explicit human-enabled paper-network/submit flags were not present |
-| Network calls | None |
+| Execution status | Phase 12 preflight stopped |
+| Reason | Required KIS paper credential/process env gates are not present, and submit/cancel/query/sync network adapter is still unsupported/confirmation required |
+| Network calls | None in this review |
 | Live endpoint calls | None |
-| Secret exposure | None observed in preflight |
-| Next Phase eligibility | Not eligible until a controlled paper dry-run completes |
+| Secret exposure | None observed in this review |
+| Next executable phase | Phase 12A: KIS paper read-only balance dry-run |
+| Phase 13 eligibility | Not eligible |
 
-## Rollback rule
+## Rollback Rule
 
-If the KIS mock contract mismatches the current implementation at any step, keep
-the submit/cancel/sync network path disabled, preserve local-only fallback behavior,
-and stop before entering Phase 13.
+If the KIS mock contract mismatches the implementation at any step, keep the
+submit/cancel/query/sync network path disabled, preserve local-only fallback
+behavior, re-enable the kill switch, and stop before entering Phase 13.

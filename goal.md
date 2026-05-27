@@ -79,7 +79,9 @@ Primary deliverables:
 - Phase 9: Paper Bot Activation
 - Phase 10: Frontend Integration
 - Phase 11: End-to-End Mock Validation
-- Phase 12: Controlled KIS Paper Trading Dry Run
+- Phase 12A: KIS Paper Read-only Balance Dry-run
+- Phase 12B: KIS Paper Submit/Cancel/Query/Sync Adapter Implementation
+- Phase 12C: Controlled KIS Paper Submit/Cancel/Query/Sync Dry-run
 - Phase 13: Final Safety Hardening
 
 # Phase 0: Latest Baseline Audit
@@ -450,32 +452,140 @@ Primary deliverables:
 - 다음 Phase 진입 조건
   - End-to-end mock flow stable.
 
-# Phase 12: Controlled KIS Paper Trading Dry Run
+# Phase 12: KIS Paper Trading Dry-run Split
+
+- 현재 상태
+  - Phase 12 is incomplete and stopped at preflight.
+  - Do not mark Phase 12 complete from env flags alone.
+  - KIS paper submit/cancel/query/sync network execution remains unsupported/confirmation required.
+  - Live trading paths must remain disabled.
+- 분리 사유
+  - Current code has read-only KIS paper balance support only when all safe gates are explicitly enabled.
+  - Current `KisPaperBrokerAdapter` still raises confirmation-required errors for submit/cancel/list/sync.
+  - Current `POST /api/paper/sync` is an idempotent no-op until the KIS paper sync contract is implemented.
+
+# Phase 12A: KIS Paper Read-only Balance Dry-run
 
 - 목적
-  - Run controlled KIS mock-account validation without enabling live paths.
+  - Validate KIS paper read-only balance/position inquiry without enabling submit, cancel, sync mutation, bot auto-submit, or live paths.
 - 수정 대상 파일
   - `docs/VALIDATION.md`
   - `Memory.md`
-- 새로 생성할 파일
   - `docs/research/kis-paper-dry-run-checklist.md`
+- 새로 생성할 파일
+  - None unless a redacted manual dry-run evidence artifact is explicitly requested.
 - 금지 사항
+  - No submit/cancel/query/sync adapter implementation.
   - No live endpoint calls.
-  - No unattended auto-submit during first dry run.
+  - No `.env` or `.env.local` creation/modification.
+  - No raw KIS AppKey, AppSecret, token, account number, Telegram token, chat ID, or webhook value in code/docs/logs/DB/API responses.
 - 구현 조건
-  - Require explicit human-enabled flags.
-  - Validate submit/cancel/query/sync on KIS mock account.
-  - Record only redacted traces and outcome metadata.
+  - Use process env only for KIS paper credentials.
+  - Keep `ENABLE_REAL_ORDER` absent or false.
+  - Keep `PAPER_BOT_AUTO_SUBMIT=false`.
+  - Keep live fallback disabled.
+  - Enable only the read-only balance path after explicit human confirmation.
+  - Record redacted metadata only: route, endpoint path, paper TR ID, status code, elapsed time, correlation ID, and result status.
 - 테스트 파일
-  - No automated live-network tests required in CI.
+  - `backend/tests/test_kis_paper_balance.py`
+  - `backend/tests/test_no_live_trading_regression.py`
 - 검증 명령어
-  - Manual dry-run checklist only.
+  - `python -m pytest backend/tests/test_kis_paper_balance.py backend/tests/test_no_live_trading_regression.py -q`
+  - `python tools/secret_scan.py`
+  - `git diff --check`
 - 완료 기준
-  - Redacted dry-run result documented.
+  - Redacted read-only balance dry-run result is documented.
+  - API response/log/document output contains no raw secrets or account identifiers.
+  - No submit/cancel/sync network path is enabled.
 - rollback 기준
-  - Disable submit path if KIS mock contract mismatches implementation.
+  - Disable KIS balance inquiry flags and fall back to local `paper_portfolio_snapshots` if response contract or safety gates mismatch.
 - 다음 Phase 진입 조건
-  - Dry run completed without violating safety rules.
+  - Phase 12A read-only dry-run completed without live path use or secret exposure.
+
+# Phase 12B: KIS Paper Submit/Cancel/Query/Sync Adapter Implementation
+
+- 목적
+  - Implement paper-only KIS submit/cancel/query/sync adapter paths behind explicit safety gates.
+- 수정 대상 파일
+  - `backend/app/brokers/kis_paper.py`
+  - `backend/app/services/kis_paper_broker_adapter.py`
+  - `backend/app/services/paper_order_service.py`
+  - `backend/app/services/paper_sync_service.py`
+  - `backend/app/models/schemas.py`
+  - `backend/tests/*paper*`
+  - `docs/research/kis-paper-dry-run-checklist.md`
+  - `docs/VALIDATION.md`
+  - `Memory.md`
+- 새로 생성할 파일
+  - Adapter/query tests as needed for submit/cancel/query/sync contract coverage.
+- 금지 사항
+  - No controlled dry-run execution in the same implementation step.
+  - No live trading route, live base URL, live fallback, websocket execution, or real-account mutation.
+  - No bot auto-submit default enablement.
+  - No raw secret/account/token persistence or response exposure.
+- 구현 조건
+  - Implement only KIS paper base URL and paper TR IDs confirmed in the project matrix.
+  - Fail closed for any unconfirmed endpoint, TR ID, request field, response field, hashkey/signing prerequisite, or account mode.
+  - Require explicit process env gates for paper network execution.
+  - Keep kill switch blocking submit by default and require immediate human confirmation for submit/cancel operations.
+  - Preserve idempotency keys, duplicate prevention, broker audit redaction, and local paper persistence separation.
+  - Query/sync must upsert only dedicated paper tables and must not touch live account state or legacy synthetic `positions` as broker truth.
+- 테스트 파일
+  - Add/extend tests for paper submit/cancel/query/sync adapter success with mocked HTTP only.
+  - Add/extend fail-closed tests for missing env flags, kill switch, live base URL, unsupported TR ID, redaction, idempotency, duplicate submit, and no-live regression.
+- 검증 명령어
+  - `python -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`
+  - `python -m pytest backend/tests -q`
+  - `python tools/secret_scan.py`
+  - `git diff --check`
+- 완료 기준
+  - Mocked HTTP adapter tests pass for submit/cancel/query/sync.
+  - Real KIS network calls are still not required for CI.
+  - Default runtime remains fail-closed without explicit process env flags.
+- rollback 기준
+  - Revert adapter network implementation if any path can reach live endpoints, bypass kill switch/idempotency, or expose secrets.
+- 다음 Phase 진입 조건
+  - Phase 12B adapter implementation passes mocked contract and safety regression tests.
+
+# Phase 12C: Controlled KIS Paper Submit/Cancel/Query/Sync Dry-run
+
+- 목적
+  - Execute a controlled KIS paper submit/cancel/query/sync dry-run after Phase 12B implementation is complete.
+- 수정 대상 파일
+  - `docs/VALIDATION.md`
+  - `Memory.md`
+  - `docs/research/kis-paper-dry-run-checklist.md`
+- 새로 생성할 파일
+  - None unless a redacted manual dry-run evidence artifact is explicitly requested.
+- 금지 사항
+  - No Phase 13 work.
+  - No live endpoint calls.
+  - No unattended auto-submit.
+  - No `.env` or `.env.local` creation/modification.
+  - No raw secrets, tokens, account numbers, order identifiers that reveal account identity, or notification credentials in outputs.
+- 구현 조건
+  - Require explicit human confirmation immediately before submit and cancel.
+  - Use a minimum-size paper order only.
+  - Prove kill switch blocks submit before temporarily opening the submit gate.
+  - Re-enable kill switch immediately after the controlled submit/cancel attempt.
+  - Query cancelable orders and daily fills/orders through paper-only paths.
+  - Run sync only after query response contract matches implementation assumptions.
+  - Record redacted traces and outcome metadata only.
+- 테스트 파일
+  - No automated real-network tests required in CI.
+- 검증 명령어
+  - Manual dry-run checklist.
+  - `python -m pytest backend/tests/test_paper_runtime_flags.py backend/tests/test_no_live_trading_regression.py -q`
+  - `python tools/secret_scan.py`
+  - `git diff --check`
+- 완료 기준
+  - Redacted controlled submit/cancel/query/sync dry-run result is documented.
+  - No live path was enabled.
+  - No raw secret/account/token value was exposed.
+- rollback 기준
+  - Disable submit/cancel/query/sync network path if KIS mock contract mismatches implementation.
+- 다음 Phase 진입 조건
+  - Phase 12C completed without violating safety rules.
 
 # Phase 13: Final Safety Hardening
 
