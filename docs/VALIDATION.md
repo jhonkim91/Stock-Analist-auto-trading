@@ -1,5 +1,16 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 1 KIS Paper API Confirmation Matrix
+
+이번 변경은 `goal.md`의 `Phase 1: KIS Paper API Confirmation Matrix` 범위만 수행했다. `docs/research/kis-paper-api-confirmation-matrix.md`를 추가해 공식 KIS 포털/공식 GitHub 샘플에서 확인 가능한 endpoint/TR ID와 `확인 필요` 항목을 분리했고, production code, API route, DB schema, `.env` 계열 파일은 변경하지 않았다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 1 safety regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 17 passed in 3.36s |
+| Phase 1 secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Phase 1 live enable scan | 통과 | static scan: live/paper auto-submit true pattern 없음. `Memory.md`의 `ENABLE_REAL_ORDER=true` 언급은 차단 동작 설명이다. |
+| Phase 1 diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 0 Baseline Audit Refresh
 
 이번 변경은 루트 `goal.md`의 `Phase 0: Latest Baseline Audit` 범위만 수행했다. `docs/research/kis-paper-baseline-audit.md`를 추가해 main ref와 현재 작업 브랜치를 분리 감사했고, runtime code, API route, DB schema, `.env` 계열 파일은 변경하지 않았다.

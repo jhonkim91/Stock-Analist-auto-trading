@@ -128,6 +128,10 @@ Phase 0는 이 차이를 되돌리거나 확장하지 않는다. 이후 구현 P
 | `docs/plans/phase-paper-broker-baseline-audit.md` | 이전 Phase 0 산출물이며 main `bfcb169...` 기준 설명으로 유효하다. 새 goal Phase 0 산출물은 이 문서와 별도로 `docs/research/kis-paper-baseline-audit.md`에 둔다. |
 | 현재 `docs/PROJECT_STATUS.md` / `Memory.md` | 현재 feature branch 상태를 설명한다. main 기준선과 혼동하지 않도록 본 감사 문서에서 분리했다. |
 
+## Phase 1 연결
+
+`Phase 1: KIS Paper API Confirmation Matrix`는 `docs/research/kis-paper-api-confirmation-matrix.md`에 기록했다. 확인된 항목과 `확인 필요` 항목을 분리했으며, production code, DB schema, API route, `.env` 계열 파일은 변경하지 않았다.
+
 ## 검증 계획
 
 Phase 0의 `goal.md` 검증 명령은 다음이다.

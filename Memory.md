@@ -6,6 +6,7 @@
 - [x] 현재 version: `MVP v0.26.0`
 - [x] 현재 branch: `feature/kis-paper-goal-phases` (baseline: `main`)
 - [x] 현재 goal.md Phase 0 감사: `docs/research/kis-paper-baseline-audit.md`
+- [x] 현재 goal.md Phase 1 matrix: `docs/research/kis-paper-api-confirmation-matrix.md`
 - [x] 최신 backend pytest: `342 passed in 327.46s`
 - [x] 최신 frontend 검증: lint, typecheck, build 통과
 - [x] 최신 secret scan: `NO_SECRET_FINDINGS`
@@ -29,13 +30,15 @@
 ## 최근 변경 요약
 
 - `docs/research/kis-paper-baseline-audit.md`: `goal.md` Phase 0 산출물로 main 기준 route/table/service/test/UI와 no-live-trading 불변식 문서화.
+- `docs/research/kis-paper-api-confirmation-matrix.md`: `goal.md` Phase 1 산출물로 공식 KIS 포털/공식 GitHub 샘플 기반 확인 항목과 `확인 필요` 항목 분리.
 - `docs/PROJECT_STATUS.md`: Goal Phase 0 감사 문서 위치와 main/current branch 분리 기준 추가.
-- `docs/VALIDATION.md`: Goal Phase 0 full backend/frontend/diff 검증 결과 추가.
-- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0에서는 runtime code, API route, DB schema, `.env` 계열 파일을 변경하지 않았다.
+- `docs/VALIDATION.md`: Goal Phase 0/1 검증 결과 추가.
+- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1에서는 runtime code, API route, DB schema, `.env` 계열 파일을 변경하지 않았다.
 
 ## 최신 검증 결과
 
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 342 passed in 327.46s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 17 passed in 3.36s.
 - 2026-05-27 frontend `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.
 - 2026-05-27 `git diff --check`: 통과, CRLF warning만 있음.
 - 2026-05-27 `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS`.
