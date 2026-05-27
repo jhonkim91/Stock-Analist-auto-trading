@@ -1,5 +1,17 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 3 Token Hashkey Request Signing
+
+이번 변경은 `goal.md`의 `Phase 3: Token Hashkey Request Signing` 범위만 수행했다. token raw value를 저장하지 않는 metadata-only manager, hashkey 미확인 시 fail-closed signer, credential/account/header redaction utility를 추가했다. 실제 token 발급, hashkey 네트워크 호출, 주문 submit은 구현하지 않았다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 3 지정 pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_token_manager.py backend/tests/test_kis_request_signer.py backend/tests/test_secret_redaction.py -q`: 10 passed in 0.94s |
+| Phase 3 related regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_phase3c_kis_readonly.py backend/tests/test_no_live_trading_regression.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 22 passed in 3.29s |
+| Phase 3 secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| Phase 3 live enable scan | 통과 | static scan: live/paper auto-submit true pattern 없음. 문서의 `ENABLE_REAL_ORDER=true` 언급은 차단 동작 설명이다. |
+| Phase 3 diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning만 있음 |
+
 ## 2026-05-27 Goal.md Phase 2 Paper Broker Adapter Hardening
 
 이번 변경은 `goal.md`의 `Phase 2: Paper Broker Adapter Hardening` 범위만 수행했다. 서비스 계층 adapter import path를 추가하고 `BrokerService`/`PaperTradingService`가 새 paper-only/live-disabled adapter boundary를 사용하도록 전환했다. 네트워크 주문, live adapter 활성화, DB schema 변경은 없다.

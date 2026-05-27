@@ -163,6 +163,37 @@ class BrokerAdapterStatus(BaseModel):
     live_fallback_enabled: bool = False
 
 
+class KisTokenMetadataResponse(BaseModel):
+    """KIS token lifecycle metadata를 raw value 없이 표현한다."""
+
+    state: str
+    app_key_configured: bool = False
+    app_secret_configured: bool = False
+    token_issued: bool = False
+    refresh_token_present: bool = False
+    token_cache_enabled: bool = False
+    token_file_persistence_enabled: bool = False
+    token_db_persistence_enabled: bool = False
+    token_raw_value_persisted: bool = False
+    access_token: str | None = None
+    refresh_token: str | None = None
+    access_token_fingerprint: str | None = None
+    refresh_token_fingerprint: str | None = None
+    expires_at: str | None = None
+    expired: bool = False
+
+
+class KisRequestSigningStatus(BaseModel):
+    """KIS hashkey signing 상태를 fail-closed metadata로 표현한다."""
+
+    hashkey_confirmed: bool = False
+    hashkey_provider_configured: bool = False
+    signing_enabled: bool = False
+    network_call_performed: bool = False
+    fail_closed: bool = True
+    reason: str | None = None
+
+
 class PaperBotRunRequest(BaseModel):
     auto_submit: bool | None = None
 

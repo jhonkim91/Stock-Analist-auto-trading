@@ -8,6 +8,7 @@
 - [x] 현재 goal.md Phase 0 감사: `docs/research/kis-paper-baseline-audit.md`
 - [x] 현재 goal.md Phase 1 matrix: `docs/research/kis-paper-api-confirmation-matrix.md`
 - [x] 현재 goal.md Phase 2 adapter hardening: service adapter boundary 추가, live disabled 유지
+- [x] 현재 goal.md Phase 3 token/signing: metadata-only token, fail-closed signer, credential redaction 추가
 - [x] 최신 backend pytest: `342 passed in 327.46s`
 - [x] 최신 frontend 검증: lint, typecheck, build 통과
 - [x] 최신 secret scan: `NO_SECRET_FINDINGS`
@@ -35,14 +36,19 @@
 - `backend/app/services/broker_adapter.py`, `backend/app/services/kis_paper_broker_adapter.py`, `backend/app/services/kis_live_broker_adapter.py`: Phase 2 service adapter boundary 추가.
 - `backend/app/services/broker_service.py`, `backend/app/services/paper_trading_service.py`: 기존 broker implementation 대신 service adapter boundary import로 전환.
 - `backend/tests/test_kis_paper_adapter_contract.py`, `backend/tests/test_no_live_adapter.py`: paper adapter fail-closed와 live adapter hard-disabled 회귀 추가.
+- `backend/app/services/kis_token_manager.py`, `backend/app/services/kis_request_signer.py`, `backend/app/services/credential_redaction.py`: Phase 3 metadata-only token lifecycle, pluggable fail-closed hashkey signer, 민감값 redaction 추가.
+- `backend/app/services/kis_service.py`, `backend/app/models/schemas.py`, `backend/app/services/token_manager.py`: 기존 status/schema 호환을 유지하면서 Phase 3 token/signing metadata를 additive로 노출.
+- `backend/tests/test_kis_token_manager.py`, `backend/tests/test_kis_request_signer.py`, `backend/tests/test_secret_redaction.py`: raw token 미저장, signing prerequisite reject, nested credential redaction 검증 추가.
 - `docs/PROJECT_STATUS.md`: Goal Phase 0 감사 문서 위치와 main/current branch 분리 기준 추가.
-- `docs/VALIDATION.md`: Goal Phase 0/1/2 검증 결과 추가.
-- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1/2에서는 API route, DB schema, `.env` 계열 파일을 변경하지 않았다.
+- `docs/VALIDATION.md`: Goal Phase 0/1/2/3 검증 결과 추가.
+- KIS paper balance read-only 런타임 변경은 유지하되 이번 Phase 0/1/2/3에서는 API route, DB schema, `.env` 계열 파일을 변경하지 않았다.
 
 ## 최신 검증 결과
 
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 342 passed in 327.46s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 5 passed in 0.08s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_token_manager.py backend/tests/test_kis_request_signer.py backend/tests/test_secret_redaction.py -q`: 10 passed in 0.94s.
+- 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_phase3c_kis_readonly.py backend/tests/test_no_live_trading_regression.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_no_live_adapter.py -q`: 22 passed in 3.29s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 20 passed in 0.97s.
 - 2026-05-27 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q`: 17 passed in 3.36s.
 - 2026-05-27 frontend `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build`: 통과.

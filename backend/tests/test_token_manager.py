@@ -55,4 +55,4 @@ def test_token_lifecycle_service_preserves_fail_closed_status(monkeypatch):
     assert status["token_issued"] is False
     assert status["token_refresh_enabled"] is False
     assert status["token_db_persistence_enabled"] is False
-    assert status["disabled_reason"] == "phase_2_token_manager_contract_only"
+    assert status["disabled_reason"] == "phase_3_token_manager_metadata_only"

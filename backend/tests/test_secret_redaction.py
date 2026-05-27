@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from tools.secret_scan import SecretFinding, candidate_paths, scan_paths
+from backend.app.services.credential_redaction import CredentialRedactionService, REDACTED
 
 
 def test_secret_scan_detects_raw_values_without_printing_secret(tmp_path):
@@ -58,3 +59,21 @@ def test_status_and_settings_endpoints_do_not_return_env_secrets(client, monkeyp
     settings_serialized = json.dumps(responses[0].json()).lower()
     for key in ("app_key", "app_secret", "token", "password", "account_no", "hts_id", "access_token", "refresh_token"):
         assert key not in settings_serialized
+
+
+def test_credential_redaction_removes_nested_sensitive_values():
+    payload = {
+        "symbol": "005930",
+        "account_no": "12345678",
+        "headers": {"authorization": "Bearer RAW_TOKEN"},
+        "nested": [{"chat_id": "123456789", "safe": "ok"}],
+    }
+    service = CredentialRedactionService()
+
+    redacted = service.redact(payload)
+    removed = service.remove_sensitive(payload)
+
+    assert redacted["account_no"] == REDACTED
+    assert redacted["headers"] == REDACTED
+    assert redacted["nested"][0]["chat_id"] == REDACTED
+    assert removed == {"symbol": "005930", "nested": [{"safe": "ok"}]}
