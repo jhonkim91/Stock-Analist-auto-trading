@@ -53,8 +53,15 @@ def _count(db_session, model) -> int:
     return int(db_session.scalar(select(func.count()).select_from(model)) or 0)
 
 
+def _enable_manual_paper_runtime(monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_TRADING_ENABLED", "true")
+    monkeypatch.setenv("PAPER_TRADING_CAN_CREATE", "true")
+    monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "false")
+    monkeypatch.delenv("PAPER_TRADING_NETWORK_ENABLED", raising=False)
+
+
 def test_submit_requires_confirm_idempotency_and_kill_switch_before_write(db_session, tmp_path, monkeypatch):
-    monkeypatch.delenv("PAPER_TRADING_KILL_SWITCH", raising=False)
+    _enable_manual_paper_runtime(monkeypatch)
     _write_paper_config(tmp_path)
     service = PaperOrderService(db_session, config_dir=tmp_path)
 
@@ -97,7 +104,7 @@ def test_submit_requires_confirm_idempotency_and_kill_switch_before_write(db_ses
 
 
 def test_submit_creates_local_paper_order_idempotently_without_live_side_effects(db_session, tmp_path, monkeypatch):
-    monkeypatch.delenv("PAPER_TRADING_KILL_SWITCH", raising=False)
+    _enable_manual_paper_runtime(monkeypatch)
     _write_paper_config(tmp_path)
     service = PaperOrderService(db_session, config_dir=tmp_path)
 
@@ -153,7 +160,7 @@ def test_submit_creates_local_paper_order_idempotently_without_live_side_effects
 
 
 def test_cancel_stays_disabled_until_official_payload_is_confirmed(db_session, tmp_path, monkeypatch):
-    monkeypatch.delenv("PAPER_TRADING_KILL_SWITCH", raising=False)
+    _enable_manual_paper_runtime(monkeypatch)
     _write_paper_config(tmp_path)
     service = PaperOrderService(db_session, config_dir=tmp_path)
     created = service.submit_order(

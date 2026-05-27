@@ -186,9 +186,12 @@ def test_e2e_paper_mock_flow_is_local_non_live_and_report_notified(client, tmp_p
         "TELEGRAM_BOT_TOKEN",
         "TELEGRAM_CHAT_ID",
         "DISCORD_OPS_WEBHOOK_URL",
-        "PAPER_TRADING_KILL_SWITCH",
+        "PAPER_TRADING_NETWORK_ENABLED",
     ):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("PAPER_TRADING_ENABLED", "true")
+    monkeypatch.setenv("PAPER_TRADING_CAN_CREATE", "true")
+    monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "false")
     _write_paper_config(tmp_path)
     _write_notification_config(tmp_path)
     _patch_paper_api_config(monkeypatch, tmp_path)

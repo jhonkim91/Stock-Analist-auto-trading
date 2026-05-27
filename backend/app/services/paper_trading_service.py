@@ -16,6 +16,8 @@ from backend.app.services.market_session_service import MarketSessionService
 from backend.app.services.token_manager import TokenLifecycleService
 
 PAPER_CONFIG_NAME = "paper.yaml"
+TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
+FALSE_ENV_VALUES = {"0", "false", "no", "off"}
 
 
 class LocalPaperSimulator:
@@ -59,15 +61,23 @@ class PaperConfigService:
 
         config = self._closed_config()
         try:
+            config_enabled = bool(paper.get("enabled", False))
+            config_can_create = bool(paper.get("can_create", False))
+            config_network_enabled = bool(paper.get("network_enabled", False))
+            config_kill_switch_enabled = bool(paper.get("kill_switch_enabled", True))
+            runtime_enabled = self._env_flag_true("PAPER_TRADING_ENABLED")
+            runtime_can_create = self._env_flag_true("PAPER_TRADING_CAN_CREATE")
+            runtime_network_enabled = self._env_flag_true("PAPER_TRADING_NETWORK_ENABLED")
+            runtime_kill_switch_off = self._env_flag_false("PAPER_TRADING_KILL_SWITCH")
             config.update(
                 {
                     "mode": str(paper.get("mode") or "disabled"),
-                    "enabled": bool(paper.get("enabled", False)),
-                    "configured_can_create": bool(paper.get("can_create", False)),
+                    "enabled": config_enabled and runtime_enabled,
+                    "configured_can_create": config_can_create and runtime_can_create,
                     "configured_can_simulate_fills": bool(paper.get("can_simulate_fills", False)),
                     "preview_only": bool(paper.get("preview_only", True)),
-                    "kill_switch_enabled": bool(paper.get("kill_switch_enabled", True)),
-                    "network_enabled": bool(paper.get("network_enabled", False)),
+                    "kill_switch_enabled": config_kill_switch_enabled or not runtime_kill_switch_off,
+                    "network_enabled": config_network_enabled and runtime_network_enabled,
                     "live_order_enabled": bool(paper.get("live_order_enabled", False)),
                     "broker_order_enabled": bool(paper.get("broker_order_enabled", False)),
                     "balance_inquiry_enabled": bool(
@@ -97,6 +107,14 @@ class PaperConfigService:
         if config["mode"] not in {"disabled", "safety_scaffold", "paper"}:
             reasons.append("UNKNOWN_PAPER_MODE")
             config["mode"] = "disabled"
+        if config_enabled and not runtime_enabled:
+            reasons.append("PAPER_TRADING_ENV_FLAG_REQUIRED")
+        if config_can_create and not runtime_can_create:
+            reasons.append("PAPER_CREATE_ENV_FLAG_REQUIRED")
+        if config_network_enabled and not runtime_network_enabled:
+            reasons.append("PAPER_NETWORK_ENV_FLAG_REQUIRED")
+        if not config_kill_switch_enabled and not runtime_kill_switch_off:
+            reasons.append("PAPER_KILL_SWITCH_ENV_FALSE_REQUIRED")
         return config, reasons
 
     @staticmethod
@@ -126,6 +144,16 @@ class PaperConfigService:
             "simulator_enabled": False,
             "auto_fill_on_create": False,
         }
+
+    @staticmethod
+    def _env_flag_true(name: str) -> bool:
+        value = os.getenv(name)
+        return value is not None and value.strip().lower() in TRUE_ENV_VALUES
+
+    @staticmethod
+    def _env_flag_false(name: str) -> bool:
+        value = os.getenv(name)
+        return value is not None and value.strip().lower() in FALSE_ENV_VALUES
 
 
 class PaperRiskGate:

@@ -1,5 +1,27 @@
 # Validation
 
+## 2026-05-27 Goal.md Phase 12 Controlled KIS Paper Dry Run Preflight
+
+이번 작업은 `goal.md`의 `Phase 12: Controlled KIS Paper Trading Dry Run` 범위만 확인했다. 실제 KIS 모의계좌 dry-run은 실행하지 않았다. 로컬 프로세스 환경에 KIS paper credential과 명시적 paper network/submit enable flag가 없고, `backend/config/paper.yaml`도 `enabled=false`, `can_create=false`, `network_enabled=false`, `kill_switch_enabled=true`, `live_fallback_enabled=false`의 fail-closed 상태였기 때문이다.
+
+신규 체크리스트 `docs/research/kis-paper-dry-run-checklist.md`를 추가해 preflight 중단 사유, 수동 dry-run 절차, redaction 기준, rollback 기준을 기록했다. 공식 `koreainvestment/open-trading-api` 샘플에서 paper cash order, order modify/cancel, cancelable order query, daily order/fill query, balance query capability를 다시 확인했지만, 현재 저장소 설정에서는 네트워크 호출 조건을 충족하지 못한다. Phase 12 완료 기준인 redacted dry-run result documented는 실제 dry-run 미실행으로 아직 미충족이다.
+
+추가로 발견된 문제는 문서상 `PAPER_TRADING_ENABLED`, `PAPER_TRADING_CAN_CREATE`, `PAPER_TRADING_NETWORK_ENABLED`, `PAPER_TRADING_KILL_SWITCH=false` 같은 human-enabled runtime flag를 요구하면서도 backend gate가 기존에는 `paper.yaml` 값만 읽었다는 점이다. 이 불일치를 막기 위해 `PaperConfigService`를 보강했다. 이제 config가 paper submit/network를 열어도 대응하는 process env flag가 명시되지 않으면 fail-closed로 유지되며, kill switch는 env에서 명시적으로 false일 때만 꺼진다. `PAPER_TRADING_NETWORK_ENABLED=true`가 있더라도 현재 paper submit network execution은 계속 `PAPER_NETWORK_UNSUPPORTED`로 차단된다.
+
+| 항목 | 결과 | 명령/근거 |
+|---|---|---|
+| Phase 12 환경 preflight | 중단 | `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCESS_TOKEN`, `KIS_ACCOUNT_NO`, `KIS_PRODUCT_CODE`, `PAPER_TRADING_ENABLED`, `PAPER_TRADING_CAN_CREATE`, `PAPER_TRADING_NETWORK_ENABLED` 모두 absent |
+| Phase 12 config gate | 중단 | `backend/config/paper.yaml`: `enabled=false`, `can_create=false`, `network_enabled=false`, `kill_switch_enabled=true`, `live_fallback_enabled=false` |
+| Runtime flag hardening | 적용 | `backend/tests/test_paper_runtime_flags.py`: config true만으로 paper submit/network가 열리지 않음 |
+| Runtime flag pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_runtime_flags.py -q`: 3 passed in 0.63s |
+| Paper order/e2e regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_service.py backend/tests/test_e2e_paper_mock_flow.py -q`: 4 passed in 1.11s |
+| Paper/no-live regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_submit_cancel_api.py backend/tests/test_paper_order_api.py backend/tests/test_paper_sync_service.py backend/tests/test_paper_sync.py backend/tests/test_no_live_trading_regression.py -q`: 17 passed in 1.19s |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 373 passed in 344.18s |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py`: `NO_SECRET_FINDINGS` |
+| KIS network call | 미실행 | credential/explicit flag 미충족으로 호출하지 않음 |
+| Live endpoint call | 미실행 | live adapter/fallback 미사용 |
+| Phase 12 checklist | 작성 | `docs/research/kis-paper-dry-run-checklist.md` |
+
 ## 2026-05-27 Goal.md Phase 11 End-to-End Mock Validation
 
 이번 변경은 `goal.md`의 `Phase 11: End-to-End Mock Validation` 범위만 수행했다. `backend/tests/test_e2e_paper_mock_flow.py`를 추가해 preview -> local paper submit -> order poll -> mock fill/position/portfolio snapshot -> fail-closed sync -> notification outbox -> report notify 흐름을 KIS credential 없이 검증한다. Phase 10 wrapper 이동으로 기존 frontend static contract 테스트가 실패해 스캔 대상에 `frontend/lib/paperApi.ts`, `frontend/lib/notificationApi.ts`, `/bot` page를 additive로 포함시켰다.
