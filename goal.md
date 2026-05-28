@@ -21,11 +21,11 @@
 |---|---|
 | Version | `MVP v0.26.0` |
 | Branch | `feature/kis-paper-goal-phases` |
-| Baseline HEAD | `112f26c` |
-| 상태 | KIS paper network adapter mock 검증 완료, Phase 12C~19 완료, Phase 20 preflight 차단 |
+| Baseline HEAD | `251db45` |
+| 상태 | KIS Paper Auto Bot Phase 1-6 Mock-verified, Phase 16A process-only validation 차단, Phase 20 preflight 차단 |
 | Backend | FastAPI + SQLite + Alembic |
 | Frontend | Next.js App Router |
-| 최신 backend full pytest | `405 passed` |
+| 최신 backend full pytest | `416 passed` |
 | 최신 secret scan | `NO_SECRET_FINDINGS` |
 | Telegram | notifier/template/outbox 존재, 기본값 disabled + dry-run |
 | KIS paper adapter | submit/cancel/list/query-balance/sync mock HTTP 검증 완료 |
@@ -125,10 +125,32 @@ live fallback requested = deny
 | Phase 14 | 완료 | Telegram live opt-in dry-run/redaction 검증 |
 | Phase 15 | 완료 | daily/weekly report automation API/CLI와 outbox event 추가 |
 | Phase 16 | 완료 | paper bot once/loop gate와 no-submit soak 확인 |
+| Phase 16A | 차단 | dry_run preview/status 확인 후 process-only paper gate run이 local bot/config kill switch에서 차단. KIS paper network 미개방 |
 | Phase 17 | 완료 | KIS paper operations runbook 추가 |
 | Phase 18 | 완료 | live trading readiness design-only 문서 추가 |
 | Phase 19 | 완료 | disabled live adapter scaffold와 no-live regression 강화 |
 | Phase 20 | preflight 차단 | controlled live canary runbook/preflight record 추가, live 실행 조건 미충족 |
+
+## KIS Paper Auto Bot Phase 1-6 진행 상태
+
+아래 6단계는 `docs/goal.md`의 KIS 모의투자 전용 자동매매 봇 목표를 루트 `goal.md` 기준 실행 단위로 승격한 것이다. 모든 단계는 기본 disabled/fail-closed, no-live, no-secret-output 조건을 유지한다.
+
+| Phase | 상태 | 현재 증거 |
+|---|---|---|
+| Phase 1: 설정/secret/token 기반 구축 | 완료 | `backend/config/paper.yaml`, `.env.example`, `KisHttpClient`, `KisTokenManager`, `/api/kis/status`, `/api/kis/config`, `/api/kis/config/validate` |
+| Phase 2: KIS paper broker adapter | 완료 | `KisPaperBrokerAdapter`, service alias, paper endpoint/TR-ID mapper, mock HTTP adapter tests, live fallback 차단 |
+| Phase 3: paper order/fill/position DB 및 API | 완료 | `paper_orders`, `paper_fills`, `paper_positions`, `paper_account_snapshots`, `paper_audit_events`, `/api/paper/orders`, `/api/paper/account`, `/api/paper/sync` |
+| Phase 4: 실시간 시세/체결 worker | 완료 | `RealtimeMarketWorker`, polling quote cache, heartbeat/stale 상태, `/api/paper/realtime/status`, stale quote 주문 차단 |
+| Phase 5: bot executor 및 리스크 가드 | 완료 | `PaperBotExecutor`, `/api/paper/bot/preview`, `/api/paper/bot/run`, `/api/paper/bot/runs/{run_id}`, 후보 필터/sizing/risk gate |
+| Phase 6: 모니터링/리포트/운영 runbook | 완료 | `/api/paper/dashboard`, `PaperOperationalMetricsService`, daily/weekly `## Paper Trading`, `docs/RUNBOOK_PAPER_TRADING.md`, `docs/VALIDATION.md`, `Memory.md` |
+
+검증 기준:
+
+- 기본 runtime은 `enabled=false`, `network_enabled=false`, `preview_only=true`, `kill_switch_enabled=true`를 유지한다.
+- `dry_run=true` bot preview는 주문 row를 생성하지 않는다.
+- `dry_run=false` paper run도 kill switch, session, stale quote, duplicate, loss, concentration, cash/notional gate를 통과해야만 submit을 시도한다.
+- 실제 KIS paper network 호출은 별도 승인 전까지 열지 않는다.
+- live 주문, live cancel, live fallback, scheduler auto-start, unattended loop는 금지 상태를 유지한다.
 
 ## Phase Plan
 
@@ -341,6 +363,33 @@ live fallback requested = deny
 - 완료 기준: paper loop가 반복 실행되어도 duplicate submit과 secret exposure가 없다.
 - 다음 Phase 진입 조건: 장애 대응 runbook과 monitoring event를 정리한다.
 
+### Phase 16A: Controlled KIS Paper Bot Run Validation
+
+- 목적: `dry_run=true` preview, dashboard/status 확인, `max_candidates=1` paper run, 실제 KIS paper 최소 주문 수동 검증 흐름을 live 금지 조건 안에서 문서화하고 수행한다.
+- 수정 허용 범위: `goal.md`, `docs/VALIDATION.md`, `Memory.md`, 필요 시 runbook의 redacted 결과 기록.
+- 금지 사항: live 주문, live cancel, live fallback, scheduler auto-start, unattended loop, `.env`/`.env.local` 수정, raw secret 출력 금지.
+- 구현 조건:
+  - Step 1 dry-run preview: `POST /api/paper/bot/preview`에 `trade_date`, `strategies`, `max_candidates=1`, `dry_run=true`를 전달한다.
+  - Step 1 성공 기준: `paper_order_submitted=false`, `live_order_created=false`, 주문 row 생성 없음, decision/reason code 저장.
+  - Step 2 dashboard/status 확인: `/api/kis/config/validate`, `/api/kis/status`, `/api/broker/status`, `/api/paper/status`, `/api/paper/realtime/status`, `/api/paper/dashboard`를 확인한다.
+  - Step 2 성공 기준: secret/account/token 원문 미노출, `KIS_ENV=paper`, live disabled, kill switch 상태 명확.
+  - Step 3 paper run: 현재 PowerShell 프로세스에만 `KIS_ENV=paper`, `ENABLE_REAL_ORDER=false`, `PAPER_TRADING_ENABLED=true`, `PAPER_TRADING_CAN_CREATE=true`, `PAPER_BOT_CONFIRM=true`, `PAPER_TRADING_KILL_SWITCH=false`를 주입한다.
+  - Step 3 network gate: 실제 KIS paper network 호출이 승인된 경우에만 `PAPER_TRADING_NETWORK_ENABLED=true`, `BROKER_MODE=paper_kis`, `PAPER_ORDER_SUBMIT_ENABLED=true`를 추가한다.
+  - Step 3 실행: `POST /api/paper/bot/run`에 `max_candidates=1`, `dry_run=false`를 전달하며 submit은 최대 1건으로 제한한다.
+  - Step 4 minimum paper order: 장중, 최소 수량, 단일 symbol, 단일 strategy만 허용하고 주문 생성 시 status 조회, sync, 필요 시 cancel 순서로 확인한다.
+  - KIS가 장종료, 인증 실패, rate limit, payload 오류, stale quote를 반환하면 재시도 루프 없이 즉시 중단하고 redacted 결과만 기록한다.
+- 검증 명령:
+  - `rg -n "Phase 16A|Controlled KIS Paper Bot Run Validation|dry_run=true|max_candidates=1|PAPER_TRADING_KILL_SWITCH" goal.md`
+  - `git diff --check`
+  - `.\.venv\Scripts\python.exe tools\secret_scan.py`
+- 완료 기준: 성공 또는 KIS 거부/장종료/stale/auth/rate-limit 결과가 redacted record로 남고 live path 미사용이 확인된다.
+- 실행 결과:
+  - `POST /api/paper/bot/preview`, `max_candidates=1`, `dry_run=true` -> `run_id=paper-bot-0439a452f5b84f40`, `status=disabled`, `submitted_count=0`, `network_call_performed=false`.
+  - dashboard/status API 확인 완료. raw secret/account/token 원문 미노출, `orders_count=0`, `paper_orders_count=0`.
+  - 현재 PowerShell 프로세스 env에만 paper gate를 주입하고 network gate는 미개방한 `POST /api/paper/bot/run`, `max_candidates=1`, `dry_run=false` -> `run_id=paper-bot-7a43c3c83f3244f7`, `status=disabled`, `PAPER_BOT_DISABLED`, `PAPER_BOT_KILL_SWITCH_ACTIVE`, `KILL_SWITCH_ACTIVE`, `network_call_performed=false`.
+  - redacted 결과는 `docs/research/kis-paper-phase16a-bot-run-redacted-record.json`에 기록했다.
+- 다음 Phase 진입 조건: 실제 KIS paper 최소 주문/조회/sync/cancel은 별도 network 승인, 계좌/product code 준비, config/bot kill switch 해제 절차가 있을 때만 진행한다.
+
 ### Phase 17: KIS Paper Monitoring And Incident Runbook
 
 - 목적: KIS paper 운영 중단, 토큰 오류, 장종료, rate limit, notification 실패 대응 절차를 문서화한다.
@@ -425,6 +474,12 @@ goal.md Phase 14 Telegram live delivery opt-in만 수행해. 기본 config는 di
 goal.md Phase 15 daily/weekly report automation만 수행해. 기존 report 생성/notify 계약을 깨지 말고 run-once API와 CLI를 disabled-by-default로 추가해. 스케줄러 자동 시작은 금지하고, 실패는 notification/report 상태를 rollback하지 않게 outbox로 분리해.
 ```
 
+### Phase 16A Prompt
+
+```text
+goal.md Phase 16A controlled KIS paper bot run validation만 수행해. 먼저 dry_run=true preview를 실행하고 dashboard/status를 확인한 뒤, 현재 PowerShell 프로세스 env에만 paper gate를 주입해 max_candidates=1 paper run을 시도해. 실제 KIS paper network 호출은 별도 승인된 경우에만 열고, 장종료/거부/stale/auth/rate-limit 응답은 재시도하지 말고 redacted 결과로 기록해. live 주문, live cancel, live fallback, scheduler auto-start, unattended loop, .env/.env.local 수정, raw secret 출력은 금지한다.
+```
+
 ### Phase 18-20 Prompt
 
 ```text
@@ -436,7 +491,7 @@ goal.md Phase 18부터 live readiness만 검토해. Phase 18은 설계/문서/�
 문서 갱신만 수행할 때는 아래 명령으로 충분하다.
 
 ```powershell
-rg -n "Phase 12C|Phase 13|Phase 14|Phase 15|Phase 18|Controlled Live Canary|Non-Negotiable Safety Contract|Reusable Codex Phase Prompt" goal.md
+rg -n "Phase 12C|Phase 13|Phase 14|Phase 15|Phase 16A|Phase 18|Controlled Live Canary|Non-Negotiable Safety Contract|Reusable Codex Phase Prompt" goal.md
 git diff --check
 ```
 
@@ -445,6 +500,6 @@ Phase 실행 시에는 각 Phase의 검증 명령을 우선한다. backend/front
 ## Current Assumptions
 
 - `docs/research/deep-research-report (1).md`는 현재 작업 경로에 없으므로 이번 goal 갱신 입력에서 제외한다.
-- 현재 dirty worktree에는 사용자가 만든 변경이 섞여 있을 수 있으므로 이 goal 갱신 작업에서는 `goal.md` 외 파일을 수정하지 않는다.
+- 현재 dirty worktree에는 사용자가 만든 변경이 섞여 있을 수 있으므로 Phase 실행과 무관한 파일은 수정하지 않는다. 문서 계획 반영 시에는 `goal.md` 중심으로 갱신하고 `docs/VALIDATION.md`, `Memory.md`에는 최신 상태만 압축 기록한다.
 - 실전매매는 최종 목표로 기록하되 실제 live 주문 기능은 별도 승인 전까지 구현하지 않는다.
 - KIS endpoint/TR ID/request field는 repo matrix와 공식 문서가 일치할 때만 사용하고, 불확실한 항목은 `확인 필요`로 유지한다.

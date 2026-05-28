@@ -3,7 +3,7 @@
 ## 현재 체크포인트
 
 - [x] 현재 branch: `feature/kis-paper-goal-phases`.
-- [x] 현재 작업: `docs/goal.md` 기준 KIS 모의투자 전용 자동매매 봇 Phase 1-6 구현 완료.
+- [x] 현재 작업: 루트 `goal.md`에 KIS Paper Auto Bot Phase 1-6 진행 상태를 반영하고, Phase 16A controlled validation은 process-only 차단 상태로 유지.
 - [x] 기본 실행 주소: backend `http://127.0.0.1:8000`, frontend `http://127.0.0.1:3000/dashboard`.
 - [x] 로컬 launcher는 검증 전 중지 상태로 유지했다. 필요 시 `py launcher.py run --no-browser` 후 `py launcher.py check`로 확인한다.
 - [x] 현재 셸의 `python --version`은 `Python`만 출력하고 exit 1이다. 검증은 `.\.venv\Scripts\python.exe`로 수행한다.
@@ -11,6 +11,8 @@
 
 ## KIS Paper Auto Bot Phase 1-6 상태
 
+- [x] 루트 `goal.md`: `Phase 16A: Controlled KIS Paper Bot Run Validation`은 process-only 검증까지 수행했고 `차단` 상태다.
+- [x] 루트 `goal.md`: `KIS Paper Auto Bot Phase 1-6 진행 상태` 섹션을 추가해 설정/secret/token, KIS paper adapter, paper DB/API, realtime worker, bot executor/risk guard, monitoring/report/runbook을 완료 상태로 연결했다.
 - [x] `docs/goal.md`: 목표, 범위, 안전조건, Phase 1-6, 완료기준 문서화.
 - [x] `docs/RUNBOOK_PAPER_TRADING.md`: env 설정, DB migration, backend 실행, worker 상태, dry-run, paper run, kill switch, 장애 복구 절차 문서화.
 - [x] Phase 1-4: KIS paper 설정/token/http client, adapter facade, account snapshot/API, realtime stale quote gate 구현.
@@ -34,6 +36,13 @@
 
 ## 최신 검증 결과
 
+- [x] Goal Phase 16A dry-run preview: `POST /api/paper/bot/preview`, `max_candidates=1`, `dry_run=true` -> `run_id=paper-bot-0439a452f5b84f40`, `status=disabled`, `submitted_count=0`, `network_call_performed=false`.
+- [x] Goal Phase 16A dashboard/status: KIS/status/broker/paper/realtime/dashboard/bot status API 200. raw secret/account/token 미노출, `orders_count=0`, `paper_orders_count=0`.
+- [x] Goal Phase 16A process-only paper run: 현재 PowerShell 프로세스에 paper gate만 주입하고 network gate는 미개방. `POST /api/paper/bot/run`, `max_candidates=1`, `dry_run=false` -> `run_id=paper-bot-7a43c3c83f3244f7`, `status=disabled`, `PAPER_BOT_DISABLED`, `PAPER_BOT_KILL_SWITCH_ACTIVE`, `KILL_SWITCH_ACTIVE`, `network_call_performed=false`.
+- [x] Goal KIS Paper Auto Bot Phase 1-6 alignment: 루트 `goal.md`에 6단계 진행 상태 반영, heading/status docs 확인 완료.
+- [x] Phase 1-6 targeted regression: `test_kis_paper_adapter_contract.py`, `test_paper_runtime_flags.py`, `test_paper_order_service.py`, `test_paper_order_api.py`, `test_paper_sync_service.py`, `test_paper_realtime_worker.py`, `test_paper_bot_executor_phase5.py`, `test_paper_dashboard_report_phase6.py`, migration/no-live suite -> `39 passed in 20.60s`.
+- [x] Phase 16A secret scan: `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
+- [x] Phase 16A diff check: `git diff --check` -> exit 0, CRLF warning only.
 - [x] Backend full: `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_paper_phase56_pytest_final2` -> `416 passed in 310.50s`.
 - [x] Phase 5/6 targeted: `test_paper_bot_executor_phase5.py`, `test_paper_dashboard_report_phase6.py`, migration tests -> `12 passed`.
 - [x] Paper regression: bot/order/report/no-live subset -> `27 passed`.
@@ -55,10 +64,10 @@
 - `PaperDashboardService`, `PaperOperationalMetricsService`, realtime reconnect metric 상태 추가.
 - report daily/weekly에 `## Paper Trading` section 추가.
 - `paper_bot_runs` additive migration과 migration 테스트 갱신.
-- README, `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `docs/DB_MIGRATION.md`, runbook 갱신.
+- Phase 16A redacted record `docs/research/kis-paper-phase16a-bot-run-redacted-record.json` 추가.
 
 ## 남은 작업
 
-- [ ] 실제 KIS paper 호출은 `docs/RUNBOOK_PAPER_TRADING.md` 절차와 현재 프로세스 env에서만 수행한다.
+- [ ] 실제 KIS paper 최소 주문/조회/sync/cancel은 별도 network 승인, 계좌/product code 준비, config/bot kill switch 해제 절차가 있을 때만 `docs/RUNBOOK_PAPER_TRADING.md`에 따라 수행한다.
 - [ ] 로컬 서버가 필요하면 `py launcher.py run --no-browser` 후 `py launcher.py check`로 확인한다.
 - [ ] `python` launcher 문제가 계속 필요하면 Windows PATH/App execution alias를 별도 환경 작업으로 정리한다.

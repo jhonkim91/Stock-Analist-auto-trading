@@ -23,6 +23,7 @@
 | Goal.md Phase 18 | live trading readiness design-only 문서 추가 |
 | Goal.md Phase 19 | disabled live adapter scaffold가 예외 대신 redacted disabled payload를 반환하도록 강화 |
 | Goal.md Phase 20 | controlled live canary runbook/preflight record 추가. 현재 live adapter/route/reviewer/env/rollback 조건 미충족으로 blocked |
+| Goal.md KIS Paper Auto Bot Phase 1-6 | 설정/secret/token, KIS paper adapter, paper DB/API, realtime worker, bot executor/risk guard, monitoring/report/runbook 완료 |
 | docs/goal.md Phase 1-4 | KIS paper 전용 설정/token/http client, adapter facade, account snapshot/API, realtime stale quote gate 추가 |
 | docs/goal.md Phase 5-6 | `PaperBotExecutor`, bot preview/run/runs API, paper dashboard, report paper trading section, operational metrics 추가 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
