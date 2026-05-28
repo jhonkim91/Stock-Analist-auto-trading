@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ValidationSummaryCard } from "../../components/validation-summary-card";
 import {
   callApi,
   formatNumber,
@@ -237,6 +238,14 @@ export default function BacktestPage() {
           ))}
         </section>
       ) : null}
+
+      <section className="panel">
+        <div className="sectionHeader">
+          <h2>Validation Framework</h2>
+          <span className="muted">{summaryMessage}</span>
+        </div>
+        <ValidationSummaryCard summary={strategySummary} message={summaryMessage} />
+      </section>
 
       <section className="grid wideLeft">
         <div className="tableWrap">

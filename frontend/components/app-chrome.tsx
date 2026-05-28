@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { GlobalStatusBar } from "./global-status-bar";
+
 type NavItem = {
   href: string;
   label: string;
@@ -22,6 +24,7 @@ type NavIconName =
   | "shield"
   | "file"
   | "database"
+  | "clock"
   | "paper"
   | "bot"
   | "settings";
@@ -46,6 +49,7 @@ const navSections: NavSection[] = [
     label: "DATA",
     items: [
       { href: "/data", label: "Data Manager", icon: "database" },
+      { href: "/sessions", label: "Market Sessions", icon: "clock" },
       { href: "/paper", label: "Paper Trading", icon: "paper" },
       { href: "/bot", label: "Paper Bot", icon: "bot" },
       { href: "/settings", label: "Settings", icon: "settings" }
@@ -101,6 +105,12 @@ function NavIcon({ name }: { name: NavIconName }) {
           <ellipse {...common} cx="12" cy="5.5" rx="7" ry="2.5" />
           <path {...common} d="M5 5.5v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6" />
           <path {...common} d="M5 11.5v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6" />
+        </>
+      ) : null}
+      {name === "clock" ? (
+        <>
+          <circle {...common} cx="12" cy="12" r="8" />
+          <path {...common} d="M12 8v4l3 2" />
         </>
       ) : null}
       {name === "paper" ? (
@@ -168,7 +178,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
           <div className="appNoOrderBadge">no real orders</div>
         </div>
       </aside>
-      <div className="appContent">{children}</div>
+      <div className="appContent">
+        <GlobalStatusBar />
+        {children}
+      </div>
     </div>
   );
 }

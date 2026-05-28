@@ -38,6 +38,48 @@ export type MarketRegime = {
   weekly_close: number | null;
   weekly_sma30: number | null;
   weekly_sma30_slope: number | null;
+  breadth_regime?: string;
+  breadth_score?: number | null;
+  breadth_score_available?: boolean;
+  breadth_advance_decline_ratio?: number | null;
+  breadth_advance_decline_available?: boolean;
+  breadth_52w_high_low_ratio?: number | null;
+  breadth_52w_high_low_available?: boolean;
+  breadth_ma50_participation?: number | null;
+  breadth_ma50_participation_available?: boolean;
+};
+
+export type MarketSessionWindow = {
+  venue: string;
+  name: string;
+  session_kind?: string;
+  order_acceptance_start?: string | null;
+  trading_start?: string | null;
+  trading_end?: string | null;
+  order_acceptance_end?: string | null;
+  current_session_allows_preview?: boolean;
+  [key: string]: JsonValue | undefined;
+};
+
+export type MarketSession = {
+  venue: string;
+  session: string;
+  session_kind: string;
+  is_trading_day: boolean;
+  is_trading_session: boolean;
+  current_session_allows_preview: boolean;
+  current_session: MarketSessionWindow | null;
+  next_session: MarketSessionWindow | null;
+  allowed_preview_sessions?: Record<string, boolean>;
+  operational_layer?: JsonRecord;
+  reason_codes: string[];
+  trade_date?: string | null;
+  as_of?: string | null;
+};
+
+export type MarketSessionWindows = {
+  venue: string;
+  session_windows: MarketSessionWindow[];
 };
 
 export type ScreenerResult = {
@@ -177,6 +219,62 @@ export type StrategyValidationRow = {
   };
   backtest: StrategyValidationMetricSummary;
   delta: StrategyValidationDelta;
+  validation?: {
+    walk_forward?: JsonRecord;
+    overfitting?: {
+      pbo?: JsonRecord;
+      deflated_sharpe_ratio?: JsonRecord;
+    };
+    attribution?: JsonRecord;
+  };
+};
+
+export type WalkForwardStrategySummary = {
+  strategy_name: string;
+  calculated: boolean;
+  status: string;
+  reason: string | null;
+  summary?: {
+    oos_window_count?: number | null;
+    oos_total_return?: number | null;
+    oos_avg_return?: number | null;
+    [key: string]: JsonValue | undefined;
+  } | null;
+};
+
+export type WalkForwardFrameworkSummary = {
+  status: string;
+  metric: string;
+  calculated: boolean;
+  reason: string | null;
+  train_window_trading_days: number;
+  test_window_trading_days: number;
+  step_trading_days: number;
+  rebalance_frequency?: string | null;
+  strategy_count: number;
+  calculated_strategy_count: number;
+  unavailable_strategy_count: number;
+  strategy_summaries: WalkForwardStrategySummary[];
+};
+
+export type OverfittingValidationMetric = {
+  calculated: boolean;
+  value: number | string;
+  reason?: string | null;
+  method?: string;
+  probability_of_backtest_overfitting?: number | string;
+  deflated_sharpe_ratio?: number | string;
+  input_shape?: JsonRecord;
+};
+
+export type StrategyValidationFramework = {
+  walk_forward: WalkForwardFrameworkSummary;
+  overfitting: {
+    pbo: OverfittingValidationMetric;
+    deflated_sharpe_ratio: OverfittingValidationMetric;
+  };
+  attribution?: JsonRecord;
+  trade_ledger_schema?: JsonRecord;
 };
 
 export type StrategyValidationSummary = {
@@ -206,8 +304,10 @@ export type StrategyValidationSummary = {
     path: string;
     filename: string;
     bytes?: number;
+    kind?: string;
   };
   validation_documentation_format: JsonRecord;
+  validation_framework: StrategyValidationFramework;
   strategies: StrategyValidationRow[];
 };
 

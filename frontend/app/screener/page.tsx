@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import { StrategySelector } from "../../components/strategy-selector";
 import { callApi, formatNumber, type ApiStatus, type ScreenerResult, type StrategyMetadata } from "../../lib/api";
 
 type Filters = {
@@ -62,7 +63,6 @@ export default function ScreenerPage() {
     () => strategyCatalog.filter((strategy) => strategy.is_default).map((strategy) => strategy.name),
     [strategyCatalog]
   );
-  const selectedStrategySet = useMemo(() => new Set(selectedStrategyNames), [selectedStrategyNames]);
   const strategyOptions = useMemo(() => {
     const names = new Set(strategyCatalog.map((strategy) => strategy.name));
     results.forEach((result) => names.add(result.strategy_name));
@@ -152,12 +152,6 @@ export default function ScreenerPage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
-  function toggleStrategy(strategyName: string) {
-    setSelectedStrategyNames((prev) =>
-      prev.includes(strategyName) ? prev.filter((name) => name !== strategyName) : [...prev, strategyName]
-    );
-  }
-
   function selectDefaultStrategies() {
     setSelectedStrategyNames(defaultStrategyNames);
   }
@@ -232,36 +226,7 @@ export default function ScreenerPage() {
             </button>
           </div>
         </div>
-        <div className="strategyGrid">
-          {strategyCatalog.map((strategy) => (
-            <label key={strategy.name} className={`strategyOption ${selectedStrategySet.has(strategy.name) ? "selected" : ""}`}>
-              <span className="strategyOptionTop">
-                <input
-                  type="checkbox"
-                  checked={selectedStrategySet.has(strategy.name)}
-                  onChange={() => toggleStrategy(strategy.name)}
-                />
-                <span>
-                  <strong>{strategy.display_name}</strong>
-                  <small>{strategy.name}</small>
-                </span>
-              </span>
-              <span className="strategyMetaLine">
-                <Badge tone={strategy.is_default ? "pass" : undefined}>{strategy.is_default ? "default" : "available-only"}</Badge>
-              </span>
-              <span className="strategyDescription">{strategy.description}</span>
-              <span className="strategyMetaGroup">
-                <span>required</span>
-                <InlineList items={strategy.required_fields} />
-              </span>
-              <span className="strategyMetaGroup">
-                <span>limitations</span>
-                <InlineList items={strategy.limitations} />
-              </span>
-            </label>
-          ))}
-          {strategyCatalog.length === 0 ? <p className="muted">strategy metadata loading</p> : null}
-        </div>
+        <StrategySelector selected={selectedStrategyNames} strategies={strategyCatalog} onChange={setSelectedStrategyNames} />
 
         <div className="filters">
           <label>

@@ -1,5 +1,55 @@
 # Validation
 
+## 2026-05-28 GUI Mockup Follow-up
+
+`stock_analyst_gui_mockup.html`와 `gui_개선.txt` 기준으로 누락된 Global Status Bar, dashboard 4-zone, Strategy Selector pill, Validation Framework 카드, Market Sessions route를 반영한 뒤 frontend production smoke를 재검증했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Frontend lint | 통과 | `cd frontend; npm.cmd run lint` |
+| Frontend typecheck | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit` |
+| Frontend build | 통과 | `cd frontend; npm.cmd run build`; route list에 `/sessions` 포함 |
+| Launcher state | 통과 | `py launcher.py run --no-browser`; `py launcher.py check` -> backend 8000/frontend 3000 launcher-owned |
+| Browser path | 대체 | Browser plugin `iab` unavailable로 Playwright fallback 사용 |
+| Rendered desktop smoke | 통과 | `/dashboard`: global status 1, KPI 4, validation cards 3, overlay 0; `/screener`: strategy pills 9, available pill click 후 selected 6, overlay 0; `/backtest`: validation cards 3, Walk-forward heading 1; `/sessions`: session bars 2, KRX/NXT 표시 |
+| Mobile smoke | 통과 | `390x844` `/dashboard`: global status 1, KPI 4, body width 390 = viewport 390, overlay 0 |
+| Console/request health | 통과 | relevant error 0. Route 전환 중 pending `strategy-summary` request abort 2건은 Playwright navigation side effect로 별도 제외 |
+| Audit | 통과 | `cd frontend; npm.cmd audit --audit-level=moderate` -> `found 0 vulnerabilities` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check`: exit 0, CRLF warning only |
+
+대표 screenshot은 `%TEMP%\stock_gui_validation\dashboard_desktop.png`, `%TEMP%\stock_gui_validation\screener_desktop.png`, `%TEMP%\stock_gui_validation\backtest_desktop.png`, `%TEMP%\stock_gui_validation\sessions_desktop.png`, `%TEMP%\stock_gui_validation\dashboard_mobile.png`에 남겼다.
+
+주의: 현재 로컬 DB 기준 `/api/backtest/strategy-summary?lookback_days=252`는 60초 내 응답하지 않을 수 있다. UI는 해당 API가 늦어도 Validation Framework loading 카드를 먼저 렌더링하고, 응답 도착 시 실제 값으로 교체한다.
+
+## 2026-05-28 PowerShell 7 Latest Install And Default Shell
+
+PowerShell 5.1이 계속 기본으로 열리는 문제를 보정하기 위해 로컬 설치 상태를 확인하고, 공식 Microsoft 문서와 winget 기준 최신 안정판 PowerShell 7을 설치한 뒤 Windows Terminal/VS Code 기본 PowerShell 프로필을 `pwsh`로 고정했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 최신 안정판 확인 | 확인 | Microsoft Learn의 Windows 설치 문서는 `winget search --id Microsoft.PowerShell --exact` 예시와 MSI 링크 기준 `7.6.2`를 최신 안정판으로 안내한다. 로컬 `winget search --id Microsoft.PowerShell --exact`도 `Microsoft.PowerShell 7.6.2.0`을 반환 |
+| 기존 설치 상태 | 미설치 | `Get-Command pwsh` 결과 없음, `C:\Program Files\PowerShell\7\pwsh.exe` 없음, `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe` 없음 |
+| 설치 | 완료 | `winget install --id Microsoft.PowerShell --source winget --accept-package-agreements --accept-source-agreements` -> 설치 성공 |
+| 설치 버전 | 통과 | `pwsh -NoProfile` -> `7.6.2`, `Core`, `$PSHOME=C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.2.0_x64__8wekyb3d8bbwe` |
+| 최신 여부 | 통과 | `winget list --id Microsoft.PowerShell --exact` -> `7.6.2.0`; `winget upgrade --id Microsoft.PowerShell` -> 사용 가능한 업그레이드 없음 |
+| Windows Terminal 적용 | 통과 | `%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json`의 `defaultProfile`을 `{574e775e-4f2a-5b96-ac1e-a2962a402336}`로 설정하고 해당 profile commandline을 `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe`로 추가 |
+| VS Code 적용 | 통과 | `%APPDATA%\Code\User\settings.json`의 `terminal.integrated.defaultProfile.windows=PowerShell`, `terminal.integrated.profiles.windows.PowerShell.path=${env:LOCALAPPDATA}\Microsoft\WindowsApps\pwsh.exe` 확인 |
+| UTF-8 연동 | 통과 | profile 로드 `pwsh`에서 `chcp 65001`, `$OutputEncoding=utf-8`, Console input/output utf-8, `PYTHONIOENCODING=utf-8`, `PYTHONUTF8=1`, `GetContentDefault=utf8`; Python stdin `한글 테스트`와 `Get-Content Memory.md` 한글 정상 출력 |
+
+## 2026-05-28 PowerShell UTF-8 Global Normalization
+
+`/goal` 진행 중 PowerShell 한글 출력과 Python/Playwright here-string 파이프가 깨지는 원인을 점검하고, 프로젝트 한정이 아닌 사용자 전역 PowerShell 초기화로 보정했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 원인 | 확인 | Windows PowerShell 5.1 세션에서 `chcp=949`, `$OutputEncoding=us-ascii`, `ConsoleInput=ks_c_5601-1987`로 확인됨. PowerShell 5.1은 UTF-8 BOM 없는 파일을 기본 ANSI로 읽어 `Get-Content Memory.md`도 깨짐 |
+| 전역 프로필 | 적용 | `C:\Users\demon\OneDrive\문서\WindowsPowerShell\profile.ps1`, `C:\Users\demon\OneDrive\문서\PowerShell\profile.ps1`, `C:\Users\demon\Documents\WindowsPowerShell\profile.ps1`, `C:\Users\demon\Documents\PowerShell\profile.ps1`에 UTF-8 초기화 추가 |
+| 콘솔/파이프 인코딩 | 통과 | profile 로드 새 PowerShell에서 `chcp 65001`, `$OutputEncoding=utf-8`, `[Console]::InputEncoding=utf-8`, `[Console]::OutputEncoding=utf-8` 확인 |
+| Python UTF-8 | 통과 | 사용자 환경 변수 `PYTHONIOENCODING=utf-8`, `PYTHONUTF8=1` 설정. profile 로드 새 PowerShell의 Python stdin 파이프에서 `한글 테스트` 정상 출력 |
+| 파일 읽기 기본값 | 통과 | `Get-Content:Encoding`, `Select-String:Encoding`, `Import-Csv:Encoding`, `Set-Content:Encoding`, `Out-File:Encoding`, `Add-Content:Encoding`, `Export-Csv:Encoding` 기본값을 `utf8`로 지정. 새 PowerShell에서 `Get-Content Memory.md` 한글 정상 출력 |
+| 비교 재현 | 확인 | `powershell.exe -NoProfile`에서는 `$OutputEncoding=us-ascii`가 유지되고 같은 Python stdin 테스트가 `?? ???`, `Get-Content Memory.md`가 깨진 출력으로 재현됨 |
+
 ## 2026-05-28 Local Launcher Recovery
 
 `start_stock_analyst.cmd`/`py launcher.py run` 재실행 시 응답이 없어 보이는 상태를 점검했다. 원인은 3000 포트의 기존 Next 서버와 8001 백엔드가 런처 상태 파일 없이 남아 있어 표준 런처가 fail-closed로 중단된 것이다.
