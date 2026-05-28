@@ -52,15 +52,26 @@ KIS_ORDER_CASH_PATH = "/uapi/domestic-stock/v1/trading/order-cash"
 KIS_ORDER_CANCEL_PATH = "/uapi/domestic-stock/v1/trading/order-rvsecncl"
 KIS_DAILY_CCLD_PATH = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld"
 KIS_BALANCE_PATH = "/uapi/domestic-stock/v1/trading/inquire-balance"
+KIS_OVERSEAS_ORDER_PATH = "/uapi/overseas-stock/v1/trading/order"
+KIS_OVERSEAS_ORDER_CANCEL_PATH = "/uapi/overseas-stock/v1/trading/order-rvsecncl"
+KIS_OVERSEAS_CCLD_PATH = "/uapi/overseas-stock/v1/trading/inquire-ccnl"
+KIS_OVERSEAS_BALANCE_PATH = "/uapi/overseas-stock/v1/trading/inquire-balance"
 
 KIS_PAPER_BUY_TR_ID = "VTTC0012U"
 KIS_PAPER_SELL_TR_ID = "VTTC0011U"
 KIS_PAPER_CANCEL_TR_ID = "VTTC0013U"
 KIS_PAPER_DAILY_CCLD_TR_ID = "VTTC0081R"
 KIS_PAPER_BALANCE_TR_ID = "VTTC8434R"
+KIS_PAPER_US_BUY_TR_ID = "VTTT1002U"
+KIS_PAPER_US_SELL_TR_ID = "VTTT1006U"
+KIS_PAPER_OVERSEAS_CANCEL_TR_ID = "VTTT1004U"
+KIS_PAPER_OVERSEAS_CCLD_TR_ID = "VTTS3035R"
+KIS_PAPER_OVERSEAS_BALANCE_TR_ID = "VTTS3012R"
 
 SUPPORTED_SYNC_SCOPES = {"orders", "fills", "positions", "portfolio", "all"}
 SENSITIVE_RESPONSE_KEYS = {"CANO", "ACNT_PRDT_CD", "authorization", "appkey", "appsecret"}
+US_OVERSEAS_EXCHANGE_CODES = {"NASD", "NYSE", "AMEX"}
+OVERSEAS_ORDER_KEY_PREFIX = "OVRS"
 
 
 class KisPaperBrokerRequestError(RuntimeError):
@@ -118,6 +129,9 @@ class KisPaperRequestMapper:
 
     @staticmethod
     def order_cash_body(request: BrokerOrderRequest, credentials: KisPaperCredentials) -> tuple[str, dict[str, str]]:
+        if _is_overseas_order_request(request):
+            return KisPaperRequestMapper.overseas_order_body(request, credentials)
+
         side = request.side.strip().lower()
         if side not in {"buy", "sell"}:
             raise KisPaperBrokerRequestError("KIS_PAPER_INVALID_ORDER_SIDE")
@@ -143,20 +157,71 @@ class KisPaperRequestMapper:
         return tr_id, body
 
     @staticmethod
-    def cancel_body(broker_order_id: str, credentials: KisPaperCredentials) -> dict[str, str]:
-        order_key = decode_broker_order_key(broker_order_id)
-        return {
+    def overseas_order_body(request: BrokerOrderRequest, credentials: KisPaperCredentials) -> tuple[str, dict[str, str]]:
+        side = request.side.strip().lower()
+        if side not in {"buy", "sell"}:
+            raise KisPaperBrokerRequestError("KIS_PAPER_INVALID_ORDER_SIDE")
+        if request.qty <= 0:
+            raise KisPaperBrokerRequestError("KIS_PAPER_INVALID_ORDER_QTY")
+        if request.limit_price is None:
+            raise KisPaperBrokerRequestError("KIS_PAPER_OVERSEAS_LIMIT_PRICE_REQUIRED")
+        if request.stop_price is not None:
+            raise KisPaperBrokerRequestError("KIS_PAPER_STOP_ORDER_UNSUPPORTED")
+
+        exchange = _overseas_exchange_from_metadata(request.metadata)
+        tr_id = KIS_PAPER_US_BUY_TR_ID if side == "buy" else KIS_PAPER_US_SELL_TR_ID
+        body = {
             "CANO": credentials.account_no,
             "ACNT_PRDT_CD": credentials.product_code,
-            "KRX_FWDG_ORD_ORGNO": order_key["krx_fwdg_ord_orgno"],
-            "ORGN_ODNO": order_key["odno"],
-            "ORD_DVSN": order_key["ord_dvsn"],
-            "RVSE_CNCL_DVSN_CD": "02",
-            "ORD_QTY": order_key["qty"],
-            "ORD_UNPR": order_key["price"],
-            "QTY_ALL_ORD_YN": "Y",
-            "EXCG_ID_DVSN_CD": order_key["excg_id_dvsn_cd"],
+            "OVRS_EXCG_CD": exchange,
+            "PDNO": request.symbol.strip().upper(),
+            "ORD_QTY": str(int(request.qty)),
+            "OVRS_ORD_UNPR": _overseas_price_to_kis_string(request.limit_price),
+            "CTAC_TLNO": "",
+            "MGCO_APTM_ODNO": "",
+            "SLL_TYPE": "00" if side == "sell" else "",
+            "ORD_SVR_DVSN_CD": "0",
+            "ORD_DVSN": "00",
         }
+        return tr_id, body
+
+    @staticmethod
+    def cancel_request(broker_order_id: str, credentials: KisPaperCredentials) -> tuple[str, str, dict[str, str]]:
+        order_key = decode_broker_order_key(broker_order_id)
+        if _is_overseas_order_key(order_key):
+            body = {
+                "CANO": credentials.account_no,
+                "ACNT_PRDT_CD": credentials.product_code,
+                "OVRS_EXCG_CD": _normalize_overseas_exchange(order_key["excg_id_dvsn_cd"]),
+                "PDNO": order_key["symbol"],
+                "ORGN_ODNO": order_key["odno"],
+                "RVSE_CNCL_DVSN_CD": "02",
+                "ORD_QTY": order_key["qty"],
+                "OVRS_ORD_UNPR": "0",
+                "MGCO_APTM_ODNO": "",
+                "ORD_SVR_DVSN_CD": "0",
+            }
+            return KIS_OVERSEAS_ORDER_CANCEL_PATH, KIS_PAPER_OVERSEAS_CANCEL_TR_ID, body
+        return (
+            KIS_ORDER_CANCEL_PATH,
+            KIS_PAPER_CANCEL_TR_ID,
+            {
+                "CANO": credentials.account_no,
+                "ACNT_PRDT_CD": credentials.product_code,
+                "KRX_FWDG_ORD_ORGNO": order_key["krx_fwdg_ord_orgno"],
+                "ORGN_ODNO": order_key["odno"],
+                "ORD_DVSN": order_key["ord_dvsn"],
+                "RVSE_CNCL_DVSN_CD": "02",
+                "ORD_QTY": order_key["qty"],
+                "ORD_UNPR": order_key["price"],
+                "QTY_ALL_ORD_YN": "Y",
+                "EXCG_ID_DVSN_CD": order_key["excg_id_dvsn_cd"],
+            },
+        )
+
+    @staticmethod
+    def cancel_body(broker_order_id: str, credentials: KisPaperCredentials) -> dict[str, str]:
+        return KisPaperRequestMapper.cancel_request(broker_order_id, credentials)[2]
 
     @staticmethod
     def daily_ccld_params(credentials: KisPaperCredentials, status: str | None = None) -> dict[str, str]:
@@ -185,6 +250,26 @@ class KisPaperRequestMapper:
         }
 
     @staticmethod
+    def overseas_ccnl_params(credentials: KisPaperCredentials) -> dict[str, str]:
+        today = datetime.now(UTC).date().strftime("%Y%m%d")
+        return {
+            "CANO": credentials.account_no,
+            "ACNT_PRDT_CD": credentials.product_code,
+            "PDNO": "",
+            "ORD_STRT_DT": today,
+            "ORD_END_DT": today,
+            "SLL_BUY_DVSN": "00",
+            "CCLD_NCCS_DVSN": "00",
+            "OVRS_EXCG_CD": "",
+            "SORT_SQN": "DS",
+            "ORD_DT": "",
+            "ORD_GNO_BRNO": "",
+            "ODNO": "",
+            "CTX_AREA_NK200": "",
+            "CTX_AREA_FK200": "",
+        }
+
+    @staticmethod
     def balance_params(credentials: KisPaperCredentials) -> dict[str, str]:
         return {
             "CANO": credentials.account_no,
@@ -200,12 +285,26 @@ class KisPaperRequestMapper:
             "CTX_AREA_NK100": "",
         }
 
+    @staticmethod
+    def overseas_balance_params(credentials: KisPaperCredentials, *, exchange: str, currency: str) -> dict[str, str]:
+        return {
+            "CANO": credentials.account_no,
+            "ACNT_PRDT_CD": credentials.product_code,
+            "OVRS_EXCG_CD": _normalize_overseas_exchange(exchange),
+            "TR_CRCY_CD": currency.strip().upper() or "USD",
+            "CTX_AREA_FK200": "",
+            "CTX_AREA_NK200": "",
+        }
+
 
 class KisPaperResponseMapper:
     """KIS paper response를 내부 표준 payload로 변환하고 raw payload 노출을 막는다."""
 
     @staticmethod
     def submit_response(body: dict[str, Any], request: BrokerOrderRequest) -> dict[str, Any]:
+        if _is_overseas_order_request(request):
+            return KisPaperResponseMapper.overseas_submit_response(body, request)
+
         output = _first_mapping(body.get("output"))
         order_no = _first_value(output, "ODNO", "odno", "odno_orgno", "ORGN_ODNO")
         org_no = _first_value(output, "KRX_FWDG_ORD_ORGNO", "krx_fwdg_ord_orgno", "ORD_GNO_BRNO", "ord_gno_brno")
@@ -235,6 +334,39 @@ class KisPaperResponseMapper:
         }
 
     @staticmethod
+    def overseas_submit_response(body: dict[str, Any], request: BrokerOrderRequest) -> dict[str, Any]:
+        output = _first_mapping(body.get("output"))
+        order_no = _first_value(output, "ODNO", "odno", "odno_orgno", "ORGN_ODNO")
+        if not order_no:
+            raise KisPaperBrokerRequestError("KIS_PAPER_OVERSEAS_ORDER_RESPONSE_KEY_MISSING")
+        exchange = _overseas_exchange_from_metadata(request.metadata)
+        broker_order_id = encode_broker_order_key(
+            krx_fwdg_ord_orgno=OVERSEAS_ORDER_KEY_PREFIX,
+            odno=order_no,
+            qty=str(int(request.qty)),
+            price=_overseas_price_to_kis_string(request.limit_price),
+            ord_dvsn="00",
+            excg_id_dvsn_cd=exchange,
+            symbol=request.symbol.strip().upper(),
+        )
+        return {
+            "broker_order_id": broker_order_id,
+            "broker_order_status": "submitted",
+            "broker_message_code": str(body.get("msg_cd") or ""),
+            "broker_message": str(body.get("msg1") or "").strip(),
+            "order": {
+                "symbol": request.symbol.strip().upper(),
+                "side": request.side.strip().lower(),
+                "qty": int(request.qty),
+                "filled_qty": 0,
+                "remaining_qty": int(request.qty),
+                "status": "submitted",
+                "market": "US",
+                "venue": exchange,
+            },
+        }
+
+    @staticmethod
     def cancel_response(body: dict[str, Any], broker_order_id: str) -> dict[str, Any]:
         return {
             "broker_order_id": broker_order_id,
@@ -258,6 +390,24 @@ class KisPaperResponseMapper:
         }
 
     @staticmethod
+    def overseas_orders_response(body: dict[str, Any]) -> dict[str, Any]:
+        rows = body.get("output") or body.get("output1") or []
+        if not isinstance(rows, list):
+            raise KisPaperBrokerRequestError("KIS_PAPER_OVERSEAS_CCLD_OUTPUT_INVALID")
+        orders = [
+            order for row in rows if isinstance(row, dict) and (order := _overseas_order_from_ccnl_row(row)) is not None
+        ]
+        fills = [
+            fill for row in rows if isinstance(row, dict) and (fill := _overseas_fill_from_ccnl_row(row)) is not None
+        ]
+        return {
+            "orders": orders,
+            "fills": fills,
+            "broker_message_code": str(body.get("msg_cd") or ""),
+            "broker_message": str(body.get("msg1") or "").strip(),
+        }
+
+    @staticmethod
     def balance_response(body: dict[str, Any]) -> dict[str, Any]:
         holdings = body.get("output1") or []
         if not isinstance(holdings, list):
@@ -266,6 +416,22 @@ class KisPaperResponseMapper:
         positions = [_position_from_balance_row(row) for row in holdings if isinstance(row, dict)]
         positions = [position for position in positions if position is not None]
         snapshot = _portfolio_snapshot_from_summary(summary)
+        return {
+            "positions": positions,
+            "portfolio": snapshot,
+            "broker_message_code": str(body.get("msg_cd") or ""),
+            "broker_message": str(body.get("msg1") or "").strip(),
+        }
+
+    @staticmethod
+    def overseas_balance_response(body: dict[str, Any]) -> dict[str, Any]:
+        holdings = body.get("output1") or []
+        if not isinstance(holdings, list):
+            raise KisPaperBrokerRequestError("KIS_PAPER_OVERSEAS_BALANCE_OUTPUT_INVALID")
+        summary = _first_mapping(body.get("output2"))
+        positions = [_overseas_position_from_balance_row(row) for row in holdings if isinstance(row, dict)]
+        positions = [position for position in positions if position is not None]
+        snapshot = _overseas_portfolio_snapshot_from_summary(summary, positions)
         return {
             "positions": positions,
             "portfolio": snapshot,
@@ -341,7 +507,8 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         try:
             credentials = KisPaperCredentials.from_env()
             tr_id, body = KisPaperRequestMapper.order_cash_body(request, credentials)
-            response = self._request("POST", KIS_ORDER_CASH_PATH, tr_id=tr_id, body=body, credentials=credentials)
+            path = KIS_OVERSEAS_ORDER_PATH if _is_overseas_order_request(request) else KIS_ORDER_CASH_PATH
+            response = self._request("POST", path, tr_id=tr_id, body=body, credentials=credentials)
             if not response["ok"]:
                 return self._error_payload("submit_failed", response, operation="submit")
             mapped = KisPaperResponseMapper.submit_response(response["body"], request)
@@ -375,11 +542,11 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             return self._blocked_payload("cancel_blocked", cancel_gate, operation="cancel")
         try:
             credentials = KisPaperCredentials.from_env()
-            body = KisPaperRequestMapper.cancel_body(broker_order_id, credentials)
+            path, tr_id, body = KisPaperRequestMapper.cancel_request(broker_order_id, credentials)
             response = self._request(
                 "POST",
-                KIS_ORDER_CANCEL_PATH,
-                tr_id=KIS_PAPER_CANCEL_TR_ID,
+                path,
+                tr_id=tr_id,
                 body=body,
                 credentials=credentials,
             )
@@ -414,17 +581,28 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             return self._blocked_payload("query_blocked", gate, operation="list_orders")
         try:
             credentials = KisPaperCredentials.from_env()
-            params = KisPaperRequestMapper.daily_ccld_params(credentials, status=status)
+            if _adapter_uses_overseas(self.config):
+                path = KIS_OVERSEAS_CCLD_PATH
+                tr_id = KIS_PAPER_OVERSEAS_CCLD_TR_ID
+                params = KisPaperRequestMapper.overseas_ccnl_params(credentials)
+            else:
+                path = KIS_DAILY_CCLD_PATH
+                tr_id = KIS_PAPER_DAILY_CCLD_TR_ID
+                params = KisPaperRequestMapper.daily_ccld_params(credentials, status=status)
             response = self._request(
                 "GET",
-                KIS_DAILY_CCLD_PATH,
-                tr_id=KIS_PAPER_DAILY_CCLD_TR_ID,
+                path,
+                tr_id=tr_id,
                 params=params,
                 credentials=credentials,
             )
             if not response["ok"]:
                 return self._error_payload("query_failed", response, operation="list_orders")
-            mapped = KisPaperResponseMapper.daily_orders_response(response["body"])
+            mapped = (
+                KisPaperResponseMapper.overseas_orders_response(response["body"])
+                if _adapter_uses_overseas(self.config)
+                else KisPaperResponseMapper.daily_orders_response(response["body"])
+            )
         except KisPaperBrokerRequestError as exc:
             return self._blocked_payload("query_blocked", [str(exc)], operation="list_orders")
         return {
@@ -450,16 +628,32 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             return self._blocked_payload("query_blocked", gate, operation="query_balance")
         try:
             credentials = KisPaperCredentials.from_env()
+            if _adapter_uses_overseas(self.config):
+                path = KIS_OVERSEAS_BALANCE_PATH
+                tr_id = KIS_PAPER_OVERSEAS_BALANCE_TR_ID
+                params = KisPaperRequestMapper.overseas_balance_params(
+                    credentials,
+                    exchange=_adapter_overseas_exchange(self.config),
+                    currency=_adapter_overseas_currency(self.config),
+                )
+            else:
+                path = KIS_BALANCE_PATH
+                tr_id = KIS_PAPER_BALANCE_TR_ID
+                params = KisPaperRequestMapper.balance_params(credentials)
             response = self._request(
                 "GET",
-                KIS_BALANCE_PATH,
-                tr_id=KIS_PAPER_BALANCE_TR_ID,
-                params=KisPaperRequestMapper.balance_params(credentials),
+                path,
+                tr_id=tr_id,
+                params=params,
                 credentials=credentials,
             )
             if not response["ok"]:
                 return self._error_payload("query_failed", response, operation="query_balance")
-            mapped = KisPaperResponseMapper.balance_response(response["body"])
+            mapped = (
+                KisPaperResponseMapper.overseas_balance_response(response["body"])
+                if _adapter_uses_overseas(self.config)
+                else KisPaperResponseMapper.balance_response(response["body"])
+            )
         except KisPaperBrokerRequestError as exc:
             return self._blocked_payload("query_blocked", [str(exc)], operation="query_balance")
         return {
@@ -501,32 +695,59 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         try:
             credentials = KisPaperCredentials.from_env()
             if normalized_scope in {"orders", "fills", "all"}:
-                params = KisPaperRequestMapper.daily_ccld_params(credentials)
+                if _adapter_uses_overseas(self.config):
+                    order_path = KIS_OVERSEAS_CCLD_PATH
+                    order_tr_id = KIS_PAPER_OVERSEAS_CCLD_TR_ID
+                    params = KisPaperRequestMapper.overseas_ccnl_params(credentials)
+                else:
+                    order_path = KIS_DAILY_CCLD_PATH
+                    order_tr_id = KIS_PAPER_DAILY_CCLD_TR_ID
+                    params = KisPaperRequestMapper.daily_ccld_params(credentials)
                 order_response = self._request(
                     "GET",
-                    KIS_DAILY_CCLD_PATH,
-                    tr_id=KIS_PAPER_DAILY_CCLD_TR_ID,
+                    order_path,
+                    tr_id=order_tr_id,
                     params=params,
                     credentials=credentials,
                 )
                 traces.append(order_response["trace"])
                 if not order_response["ok"]:
                     return self._error_payload("sync_failed", order_response, operation="sync")
-                mapped_orders = KisPaperResponseMapper.daily_orders_response(order_response["body"])
+                mapped_orders = (
+                    KisPaperResponseMapper.overseas_orders_response(order_response["body"])
+                    if _adapter_uses_overseas(self.config)
+                    else KisPaperResponseMapper.daily_orders_response(order_response["body"])
+                )
                 orders = mapped_orders["orders"]
                 fills = mapped_orders["fills"]
             if normalized_scope in {"positions", "portfolio", "all"}:
+                if _adapter_uses_overseas(self.config):
+                    balance_path = KIS_OVERSEAS_BALANCE_PATH
+                    balance_tr_id = KIS_PAPER_OVERSEAS_BALANCE_TR_ID
+                    balance_params = KisPaperRequestMapper.overseas_balance_params(
+                        credentials,
+                        exchange=_adapter_overseas_exchange(self.config),
+                        currency=_adapter_overseas_currency(self.config),
+                    )
+                else:
+                    balance_path = KIS_BALANCE_PATH
+                    balance_tr_id = KIS_PAPER_BALANCE_TR_ID
+                    balance_params = KisPaperRequestMapper.balance_params(credentials)
                 balance_response = self._request(
                     "GET",
-                    KIS_BALANCE_PATH,
-                    tr_id=KIS_PAPER_BALANCE_TR_ID,
-                    params=KisPaperRequestMapper.balance_params(credentials),
+                    balance_path,
+                    tr_id=balance_tr_id,
+                    params=balance_params,
                     credentials=credentials,
                 )
                 traces.append(balance_response["trace"])
                 if not balance_response["ok"]:
                     return self._error_payload("sync_failed", balance_response, operation="sync")
-                mapped_balance = KisPaperResponseMapper.balance_response(balance_response["body"])
+                mapped_balance = (
+                    KisPaperResponseMapper.overseas_balance_response(balance_response["body"])
+                    if _adapter_uses_overseas(self.config)
+                    else KisPaperResponseMapper.balance_response(balance_response["body"])
+                )
                 positions = mapped_balance["positions"]
                 portfolio = mapped_balance["portfolio"]
         except KisPaperBrokerRequestError as exc:
@@ -594,7 +815,11 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         )
         trace = self.redaction_service.redact(result.trace)
         if not result.ok:
-            return {"ok": False, "reason": _map_http_reason(result.reason), "trace": trace, "body": {}}
+            body = result.body if isinstance(result.body, dict) else {}
+            if body:
+                trace["broker_message_code"] = str(body.get("msg_cd") or "")
+                trace["broker_message"] = str(body.get("msg1") or "").strip()
+            return {"ok": False, "reason": _map_http_reason(result.reason), "trace": trace, "body": self.redaction_service.redact(body)}
         response_body = result.body
         if not isinstance(response_body, dict):
             return {"ok": False, "reason": KIS_PAPER_RESPONSE_ERROR, "trace": trace, "body": {}}
@@ -746,22 +971,24 @@ def encode_broker_order_key(
     price: str,
     ord_dvsn: str,
     excg_id_dvsn_cd: str,
+    symbol: str = "",
 ) -> str:
-    return "|".join(
-        [
-            krx_fwdg_ord_orgno.strip(),
-            odno.strip(),
-            str(qty).strip(),
-            str(price).strip(),
-            ord_dvsn.strip(),
-            excg_id_dvsn_cd.strip(),
-        ]
-    )
+    parts = [
+        krx_fwdg_ord_orgno.strip(),
+        odno.strip(),
+        str(qty).strip(),
+        str(price).strip(),
+        ord_dvsn.strip(),
+        excg_id_dvsn_cd.strip(),
+    ]
+    if symbol.strip():
+        parts.append(symbol.strip().upper())
+    return "|".join(parts)
 
 
 def decode_broker_order_key(value: str) -> dict[str, str]:
     parts = value.split("|")
-    if len(parts) != 6 or not parts[0].strip() or not parts[1].strip():
+    if len(parts) not in {6, 7} or not parts[0].strip() or not parts[1].strip():
         raise KisPaperBrokerRequestError("KIS_PAPER_CANCEL_ORDER_KEY_REQUIRED")
     return {
         "krx_fwdg_ord_orgno": parts[0].strip(),
@@ -770,6 +997,7 @@ def decode_broker_order_key(value: str) -> dict[str, str]:
         "price": parts[3].strip() or "0",
         "ord_dvsn": parts[4].strip() or "00",
         "excg_id_dvsn_cd": parts[5].strip() or "KRX",
+        "symbol": parts[6].strip().upper() if len(parts) == 7 else "",
     }
 
 
@@ -829,6 +1057,75 @@ def _fill_from_daily_row(row: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _overseas_order_from_ccnl_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    order_no = _first_value(row, "odno", "ODNO", "orgn_odno", "ORGN_ODNO")
+    symbol = _first_value(row, "ovrs_pdno", "OVRS_PDNO", "pdno", "PDNO", "symb", "SYMB")
+    if not order_no or not symbol:
+        return None
+    qty = _to_int(_first_value(row, "ord_qty", "ORD_QTY", "ft_ord_qty", "FT_ORD_QTY"))
+    filled_qty = _to_int(
+        _first_value(row, "ft_ccld_qty", "FT_CCLD_QTY", "tot_ccld_qty", "TOT_CCLD_QTY", "ccld_qty", "CCLD_QTY")
+    )
+    remaining_qty = _to_int(_first_value(row, "nccs_qty", "NCCS_QTY"))
+    if remaining_qty <= 0:
+        remaining_qty = max(qty - filled_qty, 0)
+    side_code = _first_value(row, "sll_buy_dvsn_cd", "SLL_BUY_DVSN_CD", "sll_buy_dvsn", "SLL_BUY_DVSN")
+    side_name = _first_value(row, "sll_buy_dvsn_name", "SLL_BUY_DVSN_NAME", "sll_buy_dvsn_cd_name")
+    side = "sell" if side_code == "01" or "매도" in side_name else "buy" if side_code == "02" or "매수" in side_name else ""
+    price = _to_float(_first_value(row, "ovrs_ord_unpr", "OVRS_ORD_UNPR", "ft_ord_unpr3", "FT_ORD_UNPR3", "ord_unpr", "ORD_UNPR"))
+    exchange = _normalize_overseas_exchange(_first_value(row, "ovrs_excg_cd", "OVRS_EXCG_CD") or "NASD")
+    status = "submitted" if remaining_qty else "filled" if filled_qty else "unknown"
+    order_key = encode_broker_order_key(
+        krx_fwdg_ord_orgno=OVERSEAS_ORDER_KEY_PREFIX,
+        odno=order_no,
+        qty=str(qty),
+        price=_overseas_price_to_kis_string(price) if price and price > 0 else "0",
+        ord_dvsn="00",
+        excg_id_dvsn_cd=exchange,
+        symbol=symbol,
+    )
+    return {
+        "broker_order_id": order_key,
+        "symbol": symbol,
+        "side": side,
+        "qty": qty,
+        "filled_qty": filled_qty,
+        "remaining_qty": remaining_qty,
+        "limit_price": price,
+        "status": status,
+        "broker_order_status": status,
+        "market": "US",
+        "venue": exchange,
+        "broker_synced_at": datetime.now(UTC).isoformat(),
+    }
+
+
+def _overseas_fill_from_ccnl_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    filled_qty = _to_int(
+        _first_value(row, "ft_ccld_qty", "FT_CCLD_QTY", "tot_ccld_qty", "TOT_CCLD_QTY", "ccld_qty", "CCLD_QTY")
+    )
+    if filled_qty <= 0:
+        return None
+    order = _overseas_order_from_ccnl_row(row)
+    if order is None:
+        return None
+    fill_price = _to_float(
+        _first_value(row, "ft_ccld_unpr3", "FT_CCLD_UNPR3", "ccld_unpr", "CCLD_UNPR", "ovrs_ord_unpr", "OVRS_ORD_UNPR")
+    ) or 0.0
+    return {
+        "broker_fill_id": f"{order['broker_order_id']}|fill",
+        "broker_order_id": order["broker_order_id"],
+        "symbol": order["symbol"],
+        "side": order["side"],
+        "qty": filled_qty,
+        "price": fill_price,
+        "fill_ts": datetime.now(UTC).isoformat(),
+        "status": "filled",
+        "market": "US",
+        "venue": order.get("venue"),
+    }
+
+
 def _position_from_balance_row(row: dict[str, Any]) -> dict[str, Any] | None:
     symbol = _first_value(row, "pdno", "PDNO")
     if not symbol:
@@ -846,6 +1143,32 @@ def _position_from_balance_row(row: dict[str, Any]) -> dict[str, Any] | None:
         "unrealized_pnl": _to_float(_first_value(row, "evlu_pfls_amt", "EVLU_PFLS_AMT")),
         "broker_position_key": f"kis_paper|{symbol}",
         "account_alias": "kis_paper",
+        "broker_synced_at": datetime.now(UTC).isoformat(),
+    }
+
+
+def _overseas_position_from_balance_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    symbol = _first_value(row, "ovrs_pdno", "OVRS_PDNO", "pdno", "PDNO", "symb", "SYMB")
+    if not symbol:
+        return None
+    qty = _to_int(_first_value(row, "ovrs_cblc_qty", "OVRS_CBLC_QTY", "hldg_qty", "HLDG_QTY", "ord_psbl_qty"))
+    avg_price = _to_float(_first_value(row, "pchs_avg_pric", "PCHS_AVG_PRIC", "avg_unpr", "AVG_UNPR")) or 0.0
+    last_price = _to_float(_first_value(row, "now_pric2", "NOW_PRIC2", "last", "LAST", "prpr", "PRPR"))
+    market_value = _to_float(
+        _first_value(row, "frcr_evlu_amt2", "FRCR_EVLU_AMT2", "ovrs_stck_evlu_amt", "OVRS_STCK_EVLU_AMT", "evlu_amt")
+    )
+    return {
+        "symbol": symbol,
+        "qty": qty,
+        "avg_price": avg_price,
+        "last_price": last_price,
+        "market_value": market_value,
+        "unrealized_pnl": _to_float(
+            _first_value(row, "evlu_pfls_amt", "EVLU_PFLS_AMT", "frcr_evlu_pfls_amt", "FRCR_EVLU_PFLS_AMT")
+        ),
+        "broker_position_key": f"kis_paper_us|{symbol}",
+        "account_alias": "kis_paper",
+        "market": "US",
         "broker_synced_at": datetime.now(UTC).isoformat(),
     }
 
@@ -872,9 +1195,106 @@ def _portfolio_snapshot_from_summary(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _overseas_portfolio_snapshot_from_summary(row: dict[str, Any], positions: list[dict[str, Any]]) -> dict[str, Any]:
+    now = datetime.now(UTC)
+    market_value = _to_float(
+        _first_value(row, "frcr_evlu_tota", "FRCR_EVLU_TOTA", "ovrs_stck_evlu_amt", "OVRS_STCK_EVLU_AMT", "scts_evlu_amt")
+    )
+    if market_value is None:
+        market_value = sum(float(position.get("market_value") or 0.0) for position in positions)
+    cash_balance = _to_float(
+        _first_value(row, "frcr_buy_amt_smtl1", "FRCR_BUY_AMT_SMTL1", "dnca_tot_amt", "DNCA_TOT_AMT")
+    ) or 0.0
+    total_equity = _to_float(_first_value(row, "tot_asst_amt", "TOT_ASST_AMT", "tot_evlu_amt", "TOT_EVLU_AMT"))
+    unrealized_pnl = _to_float(
+        _first_value(row, "ovrs_tot_pfls", "OVRS_TOT_PFLS", "tot_evlu_pfls_amt", "TOT_EVLU_PFLS_AMT")
+    ) or 0.0
+    return {
+        "snapshot_id": f"kis-paper-us-sync-{now.strftime('%Y%m%d%H%M%S')}",
+        "snapshot_ts": now.isoformat(),
+        "account_alias": "kis_paper",
+        "cash_balance": cash_balance,
+        "buying_power": cash_balance,
+        "market_value": market_value,
+        "total_equity": total_equity if total_equity is not None else cash_balance + market_value,
+        "unrealized_pnl": unrealized_pnl,
+        "realized_pnl": 0.0,
+        "source": "kis_paper_us",
+        "status": "synced",
+    }
+
+
 def _exchange_from_metadata(metadata: dict[str, Any]) -> str:
     value = str(metadata.get("excg_id_dvsn_cd") or metadata.get("venue") or "KRX").strip().upper()
     return value if value in {"KRX", "NXT", "SOR"} else "KRX"
+
+
+def _is_overseas_order_request(request: BrokerOrderRequest) -> bool:
+    metadata = request.metadata or {}
+    market = str(metadata.get("market") or metadata.get("country") or "").strip().upper()
+    venue = str(metadata.get("ovrs_excg_cd") or metadata.get("exchange") or metadata.get("venue") or "").strip().upper()
+    return market in {"US", "USA", "OVERSEAS"} or _maybe_overseas_exchange(venue) in US_OVERSEAS_EXCHANGE_CODES
+
+
+def _adapter_uses_overseas(config: dict[str, Any]) -> bool:
+    market = str(config.get("market") or config.get("country") or os.getenv("PAPER_TRADING_MARKET", "")).strip().upper()
+    venue = str(
+        config.get("ovrs_excg_cd")
+        or config.get("overseas_exchange")
+        or config.get("venue")
+        or os.getenv("KIS_OVERSEAS_EXCHANGE_CODE", "")
+    ).strip().upper()
+    return market in {"US", "USA", "OVERSEAS"} or _maybe_overseas_exchange(venue) in US_OVERSEAS_EXCHANGE_CODES
+
+
+def _adapter_overseas_exchange(config: dict[str, Any]) -> str:
+    value = str(
+        config.get("ovrs_excg_cd")
+        or config.get("overseas_exchange")
+        or config.get("venue")
+        or os.getenv("KIS_OVERSEAS_EXCHANGE_CODE", "NASD")
+    )
+    return _normalize_overseas_exchange(value)
+
+
+def _adapter_overseas_currency(config: dict[str, Any]) -> str:
+    value = str(config.get("currency") or config.get("tr_crcy_cd") or os.getenv("KIS_OVERSEAS_CURRENCY", "USD"))
+    normalized = value.strip().upper()
+    return normalized if normalized else "USD"
+
+
+def _overseas_exchange_from_metadata(metadata: dict[str, Any]) -> str:
+    value = str(metadata.get("ovrs_excg_cd") or metadata.get("exchange") or metadata.get("venue") or "NASD")
+    return _normalize_overseas_exchange(value)
+
+
+def _normalize_overseas_exchange(value: str) -> str:
+    normalized = str(value or "").strip().upper()
+    aliases = {
+        "US": "NASD",
+        "USA": "NASD",
+        "NASDAQ": "NASD",
+        "NAS": "NASD",
+        "NYS": "NYSE",
+        "AMS": "AMEX",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in US_OVERSEAS_EXCHANGE_CODES:
+        raise KisPaperBrokerRequestError("KIS_PAPER_OVERSEAS_EXCHANGE_UNSUPPORTED")
+    return normalized
+
+
+def _maybe_overseas_exchange(value: str) -> str | None:
+    if not value:
+        return None
+    try:
+        return _normalize_overseas_exchange(value)
+    except KisPaperBrokerRequestError:
+        return None
+
+
+def _is_overseas_order_key(order_key: dict[str, str]) -> bool:
+    return order_key.get("krx_fwdg_ord_orgno") == OVERSEAS_ORDER_KEY_PREFIX
 
 
 def _price_to_kis_string(value: float | int | str | None) -> str:
@@ -882,6 +1302,13 @@ def _price_to_kis_string(value: float | int | str | None) -> str:
         return "0"
     parsed = _to_float(value)
     return "0" if parsed is None else str(int(parsed))
+
+
+def _overseas_price_to_kis_string(value: float | int | str | None) -> str:
+    parsed = _to_float(value)
+    if parsed is None or parsed <= 0:
+        raise KisPaperBrokerRequestError("KIS_PAPER_INVALID_LIMIT_PRICE")
+    return f"{parsed:.4f}".rstrip("0").rstrip(".")
 
 
 def _first_mapping(value: Any) -> dict[str, Any]:

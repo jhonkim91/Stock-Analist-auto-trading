@@ -14,6 +14,7 @@ from backend.app.models.tables import (
     utc_now,
 )
 from backend.app.repositories.paper_repository import PaperRepository
+from backend.app.services.paper_order_service import PaperOrderService
 from backend.app.services.paper_sync_service import SYNC_CONFIRMATION_REQUIRED, PaperSyncService
 
 
@@ -79,6 +80,97 @@ class _FakeSyncAdapter:
         }
 
 
+class _BrokerLifecycleSubmitAdapter:
+    broker_order_id = "OVRS|900001|1|145.25|00|NASD|AAPL"
+
+    def submit_order(self, request) -> dict[str, object]:
+        return {
+            "ok": True,
+            "status": "submitted",
+            "broker_order_id": self.broker_order_id,
+            "broker_order_status": "submitted",
+            "network_call_performed": True,
+            "broker_trace": {
+                "endpoint_path": "/uapi/overseas-stock/v1/trading/order",
+                "tr_id": "VTTT1002U",
+                "secrets_redacted": True,
+            },
+            "order": {
+                "symbol": request.symbol,
+                "side": request.side,
+                "qty": request.qty,
+                "filled_qty": 0,
+                "remaining_qty": request.qty,
+                "status": "submitted",
+                "market": request.metadata.get("market"),
+                "venue": request.metadata.get("venue"),
+            },
+        }
+
+
+class _BrokerLifecycleSyncAdapter:
+    def sync(self, *, scope: str = "all") -> dict[str, object]:
+        broker_order_id = _BrokerLifecycleSubmitAdapter.broker_order_id
+        return {
+            "ok": True,
+            "status": "sync_ok",
+            "scope": scope,
+            "sync_performed": True,
+            "network_call_performed": True,
+            "synthetic_positions_touched": False,
+            "orders": [
+                {
+                    "broker_order_id": broker_order_id,
+                    "symbol": "AAPL",
+                    "side": "buy",
+                    "qty": 1,
+                    "filled_qty": 1,
+                    "remaining_qty": 0,
+                    "limit_price": 145.25,
+                    "status": "filled",
+                    "broker_order_status": "filled",
+                }
+            ],
+            "fills": [
+                {
+                    "broker_fill_id": f"{broker_order_id}|fill|1",
+                    "broker_order_id": broker_order_id,
+                    "symbol": "AAPL",
+                    "side": "buy",
+                    "qty": 1,
+                    "price": 145.25,
+                }
+            ],
+            "positions": [
+                {
+                    "symbol": "AAPL",
+                    "qty": 1,
+                    "avg_price": 145.25,
+                    "last_price": 146.0,
+                    "market_value": 146.0,
+                    "unrealized_pnl": 0.75,
+                    "broker_position_key": "kis_paper_us|AAPL",
+                }
+            ],
+            "portfolio": {
+                "snapshot_id": "kis-paper-us-lifecycle-sync",
+                "cash_balance": 1000.0,
+                "buying_power": 854.75,
+                "market_value": 146.0,
+                "total_equity": 1000.75,
+                "unrealized_pnl": 0.75,
+                "realized_pnl": 0.0,
+                "status": "synced",
+            },
+            "broker_trace": {
+                "operation": "sync",
+                "endpoint_path": "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+                "tr_id": "VTTS3035R",
+                "secrets_redacted": True,
+            },
+        }
+
+
 def _write_network_paper_config(tmp_path) -> None:
     tmp_path.joinpath("paper.yaml").write_text(
         dedent(
@@ -129,6 +221,9 @@ def _enable_network_runtime(monkeypatch) -> None:
     monkeypatch.setenv("PAPER_ORDER_SUBMIT_ENABLED", "true")
     monkeypatch.setenv("PAPER_BOT_CONFIRM", "true")
     monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
+    monkeypatch.setenv("PAPER_TRADING_MARKET", "US")
+    monkeypatch.setenv("KIS_OVERSEAS_EXCHANGE_CODE", "NASD")
+    monkeypatch.setenv("KIS_OVERSEAS_CURRENCY", "USD")
 
 
 def _seed_phase5_state(db_session) -> None:
@@ -324,3 +419,50 @@ def test_paper_sync_service_persists_mock_adapter_payload_to_paper_tables(
     assert portfolio["snapshot"]["snapshot_id"] == "kis-paper-sync-test"
     assert "KIS_APP_SECRET" not in serialized
     assert "KIS_ACCESS_TOKEN" not in serialized
+
+
+def test_broker_submit_then_sync_attaches_fill_to_existing_paper_order(
+    db_session,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    _enable_network_runtime(monkeypatch)
+    _write_network_paper_config(tmp_path)
+    order_service = PaperOrderService(
+        db_session,
+        config_dir=tmp_path,
+        adapter=_BrokerLifecycleSubmitAdapter(),
+    )
+
+    submitted = order_service.submit_order(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        strategy_tag="phase21-us",
+        confirm=True,
+        idempotency_key="phase21-us-lifecycle",
+    )
+    sync_service = PaperSyncService(db_session, config_dir=tmp_path, adapter=_BrokerLifecycleSyncAdapter())
+    synced = sync_service.sync(scope="all")
+    repository = PaperRepository(db_session)
+    order = db_session.get(PaperOrder, submitted["order"]["paper_order_id"])
+    fill = repository.list_fills(symbol="AAPL")[0]
+    position = repository.list_positions(symbol="AAPL")[0]
+
+    assert submitted["ok"] is True
+    assert submitted["broker_order_created"] is True
+    assert submitted["network_call_performed"] is True
+    assert synced["ok"] is True
+    assert synced["dedupe"]["orders_inserted"] == 0
+    assert synced["dedupe"]["fills_inserted"] == 1
+    assert synced["dedupe"]["positions_upserted"] == 1
+    assert order is not None
+    assert order.broker_order_id == _BrokerLifecycleSubmitAdapter.broker_order_id
+    assert order.status == "filled"
+    assert order.filled_qty == 1
+    assert order.remaining_qty == 0
+    assert fill.paper_order_id == submitted["order"]["paper_order_id"]
+    assert fill.broker_order_id == _BrokerLifecycleSubmitAdapter.broker_order_id
+    assert position.broker_position_key == "kis_paper_us|AAPL"
+    assert repository.counts()["orders_count"] == 0

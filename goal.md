@@ -22,7 +22,7 @@
 | Version | `MVP v0.26.0` |
 | Branch | `feature/kis-paper-goal-phases` |
 | Baseline HEAD | `251db45` |
-| 상태 | KIS paper token/WebSocket approval network 성공, minimum paper submit은 KIS 장종료 거부로 차단, Phase 20 live preflight 차단 |
+| 상태 | KIS paper token/WebSocket approval network 성공, US WebSocket subscribe ACK 성공, 국내/미국 minimum paper submit은 KIS 거부로 차단, 최신 미국장 재요청은 정규장 전 gate에서 차단, Phase 20 live preflight 차단 |
 | Backend | FastAPI + SQLite + Alembic |
 | Frontend | Next.js App Router |
 | 최신 backend full pytest | `416 passed` |
@@ -130,7 +130,7 @@ live fallback requested = deny
 | Phase 18 | 완료 | live trading readiness design-only 문서 추가 |
 | Phase 19 | 완료 | disabled live adapter scaffold와 no-live regression 강화 |
 | Phase 20 | preflight 차단 | controlled live canary runbook/preflight record 추가, live 실행 조건 미충족 |
-| Phase 21 | 진행 중 | KIS paper token 발급과 WebSocket approval 발급 성공. minimum paper submit은 `40580000` / `모의투자 장종료 입니다.`로 중단 |
+| Phase 21 | 진행 중 | KIS paper token 발급, WebSocket approval 발급, US WebSocket ACK 성공. 국내 submit은 `40580000` / `모의투자 장종료 입니다.`, 미국 submit은 HTTP 500으로 중단. 최신 미국장 재요청은 뉴욕 정규장 전이라 `US_REGULAR_SESSION_REQUIRED`로 adapter 호출 전 차단. API/bot/helper US metadata 전달, broker fill persistence 귀속, Phase21 helper 보강 |
 
 ## KIS Paper Auto Bot Phase 1-6 진행 상태
 
@@ -463,21 +463,41 @@ live fallback requested = deny
 - 구현 결과:
   - `POST /api/kis/token/issue`, `POST /api/kis/token/refresh`, `GET /api/kis/token/status` 추가. token 발급은 `confirm=true`, `KIS_TOKEN_ISSUE_ENABLED=true`, `KIS_ENV=paper`, `ENABLE_REAL_ORDER=false` 조건에서만 수행한다.
   - `GET /api/paper/realtime/websocket/status`, `POST /api/paper/realtime/websocket/approval`, `POST /api/paper/realtime/websocket/subscription/preview` 추가. WebSocket approval은 paper endpoint `/oauth2/Approval`만 허용한다.
-  - `H0STCNT0` quote subscription preview를 추가했지만 실제 WebSocket connect loop는 `PAPER_WEBSOCKET_CONNECT_ENABLED=false`로 미실행 상태다.
+  - `POST /api/paper/realtime/websocket/smoke` 추가. `PAPER_WEBSOCKET_CONNECT_ENABLED=true`와 `confirm=true`일 때만 bounded connect 1회 수행하고 unattended loop는 실행하지 않는다.
+  - KIS paper adapter에 공식 KIS 샘플 기준 해외주식/미국장 endpoint 분기를 추가했다. 미국 paper 주문 `VTTT1002U`/`VTTT1006U`, 취소 `VTTT1004U`, 체결조회 `VTTS3035R`, 잔고조회 `VTTS3012R`만 사용한다.
+  - `PaperConfigService`가 `PAPER_TRADING_MARKET`, `KIS_OVERSEAS_EXCHANGE_CODE`, `KIS_OVERSEAS_CURRENCY`를 runtime config로 노출하고 `PaperOrderService` network submit이 `market=US`, `venue/exchange=NASD`, `currency=USD` metadata를 adapter에 전달하도록 보강했다.
+  - `PaperSyncService`가 broker sync fill을 기존 `paper_orders.broker_order_id`로 조회해 내부 `paper_order_id`에 귀속하도록 보강했다. broker submit -> sync mock lifecycle에서 order filled status, fill, position persistence 연결을 확인했다.
+  - `tools/kis_paper_phase12c_dry_run.py`에 `--market US --exchange NASD --currency USD` 옵션을 추가해 다음 실제 1회 재시도 때 kill-switch proof -> submit -> list -> sync -> cancel이 미국장 metadata/config로 실행되도록 보강했다.
+  - `tools/kis_paper_phase21_us_activation.py`를 추가해 token 발급, WebSocket approval/subscription/smoke, controlled US submit/list/sync/cancel을 하나의 redacted record로 묶도록 보강했다.
 - 실행 결과:
   - process-only gate로 `POST /oauth2/tokenP` 1회 성공, `token_issued=true`, raw token 미출력/미기록.
   - process-only gate로 `POST /oauth2/Approval` 1회 성공, `approval_key_issued=true`, raw approval key 미출력/미기록.
   - temporary paper config와 process-only network gate로 `POST /uapi/domestic-stock/v1/trading/order-cash`, `tr_id=VTTC0012U` 1회 도달.
   - KIS 응답: `40580000`, `모의투자 장종료 입니다.`. 재시도하지 않고 중단.
+  - 사용자 지시로 미국장 AAPL/NASD paper 경로를 추가 진행했다. `HDFSCNT0`/`DNASAAPL` WebSocket bounded smoke는 `SUBSCRIBE SUCCESS` ACK를 수신했다.
+  - 해외 price 조회와 해외잔고 조회는 성공했다. 사전 해외잔고는 `70070000`, `모의투자 조회할 내역(자료)이 없습니다.`로 반환됐다.
+  - `POST /uapi/overseas-stock/v1/trading/order`, `tr_id=VTTT1002U` 1회 도달 후 HTTP 500 / `KIS_PAPER_RESPONSE_ERROR`로 중단했다. 재시도하지 않았다.
+  - submit 재시도 없이 read-only 주문체결조회 `GET /uapi/overseas-stock/v1/trading/inquire-ccnl`, `tr_id=VTTS3035R`를 1회 수행했고 open order/fill 0개를 확인했다.
+  - 이어진 read-only sync의 balance leg는 `EGW00201`, `초당 거래건수를 초과하였습니다.`로 중단했다. 재시도하지 않았다.
   - submit 실패로 broker order id가 없어 query/sync/cancel과 `paper_orders`/`paper_fills`/`paper_positions` persistence는 미완료.
-  - redacted 결과는 `docs/research/kis-paper-phase21-activation-redacted-record.json`에 기록했다.
+  - redacted 결과는 `docs/research/kis-paper-phase21-activation-redacted-record.json`, `docs/research/kis-paper-phase21-us-redacted-record.json`에 기록했다.
 - 검증 명령:
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_kis_paper_adapter_contract.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_us_targeted2`
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_kis_paper_phase12c_tool.py backend/tests/test_kis_paper_token_websocket_activation.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_us_route_fix`
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_service.py backend/tests/test_kis_paper_adapter_contract.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_us_service_metadata`
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync_service.py backend/tests/test_paper_order_service.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_lifecycle_persistence`
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase12c_tool.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_paper_order_service.py backend/tests/test_paper_sync_service.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_us_helper_options`
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase21_us_activation_tool.py backend/tests/test_kis_paper_phase12c_tool.py backend/tests/test_kis_paper_token_websocket_activation.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_activation_helper`
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_phase21_us_activation_tool.py backend/tests/test_kis_paper_phase12c_tool.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_token_manager.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py backend/tests/test_paper_sync_service.py backend/tests/test_paper_realtime_worker.py backend/tests/test_paper_dashboard_report_phase6.py backend/tests/test_api_smoke.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_activation_helper_regression`
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_token_manager.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py backend/tests/test_paper_sync_service.py backend/tests/test_paper_realtime_worker.py backend/tests/test_paper_dashboard_report_phase6.py backend/tests/test_api_smoke.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_us_regression_after_fix`
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_token_manager.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py backend/tests/test_paper_sync_service.py backend/tests/test_paper_realtime_worker.py backend/tests/test_paper_dashboard_report_phase6.py backend/tests/test_api_smoke.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_us_service_regression`
+  - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_token_manager.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py backend/tests/test_paper_sync_service.py backend/tests/test_paper_realtime_worker.py backend/tests/test_paper_dashboard_report_phase6.py backend/tests/test_api_smoke.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_lifecycle_regression`
   - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_token_manager.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_token_ws_targeted`
   - `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_token_manager.py backend/tests/test_paper_realtime_worker.py backend/tests/test_paper_dashboard_report_phase6.py backend/tests/test_api_smoke.py backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_phase3f2_kis_daily_ohlcv_adapter.py backend/tests/test_phase3f3_krx_fixture_contract.py backend/tests/test_phase3f4_data_quality_summary.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_token_ws_regression`
   - `.\.venv\Scripts\python.exe tools\secret_scan.py`
   - `git diff --check`
-- 현재 상태: `진행 중`. token/network/WebSocket approval은 완료됐지만 실제 주문 생성, 체결, 포지션 변경은 장종료로 아직 미완료다.
-- 다음 조건: KIS paper 장중에 minimum submit -> query -> sync -> cancel을 1회 재시도한다. 거부/auth/rate-limit/stale 응답이면 재시도하지 않는다.
+- 현재 상태: `진행 중`. token/network/WebSocket approval/US bounded WebSocket은 완료됐지만 실제 주문 생성, 체결, 포지션 변경은 KIS 거부로 아직 미완료다.
+- 다음 조건: KIS paper 주문이 가능한 시간/상품 조건에서 minimum submit -> query -> sync -> cancel을 1회 재시도한다. 거부/auth/rate-limit/stale 응답이면 재시도하지 않는다.
 
 ## Reusable Codex Phase Prompt
 

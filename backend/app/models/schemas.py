@@ -263,7 +263,16 @@ class KisWebSocketSubscriptionPreviewRequest(BaseModel):
 
     symbol: str = ""
     kind: Literal["quote", "ask", "notice"] = "quote"
+    market: Literal["KR", "US"] = "KR"
+    exchange: str | None = None
     subscribe: bool = True
+
+
+class KisWebSocketSmokeRequest(KisWebSocketSubscriptionPreviewRequest):
+    """KIS paper WebSocket bounded smoke 요청이다."""
+
+    confirm: bool = False
+    receive_timeout_seconds: float = 3.0
 
 
 class PaperBotRunRequest(BaseModel):

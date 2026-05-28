@@ -88,12 +88,12 @@ class KisHttpClient:
                         retry_count=attempt,
                     )
                     if status_code == 429:
-                        return KisHttpResult(False, status_code, {}, KIS_HTTP_RATE_LIMITED, trace)
+                        return KisHttpResult(False, status_code, self._safe_body(response), KIS_HTTP_RATE_LIMITED, trace)
                     if status_code >= 500 and attempt + 1 < attempts:
                         last_reason = KIS_HTTP_TRANSPORT_ERROR
                         continue
                     if status_code >= 400:
-                        return KisHttpResult(False, status_code, {}, KIS_HTTP_RESPONSE_ERROR, trace)
+                        return KisHttpResult(False, status_code, self._safe_body(response), KIS_HTTP_RESPONSE_ERROR, trace)
                     body = response.json()
                     if not isinstance(body, dict):
                         return KisHttpResult(False, status_code, {}, KIS_HTTP_RESPONSE_ERROR, trace)
@@ -140,6 +140,13 @@ class KisHttpClient:
         if method == "POST":
             return client.post(url, headers=headers, json=json_body, timeout=self.timeout_seconds)
         return client.get(url, headers=headers, params=params, timeout=self.timeout_seconds)
+
+    def _safe_body(self, response: Any) -> dict[str, Any]:
+        try:
+            body = response.json()
+        except Exception:
+            return {}
+        return self.redactor.redact(body) if isinstance(body, dict) else {}
 
     def _trace(
         self,

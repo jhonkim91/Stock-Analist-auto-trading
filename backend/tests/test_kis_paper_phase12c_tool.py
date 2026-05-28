@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from tools import kis_paper_phase12c_dry_run as phase12c
+
+US_REGULAR_SESSION = datetime(2026, 5, 28, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+US_PREMARKET_SESSION = datetime(2026, 5, 28, 5, 0, tzinfo=ZoneInfo("America/New_York"))
 
 
 class _FakeAdapter:
@@ -67,6 +72,30 @@ class _QueryFailingAdapter(_FakeAdapter):
             "status": "query_failed",
             "reason_codes": ["QUERY_CONTRACT_MISMATCH"],
             "network_call_performed": True,
+        }
+
+
+class _RecordingMarketAdapter(_FakeAdapter):
+    def __init__(self, config: dict[str, Any], calls: list[dict[str, Any]]) -> None:
+        super().__init__(config)
+        self.calls = calls
+
+    def submit_order(self, request) -> dict[str, Any]:
+        self.calls.append({"config": self.config, "metadata": request.metadata, "symbol": request.symbol})
+        if self.config["kill_switch_enabled"]:
+            return {
+                "ok": False,
+                "status": "submit_blocked",
+                "reason_codes": ["KILL_SWITCH_ACTIVE"],
+                "network_call_performed": False,
+            }
+        return {
+            "ok": True,
+            "status": "submitted",
+            "broker_order_id": "OVRS|900001|1|145.25|00|NASD|AAPL",
+            "network_call_performed": True,
+            "live_order_created": False,
+            "broker_trace": {"endpoint_path": "/uapi/overseas-stock/v1/trading/order", "tr_id": "VTTT1002U"},
         }
 
 
@@ -222,6 +251,68 @@ def test_phase12c_requires_trading_window_confirmation_before_adapter() -> None:
     assert record["network_call_performed"] is False
     assert record["steps"] == []
     assert "PHASE12C_TRADING_WINDOW_CONFIRMATION_REQUIRED" in record["reason_codes"]
+
+
+def test_phase12c_us_market_options_reach_adapter_metadata() -> None:
+    calls: list[dict[str, Any]] = []
+
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        market="US",
+        exchange="NASD",
+        currency="USD",
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        confirm_trading_window=phase12c.TRADING_WINDOW_CONFIRMATION_TOKEN,
+        as_of=US_REGULAR_SESSION,
+        env=_ready_env(),
+        config=_ready_config(),
+        adapter_factory=lambda config: _RecordingMarketAdapter(config, calls),
+    )
+
+    assert record["status"] == "completed"
+    assert record["market"] == "US"
+    assert record["exchange"] == "NASD"
+    assert calls[0]["config"]["market"] == "US"
+    assert calls[0]["config"]["venue"] == "NASD"
+    assert calls[0]["config"]["currency"] == "USD"
+    assert calls[0]["metadata"] == {
+        "market": "US",
+        "venue": "NASD",
+        "exchange": "NASD",
+        "currency": "USD",
+    }
+    assert calls[0]["symbol"] == "AAPL"
+
+
+def test_phase12c_us_market_closed_stops_before_adapter() -> None:
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        market="US",
+        exchange="NASD",
+        currency="USD",
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        confirm_trading_window=phase12c.TRADING_WINDOW_CONFIRMATION_TOKEN,
+        as_of=US_PREMARKET_SESSION,
+        env=_ready_env(),
+        config=_ready_config(),
+        adapter_factory=lambda config: (_ for _ in ()).throw(AssertionError("adapter must not be called")),
+    )
+
+    assert record["status"] == "trading_window_closed"
+    assert record["network_call_performed"] is False
+    assert record["steps"] == []
+    assert record["trading_window"]["timezone"] == "America/New_York"
+    assert "US_REGULAR_SESSION_REQUIRED" in record["reason_codes"]
 
 
 def test_phase12c_attempts_cancel_after_query_failure_and_redacts_identifier() -> None:

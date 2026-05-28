@@ -505,10 +505,7 @@ class PaperOrderService:
             limit_price=request_payload.get("limit_price"),
             stop_price=request_payload.get("stop_price"),
             idempotency_key=idempotency_key,
-            metadata={
-                "strategy_tag": request_payload.get("strategy_tag"),
-                "venue": request_payload.get("venue") or "KRX",
-            },
+            metadata=self._broker_order_metadata(request_payload=request_payload, config=config),
         )
         broker_result = self._adapter(config).submit_order(request)
         if not broker_result.get("ok"):
@@ -754,6 +751,24 @@ class PaperOrderService:
         if self.adapter is not None:
             return self.adapter
         return KisPaperBrokerAdapter(config=dict(config))
+
+    @staticmethod
+    def _broker_order_metadata(*, request_payload: dict[str, Any], config: dict[str, object]) -> dict[str, object]:
+        market = str(config.get("market") or "KR").strip().upper() or "KR"
+        requested_venue = str(request_payload.get("venue") or "").strip().upper()
+        if market in {"US", "USA", "OVERSEAS"}:
+            venue = requested_venue or str(config.get("overseas_exchange") or config.get("venue") or "NASD").strip().upper()
+            currency = str(config.get("currency") or "USD").strip().upper() or "USD"
+        else:
+            venue = requested_venue or str(config.get("venue") or "KRX").strip().upper() or "KRX"
+            currency = str(config.get("currency") or "KRW").strip().upper() or "KRW"
+        return {
+            "strategy_tag": request_payload.get("strategy_tag"),
+            "market": market,
+            "venue": venue,
+            "exchange": venue,
+            "currency": currency,
+        }
 
     @staticmethod
     def _elapsed_ms(started_at: float) -> float:

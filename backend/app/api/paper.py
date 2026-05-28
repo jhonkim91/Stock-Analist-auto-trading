@@ -12,6 +12,7 @@ from backend.app.models.schemas import (
     PaperBotRunRequest,
     PaperSyncRequest,
     KisWebSocketApprovalRequest,
+    KisWebSocketSmokeRequest,
     KisWebSocketSubscriptionPreviewRequest,
 )
 from backend.app.services.kis_paper_websocket_service import KisPaperWebSocketService
@@ -155,7 +156,21 @@ def preview_paper_websocket_subscription(payload: KisWebSocketSubscriptionPrevie
     return KisPaperWebSocketService().subscription_preview(
         symbol=payload.symbol,
         kind=payload.kind,
+        market=payload.market,
+        exchange=payload.exchange,
         subscribe=payload.subscribe,
+    )
+
+
+@router.post("/realtime/websocket/smoke")
+def smoke_paper_websocket(payload: KisWebSocketSmokeRequest) -> dict[str, object]:
+    return KisPaperWebSocketService().bounded_connect_smoke(
+        symbol=payload.symbol,
+        kind=payload.kind,
+        market=payload.market,
+        exchange=payload.exchange,
+        confirm=payload.confirm,
+        receive_timeout_seconds=payload.receive_timeout_seconds,
     )
 
 

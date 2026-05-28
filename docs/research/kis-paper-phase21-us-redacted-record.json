@@ -1,0 +1,471 @@
+{
+  "phase": "21-US",
+  "generated_at": "2026-05-28T08:26:07.139834+00:00",
+  "kst_time": "2026-05-28T17:26:07.148887+09:00",
+  "new_york_time": "2026-05-28T04:26:07.150381-04:00",
+  "paper_only": true,
+  "market": "US",
+  "symbol": "AAPL",
+  "exchange": "NASD",
+  "currency": "USD",
+  "qty": 1,
+  "live_order_created": false,
+  "raw_secret_printed": "***REDACTED***",
+  "env_loaded_from_local_file": true,
+  "configured_keys": {
+    "BROKER_MODE": true,
+    "ENABLE_REAL_ORDER": true,
+    "KIS_ACCESS_TOKEN": "***REDACTED***",
+    "KIS_ACCOUNT_NO": "***REDACTED***",
+    "KIS_APP_KEY": "***REDACTED***",
+    "KIS_APP_SECRET": "***REDACTED***",
+    "KIS_ENV": true,
+    "KIS_PAPER_ACCOUNT_ALIAS": "***REDACTED***",
+    "KIS_PAPER_BASE_URL": true,
+    "KIS_PRODUCT_CODE": true,
+    "PAPER_BOT_AUTO_SUBMIT": true,
+    "PAPER_BOT_CONFIRM": true,
+    "PAPER_BOT_ENABLED": true,
+    "PAPER_BOT_KILL_SWITCH": true,
+    "PAPER_BOT_SCHEDULER_ENABLED": true,
+    "PAPER_ORDER_SUBMIT_ENABLED": true,
+    "PAPER_TRADING_CAN_CREATE": true,
+    "PAPER_TRADING_ENABLED": true,
+    "PAPER_TRADING_KILL_SWITCH": true,
+    "PAPER_TRADING_NETWORK_ENABLED": true
+  },
+  "steps": [
+    {
+      "name": "issue_token",
+      "result": {
+        "ok": true,
+        "status": "token_issued",
+        "token_issued": "***REDACTED***",
+        "token_raw_value_persisted": "***REDACTED***",
+        "process_env_access_token_installed": "***REDACTED***",
+        "network_call_performed": true,
+        "reason": null,
+        "reason_codes": [],
+        "trace": {
+          "operation": "kis_token_issue",
+          "method": "POST",
+          "host": "openapivts.koreainvestment.com",
+          "path": "/oauth2/tokenP",
+          "endpoint_path": "/oauth2/tokenP",
+          "tr_id": null,
+          "status_code": 200,
+          "elapsed_ms": 209.089,
+          "correlation_id": "kis-http-fec142b11f5b48e5",
+          "retry_count": 0,
+          "network_call_performed": true,
+          "secrets_redacted": "***REDACTED***"
+        },
+        "metadata": {
+          "state": "METADATA_ONLY",
+          "app_key_configured": "***REDACTED***",
+          "app_secret_configured": "***REDACTED***",
+          "account_configured": "***REDACTED***",
+          "product_code_configured": true,
+          "process_access_token_configured": "***REDACTED***",
+          "kis_env": "paper",
+          "kis_env_paper": true,
+          "token_issued": "***REDACTED***",
+          "refresh_token_present": "***REDACTED***",
+          "token_cache_enabled": "***REDACTED***",
+          "token_file_persistence_enabled": "***REDACTED***",
+          "token_db_persistence_enabled": "***REDACTED***",
+          "token_raw_value_persisted": "***REDACTED***",
+          "access_token": "***REDACTED***",
+          "refresh_token": null,
+          "access_token_fingerprint": "***REDACTED***",
+          "refresh_token_fingerprint": null,
+          "expires_at": "2026-05-29T17:01:28+00:00",
+          "expired": false
+        }
+      }
+    },
+    {
+      "name": "issue_websocket_approval",
+      "result": {
+        "ok": true,
+        "status": "websocket_approval_issued",
+        "paper_only": true,
+        "approval_key_issued": "***REDACTED***",
+        "approval_key_raw_value_persisted": "***REDACTED***",
+        "approval_key_process_env_installed": "***REDACTED***",
+        "network_call_performed": true,
+        "live_order_created": false,
+        "reason": null,
+        "reason_codes": [],
+        "trace": {
+          "operation": "kis_websocket_approval",
+          "method": "POST",
+          "host": "openapivts.koreainvestment.com",
+          "path": "/oauth2/Approval",
+          "endpoint_path": "/oauth2/Approval",
+          "tr_id": null,
+          "status_code": 200,
+          "elapsed_ms": 66.728,
+          "correlation_id": "kis-ws-approval-1de48df65b94400a",
+          "retry_count": 0,
+          "network_call_performed": true,
+          "secrets_redacted": "***REDACTED***"
+        },
+        "metadata": {
+          "ok": true,
+          "paper_only": true,
+          "enabled": true,
+          "connect_enabled": true,
+          "websocket_enabled": true,
+          "approval_key_configured": "***REDACTED***",
+          "approval_key_issued": "***REDACTED***",
+          "approval_key_fingerprint": "***REDACTED***",
+          "approval_key_raw_value_persisted": "***REDACTED***",
+          "approval_key_process_env_installed": "***REDACTED***",
+          "approval_endpoint_path": "/oauth2/Approval",
+          "websocket_url": {
+            "scheme": "ws",
+            "host": "ops.koreainvestment.com",
+            "port": 31000,
+            "paper_endpoint": true,
+            "live_endpoint": false
+          },
+          "supported_tr_ids": {
+            "quote": "H0STCNT0",
+            "ask": "H0STASP0",
+            "paper_notice": "H0STCNI9",
+            "us_quote": "HDFSCNT0",
+            "us_ask": "HDFSASP0",
+            "us_paper_notice": "H0GSCNI9"
+          },
+          "network_call_performed": false,
+          "live_order_created": false,
+          "reason": null,
+          "reason_codes": [],
+          "secrets_redacted": "***REDACTED***"
+        }
+      }
+    },
+    {
+      "name": "websocket_us_subscription_preview",
+      "result": {
+        "ok": true,
+        "status": "subscription_preview",
+        "paper_only": true,
+        "subscription": {
+          "header": "***REDACTED***",
+          "body": {
+            "input": {
+              "tr_id": "HDFSCNT0",
+              "tr_key": "DNASAAPL"
+            }
+          }
+        },
+        "tr_id": "HDFSCNT0",
+        "tr_key_fingerprint": "15e54f8c6f02",
+        "market": "US",
+        "exchange": "NASD",
+        "network_call_performed": false,
+        "live_order_created": false,
+        "reason": null,
+        "reason_codes": [],
+        "secrets_redacted": "***REDACTED***"
+      }
+    },
+    {
+      "name": "websocket_us_bounded_smoke",
+      "result": {
+        "ok": true,
+        "status": "websocket_message_received",
+        "network_call_performed": true,
+        "message_received": true,
+        "first_message": {
+          "length": 209,
+          "sha256": "5e6bc8fbc4ed718d",
+          "raw_message_redacted": "***REDACTED***",
+          "kind": "json",
+          "tr_id": "HDFSCNT0",
+          "tr_key_fingerprint": "15e54f8c6f02",
+          "rt_cd": "0",
+          "msg1": "SUBSCRIBE SUCCESS"
+        },
+        "elapsed_ms": 103.451,
+        "websocket_url": {
+          "scheme": "ws",
+          "host": "ops.koreainvestment.com",
+          "port": 31000,
+          "paper_endpoint": true,
+          "live_endpoint": false
+        },
+        "reason": null,
+        "reason_codes": [],
+        "paper_only": true,
+        "market": "US",
+        "exchange": "NASD",
+        "tr_id": "HDFSCNT0",
+        "tr_key_fingerprint": "15e54f8c6f02",
+        "approval_key_raw_value_persisted": "***REDACTED***",
+        "live_order_created": false,
+        "secrets_redacted": "***REDACTED***"
+      }
+    },
+    {
+      "name": "overseas_price",
+      "result": {
+        "ok": true,
+        "status_code": 200,
+        "reason": null,
+        "trace": {
+          "operation": "kis_overseas_price",
+          "method": "GET",
+          "host": "openapivts.koreainvestment.com",
+          "path": "/uapi/overseas-price/v1/quotations/price",
+          "endpoint_path": "/uapi/overseas-price/v1/quotations/price",
+          "tr_id": "HHDFS00000300",
+          "status_code": 200,
+          "elapsed_ms": 74.687,
+          "correlation_id": "kis-paper-us-price-8666d89de560411d",
+          "retry_count": 0,
+          "network_call_performed": true,
+          "secrets_redacted": "***REDACTED***"
+        },
+        "last_price_available": true,
+        "last_price": 310.915
+      }
+    },
+    {
+      "name": "pre_order_overseas_balance",
+      "result": {
+        "ok": true,
+        "status": "query_ok",
+        "paper_only": true,
+        "positions": [],
+        "portfolio": {
+          "snapshot_id": "kis-paper-us-sync-20260528082609",
+          "snapshot_ts": "2026-05-28T08:26:09.492341+00:00",
+          "account_alias": "***REDACTED***",
+          "cash_balance": 0.0,
+          "buying_power": 0.0,
+          "market_value": 0,
+          "total_equity": 0.0,
+          "unrealized_pnl": 0.0,
+          "realized_pnl": 0.0,
+          "source": "kis_paper_us",
+          "status": "synced"
+        },
+        "live_order_created": false,
+        "broker_order_created": false,
+        "network_call_performed": true,
+        "reason": null,
+        "reason_codes": [],
+        "broker_message_code": "70070000",
+        "broker_message": "모의투자 조회할 내역(자료)이 없습니다.",
+        "broker_trace": {
+          "operation": "GET",
+          "method": "GET",
+          "host": "openapivts.koreainvestment.com",
+          "path": "/uapi/overseas-stock/v1/trading/inquire-balance",
+          "endpoint_path": "/uapi/overseas-stock/v1/trading/inquire-balance",
+          "tr_id": "VTTS3012R",
+          "status_code": 200,
+          "elapsed_ms": 99.839,
+          "correlation_id": "kis-paper-d6ef90b155dc4bdb",
+          "retry_count": 0,
+          "network_call_performed": true,
+          "secrets_redacted": "***REDACTED***"
+        }
+      }
+    },
+    {
+      "name": "kill_switch_block",
+      "result": {
+        "ok": false,
+        "status": "submit_blocked",
+        "paper_only": true,
+        "live_order_created": false,
+        "broker_order_created": false,
+        "network_call_performed": false,
+        "sync_performed": false,
+        "order_cancelled": false,
+        "reason": "KILL_SWITCH_ACTIVE",
+        "reason_codes": [
+          "KILL_SWITCH_ACTIVE"
+        ],
+        "broker_trace": {
+          "operation": "submit",
+          "adapter": "kis_paper",
+          "paper_only": true,
+          "network_call_performed": false,
+          "reason_codes": [
+            "KILL_SWITCH_ACTIVE"
+          ],
+          "secrets_redacted": "***REDACTED***"
+        }
+      }
+    },
+    {
+      "name": "submit_us_paper_order",
+      "limit_price": 320.24,
+      "result": {
+        "ok": false,
+        "status": "submit_failed",
+        "paper_only": true,
+        "live_order_created": false,
+        "broker_order_created": false,
+        "network_call_performed": true,
+        "sync_performed": false,
+        "order_cancelled": false,
+        "reason": "KIS_PAPER_RESPONSE_ERROR",
+        "reason_codes": [
+          "KIS_PAPER_RESPONSE_ERROR"
+        ],
+        "broker_trace": {
+          "operation": "POST",
+          "method": "POST",
+          "host": "openapivts.koreainvestment.com",
+          "path": "/uapi/overseas-stock/v1/trading/order",
+          "endpoint_path": "/uapi/overseas-stock/v1/trading/order",
+          "tr_id": "VTTT1002U",
+          "status_code": 500,
+          "elapsed_ms": 59.274,
+          "correlation_id": "kis-paper-dd299e8302174ac0",
+          "retry_count": 0,
+          "network_call_performed": true,
+          "secrets_redacted": "***REDACTED***"
+        }
+      }
+    },
+    {
+      "name": "post_reject_token_refresh_for_readonly_query",
+      "result": {
+        "ok": true,
+        "status": "token_issued",
+        "token_issued": "***REDACTED***",
+        "token_raw_value_persisted": "***REDACTED***",
+        "process_env_access_token_installed": "***REDACTED***",
+        "network_call_performed": true,
+        "reason": null,
+        "reason_codes": [],
+        "trace": {
+          "operation": "kis_token_issue",
+          "method": "POST",
+          "host": "openapivts.koreainvestment.com",
+          "path": "/oauth2/tokenP",
+          "endpoint_path": "/oauth2/tokenP",
+          "tr_id": null,
+          "status_code": 200,
+          "elapsed_ms": 164.066,
+          "correlation_id": "kis-http-59b142b895894544",
+          "retry_count": 0,
+          "network_call_performed": true,
+          "secrets_redacted": "***REDACTED***"
+        },
+        "metadata": {
+          "state": "METADATA_ONLY",
+          "app_key_configured": "***REDACTED***",
+          "app_secret_configured": "***REDACTED***",
+          "account_configured": "***REDACTED***",
+          "product_code_configured": true,
+          "process_access_token_configured": "***REDACTED***",
+          "kis_env": "paper",
+          "kis_env_paper": true,
+          "token_issued": "***REDACTED***",
+          "refresh_token_present": "***REDACTED***",
+          "token_cache_enabled": "***REDACTED***",
+          "token_file_persistence_enabled": "***REDACTED***",
+          "token_db_persistence_enabled": "***REDACTED***",
+          "token_raw_value_persisted": "***REDACTED***",
+          "access_token": "***REDACTED***",
+          "refresh_token": null,
+          "access_token_fingerprint": "***REDACTED***",
+          "refresh_token_fingerprint": null,
+          "expires_at": "2026-05-29T17:01:28+00:00",
+          "expired": false
+        }
+      }
+    },
+    {
+      "name": "post_reject_list_us_orders",
+      "result": {
+        "ok": true,
+        "status": "query_ok",
+        "paper_only": true,
+        "orders": [],
+        "fills": [],
+        "live_order_created": false,
+        "broker_order_created": false,
+        "network_call_performed": true,
+        "reason": null,
+        "reason_codes": [],
+        "broker_message_code": "70070000",
+        "broker_message": "모의투자 조회할 내역(자료)이 없습니다.",
+        "broker_trace": {
+          "operation": "GET",
+          "method": "GET",
+          "host": "openapivts.koreainvestment.com",
+          "path": "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+          "endpoint_path": "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+          "tr_id": "VTTS3035R",
+          "status_code": 200,
+          "elapsed_ms": 83.136,
+          "correlation_id": "kis-paper-a31abc4e621f412b",
+          "retry_count": 0,
+          "network_call_performed": true,
+          "secrets_redacted": "***REDACTED***"
+        }
+      }
+    },
+    {
+      "name": "post_reject_sync_us_orders_positions",
+      "result": {
+        "ok": false,
+        "status": "sync_failed",
+        "paper_only": true,
+        "live_order_created": false,
+        "broker_order_created": false,
+        "network_call_performed": true,
+        "sync_performed": false,
+        "order_cancelled": false,
+        "reason": "KIS_PAPER_RESPONSE_ERROR",
+        "reason_codes": [
+          "KIS_PAPER_RESPONSE_ERROR"
+        ],
+        "broker_trace": {
+          "operation": "GET",
+          "method": "GET",
+          "host": "openapivts.koreainvestment.com",
+          "path": "/uapi/overseas-stock/v1/trading/inquire-balance",
+          "endpoint_path": "/uapi/overseas-stock/v1/trading/inquire-balance",
+          "tr_id": "VTTS3012R",
+          "status_code": 500,
+          "elapsed_ms": 63.607,
+          "correlation_id": "kis-paper-2937edad5efb4e98",
+          "retry_count": 0,
+          "network_call_performed": true,
+          "secrets_redacted": "***REDACTED***",
+          "broker_message_code": "EGW00201",
+          "broker_message": "초당 거래건수를 초과하였습니다."
+        },
+        "broker_message_code": "EGW00201",
+        "broker_message": "초당 거래건수를 초과하였습니다."
+      }
+    }
+  ],
+  "status": "submit_failed",
+  "reason_codes": [
+    "KIS_PAPER_RESPONSE_ERROR"
+  ],
+  "post_submit_read_only_checked_at": "2026-05-28T08:36:19.109013+00:00",
+  "post_reject_read_only_summary": {
+    "list_ok": true,
+    "list_status": "query_ok",
+    "orders_count": 0,
+    "fills_count": 0,
+    "sync_ok": false,
+    "sync_status": "sync_failed",
+    "sync_orders_count": 0,
+    "sync_fills_count": 0,
+    "sync_positions_count": 0,
+    "network_call_performed": true
+  }
+}

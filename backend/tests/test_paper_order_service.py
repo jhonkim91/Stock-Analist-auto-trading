@@ -15,6 +15,7 @@ def _write_paper_config(
     can_create: bool = True,
     preview_only: bool = False,
     kill_switch_enabled: bool = False,
+    network_enabled: bool = False,
     audit_persistence_enabled: bool = True,
 ) -> None:
     tmp_path.joinpath("paper.yaml").write_text(
@@ -27,7 +28,7 @@ def _write_paper_config(
               can_simulate_fills: false
               preview_only: {str(preview_only).lower()}
               kill_switch_enabled: {str(kill_switch_enabled).lower()}
-              network_enabled: false
+              network_enabled: {str(network_enabled).lower()}
               live_order_enabled: false
               broker_order_enabled: false
             risk_gate:
@@ -60,6 +61,34 @@ def _enable_manual_paper_runtime(monkeypatch) -> None:
     monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "false")
     monkeypatch.setenv("PAPER_BOT_CONFIRM", "true")
     monkeypatch.delenv("PAPER_TRADING_NETWORK_ENABLED", raising=False)
+
+
+class _RecordingSubmitAdapter:
+    def __init__(self) -> None:
+        self.requests = []
+
+    def submit_order(self, request):
+        self.requests.append(request)
+        return {
+            "ok": True,
+            "broker_order_id": "kis-paper-us|NASD|AAPL|900001",
+            "broker_order_status": "submitted",
+            "broker_trace": {
+                "endpoint_path": "/uapi/overseas-stock/v1/trading/order",
+                "tr_id": "VTTT1002U",
+                "network_call_performed": True,
+            },
+            "order": {
+                "symbol": request.symbol,
+                "side": request.side,
+                "qty": request.qty,
+                "filled_qty": 0,
+                "remaining_qty": request.qty,
+                "status": "submitted",
+                "market": request.metadata.get("market"),
+                "venue": request.metadata.get("venue"),
+            },
+        }
 
 
 def test_submit_requires_confirm_idempotency_and_kill_switch_before_write(db_session, tmp_path, monkeypatch):
@@ -171,6 +200,43 @@ def test_submit_creates_local_paper_order_idempotently_without_live_side_effects
     assert listed["orders"][0]["paper_order_id"] == created["order"]["paper_order_id"]
     assert _count(db_session, PaperOrder) == 1
     assert _count(db_session, PaperAuditEvent) == 1
+    assert _count(db_session, Order) == 0
+
+
+def test_network_submit_uses_us_market_metadata_from_runtime_env(db_session, tmp_path, monkeypatch):
+    _enable_manual_paper_runtime(monkeypatch)
+    monkeypatch.setenv("PAPER_TRADING_NETWORK_ENABLED", "true")
+    monkeypatch.setenv("BROKER_MODE", "paper_kis")
+    monkeypatch.setenv("PAPER_ORDER_SUBMIT_ENABLED", "true")
+    monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
+    monkeypatch.setenv("PAPER_TRADING_MARKET", "US")
+    monkeypatch.setenv("KIS_OVERSEAS_EXCHANGE_CODE", "NASD")
+    monkeypatch.setenv("KIS_OVERSEAS_CURRENCY", "USD")
+    _write_paper_config(tmp_path, network_enabled=True)
+    adapter = _RecordingSubmitAdapter()
+    service = PaperOrderService(db_session, config_dir=tmp_path, adapter=adapter)
+
+    result = service.submit_order(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        strategy_tag="phase21-us",
+        confirm=True,
+        idempotency_key="phase21-us-service-submit",
+    )
+
+    assert result["ok"] is True
+    assert result["broker_order_created"] is True
+    assert result["network_call_performed"] is True
+    assert adapter.requests[0].metadata == {
+        "strategy_tag": "phase21-us",
+        "market": "US",
+        "venue": "NASD",
+        "exchange": "NASD",
+        "currency": "USD",
+    }
+    assert _count(db_session, PaperOrder) == 1
     assert _count(db_session, Order) == 0
 
 

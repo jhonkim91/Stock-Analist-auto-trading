@@ -5,9 +5,10 @@ import hashlib
 import json
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
+from zoneinfo import ZoneInfo
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -35,6 +36,9 @@ from backend.app.services.token_manager import KIS_APP_KEY_ENV, KIS_APP_SECRET_E
 
 CONFIRMATION_TOKEN = "CONFIRM_KIS_PAPER_PHASE12C"
 TRADING_WINDOW_CONFIRMATION_TOKEN = "CONFIRM_KIS_PAPER_TRADING_WINDOW"
+US_EASTERN = ZoneInfo("America/New_York")
+US_REGULAR_SESSION_START = time(9, 30)
+US_REGULAR_SESSION_END = time(16, 0)
 KIS_CREDENTIAL_ENV_KEYS = (
     KIS_APP_KEY_ENV,
     KIS_APP_SECRET_ENV,
@@ -70,9 +74,14 @@ SENSITIVE_KEYS = {
     "access_token",
     "app_key",
     "app_secret",
+    "appkey",
+    "appsecret",
+    "approval_key",
     "authorization",
     "cano",
     "chat_id",
+    "refresh_token",
+    "secretkey",
     "token",
 }
 
@@ -158,6 +167,10 @@ def run_controlled_dry_run(
     confirm_submit: str | None,
     confirm_cancel: str | None,
     confirm_trading_window: str | None = None,
+    market: str = "KR",
+    exchange: str = "KRX",
+    currency: str = "KRW",
+    as_of: datetime | None = None,
     env: Mapping[str, str] | None = None,
     config: Mapping[str, Any] | None = None,
     adapter_factory: Callable[[dict[str, Any]], Any] | None = None,
@@ -175,6 +188,9 @@ def run_controlled_dry_run(
         "generated_at": datetime.now(UTC).isoformat(),
         "execute_requested": execute,
         "paper_only": True,
+        "market": market.strip().upper(),
+        "exchange": exchange.strip().upper(),
+        "currency": currency.strip().upper(),
         "live_order_created": False,
         "network_call_performed": False,
         "temporary_config_used": use_temporary_paper_config,
@@ -203,6 +219,16 @@ def run_controlled_dry_run(
             }
         )
         return record
+    trading_window = _trading_window_status(market=market, as_of=as_of)
+    record["trading_window"] = trading_window
+    if not trading_window["ok"]:
+        record.update(
+            {
+                "status": "trading_window_closed",
+                "reason_codes": list(trading_window["reason_codes"]),
+            }
+        )
+        return record
 
     request = BrokerOrderRequest(
         symbol=symbol.strip(),
@@ -210,10 +236,12 @@ def run_controlled_dry_run(
         qty=qty,
         limit_price=limit_price,
         idempotency_key=f"phase12c-{_digest(datetime.now(UTC).isoformat())}",
-        metadata={"exchange": "KRX"},
+        metadata=_order_metadata(market=market, exchange=exchange, currency=currency),
     )
 
-    kill_switch_adapter = factory(_adapter_config(loaded_config, kill_switch_enabled=True))
+    kill_switch_adapter = factory(
+        _adapter_config(loaded_config, kill_switch_enabled=True, market=market, exchange=exchange, currency=currency)
+    )
     kill_switch_result = kill_switch_adapter.submit_order(request)
     record["steps"].append({"name": "kill_switch_block", "result": sanitize_payload(kill_switch_result)})
     if bool(kill_switch_result.get("network_call_performed")) or "KILL_SWITCH_ACTIVE" not in kill_switch_result.get(
@@ -222,7 +250,9 @@ def run_controlled_dry_run(
         record.update({"status": "kill_switch_proof_failed", "reason_codes": ["KILL_SWITCH_PROOF_FAILED"]})
         return record
 
-    open_adapter = factory(_adapter_config(loaded_config, kill_switch_enabled=False))
+    open_adapter = factory(
+        _adapter_config(loaded_config, kill_switch_enabled=False, market=market, exchange=exchange, currency=currency)
+    )
     submit_result = open_adapter.submit_order(request)
     record["steps"].append({"name": "submit", "result": sanitize_payload(submit_result)})
     record["network_call_performed"] = bool(submit_result.get("network_call_performed"))
@@ -335,6 +365,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--side", default="buy", choices=["buy", "sell"], help="paper order side")
     parser.add_argument("--qty", type=int, default=1, help="minimum paper order quantity")
     parser.add_argument("--limit-price", type=float, default=None, help="optional paper limit price")
+    parser.add_argument("--market", default="KR", choices=["KR", "US"], help="paper market for request metadata")
+    parser.add_argument("--exchange", default=None, help="KRX for KR or NASD/NYSE/AMEX for US")
+    parser.add_argument("--currency", default=None, help="KRW for KR or USD for US")
     parser.add_argument("--confirm-submit", default=None, help=f"must equal {CONFIRMATION_TOKEN} when executing")
     parser.add_argument("--confirm-cancel", default=None, help=f"must equal {CONFIRMATION_TOKEN} when executing")
     parser.add_argument(
@@ -347,6 +380,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--temporary-paper-config",
         action="store_true",
         help="use a process-only Phase 12C paper config override without writing backend/config/paper.yaml",
+    )
+    parser.add_argument(
+        "--as-of",
+        default=None,
+        help="optional ISO timestamp used only for local trading-window validation",
     )
     return parser
 
@@ -362,9 +400,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         side=args.side,
         qty=args.qty,
         limit_price=args.limit_price,
+        market=args.market,
+        exchange=args.exchange or ("NASD" if args.market == "US" else "KRX"),
+        currency=args.currency or ("USD" if args.market == "US" else "KRW"),
         confirm_submit=args.confirm_submit,
         confirm_cancel=args.confirm_cancel,
         confirm_trading_window=args.confirm_trading_window,
+        as_of=_parse_as_of(args.as_of),
         use_temporary_paper_config=bool(args.temporary_paper_config),
     )
     if args.record_path:
@@ -375,11 +417,64 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0 if record.get("status") == "completed" else 2
 
 
-def _adapter_config(config: Mapping[str, Any], *, kill_switch_enabled: bool) -> dict[str, Any]:
+def _trading_window_status(*, market: str, as_of: datetime | None = None) -> dict[str, Any]:
+    """Return a local static regular-session guard before any paper submit call."""
+    normalized_market = market.strip().upper()
+    now = as_of or datetime.now(UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    if normalized_market not in {"US", "USA", "OVERSEAS"}:
+        return {
+            "ok": True,
+            "market": normalized_market or "KR",
+            "reason_codes": [],
+            "source": "no_local_regular_session_guard_for_market",
+        }
+    local = now.astimezone(US_EASTERN)
+    in_regular_hours = US_REGULAR_SESSION_START <= local.time() < US_REGULAR_SESSION_END
+    is_weekday = local.weekday() < 5
+    ok = bool(is_weekday and in_regular_hours)
+    return {
+        "ok": ok,
+        "market": "US",
+        "timezone": "America/New_York",
+        "local_time": local.isoformat(),
+        "weekday": local.strftime("%A"),
+        "regular_session_start": "09:30",
+        "regular_session_end": "16:00",
+        "calendar_quality": "static_weekday_regular_session_guard",
+        "reason_codes": [] if ok else ["US_REGULAR_SESSION_REQUIRED"],
+    }
+
+
+def _parse_as_of(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+    return datetime.fromisoformat(normalized)
+
+
+def _adapter_config(
+    config: Mapping[str, Any],
+    *,
+    kill_switch_enabled: bool,
+    market: str = "KR",
+    exchange: str = "KRX",
+    currency: str = "KRW",
+) -> dict[str, Any]:
+    normalized_market = market.strip().upper()
+    normalized_exchange = exchange.strip().upper()
+    normalized_currency = currency.strip().upper()
     adapter_config = {
         "mode": "paper",
         "kis_env": "paper",
         "broker_mode": REQUIRED_PAPER_BROKER_MODE,
+        "market": normalized_market,
+        "venue": normalized_exchange,
+        "currency": normalized_currency,
+        "overseas_exchange": normalized_exchange if normalized_market in {"US", "USA", "OVERSEAS"} else "NASD",
         "enabled": True,
         "configured_can_create": True,
         "paper_order_submit_enabled": True,
@@ -396,10 +491,28 @@ def _adapter_config(config: Mapping[str, Any], *, kill_switch_enabled: bool) -> 
     }
     adapter_config.update({key: config[key] for key in config if key in adapter_config})
     adapter_config["mode"] = "paper"
+    adapter_config["market"] = normalized_market
+    adapter_config["venue"] = normalized_exchange
+    adapter_config["currency"] = normalized_currency
+    adapter_config["overseas_exchange"] = normalized_exchange if normalized_market in {"US", "USA", "OVERSEAS"} else "NASD"
     adapter_config["kill_switch_enabled"] = kill_switch_enabled
     adapter_config["live_order_enabled"] = False
     adapter_config["live_fallback_enabled"] = False
     return adapter_config
+
+
+def _order_metadata(*, market: str, exchange: str, currency: str) -> dict[str, str]:
+    normalized_market = market.strip().upper()
+    normalized_exchange = exchange.strip().upper()
+    normalized_currency = currency.strip().upper()
+    if normalized_market in {"US", "USA", "OVERSEAS"}:
+        return {
+            "market": "US",
+            "venue": normalized_exchange or "NASD",
+            "exchange": normalized_exchange or "NASD",
+            "currency": normalized_currency or "USD",
+        }
+    return {"exchange": normalized_exchange or "KRX"}
 
 
 def _temporary_phase12c_config(config: Mapping[str, Any]) -> dict[str, Any]:

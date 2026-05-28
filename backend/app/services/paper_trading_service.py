@@ -25,6 +25,9 @@ KIS_ENV_ENV = "KIS_ENV"
 PAPER_REALTIME_ENABLED_ENV = "PAPER_REALTIME_ENABLED"
 PAPER_REALTIME_REQUIRE_FRESH_QUOTES_ENV = "PAPER_REALTIME_REQUIRE_FRESH_QUOTES"
 PAPER_REALTIME_STALE_QUOTE_THRESHOLD_SECONDS_ENV = "PAPER_REALTIME_STALE_QUOTE_THRESHOLD_SECONDS"
+PAPER_TRADING_MARKET_ENV = "PAPER_TRADING_MARKET"
+KIS_OVERSEAS_EXCHANGE_CODE_ENV = "KIS_OVERSEAS_EXCHANGE_CODE"
+KIS_OVERSEAS_CURRENCY_ENV = "KIS_OVERSEAS_CURRENCY"
 REQUIRED_PAPER_BROKER_MODE = "paper_kis"
 
 
@@ -82,6 +85,9 @@ class PaperConfigService:
             runtime_order_submit_enabled = self._env_flag_true(PAPER_ORDER_SUBMIT_ENABLED_ENV)
             runtime_bot_confirm = self._env_flag_true(PAPER_BOT_CONFIRM_ENV)
             runtime_kis_env = os.getenv(KIS_ENV_ENV, "").strip().lower()
+            runtime_market = os.getenv(PAPER_TRADING_MARKET_ENV, "KR").strip().upper() or "KR"
+            runtime_overseas_exchange = os.getenv(KIS_OVERSEAS_EXCHANGE_CODE_ENV, "NASD").strip().upper() or "NASD"
+            runtime_overseas_currency = os.getenv(KIS_OVERSEAS_CURRENCY_ENV, "USD").strip().upper() or "USD"
             realtime_enabled = bool(realtime.get("enabled", False)) and self._env_bool(
                 PAPER_REALTIME_ENABLED_ENV,
                 bool(realtime.get("enabled", False)),
@@ -96,6 +102,10 @@ class PaperConfigService:
                     "kis_env": runtime_kis_env,
                     "kis_env_paper": runtime_kis_env == "paper",
                     "broker_mode": runtime_broker_mode,
+                    "market": runtime_market,
+                    "venue": runtime_overseas_exchange if runtime_market in {"US", "USA", "OVERSEAS"} else "KRX",
+                    "currency": runtime_overseas_currency if runtime_market in {"US", "USA", "OVERSEAS"} else "KRW",
+                    "overseas_exchange": runtime_overseas_exchange,
                     "enabled": config_enabled and runtime_enabled,
                     "configured_can_create": config_can_create and runtime_can_create,
                     "paper_order_submit_enabled": runtime_order_submit_enabled,
@@ -161,6 +171,10 @@ class PaperConfigService:
             "kis_env": "",
             "kis_env_paper": False,
             "broker_mode": "",
+            "market": "KR",
+            "venue": "KRX",
+            "currency": "KRW",
+            "overseas_exchange": "NASD",
             "enabled": False,
             "configured_can_create": False,
             "paper_order_submit_enabled": False,

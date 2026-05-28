@@ -1,0 +1,166 @@
+{
+  "currency": "USD",
+  "exchange": "NASD",
+  "generated_at": "2026-05-28T09:13:35.496070+00:00",
+  "live_order_created": false,
+  "market": "US",
+  "network_call_performed": false,
+  "paper_only": true,
+  "phase": "21-US",
+  "qty": 1,
+  "raw_secret_printed": false,
+  "reason_codes": [
+    "US_REGULAR_SESSION_REQUIRED"
+  ],
+  "status": "submit_lifecycle_incomplete",
+  "steps": [
+    {
+      "name": "websocket_us_subscription_preview",
+      "result": {
+        "exchange": "NASD",
+        "live_order_created": false,
+        "market": "US",
+        "network_call_performed": false,
+        "ok": true,
+        "paper_only": true,
+        "reason": null,
+        "reason_codes": [],
+        "secrets_redacted": true,
+        "status": "subscription_preview",
+        "subscription": {
+          "body": {
+            "input": {
+              "tr_id": "HDFSCNT0",
+              "tr_key": "DNASAAPL"
+            }
+          },
+          "header": {
+            "approval_key": "***REDACTED***",
+            "content-type": "utf-8",
+            "custtype": "P",
+            "tr_type": "1"
+          }
+        },
+        "tr_id": "HDFSCNT0",
+        "tr_key_fingerprint": "15e54f8c6f02"
+      }
+    },
+    {
+      "name": "controlled_us_submit_list_sync_cancel",
+      "result": {
+        "currency": "USD",
+        "exchange": "NASD",
+        "execute_requested": true,
+        "generated_at": "2026-05-28T09:13:35.500220+00:00",
+        "live_order_created": false,
+        "market": "US",
+        "network_call_performed": false,
+        "paper_only": true,
+        "phase": "12C",
+        "preflight": {
+          "blockers": [],
+          "config_gates": {
+            "broker_adapter_enabled": {
+              "enabled": true
+            },
+            "configured_can_create": {
+              "enabled": true
+            },
+            "enabled": {
+              "enabled": true
+            },
+            "kill_switch_enabled": false,
+            "live_fallback_enabled": false,
+            "live_order_enabled": false,
+            "mode": "paper",
+            "network_enabled": {
+              "enabled": true
+            },
+            "official_endpoint_confirmed": {
+              "enabled": true
+            },
+            "paper_bot_confirm_enabled": {
+              "enabled": true
+            }
+          },
+          "credential_fields": {
+            "KIS_ACCESS_TOKEN": {
+              "configured": true
+            },
+            "KIS_ACCOUNT_NO": {
+              "configured": true
+            },
+            "KIS_APP_KEY": {
+              "configured": true
+            },
+            "KIS_APP_SECRET": {
+              "configured": true
+            },
+            "KIS_PRODUCT_CODE": {
+              "configured": true
+            }
+          },
+          "ok": true,
+          "runtime_gates": {
+            "BROKER_MODE": {
+              "paper_kis": true
+            },
+            "KIS_ENV": {
+              "enabled": true
+            },
+            "PAPER_BOT_CONFIRM": {
+              "enabled": true
+            },
+            "PAPER_ORDER_SUBMIT_ENABLED": {
+              "enabled": true
+            },
+            "PAPER_TRADING_CAN_CREATE": {
+              "enabled": true
+            },
+            "PAPER_TRADING_ENABLED": {
+              "enabled": true
+            },
+            "PAPER_TRADING_KILL_SWITCH": {
+              "explicit_false": true
+            },
+            "PAPER_TRADING_NETWORK_ENABLED": {
+              "enabled": true
+            }
+          },
+          "safety_gates": {
+            "ENABLE_REAL_ORDER": {
+              "enabled": false
+            },
+            "KIS_PAPER_BASE_URL": {
+              "configured": true,
+              "live_host": false
+            },
+            "PAPER_BOT_AUTO_SUBMIT": {
+              "enabled": false
+            }
+          }
+        },
+        "reason_codes": [
+          "US_REGULAR_SESSION_REQUIRED"
+        ],
+        "status": "trading_window_closed",
+        "steps": [],
+        "temporary_config_used": true,
+        "trading_window": {
+          "calendar_quality": "static_weekday_regular_session_guard",
+          "local_time": "2026-05-28T05:13:35.500230-04:00",
+          "market": "US",
+          "ok": false,
+          "reason_codes": [
+            "US_REGULAR_SESSION_REQUIRED"
+          ],
+          "regular_session_end": "16:00",
+          "regular_session_start": "09:30",
+          "timezone": "America/New_York",
+          "weekday": "Thursday"
+        }
+      }
+    }
+  ],
+  "symbol": "AAPL"
+}

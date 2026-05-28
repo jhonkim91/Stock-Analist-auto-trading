@@ -5,7 +5,7 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.26.0` |
-| Phase | `KIS Paper token/WebSocket approval reached; minimum submit blocked by KIS market close` |
+| Phase | `KIS Paper US WebSocket connected; US paper submit reached but rejected; US regular-session guard active` |
 | Goal.md Phase 0 | `docs/research/kis-paper-baseline-audit.md`에서 main 기준선과 현재 작업 브랜치 차이를 분리 감사 |
 | Goal.md Phase 5 | `PaperRepository` 기반 paper fills/positions/portfolio sync 조회 경계 보강 |
 | Goal.md Phase 6 | Telegram-first notification channel decision 문서화 |
@@ -24,13 +24,13 @@
 | Goal.md Phase 18 | live trading readiness design-only 문서 추가 |
 | Goal.md Phase 19 | disabled live adapter scaffold가 예외 대신 redacted disabled payload를 반환하도록 강화 |
 | Goal.md Phase 20 | controlled live canary runbook/preflight record 추가. 현재 live adapter/route/reviewer/env/rollback 조건 미충족으로 blocked |
-| Goal.md Phase 21 | KIS paper token 발급과 WebSocket approval 발급은 성공. minimum paper submit은 `40580000 / 모의투자 장종료 입니다.`로 중단 |
+| Goal.md Phase 21 | KIS paper token/WebSocket approval 성공. 국내 submit은 `40580000 / 모의투자 장종료 입니다.`로 중단, 미국장 submit은 해외주식 paper endpoint 도달 후 HTTP 500으로 중단. 최신 미국장 요청은 뉴욕 정규장 전이라 `US_REGULAR_SESSION_REQUIRED`로 adapter 호출 전 차단. API/bot submit 경로의 US metadata 전달, broker fill persistence 귀속, controlled/Phase21 helper 보강 |
 | Goal.md KIS Paper Auto Bot Phase 1-6 | 설정/secret/token, KIS paper adapter, paper DB/API, realtime worker, bot executor/risk guard, monitoring/report/runbook 완료 |
 | docs/goal.md Phase 1-4 | KIS paper 전용 설정/token/http client, adapter facade, account snapshot/API, realtime stale quote gate 추가 |
 | docs/goal.md Phase 5-6 | `PaperBotExecutor`, bot preview/run/runs API, paper dashboard, report paper trading section, operational metrics 추가 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
-| 상태 | KIS 모의투자 token/WebSocket approval/network submit path를 process-only로 검증. 기본 config는 계속 disabled/fail-closed |
-| 거래 상태 | KIS paper `tokenP`와 WebSocket `Approval` network 호출 성공. order-cash submit은 장종료 거부로 실패해 주문 생성/체결/포지션 변경은 미완료. live/real order/fallback disabled |
+| 상태 | KIS 모의투자 token/WebSocket approval/US bounded WebSocket/network submit path를 process-only로 검증. 기본 config는 계속 disabled/fail-closed |
+| 거래 상태 | KIS paper `tokenP`, WebSocket `Approval`, US WebSocket `HDFSCNT0` subscribe ACK 성공. 국내 order-cash는 장종료 거부, 미국 해외주식 order는 HTTP 500 거부로 주문 생성/체결/포지션 변경 미완료. 최신 미국장 재요청은 `America/New_York` 05:13으로 정규장 전이라 `network_call_performed=false`로 중단. API/bot/helper submit은 `PAPER_TRADING_MARKET=US` 또는 `--market US` metadata를 adapter에 전달하고, broker sync fill은 기존 paper order에 귀속. Phase21 helper는 token/WebSocket/US submit lifecycle을 redacted record로 묶음. live/real order/fallback disabled |
 | 최신 backend pytest | full backend `416 passed` |
 | 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; rendered smoke 통과 |
 | 최신 승인 게이트 감사 | Phase 19 완료, Phase 20 preflight blocked. live 주문/route/network call 없음 |

@@ -517,12 +517,14 @@ class PaperSyncService:
         broker_fill_id = str(payload.get("broker_fill_id") or "").strip()
         if not broker_fill_id:
             return False
+        broker_order_id = str(payload.get("broker_order_id") or "").strip()
         fill_id = f"paper-fill-{hashlib.sha256(broker_fill_id.encode('utf-8')).hexdigest()[:16]}"
         if self.db.get(PaperFill, fill_id) is not None:
             return False
+        paper_order_id = self._paper_order_id_for_broker_order_id(broker_order_id) or broker_order_id or broker_fill_id
         fill = PaperFill(
             paper_fill_id=fill_id,
-            paper_order_id=str(payload.get("broker_order_id") or broker_fill_id),
+            paper_order_id=paper_order_id,
             symbol=str(payload.get("symbol") or ""),
             side=str(payload.get("side") or ""),
             qty=int(payload.get("qty") or 0),
@@ -533,12 +535,23 @@ class PaperSyncService:
             broker_order_created=True,
             network_call_performed=True,
             broker_fill_id=broker_fill_id,
-            broker_order_id=str(payload.get("broker_order_id") or ""),
+            broker_order_id=broker_order_id,
             broker_fill_ts=now,
             broker_status_json=json.dumps(self.redactor.redact(payload), sort_keys=True, default=str),
         )
         self.db.add(fill)
         return True
+
+    def _paper_order_id_for_broker_order_id(self, broker_order_id: str) -> str | None:
+        if not broker_order_id:
+            return None
+        paper_order_id = (
+            self.db.query(PaperOrder.paper_order_id)
+            .filter(PaperOrder.broker_order_id == broker_order_id)
+            .limit(1)
+            .scalar()
+        )
+        return str(paper_order_id) if paper_order_id else None
 
     def _upsert_position(self, payload: dict[str, Any], now: datetime) -> bool:
         symbol = str(payload.get("symbol") or "").strip()

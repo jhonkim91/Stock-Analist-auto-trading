@@ -105,6 +105,7 @@ def test_paper_websocket_routes_are_paper_only_and_do_not_register_kis_websocket
 
     assert "/api/paper/realtime/websocket/status" in route_paths
     assert "/api/paper/realtime/websocket/approval" in route_paths
+    assert "/api/paper/realtime/websocket/smoke" in route_paths
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
 
     status = client.get("/api/paper/realtime/websocket/status").json()
@@ -112,6 +113,14 @@ def test_paper_websocket_routes_are_paper_only_and_do_not_register_kis_websocket
     subscription = client.post(
         "/api/paper/realtime/websocket/subscription/preview",
         json={"symbol": "005930", "kind": "quote", "subscribe": True},
+    ).json()
+    us_subscription = client.post(
+        "/api/paper/realtime/websocket/subscription/preview",
+        json={"symbol": "AAPL", "kind": "quote", "market": "US", "exchange": "NASD", "subscribe": True},
+    ).json()
+    smoke_blocked = client.post(
+        "/api/paper/realtime/websocket/smoke",
+        json={"symbol": "AAPL", "kind": "quote", "market": "US", "exchange": "NASD", "confirm": False},
     ).json()
     serialized = json.dumps({"status": status, "approval": blocked_approval, "subscription": subscription})
 
@@ -122,4 +131,10 @@ def test_paper_websocket_routes_are_paper_only_and_do_not_register_kis_websocket
     assert subscription["ok"] is True
     assert subscription["tr_id"] == "H0STCNT0"
     assert subscription["subscription"]["header"]["approval_key"] == "***REDACTED***"
+    assert us_subscription["ok"] is True
+    assert us_subscription["tr_id"] == "HDFSCNT0"
+    assert us_subscription["market"] == "US"
+    assert us_subscription["subscription"]["body"]["input"]["tr_key"] == "DNASAAPL"
+    assert smoke_blocked["network_call_performed"] is False
+    assert "KIS_WEBSOCKET_CONNECT_CONFIRM_REQUIRED" in smoke_blocked["reason_codes"]
     assert "TEST_APP_SECRET" not in serialized

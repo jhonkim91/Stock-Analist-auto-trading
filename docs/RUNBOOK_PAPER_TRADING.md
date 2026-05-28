@@ -17,6 +17,9 @@
 | `PAPER_BOT_CONFIRM` | `true` | paper bot/order 최종 확인 gate |
 | `BROKER_MODE` | `paper_kis` | KIS paper adapter만 허용 |
 | `PAPER_ORDER_SUBMIT_ENABLED` | `true` | KIS paper submit 전용 gate |
+| `PAPER_TRADING_MARKET` | `KR` 또는 `US` | 미국장 해외주식 검증 시 `US` |
+| `KIS_OVERSEAS_EXCHANGE_CODE` | `NASD` | 미국 WebSocket smoke는 현재 공식 샘플 확인 범위인 NASD만 사용 |
+| `KIS_OVERSEAS_CURRENCY` | `USD` | 해외잔고 조회 통화 |
 | `KIS_TOKEN_ISSUE_ENABLED` | `true` | token 발급을 실제 KIS paper로 호출할 때만 |
 | `KIS_WEBSOCKET_APPROVAL_ENABLED` | `true` | WebSocket approval key 발급을 실제 KIS paper로 호출할 때만 |
 | `PAPER_WEBSOCKET_ENABLED` | `true` | paper WebSocket status/subscription gate |
@@ -97,6 +100,9 @@ Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/approval -M
 
 $subBody = @{ symbol = "005930"; kind = "quote"; subscribe = $true } | ConvertTo-Json
 Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/subscription/preview -Method Post -ContentType "application/json" -Body $subBody
+
+$usSubBody = @{ symbol = "AAPL"; kind = "quote"; market = "US"; exchange = "NASD"; subscribe = $true } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/subscription/preview -Method Post -ContentType "application/json" -Body $usSubBody
 ```
 
 성공 기준:
@@ -104,6 +110,38 @@ Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/subscriptio
 - token 응답은 `token_issued=true`, `token_raw_value_persisted=false`, raw token 미노출이어야 한다.
 - WebSocket approval 응답은 `approval_key_issued=true`, `approval_key_raw_value_persisted=false`, raw approval key 미노출이어야 한다.
 - subscription preview는 `approval_key=***REDACTED***`만 반환하고 실제 socket loop를 시작하지 않는다.
+- 미국장 subscription preview는 공식 샘플 확인 범위인 `market=US`, `exchange=NASD`, `HDFSCNT0`, `DNAS{symbol}`만 사용한다.
+
+## Bounded WebSocket smoke
+
+장시간 WebSocket loop는 금지한다. 연결 검증이 필요할 때만 현재 PowerShell 프로세스에서 아래 gate를 열고, `confirm=true`로 bounded smoke를 1회 실행한다.
+
+```powershell
+$env:PAPER_WEBSOCKET_ENABLED = "true"
+$env:PAPER_WEBSOCKET_CONNECT_ENABLED = "true"
+$env:KIS_ENV = "paper"
+$env:ENABLE_REAL_ORDER = "false"
+```
+
+```powershell
+$smokeBody = @{
+  symbol = "AAPL"
+  kind = "quote"
+  market = "US"
+  exchange = "NASD"
+  confirm = $true
+  receive_timeout_seconds = 3
+} | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/smoke -Method Post -ContentType "application/json" -Body $smokeBody
+```
+
+성공 기준:
+
+- `network_call_performed=true`
+- `tr_id=HDFSCNT0`
+- `message_received=true` 또는 `status=websocket_connected_no_message`
+- raw approval key와 raw WebSocket message는 출력하지 않는다.
+- smoke는 subscribe 후 unsubscribe를 전송하고 종료한다.
 
 ## Bot dry-run preview
 
@@ -146,6 +184,46 @@ network submit을 실제 KIS paper로 열어야 하는 경우에만 별도 수�
 $env:PAPER_TRADING_NETWORK_ENABLED = "true"
 $env:BROKER_MODE = "paper_kis"
 $env:PAPER_ORDER_SUBMIT_ENABLED = "true"
+```
+
+미국장 해외주식 1회 검증은 process-only gate와 trading-window 확인 토큰을 함께 사용한다. helper는 `market=US`일 때 `America/New_York` 기준 정적 정규장 `09:30-16:00`과 평일 조건을 먼저 확인하며, 조건이 맞지 않으면 adapter 호출 전 `US_REGULAR_SESSION_REQUIRED`로 중단한다. 이 guard는 휴장일 calendar feed를 포함하지 않으므로 실제 실행 전 휴장 여부는 별도로 확인한다. 장종료/거부/auth/rate-limit/stale 응답이 나오면 재시도하지 않고 record만 남긴다.
+
+```powershell
+.\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py `
+  --execute `
+  --temporary-paper-config `
+  --market US `
+  --exchange NASD `
+  --currency USD `
+  --symbol AAPL `
+  --side buy `
+  --qty 1 `
+  --limit-price <LIMIT_PRICE> `
+  --confirm-submit CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-trading-window CONFIRM_KIS_PAPER_TRADING_WINDOW `
+  --record-path docs/research/kis-paper-phase21-us-redacted-record.json
+```
+
+token 발급, WebSocket approval, bounded WebSocket smoke, controlled submit/list/sync/cancel을 같은 redacted record로 묶어야 하면 Phase 21 helper를 사용한다. 아래 명령도 process env만 사용하며 `.env`/`.env.local`을 쓰지 않는다.
+
+```powershell
+.\.venv\Scripts\python.exe tools\kis_paper_phase21_us_activation.py `
+  --issue-token `
+  --issue-websocket-approval `
+  --websocket-smoke `
+  --execute-submit `
+  --symbol AAPL `
+  --qty 1 `
+  --limit-price <LIMIT_PRICE> `
+  --exchange NASD `
+  --currency USD `
+  --confirm-token CONFIRM_KIS_PAPER_PHASE21_TOKEN `
+  --confirm-websocket CONFIRM_KIS_PAPER_PHASE21_WEBSOCKET `
+  --confirm-submit CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-trading-window CONFIRM_KIS_PAPER_TRADING_WINDOW `
+  --record-path docs/research/kis-paper-phase21-us-redacted-record.json
 ```
 
 실행:

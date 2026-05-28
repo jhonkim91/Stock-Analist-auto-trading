@@ -229,6 +229,152 @@ def test_kis_paper_adapter_submit_cancel_query_sync_with_mock_http(monkeypatch):
     assert client.calls[5]["headers"]["tr_id"] == "VTTC8434R"
 
 
+def test_kis_paper_adapter_keeps_domestic_path_when_metadata_exchange_is_krx(monkeypatch):
+    _set_kis_env(monkeypatch)
+    client = _FakeHttpClient(
+        [
+            _FakeResponse(
+                {"rt_cd": "0", "msg_cd": "0", "msg1": "OK", "output": {"KRX_FWDG_ORD_ORGNO": "001", "ODNO": "000002"}}
+            )
+        ]
+    )
+    adapter = KisPaperBrokerAdapter(config=_enabled_config(), http_client=client, max_retries=0)
+    request = BrokerOrderRequest(
+        symbol="005930",
+        side="buy",
+        qty=1,
+        limit_price=70000,
+        metadata={"exchange": "KRX", "venue": "KRX"},
+    )
+
+    submit = adapter.submit_order(request)
+
+    assert submit["ok"] is True
+    assert submit["broker_trace"]["endpoint_path"] == "/uapi/domestic-stock/v1/trading/order-cash"
+    assert client.calls[0]["headers"]["tr_id"] == "VTTC0012U"
+    assert client.calls[0]["json"]["EXCG_ID_DVSN_CD"] == "KRX"
+
+
+def test_kis_paper_adapter_supports_us_overseas_order_query_sync_with_mock_http(monkeypatch):
+    _set_kis_env(monkeypatch)
+    client = _FakeHttpClient(
+        [
+            _FakeResponse({"rt_cd": "0", "msg_cd": "0", "msg1": "OK", "output": {"ODNO": "900001"}}),
+            _FakeResponse({"rt_cd": "0", "msg_cd": "0", "msg1": "OK", "output": {"ODNO": "900001"}}),
+            _FakeResponse(
+                {
+                    "rt_cd": "0",
+                    "msg_cd": "0",
+                    "msg1": "OK",
+                    "output": [
+                        {
+                            "odno": "900001",
+                            "ovrs_pdno": "AAPL",
+                            "ord_qty": "1",
+                            "ft_ccld_qty": "1",
+                            "sll_buy_dvsn_cd": "02",
+                            "ovrs_ord_unpr": "145.25",
+                            "ovrs_excg_cd": "NASD",
+                        }
+                    ],
+                }
+            ),
+            _FakeResponse(
+                {
+                    "rt_cd": "0",
+                    "msg_cd": "0",
+                    "msg1": "OK",
+                    "output1": [
+                        {
+                            "ovrs_pdno": "AAPL",
+                            "ovrs_cblc_qty": "1",
+                            "pchs_avg_pric": "145.25",
+                            "now_pric2": "146.00",
+                            "frcr_evlu_amt2": "146.00",
+                            "evlu_pfls_amt": "0.75",
+                        }
+                    ],
+                    "output2": {"frcr_buy_amt_smtl1": "1000.00", "frcr_evlu_tota": "146.00", "tot_asst_amt": "1146.00"},
+                }
+            ),
+            _FakeResponse(
+                {
+                    "rt_cd": "0",
+                    "msg_cd": "0",
+                    "msg1": "OK",
+                    "output": [
+                        {
+                            "odno": "900001",
+                            "ovrs_pdno": "AAPL",
+                            "ord_qty": "1",
+                            "ft_ccld_qty": "1",
+                            "sll_buy_dvsn_cd": "02",
+                            "ovrs_ord_unpr": "145.25",
+                            "ovrs_excg_cd": "NASD",
+                        }
+                    ],
+                }
+            ),
+            _FakeResponse(
+                {
+                    "rt_cd": "0",
+                    "msg_cd": "0",
+                    "msg1": "OK",
+                    "output1": [
+                        {
+                            "ovrs_pdno": "AAPL",
+                            "ovrs_cblc_qty": "1",
+                            "pchs_avg_pric": "145.25",
+                            "now_pric2": "146.00",
+                            "frcr_evlu_amt2": "146.00",
+                            "evlu_pfls_amt": "0.75",
+                        }
+                    ],
+                    "output2": {"frcr_buy_amt_smtl1": "1000.00", "frcr_evlu_tota": "146.00", "tot_asst_amt": "1146.00"},
+                }
+            ),
+        ]
+    )
+    adapter = KisPaperBrokerAdapter(
+        config={**_enabled_config(), "market": "US", "venue": "NASD", "currency": "USD"},
+        http_client=client,
+        max_retries=0,
+    )
+    request = BrokerOrderRequest(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        metadata={"market": "US", "venue": "NASD", "currency": "USD"},
+    )
+
+    submit = adapter.submit_order(request)
+    cancel = adapter.cancel_order(broker_order_id=submit["broker_order_id"], confirm=True)
+    listed = adapter.list_orders(status="filled")
+    balance = adapter.query_balance()
+    synced = adapter.sync(scope="all")
+
+    assert submit["ok"] is True
+    assert submit["broker_order_created"] is True
+    assert submit["broker_trace"]["endpoint_path"] == "/uapi/overseas-stock/v1/trading/order"
+    assert submit["order"]["market"] == "US"
+    assert submit["order"]["venue"] == "NASD"
+    assert cancel["ok"] is True
+    assert listed["orders"][0]["symbol"] == "AAPL"
+    assert listed["fills"][0]["qty"] == 1
+    assert balance["positions"][0]["symbol"] == "AAPL"
+    assert balance["portfolio"]["source"] == "kis_paper_us"
+    assert synced["positions"][0]["broker_position_key"] == "kis_paper_us|AAPL"
+    assert client.calls[0]["url"].endswith("/uapi/overseas-stock/v1/trading/order")
+    assert client.calls[0]["headers"]["tr_id"] == "VTTT1002U"
+    assert client.calls[0]["json"]["OVRS_EXCG_CD"] == "NASD"
+    assert client.calls[0]["json"]["OVRS_ORD_UNPR"] == "145.25"
+    assert client.calls[1]["headers"]["tr_id"] == "VTTT1004U"
+    assert client.calls[2]["headers"]["tr_id"] == "VTTS3035R"
+    assert client.calls[3]["headers"]["tr_id"] == "VTTS3012R"
+    assert client.calls[5]["headers"]["tr_id"] == "VTTS3012R"
+
+
 def test_kis_paper_adapter_blocks_live_base_url(monkeypatch):
     _set_kis_env(monkeypatch)
     monkeypatch.setenv("KIS_PAPER_BASE_URL", "https://openapi.koreainvestment.com:9443")
@@ -280,4 +426,32 @@ def test_kis_paper_adapter_redacts_and_surfaces_kis_error_message(monkeypatch):
     assert result["broker_message"] == "mock paper order rejected"
     assert result["broker_trace"]["broker_message_code"] == "40580000"
     assert result["broker_trace"]["broker_message"] == "mock paper order rejected"
+    assert secret not in str(result)
+
+
+def test_kis_paper_adapter_surfaces_redacted_http_error_body(monkeypatch):
+    secret = "PHASE21_HTTP_ERROR_SECRET"
+    _set_kis_env(monkeypatch, secret=secret)
+    client = _FakeHttpClient(
+        [
+            _FakeResponse(
+                {
+                    "rt_cd": "1",
+                    "msg_cd": "50012345",
+                    "msg1": "mock http body rejected",
+                    "appsecret": secret,
+                },
+                status_code=500,
+            )
+        ]
+    )
+    adapter = KisPaperBrokerAdapter(config=_enabled_config(), http_client=client, max_retries=0)
+
+    result = adapter.submit_order(BrokerOrderRequest(symbol="005930", side="buy", qty=1, limit_price=70000))
+
+    assert result["ok"] is False
+    assert result["status"] == "submit_failed"
+    assert result["broker_message_code"] == "50012345"
+    assert result["broker_message"] == "mock http body rejected"
+    assert result["broker_trace"]["broker_message_code"] == "50012345"
     assert secret not in str(result)
