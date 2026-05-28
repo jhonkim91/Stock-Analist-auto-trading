@@ -65,12 +65,14 @@ class KisTokenManager:
         metadata = self._metadata
         expires_at = metadata.expires_at
         token_issued = metadata.token_issued
+        process_access_token_configured = self.env_configured(KIS_ACCESS_TOKEN_ENV)
         return {
             "state": "METADATA_ONLY" if token_issued else self.env_state(),
             "app_key_configured": self.env_configured(KIS_APP_KEY_ENV),
             "app_secret_configured": self.env_configured(KIS_APP_SECRET_ENV),
             "account_configured": self.env_configured(KIS_ACCOUNT_NO_ENV),
             "product_code_configured": self.env_configured(KIS_PRODUCT_CODE_ENV),
+            "process_access_token_configured": process_access_token_configured,
             "kis_env": os.getenv(KIS_ENV_ENV, "").strip().lower() or None,
             "kis_env_paper": self.env_is_paper(),
             "token_issued": token_issued,
@@ -91,10 +93,11 @@ class KisTokenManager:
         self,
         *,
         confirm: bool = False,
+        install_to_process_env: bool = False,
         http_client: Any | None = None,
         timeout_seconds: float = 10.0,
     ) -> dict[str, object]:
-        """명시 opt-in 상태에서만 KIS paper access token을 발급하고 raw token은 저장하지 않는다."""
+        """명시 opt-in 상태에서만 KIS paper access token을 발급하고 raw token은 문서/응답에 남기지 않는다."""
         gate = self._token_issue_gate_reasons(confirm=confirm)
         if gate:
             return self._blocked_token_payload("token_issue_blocked", gate)
@@ -119,6 +122,7 @@ class KisTokenManager:
                 "status": "token_issue_failed",
                 "token_issued": False,
                 "token_raw_value_persisted": False,
+                "process_env_access_token_installed": False,
                 "network_call_performed": bool(result.trace.get("network_call_performed")),
                 "reason": result.reason or "KIS_TOKEN_ISSUE_FAILED",
                 "reason_codes": [str(result.reason or "KIS_TOKEN_ISSUE_FAILED")],
@@ -133,6 +137,7 @@ class KisTokenManager:
                 "status": "token_issue_failed",
                 "token_issued": False,
                 "token_raw_value_persisted": False,
+                "process_env_access_token_installed": False,
                 "network_call_performed": True,
                 "reason": "KIS_TOKEN_RESPONSE_MISSING_ACCESS_TOKEN",
                 "reason_codes": ["KIS_TOKEN_RESPONSE_MISSING_ACCESS_TOKEN"],
@@ -144,11 +149,14 @@ class KisTokenManager:
             expires_at=self._parse_expires_at(result.body),
             refresh_token=str(result.body.get("refresh_token") or "").strip() or None,
         )
+        if install_to_process_env:
+            os.environ[KIS_ACCESS_TOKEN_ENV] = access_token
         return {
             "ok": True,
             "status": "token_issued",
             "token_issued": True,
             "token_raw_value_persisted": False,
+            "process_env_access_token_installed": bool(install_to_process_env),
             "network_call_performed": True,
             "reason": None,
             "reason_codes": [],
@@ -160,12 +168,14 @@ class KisTokenManager:
         self,
         *,
         confirm: bool = False,
+        install_to_process_env: bool = False,
         http_client: Any | None = None,
         timeout_seconds: float = 10.0,
     ) -> dict[str, object]:
         """KIS 개인 Open API paper token은 동일 gate 뒤에서 재발급 방식으로 갱신한다."""
         result = self.issue_paper_access_token(
             confirm=confirm,
+            install_to_process_env=install_to_process_env,
             http_client=http_client,
             timeout_seconds=timeout_seconds,
         )
@@ -224,6 +234,7 @@ class KisTokenManager:
             "status": status,
             "token_issued": False,
             "token_raw_value_persisted": False,
+            "process_env_access_token_installed": False,
             "network_call_performed": False,
             "reason": reason_codes[0] if reason_codes else "KIS_TOKEN_ISSUE_DISABLED",
             "reason_codes": reason_codes,
@@ -273,13 +284,33 @@ class TokenLifecycleService:
             "disabled_reason": "phase_3_token_manager_metadata_only",
         }
 
-    def issue_paper_access_token(self, *, confirm: bool = False, http_client: Any | None = None) -> dict[str, object]:
+    def issue_paper_access_token(
+        self,
+        *,
+        confirm: bool = False,
+        install_to_process_env: bool = False,
+        http_client: Any | None = None,
+    ) -> dict[str, object]:
         """service 계층에서 KIS paper token 발급을 fail-closed gate 뒤로 노출한다."""
-        return self.token_manager.issue_paper_access_token(confirm=confirm, http_client=http_client)
+        return self.token_manager.issue_paper_access_token(
+            confirm=confirm,
+            install_to_process_env=install_to_process_env,
+            http_client=http_client,
+        )
 
-    def refresh_paper_access_token(self, *, confirm: bool = False, http_client: Any | None = None) -> dict[str, object]:
+    def refresh_paper_access_token(
+        self,
+        *,
+        confirm: bool = False,
+        install_to_process_env: bool = False,
+        http_client: Any | None = None,
+    ) -> dict[str, object]:
         """service 계층에서 KIS paper token 갱신을 fail-closed gate 뒤로 노출한다."""
-        return self.token_manager.refresh_paper_access_token(confirm=confirm, http_client=http_client)
+        return self.token_manager.refresh_paper_access_token(
+            confirm=confirm,
+            install_to_process_env=install_to_process_env,
+            http_client=http_client,
+        )
 
 
 def _env_true(name: str) -> bool:

@@ -17,6 +17,10 @@
 | `PAPER_BOT_CONFIRM` | `true` | paper bot/order 최종 확인 gate |
 | `BROKER_MODE` | `paper_kis` | KIS paper adapter만 허용 |
 | `PAPER_ORDER_SUBMIT_ENABLED` | `true` | KIS paper submit 전용 gate |
+| `KIS_TOKEN_ISSUE_ENABLED` | `true` | token 발급을 실제 KIS paper로 호출할 때만 |
+| `KIS_WEBSOCKET_APPROVAL_ENABLED` | `true` | WebSocket approval key 발급을 실제 KIS paper로 호출할 때만 |
+| `PAPER_WEBSOCKET_ENABLED` | `true` | paper WebSocket status/subscription gate |
+| `PAPER_WEBSOCKET_CONNECT_ENABLED` | `false` 기본 | unattended loop 방지. bounded smoke 전 별도 승인 필요 |
 
 실제 값은 절대 로그나 문서에 기록하지 않는다. 확인은 boolean configured 상태와 redacted fingerprint만 사용한다.
 
@@ -57,10 +61,11 @@ Invoke-RestMethod http://127.0.0.1:8000/api/paper/dashboard
 
 ## Worker 상태
 
-현재 worker는 운영 WebSocket daemon이 아니라 backend process 내부의 polling/mock quote cache와 heartbeat 상태를 제공한다.
+기본 worker는 운영 WebSocket daemon이 아니라 backend process 내부의 polling/mock quote cache와 heartbeat 상태를 제공한다. KIS paper WebSocket은 approval key와 subscription preview route만 기본 제공하며, 장시간 연결 loop는 별도 bounded smoke 절차 전까지 실행하지 않는다.
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/status
+Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/status
 ```
 
 성공 기준:
@@ -68,6 +73,37 @@ Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/status
 - 기본값은 `enabled=false`, `reason_codes`에 `PAPER_REALTIME_DISABLED`가 포함된다.
 - realtime fresh quote gate를 켠 상태에서 quote가 없거나 stale이면 신규 주문은 `PAPER_REALTIME_STALE_QUOTE`로 차단된다.
 - WebSocket reconnect 지표는 dashboard `metrics.websocket_reconnect_count` 또는 worker status `metrics.websocket_reconnect_count`에서 확인한다.
+- `/api/kis/websocket/*` route는 live성 경계로 계속 미등록 상태를 유지한다.
+
+## Token 및 WebSocket approval
+
+token 발급과 WebSocket approval key 발급은 process-only gate와 `confirm=true`가 모두 있을 때만 실제 KIS paper network를 호출한다.
+
+```powershell
+$env:KIS_ENV = "paper"
+$env:ENABLE_REAL_ORDER = "false"
+$env:KIS_TOKEN_ISSUE_ENABLED = "true"
+$env:KIS_WEBSOCKET_APPROVAL_ENABLED = "true"
+$env:PAPER_WEBSOCKET_ENABLED = "true"
+$env:PAPER_WEBSOCKET_CONNECT_ENABLED = "false"
+```
+
+```powershell
+$tokenBody = @{ confirm = $true; install_to_process_env = $true } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/api/kis/token/issue -Method Post -ContentType "application/json" -Body $tokenBody
+
+$wsBody = @{ confirm = $true; install_to_process_env = $true } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/approval -Method Post -ContentType "application/json" -Body $wsBody
+
+$subBody = @{ symbol = "005930"; kind = "quote"; subscribe = $true } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/subscription/preview -Method Post -ContentType "application/json" -Body $subBody
+```
+
+성공 기준:
+
+- token 응답은 `token_issued=true`, `token_raw_value_persisted=false`, raw token 미노출이어야 한다.
+- WebSocket approval 응답은 `approval_key_issued=true`, `approval_key_raw_value_persisted=false`, raw approval key 미노출이어야 한다.
+- subscription preview는 `approval_key=***REDACTED***`만 반환하고 실제 socket loop를 시작하지 않는다.
 
 ## Bot dry-run preview
 

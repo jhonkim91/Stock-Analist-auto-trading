@@ -119,6 +119,9 @@ class RealtimeMarketWorker:
     def status(self) -> dict[str, Any]:
         """realtime worker 상태를 secret 없이 반환한다."""
         config, config_reasons = PaperConfigService(self.config_dir).load()
+        from backend.app.services.kis_paper_websocket_service import KisPaperWebSocketService
+
+        websocket_status = KisPaperWebSocketService().status(config=config, config_reasons=config_reasons)
         threshold = int(config.get("realtime_stale_quote_threshold_seconds") or 30)
         heartbeat_timeout = int(config.get("realtime_heartbeat_timeout_seconds") or 60)
         cache_status = self.quote_cache.status(
@@ -137,7 +140,8 @@ class RealtimeMarketWorker:
             "ok": True,
             "enabled": enabled,
             "mode": str(config.get("realtime_mode") or "polling"),
-            "websocket_enabled": False,
+            "websocket_enabled": bool(websocket_status.get("websocket_enabled", False)),
+            "websocket": websocket_status,
             "polling_enabled": enabled,
             "universe": self.build_universe(),
             "quote_cache": cache_status,

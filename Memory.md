@@ -3,7 +3,7 @@
 ## 현재 체크포인트
 
 - [x] 현재 branch: `feature/kis-paper-goal-phases`.
-- [x] 현재 작업: `.env.local`의 `KIS_ENV=paper` readiness를 redacted status로 재확인했고, Phase 16A controlled validation은 config/bot fail-closed 차단 상태로 유지.
+- [x] 현재 작업: KIS paper token 발급, WebSocket approval 발급, minimum paper submit network 도달까지 진행했다. submit은 KIS 장종료 거부로 중단됐다.
 - [x] 기본 실행 주소: backend `http://127.0.0.1:8000`, frontend `http://127.0.0.1:3000/dashboard`.
 - [x] 로컬 launcher는 검증 전 중지 상태로 유지했다. 필요 시 `py launcher.py run --no-browser` 후 `py launcher.py check`로 확인한다.
 - [x] 현재 셸의 `python --version`은 `Python`만 출력하고 exit 1이다. 검증은 `.\.venv\Scripts\python.exe`로 수행한다.
@@ -29,6 +29,7 @@
 - [x] 기본값은 disabled/fail-closed/dry-run.
 - [x] KIS paper submit은 `KIS_ENV=paper`, `PAPER_TRADING_ENABLED=true`, `PAPER_BOT_CONFIRM=true`, kill switch off, `confirm=true`, idempotency, risk gate, no-live 조건이 필요하다.
 - [x] `dry_run=true` bot run은 주문 row를 생성하지 않고 run/decision preview만 저장한다.
+- [x] token/approval key는 process env에만 설치할 수 있고, API/문서/record에는 raw value를 남기지 않는다.
 - [x] `ENABLE_REAL_ORDER=true`, live base URL, live fallback은 차단.
 - [x] `orders_count == 0` 정책 유지. paper order는 `paper_orders`에만 저장.
 - [x] secret, token, account number 원문은 API 응답/DB/log/docs에 저장하지 않는다.
@@ -36,6 +37,11 @@
 
 ## 최신 검증 결과
 
+- [x] KIS paper activation: `.env.local`을 현재 Python 검증 프로세스에만 로드하고 process-only gate를 열어 `POST /oauth2/tokenP` 1회 성공, `POST /oauth2/Approval` 1회 성공. raw token/approval key 미출력, `docs/research/kis-paper-phase21-activation-redacted-record.json` 생성.
+- [x] Minimum paper submit: temporary paper config와 process-only network gate로 `POST /uapi/domestic-stock/v1/trading/order-cash`, `tr_id=VTTC0012U` 1회 도달 -> `40580000`, `모의투자 장종료 입니다.`, `status=submit_failed`, 재시도 없음.
+- [x] 주문/체결/포지션: submit 실패로 broker order id가 없어 query/sync/cancel 및 `paper_orders`/`paper_fills`/`paper_positions` persistence는 미완료.
+- [x] Token/WebSocket targeted regression: token issue, paper WebSocket approval/status/subscription preview, no-live regression -> `17 passed in 0.78s`.
+- [x] Paper/no-live regression: paper realtime/dashboard/API smoke와 `/api/kis/websocket` 미등록 회귀 포함 -> `60 passed in 42.05s`.
 - [x] `.env.local` KIS paper readiness recheck: 현재 Python 검증 프로세스에만 로드. `POST /api/kis/config/validate` -> `configured=true`, `kis_env_paper=true`, `network_call_performed=false`; raw secret/account/token 미노출.
 - [x] `.env.local` dry-run preview: `POST /api/paper/bot/preview`, `max_candidates=1`, `dry_run=true` -> `run_id=paper-bot-fb740345fe7f4608`, `status=disabled`, `PAPER_BOT_DISABLED`, `KILL_SWITCH_ACTIVE`, `submitted_count=0`, `network_call_performed=false`.
 - [x] `.env.local` status/dashboard: KIS/broker/paper/realtime/dashboard/bot status API 200. `orders_count=0`, `paper_orders_count=0`, 외부 TCP connect 시도 0.
@@ -56,10 +62,10 @@
 
 ## 현재 프로젝트 상태
 
-- Backend: FastAPI + SQLite + Alembic, sample seed, CSV import, KIS read-only foundation, broker safety scaffold, paper trading lifecycle, KIS paper adapter mock, report notification/automation, paper bot scheduler, Phase 5 bot executor, realtime quote worker skeleton.
+- Backend: FastAPI + SQLite + Alembic, sample seed, CSV import, KIS read-only foundation, broker safety scaffold, paper trading lifecycle, KIS paper adapter, token issue route, paper WebSocket approval route, report notification/automation, paper bot scheduler, Phase 5 bot executor, realtime quote worker skeleton.
 - Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/sessions`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/bot`, `/settings`.
 - Notification: `backend/config/notifications.yaml` 기본값은 disabled/dry-run.
-- Paper/KIS execution: fail-closed 기본값. live broker, live websocket, 실계좌 주문/취소/체결은 활성화하지 않는다.
+- Paper/KIS execution: 기본 config는 fail-closed. KIS paper token/WebSocket approval은 process-only gate로 호출 가능. live broker, live websocket, 실계좌 주문/취소/체결은 활성화하지 않는다.
 
 ## 최근 변경 요약
 
@@ -67,10 +73,12 @@
 - `PaperDashboardService`, `PaperOperationalMetricsService`, realtime reconnect metric 상태 추가.
 - report daily/weekly에 `## Paper Trading` section 추가.
 - `paper_bot_runs` additive migration과 migration 테스트 갱신.
-- Phase 16A redacted record `docs/research/kis-paper-phase16a-bot-run-redacted-record.json` 추가.
+- KIS paper token issue API와 paper WebSocket approval/status/subscription preview API 추가.
+- Phase 21 activation redacted record `docs/research/kis-paper-phase21-activation-redacted-record.json` 추가.
 
 ## 남은 작업
 
-- [ ] 실제 KIS paper 최소 주문/조회/sync/cancel은 별도 network 승인과 process-only temporary config/bot gate 해제 절차가 있을 때만 `docs/RUNBOOK_PAPER_TRADING.md`에 따라 수행한다.
+- [ ] KIS paper 장중에 minimum submit -> query -> sync -> cancel을 1회 재시도한다. 장종료/거부/auth/rate-limit/stale 응답이면 재시도하지 않고 redacted record만 갱신한다.
+- [ ] 실제 WebSocket connect loop는 아직 미실행이다. approval key와 subscription preview까지만 완료됐고, bounded smoke는 별도 process-only gate가 필요하다.
 - [ ] 로컬 서버가 필요하면 `py launcher.py run --no-browser` 후 `py launcher.py check`로 확인한다.
 - [ ] `python` launcher 문제가 계속 필요하면 Windows PATH/App execution alias를 별도 환경 작업으로 정리한다.

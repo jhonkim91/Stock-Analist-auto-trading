@@ -11,7 +11,10 @@ from backend.app.models.schemas import (
     PaperOrderSubmitRequest,
     PaperBotRunRequest,
     PaperSyncRequest,
+    KisWebSocketApprovalRequest,
+    KisWebSocketSubscriptionPreviewRequest,
 )
+from backend.app.services.kis_paper_websocket_service import KisPaperWebSocketService
 from backend.app.services.paper_trading_service import PaperTradingService
 
 router = APIRouter(prefix="/api/paper", tags=["paper"])
@@ -132,6 +135,28 @@ def sync_paper(payload: PaperSyncRequest, db: Session = Depends(get_db)) -> dict
 @router.get("/realtime/status")
 def paper_realtime_status(db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).realtime_status()
+
+
+@router.get("/realtime/websocket/status")
+def paper_websocket_status(db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).realtime_status()["websocket"]
+
+
+@router.post("/realtime/websocket/approval")
+def issue_paper_websocket_approval(payload: KisWebSocketApprovalRequest) -> dict[str, object]:
+    return KisPaperWebSocketService().issue_approval_key(
+        confirm=payload.confirm,
+        install_to_process_env=payload.install_to_process_env,
+    )
+
+
+@router.post("/realtime/websocket/subscription/preview")
+def preview_paper_websocket_subscription(payload: KisWebSocketSubscriptionPreviewRequest) -> dict[str, object]:
+    return KisPaperWebSocketService().subscription_preview(
+        symbol=payload.symbol,
+        kind=payload.kind,
+        subscribe=payload.subscribe,
+    )
 
 
 @router.get("/dashboard")

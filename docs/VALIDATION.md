@@ -1,5 +1,26 @@
 # Validation
 
+## 2026-05-28 KIS Paper Token, Network, WebSocket Activation
+
+Preview-only 단계를 넘겨 KIS paper 전용 token 발급, WebSocket approval key 발급, minimum paper submit network 도달을 진행했다. 모든 gate는 현재 Python 프로세스에만 주입했고 `.env`/`.env.local`은 수정하지 않았다. live 주문, live cancel, live fallback, `/api/kis/websocket/*` route, unattended WebSocket loop는 추가하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Token API 구현 | 완료 | `POST /api/kis/token/issue`, `POST /api/kis/token/refresh`, `GET /api/kis/token/status` 추가. `confirm=true`, `KIS_TOKEN_ISSUE_ENABLED=true`, `KIS_ENV=paper`, paper base URL, `ENABLE_REAL_ORDER=false`가 모두 필요 |
+| Token network call | 성공 | process-only gate로 `POST /oauth2/tokenP` 1회 호출 -> HTTP 200, `token_issued=true`, `process_env_access_token_installed=true`, raw token 미출력/미기록 |
+| WebSocket approval 구현 | 완료 | `GET /api/paper/realtime/websocket/status`, `POST /api/paper/realtime/websocket/approval`, `POST /api/paper/realtime/websocket/subscription/preview` 추가. `/api/kis/websocket/*`는 계속 미등록 |
+| WebSocket approval network call | 성공 | process-only gate로 `POST /oauth2/Approval` 1회 호출 -> HTTP 200, `approval_key_issued=true`, `approval_key_process_env_installed=true`, raw approval key 미출력/미기록 |
+| WebSocket subscription | bounded preview | `H0STCNT0` quote subscription message preview 생성. 실제 WebSocket connect loop는 `PAPER_WEBSOCKET_CONNECT_ENABLED=false`로 미실행 |
+| Minimum paper submit | KIS 거부로 중단 | temporary paper config와 process-only network gate로 `POST /uapi/domestic-stock/v1/trading/order-cash`, `tr_id=VTTC0012U` 1회 도달 -> `40580000`, `모의투자 장종료 입니다.`, `status=submit_failed`, 재시도 없음 |
+| 주문/체결/포지션 DB 변경 | 미완료 | submit 실패로 broker order id가 없어 query/sync/cancel 및 `paper_orders`/`paper_fills`/`paper_positions` persistence는 수행되지 않음 |
+| Redacted record | 생성 | `docs/research/kis-paper-phase21-activation-redacted-record.json` |
+| Targeted regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_token_manager.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_token_ws_targeted` -> `17 passed in 0.78s` |
+| Paper/no-live regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_token_manager.py backend/tests/test_paper_realtime_worker.py backend/tests/test_paper_dashboard_report_phase6.py backend/tests/test_api_smoke.py backend/tests/test_phase3c_kis_readonly.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py backend/tests/test_phase3f2_kis_daily_ohlcv_adapter.py backend/tests/test_phase3f3_krx_fixture_contract.py backend/tests/test_phase3f4_data_quality_summary.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase21_token_ws_regression` -> `60 passed in 42.05s` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check` -> exit 0, CRLF warning only |
+
+결론: token 발급, WebSocket approval 발급, KIS paper order-cash endpoint 도달은 확인했다. 실제 주문 생성, 체결, 포지션 변경은 장종료 응답으로 아직 완료되지 않았다. 다음 재시도는 KIS paper 장중에만 1회 수행하고, 거부/auth/rate-limit/stale 응답이면 재시도하지 않는다.
+
 ## 2026-05-28 `.env.local` KIS Paper Readiness Recheck
 
 사용자가 로컬 `.env.local`에 `KIS_ENV=paper`를 추가한 뒤, 값을 출력하지 않고 키 존재와 runtime status만 재확인했다. Codex는 `.env.local`을 수정하지 않았고, 현재 Python 검증 프로세스에만 로드했다. 실제 KIS paper 주문/조회/sync/cancel 네트워크 호출은 실행하지 않았다.

@@ -244,6 +244,28 @@ class KisRequestSigningStatus(BaseModel):
     reason: str | None = None
 
 
+class KisTokenIssueRequest(BaseModel):
+    """KIS paper token 발급 요청은 confirm과 process-only 설치를 명시해야 한다."""
+
+    confirm: bool = False
+    install_to_process_env: bool = False
+
+
+class KisWebSocketApprovalRequest(BaseModel):
+    """KIS paper WebSocket approval key 발급 요청이다."""
+
+    confirm: bool = False
+    install_to_process_env: bool = False
+
+
+class KisWebSocketSubscriptionPreviewRequest(BaseModel):
+    """KIS paper WebSocket 구독 메시지 preview 요청이다."""
+
+    symbol: str = ""
+    kind: Literal["quote", "ask", "notice"] = "quote"
+    subscribe: bool = True
+
+
 class PaperBotRunRequest(BaseModel):
     auto_submit: bool | None = None
     trade_date: date | None = None
