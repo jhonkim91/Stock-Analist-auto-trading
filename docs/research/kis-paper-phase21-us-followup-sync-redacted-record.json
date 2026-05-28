@@ -1,0 +1,255 @@
+{
+  "cancel_performed": false,
+  "completion_audit": {
+    "complete": true,
+    "missing_requirements": [],
+    "requirements": {
+      "cancel_not_performed": true,
+      "live_order_created_false": true,
+      "network_call_performed": true,
+      "orders_count_unchanged": true,
+      "paper_fill_present": true,
+      "paper_only": true,
+      "paper_position_present": true,
+      "raw_secret_printed_false": true,
+      "submit_not_performed": true,
+      "sync_completed": true
+    },
+    "scope": "phase21_followup_sync_fill_position"
+  },
+  "counts_after": {
+    "broker_audit_events_count": 4,
+    "kis_token_status_metadata_count": 0,
+    "orders_count": 0,
+    "paper_account_snapshots_count": 3,
+    "paper_fills_count": 1,
+    "paper_orders_count": 2,
+    "paper_portfolio_snapshots_count": 3,
+    "paper_positions_count": 1,
+    "synthetic_positions_count": 0
+  },
+  "counts_before": {
+    "broker_audit_events_count": 3,
+    "kis_token_status_metadata_count": 0,
+    "orders_count": 0,
+    "paper_account_snapshots_count": 2,
+    "paper_fills_count": 1,
+    "paper_orders_count": 2,
+    "paper_portfolio_snapshots_count": 2,
+    "paper_positions_count": 1,
+    "synthetic_positions_count": 0
+  },
+  "currency": "USD",
+  "exchange": "NASD",
+  "followup_evidence": {
+    "fills_inserted": 0,
+    "orders_count_delta": 0,
+    "paper_fill_present": true,
+    "paper_fills_after": 1,
+    "paper_fills_before": 1,
+    "paper_fills_delta": 0,
+    "paper_position_present": true,
+    "paper_positions_after": 1,
+    "paper_positions_before": 1,
+    "paper_positions_delta": 0,
+    "positions_upserted": 0,
+    "sync_completed": true
+  },
+  "generated_at": "2026-05-28T14:12:35.786150+00:00",
+  "live_order_created": false,
+  "market": "US",
+  "network_call_performed": true,
+  "paper_only": true,
+  "phase": "21-followup-sync",
+  "raw_secret_printed": false,
+  "reason_codes": [],
+  "scope": "all",
+  "status": "completed",
+  "steps": [
+    {
+      "name": "load_env_file",
+      "result": {
+        "ignored_count": 10,
+        "ignored_keys": [
+          "APP_ENV",
+          "NEXT_PUBLIC_API_BASE_URL",
+          "PAPER_BOT_ENABLED",
+          "PAPER_BOT_KILL_SWITCH",
+          "PAPER_BOT_SCHEDULER_ENABLED"
+        ],
+        "ignored_secret_like_key_count": 5,
+        "loaded_count": 5,
+        "loaded_keys": [
+          "KIS_PAPER_BASE_URL",
+          "KIS_PRODUCT_CODE",
+          "PAPER_BOT_AUTO_SUBMIT"
+        ],
+        "loaded_secret_like_key_count": 2,
+        "network_call_performed": false,
+        "ok": true,
+        "override": false,
+        "path": ".env.local",
+        "raw_secret_printed": false,
+        "secret_like_key_names_redacted": true,
+        "secrets_redacted": true,
+        "skipped_existing_count": 11,
+        "skipped_existing_keys": [
+          "BROKER_MODE",
+          "ENABLE_REAL_ORDER",
+          "KIS_ENV",
+          "PAPER_BOT_CONFIRM",
+          "PAPER_ORDER_SUBMIT_ENABLED",
+          "PAPER_TRADING_CAN_CREATE",
+          "PAPER_TRADING_ENABLED",
+          "PAPER_TRADING_KILL_SWITCH",
+          "PAPER_TRADING_NETWORK_ENABLED"
+        ],
+        "skipped_secret_like_key_count": 2,
+        "status": "env_file_loaded"
+      }
+    },
+    {
+      "name": "issue_token",
+      "result": {
+        "metadata": {
+          "access_token": "***REDACTED***",
+          "access_token_fingerprint": "6cd04d2d7ccf",
+          "account_configured": true,
+          "app_key_configured": true,
+          "app_secret_configured": true,
+          "expired": false,
+          "expires_at": "2026-05-29T23:05:15+00:00",
+          "kis_env": "paper",
+          "kis_env_paper": true,
+          "process_access_token_configured": true,
+          "product_code_configured": true,
+          "refresh_token": "***REDACTED***",
+          "refresh_token_fingerprint": null,
+          "refresh_token_present": false,
+          "state": "METADATA_ONLY",
+          "token_cache_enabled": false,
+          "token_db_persistence_enabled": false,
+          "token_file_persistence_enabled": false,
+          "token_issued": true,
+          "token_raw_value_persisted": false
+        },
+        "network_call_performed": true,
+        "ok": true,
+        "process_env_access_token_installed": true,
+        "reason": null,
+        "reason_codes": [],
+        "status": "token_issued",
+        "token_issued": true,
+        "token_raw_value_persisted": false,
+        "trace": {
+          "correlation_id": "kis-http-d5a82d7192a042bf",
+          "elapsed_ms": 175.608,
+          "endpoint_path": "/oauth2/tokenP",
+          "host": "openapivts.koreainvestment.com",
+          "method": "POST",
+          "network_call_performed": true,
+          "operation": "kis_token_issue",
+          "path": "/oauth2/tokenP",
+          "retry_count": 0,
+          "secrets_redacted": "***REDACTED***",
+          "status_code": 200,
+          "tr_id": null
+        }
+      }
+    },
+    {
+      "name": "followup_sync",
+      "result": {
+        "broker_order_created": false,
+        "broker_trace": {
+          "adapter": "kis_paper",
+          "network_call_performed": true,
+          "operation": "sync",
+          "paper_only": true,
+          "request_count": 2,
+          "scope": "all",
+          "secrets_redacted": "***REDACTED***",
+          "traces": [
+            {
+              "correlation_id": "kis-paper-9e3954dd56d24455",
+              "elapsed_ms": 80.757,
+              "endpoint_path": "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+              "host": "openapivts.koreainvestment.com",
+              "method": "GET",
+              "msg1": "",
+              "msg_cd": "",
+              "network_call_performed": true,
+              "operation": "GET",
+              "path": "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+              "retry_count": 0,
+              "rt_cd": "",
+              "secrets_redacted": "***REDACTED***",
+              "status_code": 200,
+              "tr_id": "VTTS3035R"
+            },
+            {
+              "correlation_id": "kis-paper-8ff98b737cfc414a",
+              "elapsed_ms": 112.288,
+              "endpoint_path": "/uapi/overseas-stock/v1/trading/inquire-balance",
+              "host": "openapivts.koreainvestment.com",
+              "method": "GET",
+              "msg1": "",
+              "msg_cd": "",
+              "network_call_performed": true,
+              "operation": "GET",
+              "path": "/uapi/overseas-stock/v1/trading/inquire-balance",
+              "retry_count": 0,
+              "rt_cd": "",
+              "secrets_redacted": "***REDACTED***",
+              "status_code": 200,
+              "tr_id": "VTTS3012R"
+            }
+          ]
+        },
+        "counts": {
+          "broker_audit_events_count": 4,
+          "kis_token_status_metadata_count": 0,
+          "orders_count": 0,
+          "paper_account_snapshots_count": 3,
+          "paper_fills_count": 1,
+          "paper_orders_count": 2,
+          "paper_portfolio_snapshots_count": 3,
+          "paper_positions_count": 1,
+          "synthetic_positions_count": 0
+        },
+        "dedupe": {
+          "account_snapshots_inserted": 1,
+          "fills_inserted": 0,
+          "idempotent": true,
+          "orders_inserted": 0,
+          "portfolio_snapshots_inserted": 1,
+          "positions_upserted": 0
+        },
+        "live_order_created": false,
+        "network_call_performed": true,
+        "ok": true,
+        "reason": null,
+        "reason_codes": [],
+        "scope": "all",
+        "status": "sync_ok",
+        "supported_scopes": [
+          "all",
+          "fills",
+          "orders",
+          "portfolio",
+          "positions"
+        ],
+        "sync_performed": true,
+        "synced_scopes": [
+          "orders",
+          "fills",
+          "positions",
+          "portfolio"
+        ],
+        "synthetic_positions_touched": false
+      }
+    }
+  ],
+  "submit_performed": false,
+  "symbol": "AAPL"
+}

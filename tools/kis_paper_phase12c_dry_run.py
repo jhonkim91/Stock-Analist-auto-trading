@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 import sys
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 from zoneinfo import ZoneInfo
@@ -37,6 +37,7 @@ from backend.app.services.token_manager import KIS_APP_KEY_ENV, KIS_APP_SECRET_E
 CONFIRMATION_TOKEN = "CONFIRM_KIS_PAPER_PHASE12C"
 TRADING_WINDOW_CONFIRMATION_TOKEN = "CONFIRM_KIS_PAPER_TRADING_WINDOW"
 US_EASTERN = ZoneInfo("America/New_York")
+US_PREMARKET_SESSION_START = time(4, 0)
 US_REGULAR_SESSION_START = time(9, 30)
 US_REGULAR_SESSION_END = time(16, 0)
 KIS_CREDENTIAL_ENV_KEYS = (
@@ -175,6 +176,7 @@ def run_controlled_dry_run(
     config: Mapping[str, Any] | None = None,
     adapter_factory: Callable[[dict[str, Any]], Any] | None = None,
     use_temporary_paper_config: bool = False,
+    allow_premarket_submit: bool = False,
 ) -> dict[str, Any]:
     """Run Phase 12C preflight or a fully gated controlled paper-network dry-run."""
     current_env = os.environ if env is None else env
@@ -194,6 +196,7 @@ def run_controlled_dry_run(
         "live_order_created": False,
         "network_call_performed": False,
         "temporary_config_used": use_temporary_paper_config,
+        "allow_premarket_submit": allow_premarket_submit,
         "preflight": preflight,
         "steps": [],
     }
@@ -229,14 +232,18 @@ def run_controlled_dry_run(
             }
         )
         return record
-
     request = BrokerOrderRequest(
         symbol=symbol.strip(),
         side=side.strip().lower(),
         qty=qty,
         limit_price=limit_price,
         idempotency_key=f"phase12c-{_digest(datetime.now(UTC).isoformat())}",
-        metadata=_order_metadata(market=market, exchange=exchange, currency=currency),
+        metadata=_order_metadata(
+            market=market,
+            exchange=exchange,
+            currency=currency,
+            order_session=str(trading_window.get("session") or ""),
+        ),
     )
 
     kill_switch_adapter = factory(
@@ -289,6 +296,33 @@ def run_controlled_dry_run(
         )
         return record
 
+    lifecycle_evidence = _lifecycle_evidence(synced, broker_order_id=broker_order_id, symbol=symbol, qty=qty)
+    record["lifecycle_evidence"] = sanitize_payload(lifecycle_evidence)
+    if lifecycle_evidence["order_filled"]:
+        record["steps"].append(
+            {
+                "name": "cancel_skipped_after_fill",
+                "result": {
+                    "ok": True,
+                    "status": "cancel_skipped",
+                    "reason_codes": ["ORDER_ALREADY_FILLED_AFTER_SYNC"],
+                    "network_call_performed": False,
+                    "lifecycle_evidence": sanitize_payload(lifecycle_evidence),
+                },
+            }
+        )
+        record.update(
+            {
+                "status": "completed",
+                "reason_codes": [],
+                "order_identifier": _hash_identifier(broker_order_id),
+                "kill_switch_reenabled": True,
+                "cancel_skipped": True,
+                "cancel_skipped_reason": "ORDER_ALREADY_FILLED_AFTER_SYNC",
+            }
+        )
+        return record
+
     cancel_result = _attempt_cancel(open_adapter, broker_order_id)
     record["steps"].append({"name": "cancel", "result": sanitize_payload(cancel_result)})
     if not cancel_result.get("ok"):
@@ -310,6 +344,62 @@ def run_controlled_dry_run(
         }
     )
     return record
+
+
+def _lifecycle_evidence(synced: Mapping[str, Any], *, broker_order_id: str, symbol: str, qty: int) -> dict[str, Any]:
+    """Summarize submit -> sync evidence without leaking broker identifiers."""
+    normalized_symbol = symbol.strip().upper()
+    orders = [row for row in synced.get("orders") or [] if isinstance(row, Mapping)]
+    fills = [row for row in synced.get("fills") or [] if isinstance(row, Mapping)]
+    positions = [row for row in synced.get("positions") or [] if isinstance(row, Mapping)]
+    matching_order = _matching_order(orders, broker_order_id=broker_order_id, symbol=normalized_symbol)
+    filled_qty = _int_or_zero(matching_order.get("filled_qty") or matching_order.get("qty")) if matching_order else 0
+    remaining_qty = _int_or_zero(matching_order.get("remaining_qty")) if matching_order else 0
+    status = str(matching_order.get("status") or "").strip().lower() if matching_order else ""
+    order_filled = status in {"filled", "fully_filled"} or (
+        bool(matching_order) and filled_qty >= int(qty) and remaining_qty <= 0
+    )
+    matching_positions = [
+        row
+        for row in positions
+        if str(row.get("symbol") or row.get("pdno") or row.get("ovrs_pdno") or "").strip().upper() == normalized_symbol
+    ]
+    position_qty = sum(_int_or_zero(row.get("qty") or row.get("quantity") or row.get("hldg_qty")) for row in matching_positions)
+    return {
+        "order_seen": bool(matching_order),
+        "order_status": status or None,
+        "order_filled": bool(order_filled),
+        "filled_qty": filled_qty,
+        "remaining_qty": remaining_qty,
+        "fills_count": len(fills),
+        "positions_count": len(positions),
+        "position_changed": bool(position_qty),
+        "position_qty": position_qty,
+        "portfolio_seen": isinstance(synced.get("portfolio"), Mapping),
+    }
+
+
+def _matching_order(
+    orders: list[Mapping[str, Any]],
+    *,
+    broker_order_id: str,
+    symbol: str,
+) -> Mapping[str, Any] | None:
+    for order in orders:
+        if broker_order_id and str(order.get("broker_order_id") or "") == broker_order_id:
+            return order
+    for order in orders:
+        order_symbol = str(order.get("symbol") or order.get("pdno") or order.get("ovrs_pdno") or "").strip().upper()
+        if symbol and order_symbol == symbol:
+            return order
+    return None
+
+
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(float(str(value).replace(",", "").strip()))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _attempt_cancel(adapter: Any, broker_order_id: str) -> dict[str, Any]:
@@ -386,6 +476,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="optional ISO timestamp used only for local trading-window validation",
     )
+    parser.add_argument(
+        "--allow-premarket-submit",
+        action="store_true",
+        help="deprecated compatibility flag; US paper submit remains regular-session only",
+    )
     return parser
 
 
@@ -408,6 +503,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         confirm_trading_window=args.confirm_trading_window,
         as_of=_parse_as_of(args.as_of),
         use_temporary_paper_config=bool(args.temporary_paper_config),
+        allow_premarket_submit=bool(args.allow_premarket_submit),
     )
     if args.record_path:
         write_record(record, PROJECT_ROOT / args.record_path)
@@ -418,7 +514,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _trading_window_status(*, market: str, as_of: datetime | None = None) -> dict[str, Any]:
-    """Return a local static regular-session guard before any paper submit call."""
+    """Return a local static regular-session guard before a US paper submit."""
     normalized_market = market.strip().upper()
     now = as_of or datetime.now(UTC)
     if now.tzinfo is None:
@@ -431,20 +527,43 @@ def _trading_window_status(*, market: str, as_of: datetime | None = None) -> dic
             "source": "no_local_regular_session_guard_for_market",
         }
     local = now.astimezone(US_EASTERN)
-    in_regular_hours = US_REGULAR_SESSION_START <= local.time() < US_REGULAR_SESSION_END
+    local_time = local.time()
+    in_premarket = US_PREMARKET_SESSION_START <= local_time < US_REGULAR_SESSION_START
+    in_regular_hours = US_REGULAR_SESSION_START <= local_time < US_REGULAR_SESSION_END
     is_weekday = local.weekday() < 5
     ok = bool(is_weekday and in_regular_hours)
+    session = "premarket" if in_premarket else "regular" if in_regular_hours else "closed"
+    next_regular_session_start = _next_us_regular_session_start(local)
     return {
         "ok": ok,
         "market": "US",
         "timezone": "America/New_York",
         "local_time": local.isoformat(),
         "weekday": local.strftime("%A"),
+        "session": session if is_weekday else "closed",
+        "premarket_session_start": "04:00",
+        "premarket_session_end": "09:30",
         "regular_session_start": "09:30",
         "regular_session_end": "16:00",
+        "next_regular_session_start": next_regular_session_start.isoformat(),
         "calendar_quality": "static_weekday_regular_session_guard",
         "reason_codes": [] if ok else ["US_REGULAR_SESSION_REQUIRED"],
     }
+
+
+def _next_us_regular_session_start(local: datetime) -> datetime:
+    """Return the next static weekday regular-session start in America/New_York."""
+    candidate = local.replace(
+        hour=US_REGULAR_SESSION_START.hour,
+        minute=US_REGULAR_SESSION_START.minute,
+        second=0,
+        microsecond=0,
+    )
+    if local.weekday() >= 5 or local >= candidate:
+        candidate = candidate + timedelta(days=1)
+    while candidate.weekday() >= 5:
+        candidate = candidate + timedelta(days=1)
+    return candidate
 
 
 def _parse_as_of(value: str | None) -> datetime | None:
@@ -501,17 +620,21 @@ def _adapter_config(
     return adapter_config
 
 
-def _order_metadata(*, market: str, exchange: str, currency: str) -> dict[str, str]:
+def _order_metadata(*, market: str, exchange: str, currency: str, order_session: str = "") -> dict[str, str]:
     normalized_market = market.strip().upper()
     normalized_exchange = exchange.strip().upper()
     normalized_currency = currency.strip().upper()
+    normalized_order_session = order_session.strip().lower()
     if normalized_market in {"US", "USA", "OVERSEAS"}:
-        return {
+        metadata = {
             "market": "US",
             "venue": normalized_exchange or "NASD",
             "exchange": normalized_exchange or "NASD",
             "currency": normalized_currency or "USD",
         }
+        if normalized_order_session:
+            metadata["order_session"] = normalized_order_session
+        return metadata
     return {"exchange": normalized_exchange or "KRX"}
 
 

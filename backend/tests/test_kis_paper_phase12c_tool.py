@@ -11,6 +11,8 @@ from tools import kis_paper_phase12c_dry_run as phase12c
 
 US_REGULAR_SESSION = datetime(2026, 5, 28, 10, 0, tzinfo=ZoneInfo("America/New_York"))
 US_PREMARKET_SESSION = datetime(2026, 5, 28, 5, 0, tzinfo=ZoneInfo("America/New_York"))
+US_CLOSED_SESSION = datetime(2026, 5, 28, 3, 30, tzinfo=ZoneInfo("America/New_York"))
+US_AFTER_HOURS_SESSION = datetime(2026, 5, 28, 16, 30, tzinfo=ZoneInfo("America/New_York"))
 
 
 class _FakeAdapter:
@@ -73,6 +75,69 @@ class _QueryFailingAdapter(_FakeAdapter):
             "reason_codes": ["QUERY_CONTRACT_MISMATCH"],
             "network_call_performed": True,
         }
+
+
+class _FilledAfterSyncAdapter(_FakeAdapter):
+    def sync(self, *, scope: str = "all") -> dict[str, Any]:
+        return {
+            "ok": True,
+            "status": "sync_ok",
+            "sync_performed": True,
+            "orders": [
+                {
+                    "broker_order_id": "001|000001|1|70000|00|KRX",
+                    "symbol": "005930",
+                    "status": "filled",
+                    "filled_qty": 1,
+                    "remaining_qty": 0,
+                }
+            ],
+            "fills": [{"broker_fill_id": "raw-fill-id", "qty": 1, "symbol": "005930"}],
+            "positions": [{"symbol": "005930", "qty": 1}],
+            "portfolio": {"total_equity": 1000},
+            "network_call_performed": True,
+        }
+
+    def cancel_order(self, *, broker_order_id: str, confirm: bool = False) -> dict[str, Any]:
+        raise AssertionError("filled order must not be cancelled")
+
+
+class _SubmitFailingAdapter(_FakeAdapter):
+    def __init__(self, config: dict[str, Any], events: list[str]) -> None:
+        super().__init__(config)
+        self.events = events
+
+    def submit_order(self, request) -> dict[str, Any]:
+        if self.config["kill_switch_enabled"]:
+            self.events.append("kill_switch_submit")
+            return {
+                "ok": False,
+                "status": "submit_blocked",
+                "reason_codes": ["KILL_SWITCH_ACTIVE"],
+                "network_call_performed": False,
+            }
+        self.events.append("submit")
+        return {
+            "ok": False,
+            "status": "submit_failed",
+            "reason_codes": ["KIS_PAPER_RESPONSE_ERROR"],
+            "broker_message_code": "40570000",
+            "broker_message": "mock paper market not started",
+            "network_call_performed": True,
+            "live_order_created": False,
+        }
+
+    def list_orders(self, *, status: str | None = None) -> dict[str, Any]:
+        self.events.append("list_orders")
+        raise AssertionError("list_orders must not be called after submit failure")
+
+    def sync(self, *, scope: str = "all") -> dict[str, Any]:
+        self.events.append("sync")
+        raise AssertionError("sync must not be called after submit failure")
+
+    def cancel_order(self, *, broker_order_id: str, confirm: bool = False) -> dict[str, Any]:
+        self.events.append("cancel")
+        raise AssertionError("cancel must not be called after submit failure")
 
 
 class _RecordingMarketAdapter(_FakeAdapter):
@@ -285,11 +350,12 @@ def test_phase12c_us_market_options_reach_adapter_metadata() -> None:
         "venue": "NASD",
         "exchange": "NASD",
         "currency": "USD",
+        "order_session": "regular",
     }
     assert calls[0]["symbol"] == "AAPL"
 
 
-def test_phase12c_us_market_closed_stops_before_adapter() -> None:
+def test_phase12c_us_premarket_stops_before_adapter_after_daytime_rejection() -> None:
     record = phase12c.run_controlled_dry_run(
         execute=True,
         symbol="AAPL",
@@ -310,9 +376,115 @@ def test_phase12c_us_market_closed_stops_before_adapter() -> None:
 
     assert record["status"] == "trading_window_closed"
     assert record["network_call_performed"] is False
+    assert record["trading_window"]["session"] == "premarket"
+    assert record["trading_window"]["next_regular_session_start"] == "2026-05-28T09:30:00-04:00"
+    assert "US_REGULAR_SESSION_REQUIRED" in record["reason_codes"]
+    assert record["steps"] == []
+
+
+def test_phase12c_us_premarket_does_not_run_submit_lifecycle() -> None:
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        market="US",
+        exchange="NASD",
+        currency="USD",
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        confirm_trading_window=phase12c.TRADING_WINDOW_CONFIRMATION_TOKEN,
+        as_of=US_PREMARKET_SESSION,
+        env=_ready_env(),
+        config=_ready_config(),
+        adapter_factory=lambda config: (_ for _ in ()).throw(AssertionError("adapter must not be called")),
+    )
+
+    assert record["status"] == "trading_window_closed"
+    assert record["network_call_performed"] is False
+    assert record["trading_window"]["session"] == "premarket"
+    assert record["trading_window"]["next_regular_session_start"] == "2026-05-28T09:30:00-04:00"
+    assert record["reason_codes"] == ["US_REGULAR_SESSION_REQUIRED"]
+
+
+def test_phase12c_us_closed_window_stops_before_adapter() -> None:
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        market="US",
+        exchange="NASD",
+        currency="USD",
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        confirm_trading_window=phase12c.TRADING_WINDOW_CONFIRMATION_TOKEN,
+        as_of=US_CLOSED_SESSION,
+        env=_ready_env(),
+        config=_ready_config(),
+        adapter_factory=lambda config: (_ for _ in ()).throw(AssertionError("adapter must not be called")),
+    )
+
+    assert record["status"] == "trading_window_closed"
+    assert record["network_call_performed"] is False
     assert record["steps"] == []
     assert record["trading_window"]["timezone"] == "America/New_York"
+    assert record["trading_window"]["next_regular_session_start"] == "2026-05-28T09:30:00-04:00"
     assert "US_REGULAR_SESSION_REQUIRED" in record["reason_codes"]
+
+
+def test_phase12c_us_after_hours_points_to_next_regular_session() -> None:
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        market="US",
+        exchange="NASD",
+        currency="USD",
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        confirm_trading_window=phase12c.TRADING_WINDOW_CONFIRMATION_TOKEN,
+        as_of=US_AFTER_HOURS_SESSION,
+        env=_ready_env(),
+        config=_ready_config(),
+        adapter_factory=lambda config: (_ for _ in ()).throw(AssertionError("adapter must not be called")),
+    )
+
+    assert record["status"] == "trading_window_closed"
+    assert record["trading_window"]["session"] == "closed"
+    assert record["trading_window"]["next_regular_session_start"] == "2026-05-29T09:30:00-04:00"
+
+
+def test_phase12c_submit_failure_does_not_query_sync_or_cancel() -> None:
+    events: list[str] = []
+
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        market="US",
+        exchange="NASD",
+        currency="USD",
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        confirm_trading_window=phase12c.TRADING_WINDOW_CONFIRMATION_TOKEN,
+        as_of=US_REGULAR_SESSION,
+        env=_ready_env(),
+        config=_ready_config(),
+        adapter_factory=lambda config: _SubmitFailingAdapter(config, events),
+    )
+
+    assert record["status"] == "submit_failed"
+    assert record["network_call_performed"] is True
+    assert [step["name"] for step in record["steps"]] == ["kill_switch_block", "submit"]
+    assert events == ["kill_switch_submit", "submit"]
+    assert "KIS_PAPER_RESPONSE_ERROR" in record["reason_codes"]
 
 
 def test_phase12c_attempts_cancel_after_query_failure_and_redacts_identifier() -> None:
@@ -372,3 +544,35 @@ def test_phase12c_execute_uses_kill_switch_proof_and_redacts_identifiers() -> No
     assert "001|000001|1|70000|00|KRX" not in serialized
     assert "raw-fill-id" not in serialized
     assert "sha256:" in serialized
+
+
+def test_phase12c_skips_cancel_when_sync_proves_filled_position() -> None:
+    record = phase12c.run_controlled_dry_run(
+        execute=True,
+        symbol="005930",
+        side="buy",
+        qty=1,
+        limit_price=70000,
+        confirm_submit=phase12c.CONFIRMATION_TOKEN,
+        confirm_cancel=phase12c.CONFIRMATION_TOKEN,
+        confirm_trading_window=phase12c.TRADING_WINDOW_CONFIRMATION_TOKEN,
+        env=_ready_env(),
+        config=_ready_config(),
+        adapter_factory=lambda config: _FilledAfterSyncAdapter(config),
+    )
+    serialized = json.dumps(record, sort_keys=True)
+
+    assert record["status"] == "completed"
+    assert record["cancel_skipped"] is True
+    assert record["cancel_skipped_reason"] == "ORDER_ALREADY_FILLED_AFTER_SYNC"
+    assert record["lifecycle_evidence"]["order_filled"] is True
+    assert record["lifecycle_evidence"]["position_changed"] is True
+    assert [step["name"] for step in record["steps"]] == [
+        "kill_switch_block",
+        "submit",
+        "list_orders",
+        "sync",
+        "cancel_skipped_after_fill",
+    ]
+    assert "001|000001|1|70000|00|KRX" not in serialized
+    assert "raw-fill-id" not in serialized

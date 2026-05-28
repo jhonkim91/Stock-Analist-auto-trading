@@ -28,6 +28,7 @@ PAPER_REALTIME_STALE_QUOTE_THRESHOLD_SECONDS_ENV = "PAPER_REALTIME_STALE_QUOTE_T
 PAPER_TRADING_MARKET_ENV = "PAPER_TRADING_MARKET"
 KIS_OVERSEAS_EXCHANGE_CODE_ENV = "KIS_OVERSEAS_EXCHANGE_CODE"
 KIS_OVERSEAS_CURRENCY_ENV = "KIS_OVERSEAS_CURRENCY"
+KIS_OVERSEAS_ORDER_SESSION_ENV = "KIS_OVERSEAS_ORDER_SESSION"
 REQUIRED_PAPER_BROKER_MODE = "paper_kis"
 
 
@@ -88,6 +89,7 @@ class PaperConfigService:
             runtime_market = os.getenv(PAPER_TRADING_MARKET_ENV, "KR").strip().upper() or "KR"
             runtime_overseas_exchange = os.getenv(KIS_OVERSEAS_EXCHANGE_CODE_ENV, "NASD").strip().upper() or "NASD"
             runtime_overseas_currency = os.getenv(KIS_OVERSEAS_CURRENCY_ENV, "USD").strip().upper() or "USD"
+            runtime_overseas_order_session = os.getenv(KIS_OVERSEAS_ORDER_SESSION_ENV, "").strip().lower()
             realtime_enabled = bool(realtime.get("enabled", False)) and self._env_bool(
                 PAPER_REALTIME_ENABLED_ENV,
                 bool(realtime.get("enabled", False)),
@@ -106,6 +108,7 @@ class PaperConfigService:
                     "venue": runtime_overseas_exchange if runtime_market in {"US", "USA", "OVERSEAS"} else "KRX",
                     "currency": runtime_overseas_currency if runtime_market in {"US", "USA", "OVERSEAS"} else "KRW",
                     "overseas_exchange": runtime_overseas_exchange,
+                    "overseas_order_session": runtime_overseas_order_session,
                     "enabled": config_enabled and runtime_enabled,
                     "configured_can_create": config_can_create and runtime_can_create,
                     "paper_order_submit_enabled": runtime_order_submit_enabled,
@@ -175,6 +178,7 @@ class PaperConfigService:
             "venue": "KRX",
             "currency": "KRW",
             "overseas_exchange": "NASD",
+            "overseas_order_session": "",
             "enabled": False,
             "configured_can_create": False,
             "paper_order_submit_enabled": False,

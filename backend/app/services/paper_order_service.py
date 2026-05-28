@@ -6,7 +6,7 @@ import os
 from time import perf_counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -620,13 +620,16 @@ class PaperOrderService:
         risk_gate: dict[str, Any] | None = None,
         broker_trace: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        network_call_performed = (
+            bool(broker_trace.get("network_call_performed")) if isinstance(broker_trace, Mapping) else False
+        )
         return {
             "ok": False,
             "status": status,
             "paper_order_created": False,
             "live_order_created": False,
             "broker_order_created": False,
-            "network_call_performed": False,
+            "network_call_performed": network_call_performed,
             "reason": reason_codes[0] if reason_codes else "PAPER_ORDER_BLOCKED",
             "reason_codes": reason_codes,
             "risk_gate": risk_gate or {"decision": "deny", "passed": False, "reason_codes": reason_codes},
@@ -756,19 +759,19 @@ class PaperOrderService:
     def _broker_order_metadata(*, request_payload: dict[str, Any], config: dict[str, object]) -> dict[str, object]:
         market = str(config.get("market") or "KR").strip().upper() or "KR"
         requested_venue = str(request_payload.get("venue") or "").strip().upper()
+        metadata: dict[str, object] = {"strategy_tag": request_payload.get("strategy_tag"), "market": market}
         if market in {"US", "USA", "OVERSEAS"}:
             venue = requested_venue or str(config.get("overseas_exchange") or config.get("venue") or "NASD").strip().upper()
             currency = str(config.get("currency") or "USD").strip().upper() or "USD"
+            order_session = str(config.get("overseas_order_session") or "").strip().lower()
         else:
             venue = requested_venue or str(config.get("venue") or "KRX").strip().upper() or "KRX"
             currency = str(config.get("currency") or "KRW").strip().upper() or "KRW"
-        return {
-            "strategy_tag": request_payload.get("strategy_tag"),
-            "market": market,
-            "venue": venue,
-            "exchange": venue,
-            "currency": currency,
-        }
+            order_session = ""
+        metadata.update({"venue": venue, "exchange": venue, "currency": currency})
+        if order_session:
+            metadata["order_session"] = order_session
+        return metadata
 
     @staticmethod
     def _elapsed_ms(started_at: float) -> float:

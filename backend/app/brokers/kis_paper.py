@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import urlparse
 
 
@@ -31,6 +31,10 @@ KIS_LIVE_BASE_URL_BLOCKED = "KIS_LIVE_BASE_URL_BLOCKED"
 KIS_PAPER_BASE_URL_REQUIRED = "KIS_PAPER_BASE_URL_REQUIRED"
 BROKER_MODE_PAPER_KIS_REQUIRED = "BROKER_MODE_PAPER_KIS_REQUIRED"
 PAPER_ORDER_SUBMIT_ENABLED_REQUIRED = "PAPER_ORDER_SUBMIT_ENABLED_REQUIRED"
+KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED = "KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED"
+KIS_PAPER_US_EXTENDED_SESSION_BLOCK_MESSAGE = (
+    "KIS paper trading does not support US extended/daytime order session. Blocked before API call."
+)
 
 KIS_ACCESS_TOKEN_ENV = "KIS_ACCESS_TOKEN"
 KIS_ACCOUNT_NO_ENV = "KIS_ACCOUNT_NO"
@@ -72,6 +76,62 @@ SUPPORTED_SYNC_SCOPES = {"orders", "fills", "positions", "portfolio", "all"}
 SENSITIVE_RESPONSE_KEYS = {"CANO", "ACNT_PRDT_CD", "authorization", "appkey", "appsecret"}
 US_OVERSEAS_EXCHANGE_CODES = {"NASD", "NYSE", "AMEX"}
 OVERSEAS_ORDER_KEY_PREFIX = "OVRS"
+KIS_US_REGULAR_SESSION = "regular"
+KIS_US_ORDER_CAPABILITIES = {
+    "paper": {"supported_us_sessions": (KIS_US_REGULAR_SESSION,)},
+    "real": {"supported_us_sessions": ("regular", "premarket", "aftermarket", "daytime")},
+}
+US_ORDER_SESSION_ALIASES = {
+    "": KIS_US_REGULAR_SESSION,
+    "regular": KIS_US_REGULAR_SESSION,
+    "normal": KIS_US_REGULAR_SESSION,
+    "premarket": "premarket",
+    "pre_market": "premarket",
+    "pre-market": "premarket",
+    "aftermarket": "aftermarket",
+    "after_market": "aftermarket",
+    "after-market": "aftermarket",
+    "postmarket": "aftermarket",
+    "post_market": "aftermarket",
+    "post-market": "aftermarket",
+    "extended": "extended",
+    "extended_hours": "extended",
+    "extended-hours": "extended",
+    "daytime": "daytime",
+    "us_daytime": "daytime",
+}
+US_DAYTIME_ORDER_SESSIONS = {
+    "daytime",
+    "us_daytime",
+    "premarket",
+    "pre_market",
+    "pre-market",
+    "aftermarket",
+    "after_market",
+    "after-market",
+    "postmarket",
+    "post_market",
+    "post-market",
+    "extended",
+    "extended_hours",
+    "extended-hours",
+}
+
+
+def normalize_kis_us_order_session(value: str | None) -> str:
+    """KIS 미국주식 주문 세션 값을 capability map 기준으로 정규화한다."""
+    normalized = str(value or "").strip().lower()
+    return US_ORDER_SESSION_ALIASES.get(normalized, normalized or KIS_US_REGULAR_SESSION)
+
+
+def kis_us_order_session_supported(kis_env: str, order_session: str | None) -> bool:
+    """KIS 환경별 미국주식 주문 세션 지원 여부를 반환한다."""
+    env_key = str(kis_env or "").strip().lower()
+    capabilities = KIS_US_ORDER_CAPABILITIES.get(env_key)
+    if capabilities is None:
+        return False
+    supported = set(capabilities.get("supported_us_sessions") or ())
+    return normalize_kis_us_order_session(order_session) in supported
 
 
 class KisPaperBrokerRequestError(RuntimeError):
@@ -169,6 +229,8 @@ class KisPaperRequestMapper:
             raise KisPaperBrokerRequestError("KIS_PAPER_STOP_ORDER_UNSUPPORTED")
 
         exchange = _overseas_exchange_from_metadata(request.metadata)
+        if _is_us_paper_unsupported_order_session(request):
+            raise KisPaperBrokerRequestError(KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED)
         tr_id = KIS_PAPER_US_BUY_TR_ID if side == "buy" else KIS_PAPER_US_SELL_TR_ID
         body = {
             "CANO": credentials.account_no,
@@ -179,16 +241,18 @@ class KisPaperRequestMapper:
             "OVRS_ORD_UNPR": _overseas_price_to_kis_string(request.limit_price),
             "CTAC_TLNO": "",
             "MGCO_APTM_ODNO": "",
-            "SLL_TYPE": "00" if side == "sell" else "",
             "ORD_SVR_DVSN_CD": "0",
             "ORD_DVSN": "00",
         }
+        body["SLL_TYPE"] = "00" if side == "sell" else ""
         return tr_id, body
 
     @staticmethod
     def cancel_request(broker_order_id: str, credentials: KisPaperCredentials) -> tuple[str, str, dict[str, str]]:
         order_key = decode_broker_order_key(broker_order_id)
         if _is_overseas_order_key(order_key):
+            if not kis_us_order_session_supported("paper", order_key.get("order_session", "")):
+                raise KisPaperBrokerRequestError(KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED)
             body = {
                 "CANO": credentials.account_no,
                 "ACNT_PRDT_CD": credentials.product_code,
@@ -340,6 +404,7 @@ class KisPaperResponseMapper:
         if not order_no:
             raise KisPaperBrokerRequestError("KIS_PAPER_OVERSEAS_ORDER_RESPONSE_KEY_MISSING")
         exchange = _overseas_exchange_from_metadata(request.metadata)
+        order_session = _overseas_order_session_from_metadata(request.metadata)
         broker_order_id = encode_broker_order_key(
             krx_fwdg_ord_orgno=OVERSEAS_ORDER_KEY_PREFIX,
             odno=order_no,
@@ -348,22 +413,26 @@ class KisPaperResponseMapper:
             ord_dvsn="00",
             excg_id_dvsn_cd=exchange,
             symbol=request.symbol.strip().upper(),
+            order_session=order_session if _is_us_daytime_order_session(order_session) else "",
         )
+        order = {
+            "symbol": request.symbol.strip().upper(),
+            "side": request.side.strip().lower(),
+            "qty": int(request.qty),
+            "filled_qty": 0,
+            "remaining_qty": int(request.qty),
+            "status": "submitted",
+            "market": "US",
+            "venue": exchange,
+        }
+        if order_session:
+            order["order_session"] = order_session
         return {
             "broker_order_id": broker_order_id,
             "broker_order_status": "submitted",
             "broker_message_code": str(body.get("msg_cd") or ""),
             "broker_message": str(body.get("msg1") or "").strip(),
-            "order": {
-                "symbol": request.symbol.strip().upper(),
-                "side": request.side.strip().lower(),
-                "qty": int(request.qty),
-                "filled_qty": 0,
-                "remaining_qty": int(request.qty),
-                "status": "submitted",
-                "market": "US",
-                "venue": exchange,
-            },
+            "order": order,
         }
 
     @staticmethod
@@ -506,9 +575,23 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             return self._blocked_payload("submit_blocked", gate, operation="submit")
         try:
             credentials = KisPaperCredentials.from_env()
+            session_block = self._paper_us_session_block(request, credentials)
+            if session_block is not None:
+                return session_block
             tr_id, body = KisPaperRequestMapper.order_cash_body(request, credentials)
-            path = KIS_OVERSEAS_ORDER_PATH if _is_overseas_order_request(request) else KIS_ORDER_CASH_PATH
-            response = self._request("POST", path, tr_id=tr_id, body=body, credentials=credentials)
+            path = (
+                KIS_OVERSEAS_ORDER_PATH
+                if _is_overseas_order_request(request)
+                else KIS_ORDER_CASH_PATH
+            )
+            response = self._request(
+                "POST",
+                path,
+                tr_id=tr_id,
+                body=body,
+                credentials=credentials,
+                context=_order_trace_context(request),
+            )
             if not response["ok"]:
                 return self._error_payload("submit_failed", response, operation="submit")
             mapped = KisPaperResponseMapper.submit_response(response["body"], request)
@@ -792,6 +875,7 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         credentials: KisPaperCredentials,
         body: dict[str, str] | None = None,
         params: dict[str, str] | None = None,
+        context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         url = f"{credentials.base_url.rstrip('/')}{path}"
         headers = self._headers(credentials, tr_id)
@@ -813,19 +897,17 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             redact_body=False,
             correlation_prefix="kis-paper",
         )
-        trace = self.redaction_service.redact(result.trace)
+        trace = self._request_trace(result.trace, context=context)
         if not result.ok:
             body = result.body if isinstance(result.body, dict) else {}
-            if body:
-                trace["broker_message_code"] = str(body.get("msg_cd") or "")
-                trace["broker_message"] = str(body.get("msg1") or "").strip()
+            self._attach_kis_response_fields(trace, body)
             return {"ok": False, "reason": _map_http_reason(result.reason), "trace": trace, "body": self.redaction_service.redact(body)}
         response_body = result.body
         if not isinstance(response_body, dict):
+            self._attach_kis_response_fields(trace, {})
             return {"ok": False, "reason": KIS_PAPER_RESPONSE_ERROR, "trace": trace, "body": {}}
         if str(response_body.get("rt_cd", "0")) != "0":
-            trace["broker_message_code"] = str(response_body.get("msg_cd") or "")
-            trace["broker_message"] = str(response_body.get("msg1") or "").strip()
+            self._attach_kis_response_fields(trace, response_body)
             return {
                 "ok": False,
                 "reason": KIS_PAPER_RESPONSE_ERROR,
@@ -833,6 +915,75 @@ class KisPaperBrokerAdapter(BrokerAdapter):
                 "body": self.redaction_service.redact(response_body),
             }
         return {"ok": True, "reason": None, "trace": trace, "body": response_body}
+
+    def _paper_us_session_block(
+        self,
+        request: BrokerOrderRequest,
+        credentials: KisPaperCredentials,
+    ) -> dict[str, Any] | None:
+        if not _is_overseas_order_request(request):
+            return None
+        order_session = normalize_kis_us_order_session(_overseas_order_session_from_metadata(request.metadata))
+        if kis_us_order_session_supported("paper", order_session):
+            return None
+        tr_id = _regular_us_tr_id_for_request(request)
+        trace = self._request_trace(
+            {
+                "operation": "POST",
+                "method": "POST",
+                "host": _host_from_url(credentials.base_url),
+                "path": KIS_OVERSEAS_ORDER_PATH,
+                "endpoint_path": KIS_OVERSEAS_ORDER_PATH,
+                "tr_id": tr_id,
+                "status_code": None,
+                "correlation_id": None,
+                "retry_count": 0,
+                "network_call_performed": False,
+                "secrets_redacted": True,
+            },
+            context=_order_trace_context(request),
+        )
+        self._attach_kis_response_fields(
+            trace,
+            {
+                "rt_cd": "LOCAL_BLOCK",
+                "msg_cd": KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED,
+                "msg1": KIS_PAPER_US_EXTENDED_SESSION_BLOCK_MESSAGE,
+            },
+        )
+        return self._blocked_payload(
+            "submit_blocked",
+            [KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED],
+            operation="submit",
+            extra={
+                "broker_message_code": KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED,
+                "broker_message": KIS_PAPER_US_EXTENDED_SESSION_BLOCK_MESSAGE,
+                "rt_cd": "LOCAL_BLOCK",
+                "msg_cd": KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED,
+                "msg1": KIS_PAPER_US_EXTENDED_SESSION_BLOCK_MESSAGE,
+                "broker_trace": trace,
+            },
+        )
+
+    def _request_trace(self, trace: Mapping[str, Any], *, context: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        enriched = dict(trace)
+        if context:
+            enriched.update(dict(context))
+        enriched.setdefault("rt_cd", "")
+        enriched.setdefault("msg_cd", "")
+        enriched.setdefault("msg1", "")
+        return self.redaction_service.redact(enriched)
+
+    @staticmethod
+    def _attach_kis_response_fields(trace: dict[str, Any], body: Mapping[str, Any]) -> None:
+        rt_cd = str(body.get("rt_cd") or "")
+        msg_cd = str(body.get("msg_cd") or "")
+        msg1 = str(body.get("msg1") or "").strip()
+        trace["rt_cd"] = rt_cd
+        trace["msg_cd"] = msg_cd
+        trace["msg1"] = msg1
+        trace["broker_message_code"] = msg_cd
+        trace["broker_message"] = msg1
 
     def _send_request(
         self,
@@ -957,6 +1108,9 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             "reason_codes": [reason],
             "broker_trace": self.redaction_service.redact(trace),
         }
+        for key in ("rt_cd", "msg_cd", "msg1"):
+            if key in trace:
+                payload[key] = trace.get(key)
         if broker_message_code:
             payload["broker_message_code"] = broker_message_code
         if broker_message:
@@ -972,6 +1126,7 @@ def encode_broker_order_key(
     ord_dvsn: str,
     excg_id_dvsn_cd: str,
     symbol: str = "",
+    order_session: str = "",
 ) -> str:
     parts = [
         krx_fwdg_ord_orgno.strip(),
@@ -983,12 +1138,16 @@ def encode_broker_order_key(
     ]
     if symbol.strip():
         parts.append(symbol.strip().upper())
+    if order_session.strip():
+        if not symbol.strip():
+            parts.append("")
+        parts.append(order_session.strip().lower())
     return "|".join(parts)
 
 
 def decode_broker_order_key(value: str) -> dict[str, str]:
     parts = value.split("|")
-    if len(parts) not in {6, 7} or not parts[0].strip() or not parts[1].strip():
+    if len(parts) not in {6, 7, 8} or not parts[0].strip() or not parts[1].strip():
         raise KisPaperBrokerRequestError("KIS_PAPER_CANCEL_ORDER_KEY_REQUIRED")
     return {
         "krx_fwdg_ord_orgno": parts[0].strip(),
@@ -997,7 +1156,8 @@ def decode_broker_order_key(value: str) -> dict[str, str]:
         "price": parts[3].strip() or "0",
         "ord_dvsn": parts[4].strip() or "00",
         "excg_id_dvsn_cd": parts[5].strip() or "KRX",
-        "symbol": parts[6].strip().upper() if len(parts) == 7 else "",
+        "symbol": parts[6].strip().upper() if len(parts) >= 7 else "",
+        "order_session": parts[7].strip().lower() if len(parts) == 8 else "",
     }
 
 
@@ -1236,6 +1396,49 @@ def _is_overseas_order_request(request: BrokerOrderRequest) -> bool:
     return market in {"US", "USA", "OVERSEAS"} or _maybe_overseas_exchange(venue) in US_OVERSEAS_EXCHANGE_CODES
 
 
+def _is_us_daytime_order_request(request: BrokerOrderRequest) -> bool:
+    return _is_us_paper_unsupported_order_session(request)
+
+
+def _is_us_paper_unsupported_order_session(request: BrokerOrderRequest) -> bool:
+    return _is_overseas_order_request(request) and not kis_us_order_session_supported(
+        "paper",
+        _overseas_order_session_from_metadata(request.metadata),
+    )
+
+
+def _overseas_order_session_from_metadata(metadata: dict[str, Any]) -> str:
+    value = metadata.get("order_session") or metadata.get("session") or metadata.get("trading_session") or ""
+    return str(value).strip().lower()
+
+
+def _is_us_daytime_order_session(value: str) -> bool:
+    return normalize_kis_us_order_session(value) in {session for session in US_DAYTIME_ORDER_SESSIONS}
+
+
+def _order_trace_context(request: BrokerOrderRequest) -> dict[str, str]:
+    market = "US" if _is_overseas_order_request(request) else "KR"
+    order_session = (
+        normalize_kis_us_order_session(_overseas_order_session_from_metadata(request.metadata))
+        if market == "US"
+        else ""
+    )
+    return {
+        "market": market,
+        "symbol": request.symbol.strip().upper() if market == "US" else request.symbol.strip(),
+        "order_session": order_session,
+    }
+
+
+def _regular_us_tr_id_for_request(request: BrokerOrderRequest) -> str:
+    side = request.side.strip().lower()
+    if side == "buy":
+        return KIS_PAPER_US_BUY_TR_ID
+    if side == "sell":
+        return KIS_PAPER_US_SELL_TR_ID
+    return ""
+
+
 def _adapter_uses_overseas(config: dict[str, Any]) -> bool:
     market = str(config.get("market") or config.get("country") or os.getenv("PAPER_TRADING_MARKET", "")).strip().upper()
     venue = str(
@@ -1389,3 +1592,7 @@ def _is_live_base_url(base_url: str) -> bool:
 def _is_paper_base_url(base_url: str) -> bool:
     parsed = urlparse(base_url)
     return (parsed.hostname or "").lower() == KIS_PAPER_HOST
+
+
+def _host_from_url(base_url: str) -> str:
+    return (urlparse(base_url).hostname or "").lower()

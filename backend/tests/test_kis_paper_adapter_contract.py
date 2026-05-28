@@ -3,6 +3,11 @@ from __future__ import annotations
 import pytest
 
 from backend.app.models.schemas import BrokerAdapterStatus
+from backend.app.brokers.kis_paper import (
+    KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED,
+    KIS_PAPER_US_EXTENDED_SESSION_BLOCK_MESSAGE,
+    kis_us_order_session_supported,
+)
 from backend.app.services.broker_adapter import BrokerAdapter, BrokerCapabilityError, BrokerOrderRequest
 from backend.app.services.kis_paper_broker_adapter import (
     CANCEL_CONFIRMATION_REQUIRED,
@@ -345,7 +350,7 @@ def test_kis_paper_adapter_supports_us_overseas_order_query_sync_with_mock_http(
         side="buy",
         qty=1,
         limit_price=145.25,
-        metadata={"market": "US", "venue": "NASD", "currency": "USD"},
+        metadata={"market": "US", "venue": "NASD", "currency": "USD", "order_session": "regular"},
     )
 
     submit = adapter.submit_order(request)
@@ -373,6 +378,133 @@ def test_kis_paper_adapter_supports_us_overseas_order_query_sync_with_mock_http(
     assert client.calls[2]["headers"]["tr_id"] == "VTTS3035R"
     assert client.calls[3]["headers"]["tr_id"] == "VTTS3012R"
     assert client.calls[5]["headers"]["tr_id"] == "VTTS3012R"
+
+
+def test_kis_paper_adapter_allows_us_regular_order_on_paper_host(monkeypatch):
+    _set_kis_env(monkeypatch)
+    client = _FakeHttpClient([_FakeResponse({"rt_cd": "0", "msg_cd": "0", "msg1": "OK", "output": {"ODNO": "900002"}})])
+    adapter = KisPaperBrokerAdapter(
+        config={**_enabled_config(), "market": "US", "venue": "NASD", "currency": "USD"},
+        http_client=client,
+        max_retries=0,
+    )
+    request = BrokerOrderRequest(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        metadata={"market": "US", "venue": "NASD", "currency": "USD", "order_session": "regular"},
+    )
+
+    submit = adapter.submit_order(request)
+
+    assert submit["ok"] is True
+    assert submit["network_call_performed"] is True
+    assert submit["broker_trace"]["market"] == "US"
+    assert submit["broker_trace"]["symbol"] == "AAPL"
+    assert submit["broker_trace"]["order_session"] == "regular"
+    assert client.calls[0]["url"].endswith("/uapi/overseas-stock/v1/trading/order")
+    assert client.calls[0]["headers"]["tr_id"] == "VTTT1002U"
+
+
+def test_kis_paper_adapter_blocks_us_premarket_order_before_api_call(monkeypatch):
+    _set_kis_env(monkeypatch)
+    client = _FakeHttpClient([])
+    adapter = KisPaperBrokerAdapter(
+        config={**_enabled_config(), "market": "US", "venue": "NASD", "currency": "USD"},
+        http_client=client,
+        max_retries=0,
+    )
+    request = BrokerOrderRequest(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        metadata={"market": "US", "venue": "NASD", "currency": "USD", "order_session": "premarket"},
+    )
+
+    submit = adapter.submit_order(request)
+
+    assert submit["ok"] is False
+    assert submit["network_call_performed"] is False
+    assert submit["reason_codes"] == [KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED]
+    assert submit["broker_message"] == KIS_PAPER_US_EXTENDED_SESSION_BLOCK_MESSAGE
+    assert submit["broker_trace"]["tr_id"] == "VTTT1002U"
+    assert submit["broker_trace"]["host"] == "openapivts.koreainvestment.com"
+    assert submit["broker_trace"]["market"] == "US"
+    assert submit["broker_trace"]["symbol"] == "AAPL"
+    assert submit["broker_trace"]["order_session"] == "premarket"
+    assert submit["broker_trace"]["rt_cd"] == "LOCAL_BLOCK"
+    assert submit["broker_trace"]["msg_cd"] == KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED
+    assert submit["broker_trace"]["msg1"] == KIS_PAPER_US_EXTENDED_SESSION_BLOCK_MESSAGE
+    assert client.calls == []
+
+
+def test_kis_paper_adapter_blocks_us_daytime_order_before_api_call(monkeypatch):
+    _set_kis_env(monkeypatch)
+    client = _FakeHttpClient([])
+    adapter = KisPaperBrokerAdapter(
+        config={**_enabled_config(), "market": "US", "venue": "NASD", "currency": "USD"},
+        http_client=client,
+        max_retries=0,
+    )
+    request = BrokerOrderRequest(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        metadata={"market": "US", "venue": "NASD", "currency": "USD", "order_session": "daytime"},
+    )
+
+    submit = adapter.submit_order(request)
+
+    assert submit["ok"] is False
+    assert submit["network_call_performed"] is False
+    assert submit["reason_codes"] == [KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED]
+    assert submit["broker_trace"]["order_session"] == "daytime"
+    assert submit["broker_trace"]["msg_cd"] == KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED
+    assert submit["broker_trace"]["msg1"] == KIS_PAPER_US_EXTENDED_SESSION_BLOCK_MESSAGE
+    assert client.calls == []
+
+
+def test_kis_paper_adapter_blocks_us_aftermarket_order_before_api_call(monkeypatch):
+    _set_kis_env(monkeypatch)
+    client = _FakeHttpClient([])
+    adapter = KisPaperBrokerAdapter(
+        config={**_enabled_config(), "market": "US", "venue": "NASD", "currency": "USD"},
+        http_client=client,
+        max_retries=0,
+    )
+    request = BrokerOrderRequest(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        metadata={"market": "US", "venue": "NASD", "currency": "USD", "order_session": "aftermarket"},
+    )
+
+    submit = adapter.submit_order(request)
+
+    assert submit["ok"] is False
+    assert submit["network_call_performed"] is False
+    assert submit["reason_codes"] == [KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED]
+    assert submit["broker_trace"]["market"] == "US"
+    assert submit["broker_trace"]["symbol"] == "AAPL"
+    assert submit["broker_trace"]["order_session"] == "aftermarket"
+    assert submit["broker_trace"]["rt_cd"] == "LOCAL_BLOCK"
+    assert submit["broker_trace"]["msg_cd"] == KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED
+    assert submit["broker_trace"]["msg1"] == KIS_PAPER_US_EXTENDED_SESSION_BLOCK_MESSAGE
+    assert client.calls == []
+
+
+def test_kis_capability_map_keeps_real_us_extended_sessions_enabled() -> None:
+    assert kis_us_order_session_supported("paper", "regular") is True
+    assert kis_us_order_session_supported("paper", "premarket") is False
+    assert kis_us_order_session_supported("paper", "aftermarket") is False
+    assert kis_us_order_session_supported("paper", "daytime") is False
+    assert kis_us_order_session_supported("real", "premarket") is True
+    assert kis_us_order_session_supported("real", "aftermarket") is True
+    assert kis_us_order_session_supported("real", "daytime") is True
 
 
 def test_kis_paper_adapter_blocks_live_base_url(monkeypatch):
@@ -426,6 +558,53 @@ def test_kis_paper_adapter_redacts_and_surfaces_kis_error_message(monkeypatch):
     assert result["broker_message"] == "mock paper order rejected"
     assert result["broker_trace"]["broker_message_code"] == "40580000"
     assert result["broker_trace"]["broker_message"] == "mock paper order rejected"
+    assert secret not in str(result)
+
+
+def test_kis_paper_adapter_us_failure_trace_includes_order_context(monkeypatch):
+    secret = "PHASE21_US_ERROR_SECRET"
+    _set_kis_env(monkeypatch, secret=secret)
+    client = _FakeHttpClient(
+        [
+            _FakeResponse(
+                {
+                    "rt_cd": "1",
+                    "msg_cd": "40570000",
+                    "msg1": "mock US paper order rejected",
+                    "output": {"raw_account": secret},
+                }
+            )
+        ]
+    )
+    adapter = KisPaperBrokerAdapter(
+        config={**_enabled_config(), "market": "US", "venue": "NASD", "currency": "USD"},
+        http_client=client,
+        max_retries=0,
+    )
+    request = BrokerOrderRequest(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        metadata={"market": "US", "venue": "NASD", "currency": "USD", "order_session": "regular"},
+    )
+
+    result = adapter.submit_order(request)
+    trace = result["broker_trace"]
+
+    assert result["ok"] is False
+    assert result["status"] == "submit_failed"
+    assert trace["tr_id"] == "VTTT1002U"
+    assert trace["host"] == "openapivts.koreainvestment.com"
+    assert trace["market"] == "US"
+    assert trace["symbol"] == "AAPL"
+    assert trace["order_session"] == "regular"
+    assert trace["rt_cd"] == "1"
+    assert trace["msg_cd"] == "40570000"
+    assert trace["msg1"] == "mock US paper order rejected"
+    assert result["rt_cd"] == "1"
+    assert result["msg_cd"] == "40570000"
+    assert result["msg1"] == "mock US paper order rejected"
     assert secret not in str(result)
 
 

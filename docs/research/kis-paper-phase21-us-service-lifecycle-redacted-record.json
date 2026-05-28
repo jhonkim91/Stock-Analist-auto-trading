@@ -1,0 +1,143 @@
+{
+  "completion_audit": {
+    "complete": false,
+    "missing_requirements": [
+      "token_issued",
+      "websocket_approval_issued",
+      "websocket_smoke_message_received",
+      "service_lifecycle_completed",
+      "paper_order_created",
+      "broker_order_created",
+      "paper_fill_created",
+      "paper_position_changed",
+      "orders_count_unchanged",
+      "service_completion_audit_passed"
+    ],
+    "requirements": {
+      "broker_order_created": false,
+      "live_order_created_false": true,
+      "network_call_performed": true,
+      "orders_count_unchanged": false,
+      "paper_fill_created": false,
+      "paper_only": true,
+      "paper_order_created": false,
+      "paper_position_changed": false,
+      "raw_secret_printed_false": true,
+      "service_completion_audit_passed": false,
+      "service_lifecycle_completed": false,
+      "token_issued": false,
+      "websocket_approval_issued": false,
+      "websocket_smoke_message_received": false
+    },
+    "scope": "phase21_token_network_websocket_order_fill_position"
+  },
+  "currency": "USD",
+  "exchange": "NASD",
+  "generated_at": "2026-05-28T13:52:13.702634+00:00",
+  "live_order_created": false,
+  "market": "US",
+  "network_call_performed": true,
+  "paper_only": true,
+  "phase": "21-US",
+  "qty": 1,
+  "raw_secret_printed": false,
+  "reason_codes": [
+    "KIS_HTTP_RESPONSE_ERROR"
+  ],
+  "status": "token_failed",
+  "steps": [
+    {
+      "name": "load_env_file",
+      "result": {
+        "ignored_count": 10,
+        "ignored_keys": [
+          "APP_ENV",
+          "NEXT_PUBLIC_API_BASE_URL",
+          "PAPER_BOT_ENABLED",
+          "PAPER_BOT_KILL_SWITCH",
+          "PAPER_BOT_SCHEDULER_ENABLED"
+        ],
+        "ignored_secret_like_key_count": 5,
+        "loaded_count": 14,
+        "loaded_keys": [
+          "BROKER_MODE",
+          "ENABLE_REAL_ORDER",
+          "KIS_ENV",
+          "KIS_PAPER_BASE_URL",
+          "KIS_PRODUCT_CODE",
+          "PAPER_BOT_AUTO_SUBMIT",
+          "PAPER_BOT_CONFIRM",
+          "PAPER_ORDER_SUBMIT_ENABLED",
+          "PAPER_TRADING_CAN_CREATE",
+          "PAPER_TRADING_ENABLED",
+          "PAPER_TRADING_KILL_SWITCH",
+          "PAPER_TRADING_NETWORK_ENABLED"
+        ],
+        "loaded_secret_like_key_count": 2,
+        "network_call_performed": false,
+        "ok": true,
+        "override": false,
+        "path": ".env.local",
+        "raw_secret_printed": false,
+        "secret_like_key_names_redacted": true,
+        "secrets_redacted": true,
+        "skipped_existing_count": 2,
+        "skipped_existing_keys": [],
+        "skipped_secret_like_key_count": 2,
+        "status": "env_file_loaded"
+      }
+    },
+    {
+      "name": "issue_token",
+      "result": {
+        "metadata": {
+          "access_token": "***REDACTED***",
+          "access_token_fingerprint": null,
+          "account_configured": true,
+          "app_key_configured": true,
+          "app_secret_configured": true,
+          "expired": false,
+          "expires_at": null,
+          "kis_env": "paper",
+          "kis_env_paper": true,
+          "process_access_token_configured": true,
+          "product_code_configured": true,
+          "refresh_token": "***REDACTED***",
+          "refresh_token_fingerprint": null,
+          "refresh_token_present": false,
+          "state": "CONFIGURED_NO_TOKEN",
+          "token_cache_enabled": false,
+          "token_db_persistence_enabled": false,
+          "token_file_persistence_enabled": false,
+          "token_issued": false,
+          "token_raw_value_persisted": false
+        },
+        "network_call_performed": true,
+        "ok": false,
+        "process_env_access_token_installed": false,
+        "reason": "KIS_HTTP_RESPONSE_ERROR",
+        "reason_codes": [
+          "KIS_HTTP_RESPONSE_ERROR"
+        ],
+        "status": "token_issue_failed",
+        "token_issued": false,
+        "token_raw_value_persisted": false,
+        "trace": {
+          "correlation_id": "kis-http-b5cc3d62edfc42ec",
+          "elapsed_ms": 97.277,
+          "endpoint_path": "/oauth2/tokenP",
+          "host": "openapivts.koreainvestment.com",
+          "method": "POST",
+          "network_call_performed": true,
+          "operation": "kis_token_issue",
+          "path": "/oauth2/tokenP",
+          "retry_count": 0,
+          "secrets_redacted": "***REDACTED***",
+          "status_code": 403,
+          "tr_id": null
+        }
+      }
+    }
+  ],
+  "symbol": "AAPL"
+}

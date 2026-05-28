@@ -91,6 +91,24 @@ class _RecordingSubmitAdapter:
         }
 
 
+class _FailingNetworkSubmitAdapter:
+    def submit_order(self, request):
+        return {
+            "ok": False,
+            "status": "submit_failed",
+            "reason": "KIS_PAPER_RESPONSE_ERROR",
+            "reason_codes": ["KIS_PAPER_RESPONSE_ERROR"],
+            "broker_trace": {
+                "endpoint_path": "/uapi/overseas-stock/v1/trading/order",
+                "tr_id": "VTTT1002U",
+                "network_call_performed": True,
+                "rt_cd": "1",
+                "msg_cd": "EGW00123",
+                "msg1": "expired token",
+            },
+        }
+
+
 def test_submit_requires_confirm_idempotency_and_kill_switch_before_write(db_session, tmp_path, monkeypatch):
     _enable_manual_paper_runtime(monkeypatch)
     _write_paper_config(tmp_path)
@@ -212,6 +230,7 @@ def test_network_submit_uses_us_market_metadata_from_runtime_env(db_session, tmp
     monkeypatch.setenv("PAPER_TRADING_MARKET", "US")
     monkeypatch.setenv("KIS_OVERSEAS_EXCHANGE_CODE", "NASD")
     monkeypatch.setenv("KIS_OVERSEAS_CURRENCY", "USD")
+    monkeypatch.setenv("KIS_OVERSEAS_ORDER_SESSION", "premarket")
     _write_paper_config(tmp_path, network_enabled=True)
     adapter = _RecordingSubmitAdapter()
     service = PaperOrderService(db_session, config_dir=tmp_path, adapter=adapter)
@@ -235,8 +254,40 @@ def test_network_submit_uses_us_market_metadata_from_runtime_env(db_session, tmp
         "venue": "NASD",
         "exchange": "NASD",
         "currency": "USD",
+        "order_session": "premarket",
     }
     assert _count(db_session, PaperOrder) == 1
+    assert _count(db_session, Order) == 0
+
+
+def test_network_submit_failure_preserves_network_trace_flag(db_session, tmp_path, monkeypatch):
+    _enable_manual_paper_runtime(monkeypatch)
+    monkeypatch.setenv("PAPER_TRADING_NETWORK_ENABLED", "true")
+    monkeypatch.setenv("BROKER_MODE", "paper_kis")
+    monkeypatch.setenv("PAPER_ORDER_SUBMIT_ENABLED", "true")
+    monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
+    monkeypatch.setenv("PAPER_TRADING_MARKET", "US")
+    monkeypatch.setenv("KIS_OVERSEAS_EXCHANGE_CODE", "NASD")
+    monkeypatch.setenv("KIS_OVERSEAS_CURRENCY", "USD")
+    _write_paper_config(tmp_path, network_enabled=True)
+    service = PaperOrderService(db_session, config_dir=tmp_path, adapter=_FailingNetworkSubmitAdapter())
+
+    result = service.submit_order(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=145.25,
+        strategy_tag="phase21-us",
+        confirm=True,
+        idempotency_key="phase21-us-service-submit-failed",
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "submit_failed"
+    assert result["network_call_performed"] is True
+    assert result["broker_trace"]["network_call_performed"] is True
+    assert result["broker_trace"]["msg_cd"] == "EGW00123"
+    assert _count(db_session, PaperOrder) == 0
     assert _count(db_session, Order) == 0
 
 

@@ -20,6 +20,7 @@
 | `PAPER_TRADING_MARKET` | `KR` 또는 `US` | 미국장 해외주식 검증 시 `US` |
 | `KIS_OVERSEAS_EXCHANGE_CODE` | `NASD` | 미국 WebSocket smoke는 현재 공식 샘플 확인 범위인 NASD만 사용 |
 | `KIS_OVERSEAS_CURRENCY` | `USD` | 해외잔고 조회 통화 |
+| `KIS_OVERSEAS_ORDER_SESSION` | `premarket` / `daytime` / `extended` | 현재 KIS paper host에서 미국주간주문 TR이 미지원으로 확인되어 submit은 네트워크 전 차단됨 |
 | `KIS_TOKEN_ISSUE_ENABLED` | `true` | token 발급을 실제 KIS paper로 호출할 때만 |
 | `KIS_WEBSOCKET_APPROVAL_ENABLED` | `true` | WebSocket approval key 발급을 실제 KIS paper로 호출할 때만 |
 | `PAPER_WEBSOCKET_ENABLED` | `true` | paper WebSocket status/subscription gate |
@@ -186,7 +187,9 @@ $env:BROKER_MODE = "paper_kis"
 $env:PAPER_ORDER_SUBMIT_ENABLED = "true"
 ```
 
-미국장 해외주식 1회 검증은 process-only gate와 trading-window 확인 토큰을 함께 사용한다. helper는 `market=US`일 때 `America/New_York` 기준 정적 정규장 `09:30-16:00`과 평일 조건을 먼저 확인하며, 조건이 맞지 않으면 adapter 호출 전 `US_REGULAR_SESSION_REQUIRED`로 중단한다. 이 guard는 휴장일 calendar feed를 포함하지 않으므로 실제 실행 전 휴장 여부는 별도로 확인한다. 장종료/거부/auth/rate-limit/stale 응답이 나오면 재시도하지 않고 record만 남긴다.
+미국장 해외주식 1회 검증은 process-only gate와 trading-window 확인 토큰을 함께 사용한다. helper는 `market=US`일 때 `America/New_York` 기준 정규장 `09:30-16:00`, 평일 조건만 submit 가능 세션으로 본다. 프리마켓은 `session=premarket`으로 기록하지만 adapter 호출 전 `US_REGULAR_SESSION_REQUIRED`로 중단하고 `next_regular_session_start`를 redacted record에 남긴다. 이 guard는 휴장일 calendar feed를 포함하지 않으므로 실제 실행 전 휴장/거래 가능 여부는 별도로 확인한다. 일반 프리마켓 주문 `VTTT1002U`는 `40570000`, 공식 미국주간주문 `/uapi/overseas-stock/v1/trading/daytime-order`, `TTTS6036U`는 `EGW02006 / 모의투자 TR 이 아닙니다.`로 각각 실제 KIS paper host에서 거부됐다. 따라서 premarket/daytime/extended submit은 현재 네트워크 전 차단하며, 장종료/거부/auth/rate-limit/stale 응답은 재시도하지 않고 record만 남긴다.
+
+세션별 capability와 차단 trace 필드는 `docs/KIS_CAPABILITIES.md`를 기준으로 한다. paper 환경은 미국 정규장 `regular`만 허용하며, real 환경의 extended/daytime capability는 map상 분리되어 있지만 현재 프로젝트의 live adapter는 별도 승인 전까지 disabled scaffold 상태다.
 
 ```powershell
 .\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py `
@@ -205,7 +208,11 @@ $env:PAPER_ORDER_SUBMIT_ENABLED = "true"
   --record-path docs/research/kis-paper-phase21-us-redacted-record.json
 ```
 
+`--allow-premarket-submit` 옵션은 이전 재확인 gate와의 CLI 호환을 위해 남아 있으나, 현재 helper는 이 옵션으로 프리마켓 submit을 열지 않는다.
+
 token 발급, WebSocket approval, bounded WebSocket smoke, controlled submit/list/sync/cancel을 같은 redacted record로 묶어야 하면 Phase 21 helper를 사용한다. 아래 명령도 process env만 사용하며 `.env`/`.env.local`을 쓰지 않는다.
+
+정규장 주문이 즉시 완전 체결되어 `sync` 단계에서 `filled` 또는 `remaining_qty=0`이 확인되면 helper는 불필요한 cancel을 호출하지 않고 `cancel_skipped_after_fill`, `lifecycle_evidence`를 redacted record에 남긴다. 미체결 또는 부분체결 잔량이 남은 경우에는 기존처럼 cancel 단계로 진행한다.
 
 ```powershell
 .\.venv\Scripts\python.exe tools\kis_paper_phase21_us_activation.py `
@@ -225,6 +232,73 @@ token 발급, WebSocket approval, bounded WebSocket smoke, controlled submit/lis
   --confirm-trading-window CONFIRM_KIS_PAPER_TRADING_WINDOW `
   --record-path docs/research/kis-paper-phase21-us-redacted-record.json
 ```
+
+서비스 계층 persistence까지 한 번에 확인해야 하면 아래 helper를 사용한다. 이 경로는 정규장 gate 통과 후 `PaperOrderService.submit_order`로 `paper_orders`를 만들고, `PaperSyncService.sync`로 `paper_fills`/`paper_positions` 변경을 확인한다. fill/position이 확인되지 않으면 broker order id가 있는 경우 paper cancel을 1회 시도한다. 프리마켓/애프터/주간거래는 API 호출 전에 차단된다. 결과 record의 `completion_audit.complete`가 `true`여야 token, network, WebSocket, 주문 생성, 체결, 포지션 변경, no-live/no-secret 조건을 모두 만족한 것으로 본다. `status=completed`라도 `completion_audit.missing_requirements`가 비어 있지 않으면 전체 목표 완료로 보지 않는다.
+
+```powershell
+.\.venv\Scripts\python.exe tools\kis_paper_phase21_service_lifecycle.py `
+  --symbol AAPL `
+  --qty 1 `
+  --limit-price <LIMIT_PRICE> `
+  --exchange NASD `
+  --currency USD `
+  --confirm-submit CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-sync CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-trading-window CONFIRM_KIS_PAPER_TRADING_WINDOW `
+  --record-path docs/research/kis-paper-phase21-service-lifecycle-redacted-record.json
+```
+
+token/WebSocket proof와 service-level persistence proof를 같은 record에 묶으려면 Phase 21 helper에서 `--execute-submit` 대신 `--execute-service-lifecycle`을 사용한다. 두 submit 옵션은 중복 주문 방지를 위해 동시에 사용할 수 없다.
+
+로컬 `.env.local`을 현재 helper 프로세스에만 읽어오려면 `--load-env-local`을 추가한다. 이 옵션은 파일을 수정하지 않고 allowlist key만 주입하며, record에는 raw 값과 secret-like key name을 남기지 않는다. 이미 현재 프로세스에 값이 있으면 기본적으로 덮어쓰지 않는다. 덮어써야 할 때만 `--env-file-override`를 명시한다.
+
+정규장 직후 수동 제한가 계산을 줄이려면 `--derive-limit-from-price`를 추가한다. 이 옵션은 미국 정규장 gate가 통과된 뒤에만 read-only 해외 현재가 `/uapi/overseas-price/v1/quotations/price`, `HHDFS00000300`을 호출하고, `last_price * (1 + --limit-premium-bps / 10000)`로 제한가를 산정한다. 프리마켓/장외에서는 price call도 생략하고 `US_REGULAR_SESSION_REQUIRED` record만 남긴다.
+
+```powershell
+.\.venv\Scripts\python.exe tools\kis_paper_phase21_us_activation.py `
+  --load-env-local `
+  --issue-token `
+  --issue-websocket-approval `
+  --websocket-smoke `
+  --execute-service-lifecycle `
+  --derive-limit-from-price `
+  --limit-premium-bps 300 `
+  --symbol AAPL `
+  --qty 1 `
+  --exchange NASD `
+  --currency USD `
+  --confirm-token CONFIRM_KIS_PAPER_PHASE21_TOKEN `
+  --confirm-websocket CONFIRM_KIS_PAPER_PHASE21_WEBSOCKET `
+  --confirm-submit CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-sync CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-cancel CONFIRM_KIS_PAPER_PHASE12C `
+  --confirm-trading-window CONFIRM_KIS_PAPER_TRADING_WINDOW `
+  --record-path docs/research/kis-paper-phase21-us-service-lifecycle-redacted-record.json
+```
+
+즉시 sync에서 주문/포지션은 확인됐지만 체결 row가 늦게 반영될 수 있다. 이때는 새 주문이나 취소를 만들지 말고 follow-up sync helper만 실행한다. 이 helper는 `PaperSyncService.sync`만 호출하며 `submit_performed=false`, `cancel_performed=false`를 record에 남긴다.
+
+```powershell
+.\.venv\Scripts\python.exe tools\kis_paper_phase21_followup_sync.py `
+  --load-env-local `
+  --issue-token `
+  --symbol AAPL `
+  --exchange NASD `
+  --currency USD `
+  --scope all `
+  --confirm-token CONFIRM_KIS_PAPER_PHASE21_TOKEN `
+  --confirm-sync CONFIRM_KIS_PAPER_PHASE12C `
+  --record-path docs/research/kis-paper-phase21-us-followup-sync-redacted-record.json
+```
+
+API/bot submit 경로에서 미국주간주문 세션을 명시해야 하는 경우에도 `.env.local`을 수정하지 말고 현재 PowerShell 프로세스에만 아래 값을 추가한다. 단, 현재 paper adapter는 이 값을 submit 허용이 아니라 unsupported 차단 신호로 사용한다.
+
+```powershell
+$env:KIS_OVERSEAS_ORDER_SESSION = "premarket"
+```
+
+공식 Open API 샘플에는 미국주간주문 `/uapi/overseas-stock/v1/trading/daytime-order`, `TTTS6036U`/`TTTS6037U`와 주간정정취소 `/daytime-order-rvsecncl`, `TTTS6038U`가 별도 존재하지만, 공식 legacy 지원표에서 모의투자 지원 표시가 없고 실제 paper host도 거부했다. live base URL, live fallback, 실전 주문은 계속 차단한다.
 
 실행:
 
@@ -288,6 +362,7 @@ CI와 로컬 자동 검증은 fake/mock adapter만 사용한다.
 | `PAPER_BOT_CONFIRM_REQUIRED` | `PAPER_BOT_CONFIRM=true`가 필요한 수동 paper 실행인지 재확인한다. |
 | `KILL_SWITCH_ACTIVE` | 주문 실행을 중단하거나 명시적으로 false 전환 전 차단 증거를 남긴다. |
 | `PAPER_REALTIME_STALE_QUOTE` | quote worker heartbeat와 latest quote age를 확인하고 신규 주문을 중단한다. |
+| `KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED` | KIS paper host가 미국주간주문 `TTTS6036U`를 거부한 상태다. premarket/daytime 주문은 재시도하지 말고 정규장 paper 지원 경로만 사용한다. |
 | `KIS_PAPER_RATE_LIMITED` | 재시도하지 말고 호출 간격과 runbook 승인 상태를 확인한다. |
 | `KIS_LIVE_BASE_URL_BLOCKED` | live base URL이 섞인 상태이므로 즉시 중단한다. |
 | `PAPER_BOT_DAILY_LOSS_LIMIT_EXCEEDED` | 당일 손실 한도 초과로 신규 주문을 중단하고 dashboard PnL과 audit event를 확인한다. |
