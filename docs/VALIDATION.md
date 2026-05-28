@@ -1,5 +1,21 @@
 # Validation
 
+## 2026-05-28 `.env.local` KIS Paper Readiness Recheck
+
+사용자가 로컬 `.env.local`에 `KIS_ENV=paper`를 추가한 뒤, 값을 출력하지 않고 키 존재와 runtime status만 재확인했다. Codex는 `.env.local`을 수정하지 않았고, 현재 Python 검증 프로세스에만 로드했다. 실제 KIS paper 주문/조회/sync/cancel 네트워크 호출은 실행하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| `.env.local` key/value check | 통과 | `KIS_ENV`, KIS credential/account/product code, `ENABLE_REAL_ORDER`, paper gate key 존재 확인. `KIS_ENV_paper=true`, `ENABLE_REAL_ORDER_false=true`, `PAPER_TRADING_NETWORK_ENABLED_true=true`, `BROKER_MODE_paper_kis=true`, raw value 미출력 |
+| KIS config validate | 통과 | `POST /api/kis/config/validate` -> HTTP 200, `configured=true`, `kis_env=paper`, `kis_env_paper=true`, credential/account/product format valid, `network_call_performed=false`, raw secret/account/token 미노출 |
+| Status/dashboard | 확인 | `/api/kis/status`, `/api/broker/status`, `/api/paper/status`, `/api/paper/realtime/status`, `/api/paper/dashboard`, `/api/paper/bot/status` -> HTTP 200. `orders_count=0`, `paper_orders_count=0`, `network_call_performed=false` |
+| Dry-run preview | 안전 차단 | `POST /api/paper/bot/preview`, `max_candidates=1`, `dry_run=true` -> `run_id=paper-bot-fb740345fe7f4608`, `status=disabled`, `reason_codes=[PAPER_BOT_DISABLED, KILL_SWITCH_ACTIVE]`, `submitted_count=0`, `paper_order_submitted=false`, `live_order_created=false`, `network_call_performed=false` |
+| External network guard | 통과 | 외부 TCP connect 차단 가드 적용 상태에서 `network_attempts_blocked=0`; FastAPI `TestClient` 내부 loopback만 허용 |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check` -> exit 0 |
+
+결론: `.env.local` 기준 KIS paper credential/env readiness는 redacted boolean으로 통과했다. 다만 repo 기본 `backend/config/paper.yaml`과 `backend/config/bot.yaml`은 여전히 fail-closed이므로 paper bot submit/run은 주문 없이 차단된다. 실제 KIS paper 최소 주문/조회/sync/cancel은 별도 network 승인과 process-only temporary config/bot gate 해제 절차가 있을 때만 진행한다.
+
 ## 2026-05-28 Goal.md KIS Paper Auto Bot Phase 1-6 Alignment
 
 사용자 요청에 따라 루트 `goal.md`에 KIS 모의투자 전용 자동매매 봇 6단계 진행 상태를 명시했다. 이번 변경은 이미 구현/검증된 `docs/goal.md` Phase 1-6 범위를 루트 `goal.md`에 동기화하는 문서 정합화이며, live 주문, KIS paper network 호출, scheduler auto-start, `.env`/`.env.local` 수정은 수행하지 않았다.

@@ -22,7 +22,7 @@
 | Version | `MVP v0.26.0` |
 | Branch | `feature/kis-paper-goal-phases` |
 | Baseline HEAD | `251db45` |
-| 상태 | KIS Paper Auto Bot Phase 1-6 Mock-verified, Phase 16A process-only validation 차단, Phase 20 preflight 차단 |
+| 상태 | KIS Paper Auto Bot Phase 1-6 Mock-verified, Phase 16A `.env.local` KIS readiness 확인 후 config/bot gate 차단, Phase 20 preflight 차단 |
 | Backend | FastAPI + SQLite + Alembic |
 | Frontend | Next.js App Router |
 | 최신 backend full pytest | `416 passed` |
@@ -125,7 +125,7 @@ live fallback requested = deny
 | Phase 14 | 완료 | Telegram live opt-in dry-run/redaction 검증 |
 | Phase 15 | 완료 | daily/weekly report automation API/CLI와 outbox event 추가 |
 | Phase 16 | 완료 | paper bot once/loop gate와 no-submit soak 확인 |
-| Phase 16A | 차단 | dry_run preview/status 확인 후 process-only paper gate run이 local bot/config kill switch에서 차단. KIS paper network 미개방 |
+| Phase 16A | 차단 | `.env.local` KIS paper readiness와 dry_run preview/status 확인 후 repo paper/bot config gate에서 차단. KIS paper 주문/조회/sync/cancel network 미실행 |
 | Phase 17 | 완료 | KIS paper operations runbook 추가 |
 | Phase 18 | 완료 | live trading readiness design-only 문서 추가 |
 | Phase 19 | 완료 | disabled live adapter scaffold와 no-live regression 강화 |
@@ -387,6 +387,7 @@ live fallback requested = deny
   - `POST /api/paper/bot/preview`, `max_candidates=1`, `dry_run=true` -> `run_id=paper-bot-0439a452f5b84f40`, `status=disabled`, `submitted_count=0`, `network_call_performed=false`.
   - dashboard/status API 확인 완료. raw secret/account/token 원문 미노출, `orders_count=0`, `paper_orders_count=0`.
   - 현재 PowerShell 프로세스 env에만 paper gate를 주입하고 network gate는 미개방한 `POST /api/paper/bot/run`, `max_candidates=1`, `dry_run=false` -> `run_id=paper-bot-7a43c3c83f3244f7`, `status=disabled`, `PAPER_BOT_DISABLED`, `PAPER_BOT_KILL_SWITCH_ACTIVE`, `KILL_SWITCH_ACTIVE`, `network_call_performed=false`.
+  - `.env.local`에 `KIS_ENV=paper` 추가 후 현재 Python 검증 프로세스에만 로드해 재확인: `POST /api/kis/config/validate` -> `configured=true`, `kis_env_paper=true`, `network_call_performed=false`; `POST /api/paper/bot/preview`, `max_candidates=1`, `dry_run=true` -> `run_id=paper-bot-fb740345fe7f4608`, `status=disabled`, `PAPER_BOT_DISABLED`, `KILL_SWITCH_ACTIVE`, `submitted_count=0`, `network_call_performed=false`.
   - redacted 결과는 `docs/research/kis-paper-phase16a-bot-run-redacted-record.json`에 기록했다.
 - 다음 Phase 진입 조건: 실제 KIS paper 최소 주문/조회/sync/cancel은 별도 network 승인, 계좌/product code 준비, config/bot kill switch 해제 절차가 있을 때만 진행한다.
 

@@ -5,7 +5,7 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.26.0` |
-| Phase | `KIS Paper Auto Bot Phase 1-6 Mock-verified` |
+| Phase | `KIS Paper Auto Bot Phase 1-6 Mock-verified; Phase 16A KIS readiness rechecked/blocked` |
 | Goal.md Phase 0 | `docs/research/kis-paper-baseline-audit.md`에서 main 기준선과 현재 작업 브랜치 차이를 분리 감사 |
 | Goal.md Phase 5 | `PaperRepository` 기반 paper fills/positions/portfolio sync 조회 경계 보강 |
 | Goal.md Phase 6 | Telegram-first notification channel decision 문서화 |
@@ -19,6 +19,7 @@
 | Goal.md Phase 14 | Telegram live opt-in dry-run/redaction 검증 |
 | Goal.md Phase 15 | daily/weekly report automation API/CLI와 outbox event 추가 |
 | Goal.md Phase 16 | paper bot once/loop gate와 no-submit soak 확인 |
+| Goal.md Phase 16A | `.env.local` 기준 KIS paper readiness는 redacted boolean으로 통과했지만 repo paper/bot config gate에서 주문 없이 차단 |
 | Goal.md Phase 17 | KIS paper operations runbook 추가 |
 | Goal.md Phase 18 | live trading readiness design-only 문서 추가 |
 | Goal.md Phase 19 | disabled live adapter scaffold가 예외 대신 redacted disabled payload를 반환하도록 강화 |
@@ -27,8 +28,8 @@
 | docs/goal.md Phase 1-4 | KIS paper 전용 설정/token/http client, adapter facade, account snapshot/API, realtime stale quote gate 추가 |
 | docs/goal.md Phase 5-6 | `PaperBotExecutor`, bot preview/run/runs API, paper dashboard, report paper trading section, operational metrics 추가 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
-| 상태 | KIS 모의투자 전용 자동매매 Phase 1-6 계약 추가, 기본값 disabled/fail-closed |
-| 거래 상태 | `KIS_ENV=paper` + `PAPER_TRADING_ENABLED=true` + `PAPER_BOT_CONFIRM=true` + kill switch off 조건에서만 paper adapter mock submit 가능; live/real order/fallback disabled |
+| 상태 | KIS 모의투자 전용 자동매매 Phase 1-6 계약 추가, `.env.local` KIS paper readiness 확인, 기본값 disabled/fail-closed |
+| 거래 상태 | `.env.local`의 `KIS_ENV=paper`와 KIS credential/account/product code 구성은 확인됨. 실제 paper submit/query/sync/cancel은 별도 network 승인과 process-only config/bot gate 해제 전까지 차단; live/real order/fallback disabled |
 | 최신 backend pytest | full backend `416 passed` |
 | 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; rendered smoke 통과 |
 | 최신 승인 게이트 감사 | Phase 19 완료, Phase 20 preflight blocked. live 주문/route/network call 없음 |
