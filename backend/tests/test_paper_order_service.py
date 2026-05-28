@@ -54,9 +54,11 @@ def _count(db_session, model) -> int:
 
 
 def _enable_manual_paper_runtime(monkeypatch) -> None:
+    monkeypatch.setenv("KIS_ENV", "paper")
     monkeypatch.setenv("PAPER_TRADING_ENABLED", "true")
     monkeypatch.setenv("PAPER_TRADING_CAN_CREATE", "true")
     monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "false")
+    monkeypatch.setenv("PAPER_BOT_CONFIRM", "true")
     monkeypatch.delenv("PAPER_TRADING_NETWORK_ENABLED", raising=False)
 
 

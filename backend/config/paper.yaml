@@ -1,5 +1,6 @@
 paper:
   mode: "safety_scaffold"
+  kis_env: "paper"
   enabled: false
   can_create: false
   can_simulate_fills: false
@@ -9,6 +10,7 @@ paper:
   balance_inquiry_enabled: false
   live_order_enabled: false
   broker_order_enabled: false
+  require_bot_confirm: true
 risk_gate:
   allow_buy_preview: true
   allow_sell_preview: true
@@ -24,7 +26,30 @@ simulator:
 broker_adapter:
   name: "kis_paper"
   enabled: false
+  base_url: "https://openapivts.koreainvestment.com:29443"
   official_endpoint_confirmed: false
   official_balance_endpoint_confirmed: false
   balance_inquiry_enabled: false
   live_fallback_enabled: false
+  timeout_seconds: 10
+  retry_count: 0
+  endpoints:
+    token: "/oauth2/tokenP"
+    order_cash: "/uapi/domestic-stock/v1/trading/order-cash"
+    order_cancel: "/uapi/domestic-stock/v1/trading/order-rvsecncl"
+    order_status: "/uapi/domestic-stock/v1/trading/inquire-daily-ccld"
+    account_balance: "/uapi/domestic-stock/v1/trading/inquire-balance"
+  transaction_ids:
+    buy: "VTTC0012U"
+    sell: "VTTC0011U"
+    cancel: "VTTC0013U"
+    daily_order_fill: "VTTC0081R"
+    balance: "VTTC8434R"
+realtime:
+  enabled: false
+  mode: "polling"
+  websocket_enabled: false
+  polling_enabled: false
+  require_fresh_quote_for_orders: true
+  stale_quote_threshold_seconds: 30
+  heartbeat_timeout_seconds: 60

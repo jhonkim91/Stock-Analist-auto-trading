@@ -55,6 +55,8 @@ def _clear_runtime_flags(monkeypatch) -> None:
         "PAPER_TRADING_CAN_CREATE",
         "PAPER_TRADING_NETWORK_ENABLED",
         "PAPER_TRADING_KILL_SWITCH",
+        "PAPER_BOT_CONFIRM",
+        "KIS_ENV",
         "BROKER_MODE",
         "PAPER_ORDER_SUBMIT_ENABLED",
     ):
@@ -62,9 +64,11 @@ def _clear_runtime_flags(monkeypatch) -> None:
 
 
 def _enable_local_submit_flags(monkeypatch) -> None:
+    monkeypatch.setenv("KIS_ENV", "paper")
     monkeypatch.setenv("PAPER_TRADING_ENABLED", "true")
     monkeypatch.setenv("PAPER_TRADING_CAN_CREATE", "true")
     monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "false")
+    monkeypatch.setenv("PAPER_BOT_CONFIRM", "true")
     monkeypatch.delenv("PAPER_TRADING_NETWORK_ENABLED", raising=False)
     monkeypatch.delenv("BROKER_MODE", raising=False)
     monkeypatch.delenv("PAPER_ORDER_SUBMIT_ENABLED", raising=False)
@@ -95,6 +99,7 @@ def test_paper_config_true_still_requires_explicit_runtime_flags(tmp_path, monke
         "PAPER_TRADING_ENV_FLAG_REQUIRED",
         "PAPER_CREATE_ENV_FLAG_REQUIRED",
         "PAPER_KILL_SWITCH_ENV_FALSE_REQUIRED",
+        "KIS_ENV_PAPER_REQUIRED",
     }.issubset(set(reasons))
     assert result["paper_order_created"] is False
     assert result["network_call_performed"] is False

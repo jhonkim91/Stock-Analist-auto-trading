@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.paths import CONFIG_DIR
-from backend.app.models.tables import Order, PaperAuditEvent, PaperFill, PaperOrder, PaperPosition
+from backend.app.models.tables import Order, PaperAccountSnapshot, PaperAuditEvent, PaperFill, PaperOrder, PaperPosition
 from backend.app.services.kis_paper_broker_adapter import KisPaperBrokerAdapter
 from backend.app.services.market_session_service import MarketSessionService
 from backend.app.services.token_manager import TokenLifecycleService
@@ -20,6 +20,11 @@ TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 FALSE_ENV_VALUES = {"0", "false", "no", "off"}
 BROKER_MODE_ENV = "BROKER_MODE"
 PAPER_ORDER_SUBMIT_ENABLED_ENV = "PAPER_ORDER_SUBMIT_ENABLED"
+PAPER_BOT_CONFIRM_ENV = "PAPER_BOT_CONFIRM"
+KIS_ENV_ENV = "KIS_ENV"
+PAPER_REALTIME_ENABLED_ENV = "PAPER_REALTIME_ENABLED"
+PAPER_REALTIME_REQUIRE_FRESH_QUOTES_ENV = "PAPER_REALTIME_REQUIRE_FRESH_QUOTES"
+PAPER_REALTIME_STALE_QUOTE_THRESHOLD_SECONDS_ENV = "PAPER_REALTIME_STALE_QUOTE_THRESHOLD_SECONDS"
 REQUIRED_PAPER_BROKER_MODE = "paper_kis"
 
 
@@ -59,7 +64,8 @@ class PaperConfigService:
         audit = raw.get("audit", {})
         simulator = raw.get("simulator", {})
         broker_adapter = raw.get("broker_adapter", {})
-        if not all(isinstance(item, dict) for item in (paper, risk_gate, audit, simulator, broker_adapter)):
+        realtime = raw.get("realtime", {})
+        if not all(isinstance(item, dict) for item in (paper, risk_gate, audit, simulator, broker_adapter, realtime)):
             return self._closed_config(), ["PAPER_CONFIG_PARSE_FAILED"]
 
         config = self._closed_config()
@@ -74,13 +80,26 @@ class PaperConfigService:
             runtime_kill_switch_off = self._env_flag_false("PAPER_TRADING_KILL_SWITCH")
             runtime_broker_mode = os.getenv(BROKER_MODE_ENV, "").strip().lower()
             runtime_order_submit_enabled = self._env_flag_true(PAPER_ORDER_SUBMIT_ENABLED_ENV)
+            runtime_bot_confirm = self._env_flag_true(PAPER_BOT_CONFIRM_ENV)
+            runtime_kis_env = os.getenv(KIS_ENV_ENV, "").strip().lower()
+            realtime_enabled = bool(realtime.get("enabled", False)) and self._env_bool(
+                PAPER_REALTIME_ENABLED_ENV,
+                bool(realtime.get("enabled", False)),
+            )
+            require_fresh_quotes = self._env_bool(
+                PAPER_REALTIME_REQUIRE_FRESH_QUOTES_ENV,
+                bool(realtime.get("require_fresh_quote_for_orders", False)),
+            )
             config.update(
                 {
                     "mode": str(paper.get("mode") or "disabled"),
+                    "kis_env": runtime_kis_env,
+                    "kis_env_paper": runtime_kis_env == "paper",
                     "broker_mode": runtime_broker_mode,
                     "enabled": config_enabled and runtime_enabled,
                     "configured_can_create": config_can_create and runtime_can_create,
                     "paper_order_submit_enabled": runtime_order_submit_enabled,
+                    "paper_bot_confirm_enabled": runtime_bot_confirm,
                     "configured_can_simulate_fills": bool(paper.get("can_simulate_fills", False)),
                     "preview_only": bool(paper.get("preview_only", True)),
                     "kill_switch_enabled": config_kill_switch_enabled or not runtime_kill_switch_off,
@@ -106,6 +125,14 @@ class PaperConfigService:
                     "audit_sanitize_enabled": bool(audit.get("sanitize_enabled", True)),
                     "simulator_enabled": bool(simulator.get("enabled", False)),
                     "auto_fill_on_create": bool(simulator.get("auto_fill_on_create", False)),
+                    "realtime_enabled": realtime_enabled,
+                    "realtime_mode": str(realtime.get("mode") or "polling"),
+                    "realtime_require_fresh_quote_for_orders": require_fresh_quotes,
+                    "realtime_stale_quote_threshold_seconds": self._env_int(
+                        PAPER_REALTIME_STALE_QUOTE_THRESHOLD_SECONDS_ENV,
+                        int(realtime.get("stale_quote_threshold_seconds") or 30),
+                    ),
+                    "realtime_heartbeat_timeout_seconds": int(realtime.get("heartbeat_timeout_seconds") or 60),
                 }
             )
         except (TypeError, ValueError):
@@ -117,6 +144,8 @@ class PaperConfigService:
             config["mode"] = "disabled"
         if config_enabled and not runtime_enabled:
             reasons.append("PAPER_TRADING_ENV_FLAG_REQUIRED")
+        if runtime_kis_env != "paper":
+            reasons.append("KIS_ENV_PAPER_REQUIRED")
         if config_can_create and not runtime_can_create:
             reasons.append("PAPER_CREATE_ENV_FLAG_REQUIRED")
         if config_network_enabled and not runtime_network_enabled:
@@ -129,10 +158,13 @@ class PaperConfigService:
     def _closed_config() -> dict[str, object]:
         return {
             "mode": "disabled",
+            "kis_env": "",
+            "kis_env_paper": False,
             "broker_mode": "",
             "enabled": False,
             "configured_can_create": False,
             "paper_order_submit_enabled": False,
+            "paper_bot_confirm_enabled": False,
             "configured_can_simulate_fills": False,
             "preview_only": True,
             "kill_switch_enabled": True,
@@ -154,6 +186,11 @@ class PaperConfigService:
             "audit_sanitize_enabled": True,
             "simulator_enabled": False,
             "auto_fill_on_create": False,
+            "realtime_enabled": False,
+            "realtime_mode": "polling",
+            "realtime_require_fresh_quote_for_orders": False,
+            "realtime_stale_quote_threshold_seconds": 30,
+            "realtime_heartbeat_timeout_seconds": 60,
         }
 
     @staticmethod
@@ -165,6 +202,23 @@ class PaperConfigService:
     def _env_flag_false(name: str) -> bool:
         value = os.getenv(name)
         return value is not None and value.strip().lower() in FALSE_ENV_VALUES
+
+    @staticmethod
+    def _env_bool(name: str, default: bool) -> bool:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        return value.strip().lower() in TRUE_ENV_VALUES
+
+    @staticmethod
+    def _env_int(name: str, default: int) -> int:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except ValueError:
+            return default
 
 
 class PaperRiskGate:
@@ -273,6 +327,14 @@ class PaperTradingService:
             "adapter_network_call_performed": False,
             "audit_persistence_enabled": False,
             "paper_tables_write_enabled": False,
+            "paper_bot_confirm_enabled": bool(config.get("paper_bot_confirm_enabled", False)),
+            "kis_env": config.get("kis_env"),
+            "kis_env_paper": bool(config.get("kis_env_paper", False)),
+            "realtime": {
+                "enabled": bool(config.get("realtime_enabled", False)),
+                "require_fresh_quote_for_orders": bool(config.get("realtime_require_fresh_quote_for_orders", False)),
+                "stale_quote_threshold_seconds": int(config.get("realtime_stale_quote_threshold_seconds") or 30),
+            },
             "reason": "paper_trading_safety_scaffold_disabled",
             "kill_switch": {"blocking": True, "reason_codes": reason_codes},
             "risk_gate": {"decision": "deny", "passed": False, "reason_codes": reason_codes},
@@ -437,6 +499,16 @@ class PaperTradingService:
 
         return PaperOrderService(self.db, config_dir=self.config_service.config_dir).list_orders(status=status)
 
+    def get_order(self, *, paper_order_id: str) -> dict[str, object]:
+        """단일 paper order를 반환한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("orders")
+        from backend.app.services.paper_order_service import PaperOrderService
+
+        return PaperOrderService(self.db, config_dir=self.config_service.config_dir).get_order(
+            paper_order_id=paper_order_id
+        )
+
     def list_fills(self, *, symbol: str | None = None) -> dict[str, object]:
         """저장된 paper fill 목록을 반환한다."""
         if self.db is None:
@@ -461,6 +533,22 @@ class PaperTradingService:
 
         return PaperSyncService(self.db, config_dir=self.config_service.config_dir).portfolio()
 
+    def account(self) -> dict[str, object]:
+        """저장된 paper account snapshot을 반환한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("account")
+        from backend.app.services.paper_sync_service import PaperSyncService
+
+        return PaperSyncService(self.db, config_dir=self.config_service.config_dir).account()
+
+    def realtime_status(self) -> dict[str, object]:
+        """paper realtime worker 상태를 반환한다."""
+        from backend.app.workers.realtime_market_worker import RealtimeMarketWorker, realtime_market_worker
+
+        if self.db is None:
+            return realtime_market_worker.status()
+        return RealtimeMarketWorker(db=self.db, config_dir=self.config_service.config_dir, quote_cache=realtime_market_worker.quote_cache).status()
+
     def sync(self, *, scope: str = "all") -> dict[str, object]:
         """공식 KIS sync contract 확인 전에는 no-op sync 응답을 반환한다."""
         if self.db is None:
@@ -484,6 +572,60 @@ class PaperTradingService:
         from backend.app.services.paper_bot_service import PaperBotService
 
         return PaperBotService(self.db, config_dir=self.config_service.config_dir).run_once(auto_submit=auto_submit)
+
+    def bot_preview(
+        self,
+        *,
+        trade_date,
+        strategies: list[str],
+        max_candidates: int,
+    ) -> dict[str, object]:
+        """Phase 5 bot executor dry-run preview를 실행한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("bot")
+        from backend.app.services.paper_bot_executor import PaperBotExecutor
+
+        return PaperBotExecutor(self.db, config_dir=self.config_service.config_dir).preview(
+            trade_date=trade_date,
+            strategies=strategies,
+            max_candidates=max_candidates,
+        )
+
+    def run_bot(
+        self,
+        *,
+        trade_date,
+        strategies: list[str],
+        max_candidates: int,
+        dry_run: bool,
+    ) -> dict[str, object]:
+        """Phase 5 bot executor run을 실행한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("bot")
+        from backend.app.services.paper_bot_executor import PaperBotExecutor
+
+        return PaperBotExecutor(self.db, config_dir=self.config_service.config_dir).run(
+            trade_date=trade_date,
+            strategies=strategies,
+            max_candidates=max_candidates,
+            dry_run=dry_run,
+        )
+
+    def get_bot_run(self, *, run_id: str) -> dict[str, object]:
+        """저장된 Phase 5 bot run을 반환한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("bot")
+        from backend.app.services.paper_bot_executor import PaperBotExecutor
+
+        return PaperBotExecutor(self.db, config_dir=self.config_service.config_dir).get_run(run_id=run_id)
+
+    def dashboard(self) -> dict[str, object]:
+        """paper trading dashboard payload를 반환한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("dashboard")
+        from backend.app.services.paper_dashboard_service import PaperDashboardService
+
+        return PaperDashboardService(self.db).dashboard()
 
     def _paper_sync_unavailable_payload(self, scope: str) -> dict[str, object]:
         return {
@@ -511,6 +653,8 @@ class PaperTradingService:
             reasons.append("PAPER_TRADING_DISABLED")
         if not bool(config.get("configured_can_create")):
             reasons.append("PAPER_CREATE_DISABLED")
+        if not bool(config.get("paper_bot_confirm_enabled")):
+            reasons.append("PAPER_BOT_CONFIRM_REQUIRED")
         if not bool(config.get("configured_can_simulate_fills")):
             reasons.append("PAPER_FILL_SIMULATION_DISABLED")
         reasons.append("PAPER_ORDER_CREATE_NOT_IMPLEMENTED")
@@ -540,6 +684,7 @@ class PaperTradingService:
                 "paper_fills_count": 0,
                 "paper_positions_count": 0,
                 "paper_audit_events_count": 0,
+                "paper_account_snapshots_count": 0,
                 "orders_count": 0,
             }
         return {
@@ -547,6 +692,9 @@ class PaperTradingService:
             "paper_fills_count": int(self.db.scalar(select(func.count()).select_from(PaperFill)) or 0),
             "paper_positions_count": int(self.db.scalar(select(func.count()).select_from(PaperPosition)) or 0),
             "paper_audit_events_count": int(self.db.scalar(select(func.count()).select_from(PaperAuditEvent)) or 0),
+            "paper_account_snapshots_count": int(
+                self.db.scalar(select(func.count()).select_from(PaperAccountSnapshot)) or 0
+            ),
             "orders_count": int(self.db.scalar(select(func.count()).select_from(Order)) or 0),
         }
 

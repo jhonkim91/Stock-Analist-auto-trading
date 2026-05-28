@@ -6,7 +6,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
-ALEMBIC_HEAD = "b9c0d1e2f3a4"
+ALEMBIC_HEAD = "d1e2f3a4b5c6"
 FORBIDDEN_RAW_SECRET_COLUMNS = {
     "access" + "_token",
     "refresh" + "_token",
@@ -47,6 +47,7 @@ def test_phase3_paper_persistence_migration_is_additive(tmp_path: Path, monkeypa
         "paper_positions",
         "paper_audit_events",
         "paper_portfolio_snapshots",
+        "paper_account_snapshots",
         "broker_audit_events",
         "notification_events",
         "notification_delivery_logs",
@@ -90,6 +91,28 @@ def test_phase3_paper_persistence_migration_is_additive(tmp_path: Path, monkeypa
     assert "broker_position_key" not in synthetic_positions
     assert "account_alias" not in synthetic_positions
 
+    paper_account_snapshots = {column["name"] for column in inspector.get_columns("paper_account_snapshots")}
+    assert {
+        "snapshot_id",
+        "snapshot_ts",
+        "cash_balance",
+        "buying_power",
+        "market_value",
+        "total_equity",
+        "metadata_json",
+    }.issubset(paper_account_snapshots)
+
+    paper_bot_runs = {column["name"] for column in inspector.get_columns("paper_bot_runs")}
+    assert {
+        "trade_date",
+        "dry_run",
+        "preview_count",
+        "skipped_count",
+        "rejected_count",
+        "request_json",
+        "result_json",
+    }.issubset(paper_bot_runs)
+
     with engine.connect() as connection:
         assert connection.scalar(text("select version_num from alembic_version")) == ALEMBIC_HEAD
     engine.dispose()
@@ -111,6 +134,7 @@ def test_phase3_persistence_tables_do_not_add_raw_secret_columns(tmp_path: Path,
         "paper_fills",
         "paper_positions",
         "paper_portfolio_snapshots",
+        "paper_account_snapshots",
         "broker_audit_events",
         "notification_events",
         "notification_delivery_logs",

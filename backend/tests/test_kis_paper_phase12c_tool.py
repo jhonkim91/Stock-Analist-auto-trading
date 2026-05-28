@@ -78,6 +78,7 @@ def _ready_env() -> dict[str, str]:
         "KIS_ACCOUNT_NO": "12345678",
         "KIS_PRODUCT_CODE": "01",
         "KIS_PAPER_BASE_URL": "https://openapivts.koreainvestment.com:29443",
+        "KIS_ENV": "paper",
         "BROKER_MODE": "paper_kis",
         "ENABLE_REAL_ORDER": "false",
         "PAPER_BOT_AUTO_SUBMIT": "false",
@@ -86,16 +87,19 @@ def _ready_env() -> dict[str, str]:
         "PAPER_TRADING_CAN_CREATE": "true",
         "PAPER_TRADING_NETWORK_ENABLED": "true",
         "PAPER_TRADING_KILL_SWITCH": "false",
+        "PAPER_BOT_CONFIRM": "true",
     }
 
 
 def _ready_config() -> dict[str, object]:
     return {
         "mode": "paper",
+        "kis_env": "paper",
         "broker_mode": "paper_kis",
         "enabled": True,
         "configured_can_create": True,
         "paper_order_submit_enabled": True,
+        "paper_bot_confirm_enabled": True,
         "network_enabled": True,
         "balance_inquiry_enabled": True,
         "broker_adapter_enabled": True,

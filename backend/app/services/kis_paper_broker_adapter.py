@@ -17,6 +17,14 @@ class KisPaperBrokerAdapter(BaseKisPaperBrokerAdapter):
         status = super().status()
         status["adapter_boundary"] = "paper_only_service"
         status["live_fallback_enabled"] = False
+        status["capabilities"] = {
+            "account_summary": True,
+            "cash_available": True,
+            "positions": True,
+            "submit_order": True,
+            "cancel_order": True,
+            "order_status": True,
+        }
         return status
 
 

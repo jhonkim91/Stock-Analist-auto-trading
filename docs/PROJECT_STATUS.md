@@ -5,7 +5,7 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.26.0` |
-| Phase | `KIS Paper Network Adapter Mock-verified` |
+| Phase | `KIS Paper Auto Bot Phase 1-6 Mock-verified` |
 | Goal.md Phase 0 | `docs/research/kis-paper-baseline-audit.md`에서 main 기준선과 현재 작업 브랜치 차이를 분리 감사 |
 | Goal.md Phase 5 | `PaperRepository` 기반 paper fills/positions/portfolio sync 조회 경계 보강 |
 | Goal.md Phase 6 | Telegram-first notification channel decision 문서화 |
@@ -23,13 +23,15 @@
 | Goal.md Phase 18 | live trading readiness design-only 문서 추가 |
 | Goal.md Phase 19 | disabled live adapter scaffold가 예외 대신 redacted disabled payload를 반환하도록 강화 |
 | Goal.md Phase 20 | controlled live canary runbook/preflight record 추가. 현재 live adapter/route/reviewer/env/rollback 조건 미충족으로 blocked |
+| docs/goal.md Phase 1-4 | KIS paper 전용 설정/token/http client, adapter facade, account snapshot/API, realtime stale quote gate 추가 |
+| docs/goal.md Phase 5-6 | `PaperBotExecutor`, bot preview/run/runs API, paper dashboard, report paper trading section, operational metrics 추가 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
-| 상태 | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
-| 거래 상태 | paper-only local submit + KIS paper network submit/cancel/query/sync adapter mock 검증; live/real order/fallback disabled |
-| 최신 backend pytest | full backend `405 passed`, Phase 13-18 targeted `27 passed`, notification/bot `8 passed` |
+| 상태 | KIS 모의투자 전용 자동매매 Phase 1-6 계약 추가, 기본값 disabled/fail-closed |
+| 거래 상태 | `KIS_ENV=paper` + `PAPER_TRADING_ENABLED=true` + `PAPER_BOT_CONFIRM=true` + kill switch off 조건에서만 paper adapter mock submit 가능; live/real order/fallback disabled |
+| 최신 backend pytest | full backend `416 passed` |
 | 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; rendered smoke 통과 |
 | 최신 승인 게이트 감사 | Phase 19 완료, Phase 20 preflight blocked. live 주문/route/network call 없음 |
-| 다음 권장 Phase | Phase 20 실제 canary는 live implementation 별도 승인, reviewer, 환경 분리, rollback proof 확보 전까지 진행 금지 |
+| 다음 권장 Phase | 실제 KIS 호출은 `docs/RUNBOOK_PAPER_TRADING.md` 수동 절차와 paper env 확인 후 별도 수행 |
 
 ## 구현 완료 항목
 
@@ -77,6 +79,8 @@
 - KIS Paper Broker Phase 9 Validation & Hardening: repo secret scan 도구, CI secret scan, settings key-name redaction hardening, operation doc, full backend/frontend acceptance 검증.
 - KIS Paper Balance Inquiry Read-only: `/api/paper/portfolio`에서 paper mode와 env credential 조건이 모두 맞을 때만 KIS `주식잔고조회` paper TR `VTTC8434R`를 호출하고, 기본 disabled/mock 상태는 local snapshot fallback을 유지.
 - Goal.md Phase 12B Paper-only Network Adapter: `KisPaperBrokerAdapter` submit/cancel/list_orders/query_balance/sync를 mock HTTP client로 검증했고, network submit은 `BROKER_MODE=paper_kis`, explicit runtime flags, kill switch off, confirm/idempotency, duplicate guard, risk gate, `ENABLE_REAL_ORDER=false` 조건 없이는 차단한다.
+- docs/goal.md Phase 1-4 KIS Paper Auto Bot: `docs/goal.md`, `docs/RUNBOOK_PAPER_TRADING.md`, `KisHttpClient`, token issue/refresh metadata gate, `paper_account_snapshots`, `/api/paper/orders` alias, `/api/paper/account`, `/api/paper/realtime/status`, stale quote order reject를 추가했다.
+- docs/goal.md Phase 5-6 KIS Paper Bot Executor/Dashboard: `backend/app/services/paper_bot_executor.py`, `/api/paper/bot/preview`, `/api/paper/bot/run`, `/api/paper/bot/runs/{run_id}`, `/api/paper/dashboard`, `PaperOperationalMetricsService`, daily/weekly report `## Paper Trading` section을 추가했다.
 - Goal.md Phase 0 Baseline Audit Refresh: `docs/research/kis-paper-baseline-audit.md`에 main ref `bfcb1691e56dbdbbfc18b043bc65ec447acafa3e`와 현재 작업 브랜치 `ffd7f52a4745df2b99c8dae694796eab5e8f024d`를 분리 기록하고, Phase 0 범위가 문서 감사뿐임을 확정.
 - Goal.md Phase 1 KIS Paper API Confirmation Matrix: `docs/research/kis-paper-api-confirmation-matrix.md`에서 공식 KIS 포털/공식 GitHub 샘플 기반 확인 항목과 `확인 필요` 항목을 분리하고, Phase 2 adapter 설계는 disabled/fail-closed capability로만 진행하도록 제한.
 - Goal.md Phase 2 Paper Broker Adapter Hardening: `backend/app/services/broker_adapter.py`, `kis_paper_broker_adapter.py`, `kis_live_broker_adapter.py` 서비스 경계를 추가하고, `BrokerService`/`PaperTradingService`가 해당 경계를 사용하도록 전환. live adapter는 disabled placeholder 유지.
@@ -108,7 +112,7 @@
 - `indicator_snapshot`에는 `breadth_advance_decline_ratio`, `breadth_52w_high_low_ratio`, `breadth_ma50_participation`, `breadth_score`와 각 availability flag가 추가됐다.
 - `RegimeService`는 index/weekly 기반 `index_regime`을 먼저 계산한 뒤 breadth가 weak이면 bull을 neutral로 낮춘다. breadth 데이터가 없으면 `breadth_regime="not_available"`로 표기하고 최종 판정을 강제로 악화시키지 않는다.
 - `momentum_rank`, `stage_analysis_weekly`는 breadth hardening을 optional config가 켜진 경우에만 적용하며, enabled 상태에서 breadth 입력이 없으면 fail-closed 처리한다.
-- 최신 Alembic head는 `a8b9c0d1e2f3_paper_trading_persistence`다.
+- 최신 Alembic head는 `d1e2f3a4b5c6_extend_paper_bot_run_contract`다.
 
 ## BacktestService 상태
 
@@ -188,8 +192,8 @@
 - `/api/market/sessions`는 venue별 주문 접수/거래 시간 목록을 반환한다.
 - `/api/market/calendar`는 weekend, fixed holiday, 주입 holiday 기준의 정적 calendar preview를 반환한다.
 - `/api/broker/orders/preview`와 `/api/paper/orders/preview`는 `venue`, `session`, `session_metadata`를 additive로 반환한다.
-- `session_metadata.operational_layer`는 session/token/rate-limit/call-budget을 한 운영 계층에서 확장할 자리이며, 현재는 `token_issued=false`, `network_call_allowed=false`, `live_submit_allowed=false`, `paper_submit_allowed=false`만 명시한다.
-- 실제 거래소 calendar feed, KIS token 발급/refresh/cache, 호출량 차감, websocket, live/paper submit은 구현하지 않았다.
+- `session_metadata.operational_layer`는 session/token/rate-limit/call-budget을 한 운영 계층에서 확장할 자리이며, preview metadata에서는 `token_issued=false`, `network_call_allowed=false`, `live_submit_allowed=false`를 명시한다.
+- 실제 거래소 calendar feed, 자동 KIS token cache, 호출량 차감, 운영 WebSocket, live submit은 구현하지 않았다. paper submit은 별도 paper gate와 mock/manual runbook 경계에서만 허용된다.
 
 ## Phase C 전략 상태
 
@@ -199,7 +203,7 @@
 - `/screener`는 기본 전략 5개를 기본 선택하고, available-only 전략은 사용자가 명시 체크한 경우에만 실행 요청에 포함한다.
 - `/dashboard`와 `/backtest`의 단일 전략 실행 UI는 backend metadata를 사용한다.
 - `IndicatorService`는 EMA20, weekly fields, ATR, volume ratio, 52주 고점, pivot, RS/sector/market score, breadth proxy를 `indicator_snapshot`에 저장한다.
-- 최신 Alembic head는 `a8b9c0d1e2f3_paper_trading_persistence`다.
+- 최신 Alembic head는 `d1e2f3a4b5c6_extend_paper_bot_run_contract`다.
 - Screener 응답은 기존 explanation contract 필드를 제거하지 않는다.
 
 ## Phase C Hardening Foundation
@@ -228,9 +232,9 @@
 ## 미구현 항목
 
 - 실제 주문, 주문 취소, 체결, 계좌 자금 이동, websocket, live broker.
-- KIS/broker paper order create, paper fill simulator, paper position mutation.
-- KIS credential/token 저장, token 발급/refresh/cache, KIS 주문/실전 API 호출.
-- KIS paper broker submit/cancel/sync network implementation.
+- paper fill simulator와 임의 paper position mutation.
+- KIS credential/token 원문 저장, 자동 token cache, KIS 실전 주문 API 호출.
+- KIS paper broker submit/cancel/sync 운영 network daemon.
 - 실제 KRX/yfinance network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.
 - broker-synced portfolio cash/position state, cash lock, open_positions state machine, realized exposure/drawdown.
@@ -244,7 +248,7 @@
 - venue/session metadata는 preview 응답에만 노출하며 submit 가능 여부를 true로 바꾸지 않는다.
 - `orders_count == 0`을 유지한다.
 - 기본 config에서 `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` row count는 0을 유지한다. local `paper_orders`는 confirm/idempotency/kill-switch gate 통과 시에만 생성된다.
-- `POST /api/paper/orders`, `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*`는 미등록 404 상태를 유지한다.
+- `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*`는 미등록 404 상태를 유지한다.
 - KIS token cache 파일 `.cache/kis/token.json`은 생성하지 않는다.
 - secret, token, account/header/raw credential 값을 코드, 문서, 로그, API 응답에 노출하지 않는다.
 

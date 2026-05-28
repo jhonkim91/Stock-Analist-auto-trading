@@ -272,7 +272,10 @@ def test_quality_summary_keeps_execution_routes_closed_and_provider_contract_unc
     assert client.post("/api/kis/orders/preview", json={"symbol": "005930"}).status_code == 404
     assert client.get("/api/kis/broker/status").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
-    assert client.post("/api/paper/orders", json={"symbol": "005930", "side": "buy", "qty": 1}).status_code == 405
+    submit = client.post("/api/paper/orders", json={"symbol": "005930", "side": "buy", "qty": 1})
+    assert submit.status_code == 200
+    assert submit.json()["paper_order_created"] is False
+    assert submit.json()["network_call_performed"] is False
     assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 404
 
 

@@ -146,7 +146,10 @@ def test_paper_create_fill_and_kis_execution_routes_remain_unregistered_404(clie
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
 
-    assert client.post("/api/paper/orders", json={"symbol": "KR009", "side": "buy", "qty": 1}).status_code == 405
+    submit = client.post("/api/paper/orders", json={"symbol": "KR009", "side": "buy", "qty": 1})
+    assert submit.status_code == 200
+    assert submit.json()["paper_order_created"] is False
+    assert submit.json()["network_call_performed"] is False
     assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 404
     assert client.get("/api/kis/orders").status_code == 404
     assert client.post("/api/kis/orders/preview", json={"symbol": "005930"}).status_code == 404

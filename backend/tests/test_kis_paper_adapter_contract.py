@@ -39,10 +39,12 @@ class _FakeHttpClient:
 def _enabled_config() -> dict[str, object]:
     return {
         "mode": "paper",
+        "kis_env": "paper",
         "broker_mode": "paper_kis",
         "enabled": True,
         "configured_can_create": True,
         "paper_order_submit_enabled": True,
+        "paper_bot_confirm_enabled": True,
         "preview_only": False,
         "kill_switch_enabled": False,
         "network_enabled": True,
@@ -54,9 +56,11 @@ def _enabled_config() -> dict[str, object]:
 
 
 def _set_kis_env(monkeypatch, secret: str = "PHASE12B_SENTINEL_SECRET") -> None:
+    monkeypatch.setenv("KIS_ENV", "paper")
     monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
     monkeypatch.setenv("BROKER_MODE", "paper_kis")
     monkeypatch.setenv("PAPER_ORDER_SUBMIT_ENABLED", "true")
+    monkeypatch.setenv("PAPER_BOT_CONFIRM", "true")
     monkeypatch.setenv("KIS_APP_KEY", secret)
     monkeypatch.setenv("KIS_APP_SECRET", secret)
     monkeypatch.setenv("KIS_ACCESS_TOKEN", secret)

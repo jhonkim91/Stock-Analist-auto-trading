@@ -2,11 +2,12 @@
 
 ## Current Head
 
-- Current Alembic head: `a8b9c0d1e2f3_paper_trading_persistence`.
-- Latest schema addition: additive paper trading persistence tables and broker-sync metadata columns.
+- Current Alembic head: `d1e2f3a4b5c6_extend_paper_bot_run_contract`.
+- Latest schema addition: additive paper bot run request/result columns and paper account snapshots.
 - The ledger is a backtest/report artifact only and is not connected to live orders, paper orders, broker adapters, KIS routes, or `orders` rows.
 - KIS paper broker Phase 3 added `paper_portfolio_snapshots`, `broker_audit_events`, `notification_events`, `notification_delivery_logs`, `kis_token_status_metadata`, plus nullable broker-sync metadata on `paper_orders`, `paper_fills`, and `paper_positions`. Service-level writes remain disabled until later phases explicitly enable paper submit/sync.
 - Goal Phase 9 added `paper_bot_runs` and `paper_bot_decisions` in Alembic revision `b9c0d1e2f3a4` for preview-only bot run/decision audit. These tables do not store raw credentials or account identifiers.
+- docs/goal.md Phase 1-6 added `paper_account_snapshots` in revision `c0d1e2f3a4b5` and extended `paper_bot_runs` with `trade_date`, `dry_run`, preview/skipped/rejected counts, `request_json`, and `result_json` in revision `d1e2f3a4b5c6`.
 
 ## 현재 정책
 

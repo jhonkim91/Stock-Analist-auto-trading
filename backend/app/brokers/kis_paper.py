@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import os
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import urlparse
-from uuid import uuid4
 
-import httpx
 
 from backend.app.brokers.base import BrokerAdapter, BrokerCapabilityError, BrokerOrderRequest
 from backend.app.services.credential_redaction import CredentialRedactionService
+from backend.app.services.kis_http_client import (
+    KIS_HTTP_RATE_LIMITED,
+    KIS_HTTP_RESPONSE_ERROR,
+    KIS_HTTP_TIMEOUT,
+    KIS_HTTP_TRANSPORT_ERROR,
+    KisHttpClient,
+)
 from backend.app.services.token_manager import KIS_APP_KEY_ENV, KIS_APP_SECRET_ENV, KisTokenManager
 
 CONFIRMATION_REQUIRED = "KIS_PAPER_OFFICIAL_ENDPOINT_CONFIRMATION_REQUIRED"
@@ -35,6 +39,8 @@ KIS_PAPER_BASE_URL_ENV = "KIS_PAPER_BASE_URL"
 ENABLE_REAL_ORDER_ENV = "ENABLE_REAL_ORDER"
 BROKER_MODE_ENV = "BROKER_MODE"
 PAPER_ORDER_SUBMIT_ENABLED_ENV = "PAPER_ORDER_SUBMIT_ENABLED"
+PAPER_BOT_CONFIRM_ENV = "PAPER_BOT_CONFIRM"
+KIS_ENV_ENV = "KIS_ENV"
 REQUIRED_PAPER_BROKER_MODE = "paper_kis"
 
 DEFAULT_KIS_PAPER_BASE_URL = "https://openapivts.koreainvestment.com:29443"
@@ -568,82 +574,40 @@ class KisPaperBrokerAdapter(BrokerAdapter):
     ) -> dict[str, Any]:
         url = f"{credentials.base_url.rstrip('/')}{path}"
         headers = self._headers(credentials, tr_id)
-        close_client = self.http_client is None
-        client = self.http_client or httpx.Client(timeout=self.timeout_seconds)
         retry_allowed = method.upper() == "GET"
-        max_attempts = 1 + (self.max_retries if retry_allowed else 0)
-        last_error = KIS_PAPER_TRANSPORT_ERROR
-        started = time.perf_counter()
-        status_code: int | None = None
-        correlation_id = f"kis-paper-{uuid4().hex[:16]}"
-        try:
-            for attempt in range(max_attempts):
-                try:
-                    response = self._send_request(
-                        client,
-                        method,
-                        url,
-                        headers=headers,
-                        body=body,
-                        params=params,
-                    )
-                    status_code = int(response.status_code)
-                    trace = self._trace(
-                        operation=method,
-                        method=method,
-                        path=path,
-                        tr_id=tr_id,
-                        credentials=credentials,
-                        status_code=status_code,
-                        started=started,
-                        correlation_id=correlation_id,
-                        retry_count=attempt,
-                        request_fields=body or params or {},
-                    )
-                    if status_code == 429:
-                        return {"ok": False, "reason": KIS_PAPER_RATE_LIMITED, "trace": trace, "body": {}}
-                    if status_code >= 500 and attempt + 1 < max_attempts:
-                        last_error = KIS_PAPER_TRANSPORT_ERROR
-                        continue
-                    if status_code >= 400:
-                        return {"ok": False, "reason": KIS_PAPER_RESPONSE_ERROR, "trace": trace, "body": {}}
-                    response_body = response.json()
-                    if not isinstance(response_body, dict):
-                        return {"ok": False, "reason": KIS_PAPER_RESPONSE_ERROR, "trace": trace, "body": {}}
-                    if str(response_body.get("rt_cd", "0")) != "0":
-                        trace["broker_message_code"] = str(response_body.get("msg_cd") or "")
-                        trace["broker_message"] = str(response_body.get("msg1") or "").strip()
-                        return {
-                            "ok": False,
-                            "reason": KIS_PAPER_RESPONSE_ERROR,
-                            "trace": trace,
-                            "body": self.redaction_service.redact(response_body),
-                        }
-                    return {"ok": True, "reason": None, "trace": trace, "body": response_body}
-                except httpx.TimeoutException:
-                    last_error = KIS_PAPER_TIMEOUT
-                    if attempt + 1 >= max_attempts:
-                        break
-                except httpx.TransportError:
-                    last_error = KIS_PAPER_TRANSPORT_ERROR
-                    if attempt + 1 >= max_attempts:
-                        break
-        finally:
-            if close_client:
-                client.close()
-        trace = self._trace(
+        result = KisHttpClient(
+            http_client=self.http_client,
+            timeout_seconds=self.timeout_seconds,
+            max_retries=self.max_retries if retry_allowed else 0,
+            redaction_service=self.redaction_service,
+        ).request(
+            method,
+            url,
+            headers=headers,
+            json_body=body,
+            params=params,
+            retry_enabled=retry_allowed,
             operation=method,
-            method=method,
-            path=path,
             tr_id=tr_id,
-            credentials=credentials,
-            status_code=status_code,
-            started=started,
-            correlation_id=correlation_id,
-            retry_count=max_attempts - 1,
-            request_fields=body or params or {},
+            redact_body=False,
+            correlation_prefix="kis-paper",
         )
-        return {"ok": False, "reason": last_error, "trace": trace, "body": {}}
+        trace = self.redaction_service.redact(result.trace)
+        if not result.ok:
+            return {"ok": False, "reason": _map_http_reason(result.reason), "trace": trace, "body": {}}
+        response_body = result.body
+        if not isinstance(response_body, dict):
+            return {"ok": False, "reason": KIS_PAPER_RESPONSE_ERROR, "trace": trace, "body": {}}
+        if str(response_body.get("rt_cd", "0")) != "0":
+            trace["broker_message_code"] = str(response_body.get("msg_cd") or "")
+            trace["broker_message"] = str(response_body.get("msg1") or "").strip()
+            return {
+                "ok": False,
+                "reason": KIS_PAPER_RESPONSE_ERROR,
+                "trace": trace,
+                "body": self.redaction_service.redact(response_body),
+            }
+        return {"ok": True, "reason": None, "trace": trace, "body": response_body}
 
     def _send_request(
         self,
@@ -680,6 +644,8 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         reasons: list[str] = []
         if str(self.config.get("mode") or "disabled") != "paper":
             reasons.append("KIS_PAPER_MODE_REQUIRED")
+        if str(self.config.get("kis_env") or os.getenv(KIS_ENV_ENV, "")).strip().lower() != "paper":
+            reasons.append("KIS_ENV_PAPER_REQUIRED")
         if not bool(self.config.get("enabled", False)):
             reasons.append("PAPER_TRADING_DISABLED")
         if require_create and not bool(self.config.get("configured_can_create", False)):
@@ -694,6 +660,8 @@ class KisPaperBrokerAdapter(BrokerAdapter):
             reasons.append("PAPER_PREVIEW_ONLY")
         if require_kill_switch_off and bool(self.config.get("kill_switch_enabled", True)):
             reasons.append("KILL_SWITCH_ACTIVE")
+        if require_create and not _env_true(PAPER_BOT_CONFIRM_ENV, self.config.get("paper_bot_confirm_enabled")):
+            reasons.append("PAPER_BOT_CONFIRM_REQUIRED")
         if bool(self.config.get("live_order_enabled", False)) or bool(self.config.get("live_fallback_enabled", False)):
             reasons.append("KIS_LIVE_PATH_BLOCKED")
         if str(self.config.get("broker_mode") or os.getenv(BROKER_MODE_ENV, "")).strip().lower() != REQUIRED_PAPER_BROKER_MODE:
@@ -769,34 +737,6 @@ class KisPaperBrokerAdapter(BrokerAdapter):
         if broker_message:
             payload["broker_message"] = broker_message
         return payload
-
-    def _trace(
-        self,
-        *,
-        operation: str,
-        method: str,
-        path: str,
-        tr_id: str,
-        credentials: KisPaperCredentials,
-        status_code: int | None,
-        started: float,
-        correlation_id: str,
-        retry_count: int,
-        request_fields: dict[str, Any],
-    ) -> dict[str, Any]:
-        trace = {
-            "mode": self.mode,
-            "paper_only": True,
-            "live_fallback_enabled": False,
-            "endpoint_path": path,
-            "tr_id": tr_id,
-            "status_code": status_code,
-            "elapsed_ms": round((time.perf_counter() - started) * 1000, 3),
-            "correlation_id": correlation_id,
-            "secrets_redacted": True,
-        }
-        return self.redaction_service.redact(trace)
-
 
 def encode_broker_order_key(
     *,
@@ -991,6 +931,16 @@ def _merge_reason_codes(codes: list[str]) -> list[str]:
         if code not in merged:
             merged.append(code)
     return merged
+
+
+def _map_http_reason(reason: str | None) -> str:
+    mapping = {
+        KIS_HTTP_RATE_LIMITED: KIS_PAPER_RATE_LIMITED,
+        KIS_HTTP_TIMEOUT: KIS_PAPER_TIMEOUT,
+        KIS_HTTP_TRANSPORT_ERROR: KIS_PAPER_TRANSPORT_ERROR,
+        KIS_HTTP_RESPONSE_ERROR: KIS_PAPER_RESPONSE_ERROR,
+    }
+    return mapping.get(str(reason or ""), KIS_PAPER_TRANSPORT_ERROR)
 
 
 def _real_order_enabled() -> bool:

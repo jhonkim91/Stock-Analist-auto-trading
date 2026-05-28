@@ -7,6 +7,7 @@ from backend.app.models.tables import (
     BrokerAuditEvent,
     KisTokenStatusMetadata,
     Order,
+    PaperAccountSnapshot,
     PaperFill,
     PaperOrder,
     PaperPortfolioSnapshot,
@@ -54,6 +55,15 @@ class PaperRepository:
             )
         )
 
+    def latest_account_snapshot(self) -> PaperAccountSnapshot | None:
+        """가장 최신 `paper_account_snapshots` row를 반환한다."""
+        return self.db.scalar(
+            select(PaperAccountSnapshot).order_by(
+                PaperAccountSnapshot.snapshot_ts.desc(),
+                PaperAccountSnapshot.created_at.desc(),
+            )
+        )
+
     def counts(self) -> dict[str, int]:
         """paper persistence와 분리 확인에 필요한 대표 row 수를 반환한다."""
         return {
@@ -61,6 +71,7 @@ class PaperRepository:
             "paper_fills_count": self._count(PaperFill),
             "paper_positions_count": self._count(PaperPosition),
             "paper_portfolio_snapshots_count": self._count(PaperPortfolioSnapshot),
+            "paper_account_snapshots_count": self._count(PaperAccountSnapshot),
             "broker_audit_events_count": self._count(BrokerAuditEvent),
             "kis_token_status_metadata_count": self._count(KisTokenStatusMetadata),
             "orders_count": self._count(Order),

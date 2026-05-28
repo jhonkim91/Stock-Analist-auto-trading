@@ -15,6 +15,7 @@ KIS_ACCOUNT_NO_ENV = "KIS_ACCOUNT_NO"
 KIS_PRODUCT_CODE_ENV = "KIS_PRODUCT_CODE"
 KIS_PAPER_BASE_URL_ENV = "KIS_PAPER_BASE_URL"
 ENABLE_REAL_ORDER_ENV = "ENABLE_REAL_ORDER"
+KIS_ENV_ENV = "KIS_ENV"
 
 DEFAULT_KIS_PAPER_BASE_URL = "https://openapivts.koreainvestment.com:29443"
 KIS_PAPER_BALANCE_PATH = "/uapi/domestic-stock/v1/trading/inquire-balance"
@@ -67,6 +68,8 @@ class KisPaperBalanceCredentials:
             missing.append("product_code_configured")
         if missing:
             raise KisPaperBalanceConfigError("KIS_PAPER_BALANCE_ENV_MISSING")
+        if os.getenv(KIS_ENV_ENV, "").strip().lower() != "paper":
+            raise KisPaperBalanceConfigError("KIS_ENV_PAPER_REQUIRED")
         if _is_live_base_url(credentials.base_url):
             raise KisPaperBalanceConfigError("KIS_LIVE_BASE_URL_BLOCKED")
         if not _is_paper_base_url(credentials.base_url):
@@ -81,6 +84,7 @@ class KisPaperBalanceCredentials:
             "access_token_configured": cls._is_configured_value(os.getenv(KIS_ACCESS_TOKEN_ENV, "")),
             "account_configured": cls._is_configured_value(os.getenv(KIS_ACCOUNT_NO_ENV, "")),
             "product_code_configured": cls._is_configured_value(os.getenv(KIS_PRODUCT_CODE_ENV, "")),
+            "kis_env_paper": os.getenv(KIS_ENV_ENV, "").strip().lower() == "paper",
         }
 
     @staticmethod

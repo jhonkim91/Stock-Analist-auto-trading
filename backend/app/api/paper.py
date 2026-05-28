@@ -53,6 +53,23 @@ def submit_paper_order(payload: PaperOrderSubmitRequest, db: Session = Depends(g
     return paper_only_execution_response(result, operation="paper_order_submit")
 
 
+@router.post("/orders")
+def create_paper_order(payload: PaperOrderSubmitRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    result = PaperTradingService(db).submit_order(
+        symbol=payload.symbol,
+        side=payload.side,
+        qty=payload.qty,
+        limit_price=payload.limit_price,
+        stop_price=payload.stop_price,
+        strategy_tag=payload.strategy_tag,
+        venue=payload.venue,
+        as_of=payload.as_of,
+        confirm=payload.confirm,
+        idempotency_key=payload.idempotency_key,
+    )
+    return paper_only_execution_response(result, operation="paper_order_submit")
+
+
 @router.post("/orders/cancel")
 def cancel_paper_order(payload: PaperOrderCancelRequest, db: Session = Depends(get_db)) -> dict[str, object]:
     result = PaperTradingService(db).cancel_order(
@@ -63,9 +80,28 @@ def cancel_paper_order(payload: PaperOrderCancelRequest, db: Session = Depends(g
     return paper_only_execution_response(result, operation="paper_order_cancel")
 
 
+@router.post("/orders/{paper_order_id}/cancel")
+def cancel_paper_order_by_id(
+    paper_order_id: str,
+    payload: PaperOrderCancelRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    result = PaperTradingService(db).cancel_order(
+        paper_order_id=paper_order_id,
+        confirm=payload.confirm,
+        idempotency_key=payload.idempotency_key,
+    )
+    return paper_only_execution_response(result, operation="paper_order_cancel")
+
+
 @router.get("/orders")
 def list_paper_orders(status: str | None = None, db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).list_orders(status=status)
+
+
+@router.get("/orders/{paper_order_id}")
+def get_paper_order(paper_order_id: str, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).get_order(paper_order_id=paper_order_id)
 
 
 @router.get("/fills")
@@ -83,9 +119,24 @@ def paper_portfolio(db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).portfolio()
 
 
+@router.get("/account")
+def paper_account(db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).account()
+
+
 @router.post("/sync")
 def sync_paper(payload: PaperSyncRequest, db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).sync(scope=payload.scope)
+
+
+@router.get("/realtime/status")
+def paper_realtime_status(db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).realtime_status()
+
+
+@router.get("/dashboard")
+def paper_dashboard(db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).dashboard()
 
 
 @router.get("/bot/status")
@@ -93,6 +144,25 @@ def paper_bot_status(db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).bot_status()
 
 
+@router.post("/bot/preview")
+def preview_paper_bot(payload: PaperBotRunRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).bot_preview(
+        trade_date=payload.trade_date,
+        strategies=payload.strategies,
+        max_candidates=payload.max_candidates,
+    )
+
+
 @router.post("/bot/run")
 def run_paper_bot(payload: PaperBotRunRequest, db: Session = Depends(get_db)) -> dict[str, object]:
-    return PaperTradingService(db).run_bot_once(auto_submit=payload.auto_submit)
+    return PaperTradingService(db).run_bot(
+        trade_date=payload.trade_date,
+        strategies=payload.strategies,
+        max_candidates=payload.max_candidates,
+        dry_run=payload.dry_run,
+    )
+
+
+@router.get("/bot/runs/{run_id}")
+def get_paper_bot_run(run_id: str, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).get_bot_run(run_id=run_id)

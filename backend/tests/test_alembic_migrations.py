@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from backend.app.core.database import Base
 from backend.app.models import tables  # noqa: F401
 
-ALEMBIC_HEAD = "b9c0d1e2f3a4"
+ALEMBIC_HEAD = "d1e2f3a4b5c6"
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -43,6 +43,7 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "strategy_parameter_snapshots",
         "earnings_events",
         "paper_portfolio_snapshots",
+        "paper_account_snapshots",
         "broker_audit_events",
         "notification_events",
         "notification_delivery_logs",
@@ -78,8 +79,15 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "auto_submit_requested",
         "auto_submit_allowed",
         "decision_count",
+        "preview_count",
+        "skipped_count",
+        "rejected_count",
         "submitted_count",
+        "trade_date",
+        "dry_run",
         "reason_codes_json",
+        "request_json",
+        "result_json",
     }.issubset(paper_bot_run_columns)
     paper_bot_decision_columns = {column["name"] for column in inspector.get_columns("paper_bot_decisions")}
     assert {

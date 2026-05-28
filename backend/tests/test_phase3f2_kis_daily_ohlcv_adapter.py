@@ -302,5 +302,5 @@ def test_kis_read_only_provider_contract_safety_and_execution_routes_remain_bloc
     assert client.post("/api/kis/orders/preview", json={"symbol": "KR001"}).status_code == 404
     assert client.get("/api/kis/broker/account").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
-    assert client.post("/api/paper/orders", json={"symbol": "KR001"}).status_code == 405
+    assert client.post("/api/paper/orders", json={"symbol": "KR001"}).status_code == 422
     assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 404

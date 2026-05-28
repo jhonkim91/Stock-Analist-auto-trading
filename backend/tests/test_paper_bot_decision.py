@@ -106,9 +106,11 @@ def _seed_two_passed_screen_results(db_session) -> None:
 
 
 def _enable_local_paper_submit(monkeypatch) -> None:
+    monkeypatch.setenv("KIS_ENV", "paper")
     monkeypatch.setenv("PAPER_TRADING_ENABLED", "true")
     monkeypatch.setenv("PAPER_TRADING_CAN_CREATE", "true")
     monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "false")
+    monkeypatch.setenv("PAPER_BOT_CONFIRM", "true")
     monkeypatch.delenv("PAPER_TRADING_NETWORK_ENABLED", raising=False)
     monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
 

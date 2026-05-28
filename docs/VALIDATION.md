@@ -1,5 +1,50 @@
 # Validation
 
+## 2026-05-28 KIS Paper Auto Bot Phase 1-6
+
+`docs/goal.md` 기준 Phase 5-6 범위에서 bot executor/risk gate, paper dashboard, report paper trading section, 운영 metrics를 추가하고 Phase 1-4 fail-closed 계약과 함께 재검증했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Bot executor/dashboard targeted | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_executor_phase5.py backend/tests/test_paper_dashboard_report_phase6.py backend/tests/test_alembic_migrations.py backend/tests/test_paper_persistence_migration.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase56_targeted2` -> `12 passed` |
+| Paper regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_paper_bot_decision.py backend/tests/test_no_live_trading_regression.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py backend/tests/test_paper_submit_cancel_api.py backend/tests/test_report_quality.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase56_paper_regression2` -> `27 passed` |
+| Backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_paper_phase56_pytest_final2` -> `416 passed in 310.50s` |
+| Alembic upgrade | 통과 | `.\.venv\Scripts\python.exe -m alembic upgrade head` -> `c0d1e2f3a4b5 -> d1e2f3a4b5c6` 적용 |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check` -> exit 0, CRLF warning only |
+| Exact command note | 대체 | 현재 셸의 `python --version`은 `Python`만 출력하고 exit 1, `alembic` 실행 파일은 PATH 미등록. 검증은 프로젝트 `.venv`의 동일 모듈로 수행 |
+| Frontend | 해당 없음 | frontend 파일/API client 변경 없음 |
+
+안전 확인:
+
+- `/api/paper/bot/preview`는 dry-run preview만 저장하고 paper order를 생성하지 않는다.
+- `/api/paper/bot/run`은 `dry_run=false`여도 kill switch, market session, stale quote, duplicate order, daily loss, concentration, cash/notional gate를 통과해야 submit을 시도한다.
+- run/decision 결과는 `paper_bot_runs`, `paper_bot_decisions`에 submitted/skipped/rejected와 reason code로 저장된다.
+- `/api/paper/dashboard`는 account, positions, open orders, fills, PnL, risk, worker status, token/reconnect/latency/reject/sync lag metrics를 secret 없이 반환한다.
+- daily/weekly Markdown report는 `## Paper Trading` section에 주문 수, 체결 수, reject reason, PnL, stale data event, risk gate 차단 내역을 포함한다.
+
+## 2026-05-28 KIS Paper Auto Bot Phase 1-4
+
+`docs/goal.md` 기준 Phase 1-4 범위에서 KIS 모의투자 전용 설정/token/http client, paper adapter facade, 주문/체결/포지션/계좌 snapshot 저장 계약, realtime stale quote gate를 추가하고 fail-closed 상태를 재검증했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Goal 문서 | 통과 | `docs/goal.md`, `docs/RUNBOOK_PAPER_TRADING.md` 생성 |
+| Backend full pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_paper_phase1_4_pytest_final` -> `408 passed in 336.39s` |
+| Alembic upgrade | 통과 | `.\.venv\Scripts\python.exe -m alembic upgrade head` -> `a8b9c0d1e2f3 -> b9c0d1e2f3a4 -> c0d1e2f3a4b5` 적용 |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check` -> exit 0, CRLF warning only |
+| Exact command note | 대체 | 현재 셸의 `python --version`은 `Python`만 출력하고 exit 1, `alembic` 실행 파일은 PATH 미등록. 검증은 프로젝트 `.venv`의 동일 모듈로 수행 |
+| Frontend | 해당 없음 | frontend 파일/API client 변경 없음 |
+
+안전 확인:
+
+- 기본 config/env에서는 주문, 네트워크, token issue, realtime worker가 disabled/fail-closed다.
+- KIS paper submit은 `KIS_ENV=paper`, `PAPER_TRADING_ENABLED=true`, `PAPER_BOT_CONFIRM=true`, kill switch off, idempotency, risk gate, no-live 조건이 모두 필요하다.
+- `/api/paper/orders`, `/api/paper/orders/{order_id}/cancel`, `/api/paper/account`, `/api/paper/realtime/status`는 additive route이며 기존 route key를 제거하지 않았다.
+- `paper_account_snapshots`는 raw account number column 없이 snapshot/account alias/amount metadata만 저장한다.
+- stale quote 상태에서는 신규 paper submit이 `PAPER_REALTIME_STALE_QUOTE`로 차단된다.
+
 ## 2026-05-28 GUI Mockup Follow-up
 
 `stock_analyst_gui_mockup.html`와 `gui_개선.txt` 기준으로 누락된 Global Status Bar, dashboard 4-zone, Strategy Selector pill, Validation Framework 카드, Market Sessions route를 반영한 뒤 frontend production smoke를 재검증했다.

@@ -19,8 +19,10 @@ from backend.app.brokers.kis_paper import (
     DEFAULT_KIS_PAPER_BASE_URL,
     KIS_ACCESS_TOKEN_ENV,
     KIS_ACCOUNT_NO_ENV,
+    KIS_ENV_ENV,
     KIS_PAPER_BASE_URL_ENV,
     KIS_PRODUCT_CODE_ENV,
+    PAPER_BOT_CONFIRM_ENV,
     PAPER_ORDER_SUBMIT_ENABLED_ENV,
     REQUIRED_PAPER_BROKER_MODE,
     KisPaperBrokerAdapter,
@@ -41,14 +43,17 @@ KIS_CREDENTIAL_ENV_KEYS = (
     KIS_PRODUCT_CODE_ENV,
 )
 RUNTIME_GATE_ENV_KEYS = (
+    KIS_ENV_ENV,
     "PAPER_TRADING_ENABLED",
     "PAPER_TRADING_CAN_CREATE",
     "PAPER_TRADING_NETWORK_ENABLED",
     PAPER_ORDER_SUBMIT_ENABLED_ENV,
+    PAPER_BOT_CONFIRM_ENV,
 )
 CONFIG_GATE_KEYS = (
     "enabled",
     "configured_can_create",
+    "paper_bot_confirm_enabled",
     "network_enabled",
     "broker_adapter_enabled",
     "official_endpoint_confirmed",
@@ -82,7 +87,14 @@ def phase12c_preflight(
     credential_status = {
         key: KisPaperCredentials._is_configured_value(current_env.get(key, "")) for key in KIS_CREDENTIAL_ENV_KEYS
     }
-    runtime_status = {key: _is_true(current_env.get(key, "")) for key in RUNTIME_GATE_ENV_KEYS}
+    runtime_status = {
+        key: (
+            str(current_env.get(key, "")).strip().lower() == "paper"
+            if key == KIS_ENV_ENV
+            else _is_true(current_env.get(key, ""))
+        )
+        for key in RUNTIME_GATE_ENV_KEYS
+    }
     config_status = {key: bool(loaded_config.get(key, False)) for key in CONFIG_GATE_KEYS}
     kill_switch_off = _is_false(current_env.get("PAPER_TRADING_KILL_SWITCH", ""))
     config_kill_switch_off = not bool(loaded_config.get("kill_switch_enabled", True))
@@ -366,10 +378,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _adapter_config(config: Mapping[str, Any], *, kill_switch_enabled: bool) -> dict[str, Any]:
     adapter_config = {
         "mode": "paper",
+        "kis_env": "paper",
         "broker_mode": REQUIRED_PAPER_BROKER_MODE,
         "enabled": True,
         "configured_can_create": True,
         "paper_order_submit_enabled": True,
+        "paper_bot_confirm_enabled": True,
         "preview_only": False,
         "kill_switch_enabled": kill_switch_enabled,
         "network_enabled": True,
@@ -394,10 +408,12 @@ def _temporary_phase12c_config(config: Mapping[str, Any]) -> dict[str, Any]:
     temporary.update(
         {
             "mode": "paper",
+            "kis_env": "paper",
             "broker_mode": REQUIRED_PAPER_BROKER_MODE,
             "enabled": True,
             "configured_can_create": True,
             "paper_order_submit_enabled": True,
+            "paper_bot_confirm_enabled": True,
             "preview_only": False,
             "kill_switch_enabled": False,
             "network_enabled": True,

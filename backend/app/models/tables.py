@@ -503,6 +503,24 @@ class PaperPortfolioSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
+class PaperAccountSnapshot(Base):
+    __tablename__ = "paper_account_snapshots"
+
+    snapshot_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    snapshot_ts: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    account_alias: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cash_balance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    buying_power: Mapped[float | None] = mapped_column(Float, nullable=True)
+    market_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_equity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unrealized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    realized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String(32), default="kis_paper")
+    status: Mapped[str] = mapped_column(String(32), default="snapshot")
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
 class BrokerAuditEvent(Base):
     __tablename__ = "broker_audit_events"
 
@@ -567,11 +585,18 @@ class PaperBotRun(Base):
     run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     mode: Mapped[str] = mapped_column(String(32), default="manual")
     status: Mapped[str] = mapped_column(String(32), default="created")
+    trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=True)
     auto_submit_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     auto_submit_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
     decision_count: Mapped[int] = mapped_column(Integer, default=0)
+    preview_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    rejected_count: Mapped[int] = mapped_column(Integer, default=0)
     submitted_count: Mapped[int] = mapped_column(Integer, default=0)
     reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    request_json: Mapped[str] = mapped_column(Text, default="{}")
+    result_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 

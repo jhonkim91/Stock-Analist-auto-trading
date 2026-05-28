@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from time import perf_counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,16 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.paths import CONFIG_DIR
 from backend.app.brokers.base import BrokerOrderRequest
-from backend.app.models.tables import BrokerAuditEvent, Order, PaperAuditEvent, PaperFill, PaperOrder, PaperPosition, utc_now
+from backend.app.models.tables import (
+    BrokerAuditEvent,
+    Order,
+    PaperAccountSnapshot,
+    PaperAuditEvent,
+    PaperFill,
+    PaperOrder,
+    PaperPosition,
+    utc_now,
+)
 from backend.app.services.credential_redaction import CredentialRedactionService
 from backend.app.services.kis_paper_broker_adapter import KisPaperBrokerAdapter
 from backend.app.services.paper_trading_service import PaperConfigService, PaperRiskGate
@@ -26,8 +36,10 @@ NETWORK_DISABLED_REASON = "KIS_PAPER_NETWORK_DISABLED"
 BROKER_MODE_REQUIRED_REASON = "BROKER_MODE_PAPER_KIS_REQUIRED"
 PAPER_ORDER_SUBMIT_ENABLED_REQUIRED_REASON = "PAPER_ORDER_SUBMIT_ENABLED_REQUIRED"
 ENABLE_REAL_ORDER_BLOCK_REASON = "ENABLE_REAL_ORDER_MUST_BE_FALSE"
+KIS_ENV_PAPER_REQUIRED_REASON = "KIS_ENV_PAPER_REQUIRED"
+PAPER_BOT_CONFIRM_REQUIRED_REASON = "PAPER_BOT_CONFIRM_REQUIRED"
 DUPLICATE_OPEN_ORDER_REASON = "PAPER_DUPLICATE_OPEN_ORDER"
-OPEN_ORDER_STATUSES = {"submitted", "pending", "open", "partially_filled"}
+OPEN_ORDER_STATUSES = {"pending_submitted", "submitted", "pending", "open", "partially_filled"}
 
 
 class PaperOrderService:
@@ -58,6 +70,7 @@ class PaperOrderService:
         as_of: datetime | None = None,
     ) -> dict[str, Any]:
         """confirm/idempotency/kill-switch gate를 통과한 local paper order만 저장한다."""
+        submit_started = perf_counter()
         request_payload = self._canonical_payload(
             symbol=symbol,
             side=side,
@@ -116,6 +129,7 @@ class PaperOrderService:
             config_reasons,
             self._submit_config_reasons(config),
             list(risk_gate["reason_codes"]),
+            self._realtime_quote_reasons(config, symbol=symbol),
         )
         if reason_codes:
             risk_gate["decision"] = "deny"
@@ -149,6 +163,7 @@ class PaperOrderService:
                 idempotency_key=normalized_key,
                 risk_gate=risk_gate,
                 config=config,
+                submit_started=submit_started,
             )
 
         now = utc_now()
@@ -178,26 +193,26 @@ class PaperOrderService:
             submitted_at=now,
         )
         self.db.add(order)
-        if bool(config.get("audit_persistence_enabled")):
-            self.db.add(
-                PaperAuditEvent(
-                    event_type="paper_order_submit",
-                    paper_order_id=order.paper_order_id,
-                    decision="allow",
-                    reason_codes_json="[]",
-                    payload_json=json.dumps(
-                        {
-                            "request_hash": request_hash,
-                            "symbol": order.symbol,
-                            "side": order.side,
-                            "qty": order.qty,
-                            "limit_price": order.limit_price,
-                            "stop_price": order.stop_price,
-                        },
-                        sort_keys=True,
-                    ),
-                )
+        self.db.add(
+            PaperAuditEvent(
+                event_type="paper_order_submit",
+                paper_order_id=order.paper_order_id,
+                decision="allow",
+                reason_codes_json="[]",
+                payload_json=json.dumps(
+                    {
+                        "request_hash": request_hash,
+                        "symbol": order.symbol,
+                        "side": order.side,
+                        "qty": order.qty,
+                        "limit_price": order.limit_price,
+                        "stop_price": order.stop_price,
+                        "submit_latency_ms": self._elapsed_ms(submit_started),
+                    },
+                    sort_keys=True,
+                ),
             )
+        )
         self.db.commit()
         self.db.refresh(order)
         return self._success_response(
@@ -308,6 +323,25 @@ class PaperOrderService:
                 ),
             )
         )
+        self.db.add(
+            PaperAuditEvent(
+                event_type="paper_order_cancel",
+                paper_order_id=paper_order_id,
+                decision="allow",
+                reason_codes_json="[]",
+                payload_json=json.dumps(
+                    self.redactor.redact(
+                        {
+                            "paper_order_id": paper_order_id,
+                            "broker_order_id": order.broker_order_id,
+                            "broker_trace": broker_result.get("broker_trace"),
+                        }
+                    ),
+                    sort_keys=True,
+                    default=str,
+                ),
+            )
+        )
         self.db.commit()
         self.db.refresh(order)
         return {
@@ -344,6 +378,31 @@ class PaperOrderService:
             "network_call_performed": False,
         }
 
+    def get_order(self, *, paper_order_id: str) -> dict[str, Any]:
+        """단일 paper order를 secret 없이 반환한다."""
+        order = self.db.scalar(select(PaperOrder).where(PaperOrder.paper_order_id == paper_order_id))
+        if order is None:
+            return {
+                "ok": False,
+                "status": "not_found",
+                "paper_order_id": paper_order_id,
+                "reason": "PAPER_ORDER_NOT_FOUND",
+                "reason_codes": ["PAPER_ORDER_NOT_FOUND"],
+                "live_order_created": False,
+                "broker_order_created": False,
+                "network_call_performed": False,
+                "counts": self._counts(),
+            }
+        return {
+            "ok": True,
+            "status": "ok",
+            "order": self._order_payload(order),
+            "counts": self._counts(),
+            "live_order_created": False,
+            "broker_order_created": bool(order.broker_order_created),
+            "network_call_performed": False,
+        }
+
     @staticmethod
     def canonical_request_hash(payload: dict[str, Any]) -> str:
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
@@ -375,6 +434,8 @@ class PaperOrderService:
     @staticmethod
     def _submit_config_reasons(config: dict[str, object]) -> list[str]:
         reasons: list[str] = []
+        if str(config.get("kis_env") or "").strip().lower() != "paper":
+            reasons.append(KIS_ENV_PAPER_REQUIRED_REASON)
         if not bool(config.get("enabled")):
             reasons.append("PAPER_TRADING_DISABLED")
         if not bool(config.get("configured_can_create")):
@@ -387,6 +448,8 @@ class PaperOrderService:
             "TRUE",
         }:
             reasons.append("KILL_SWITCH_ACTIVE")
+        if not bool(config.get("paper_bot_confirm_enabled")):
+            reasons.append(PAPER_BOT_CONFIRM_REQUIRED_REASON)
         if bool(config.get("live_order_enabled")):
             reasons.append("LIVE_ORDER_UNSUPPORTED")
         if os.getenv("ENABLE_REAL_ORDER", "").strip().lower() in {"1", "true", "yes", "on"}:
@@ -403,6 +466,8 @@ class PaperOrderService:
         reasons: list[str] = []
         if str(config.get("mode")) != "paper":
             reasons.append("KIS_PAPER_MODE_REQUIRED")
+        if str(config.get("kis_env") or "").strip().lower() != "paper":
+            reasons.append(KIS_ENV_PAPER_REQUIRED_REASON)
         if not bool(config.get("enabled")):
             reasons.append("PAPER_TRADING_DISABLED")
         if not bool(config.get("configured_can_create")):
@@ -411,6 +476,8 @@ class PaperOrderService:
             reasons.append("PAPER_PREVIEW_ONLY")
         if bool(config.get("kill_switch_enabled")):
             reasons.append("KILL_SWITCH_ACTIVE")
+        if not bool(config.get("paper_bot_confirm_enabled")):
+            reasons.append(PAPER_BOT_CONFIRM_REQUIRED_REASON)
         if not bool(config.get("network_enabled")):
             reasons.append(NETWORK_DISABLED_REASON)
         if bool(config.get("live_order_enabled")) or bool(config.get("live_fallback_enabled")):
@@ -429,6 +496,7 @@ class PaperOrderService:
         idempotency_key: str,
         risk_gate: dict[str, Any],
         config: dict[str, object],
+        submit_started: float,
     ) -> dict[str, Any]:
         request = BrokerOrderRequest(
             symbol=str(request_payload["symbol"]),
@@ -502,6 +570,30 @@ class PaperOrderService:
                             "qty": order.qty,
                             "broker_order_id": order.broker_order_id,
                             "broker_trace": broker_result.get("broker_trace"),
+                            "submit_latency_ms": self._elapsed_ms(submit_started),
+                        }
+                    ),
+                    sort_keys=True,
+                    default=str,
+                ),
+            )
+        )
+        self.db.add(
+            PaperAuditEvent(
+                event_type="paper_order_submit",
+                paper_order_id=order.paper_order_id,
+                decision="allow",
+                reason_codes_json="[]",
+                payload_json=json.dumps(
+                    self.redactor.redact(
+                        {
+                            "request_hash": request_hash,
+                            "symbol": order.symbol,
+                            "side": order.side,
+                            "qty": order.qty,
+                            "broker_order_id": order.broker_order_id,
+                            "broker_trace": broker_result.get("broker_trace"),
+                            "submit_latency_ms": self._elapsed_ms(submit_started),
                         }
                     ),
                     sort_keys=True,
@@ -636,6 +728,9 @@ class PaperOrderService:
             "paper_fills_count": int(self.db.scalar(select(func.count()).select_from(PaperFill)) or 0),
             "paper_positions_count": int(self.db.scalar(select(func.count()).select_from(PaperPosition)) or 0),
             "paper_audit_events_count": int(self.db.scalar(select(func.count()).select_from(PaperAuditEvent)) or 0),
+            "paper_account_snapshots_count": int(
+                self.db.scalar(select(func.count()).select_from(PaperAccountSnapshot)) or 0
+            ),
             "orders_count": int(self.db.scalar(select(func.count()).select_from(Order)) or 0),
         }
 
@@ -659,6 +754,24 @@ class PaperOrderService:
         if self.adapter is not None:
             return self.adapter
         return KisPaperBrokerAdapter(config=dict(config))
+
+    @staticmethod
+    def _elapsed_ms(started_at: float) -> float:
+        return round((perf_counter() - started_at) * 1000, 3)
+
+    @staticmethod
+    def _realtime_quote_reasons(config: dict[str, object], *, symbol: str) -> list[str]:
+        if not bool(config.get("realtime_enabled")):
+            return []
+        if not bool(config.get("realtime_require_fresh_quote_for_orders")):
+            return []
+        from backend.app.workers.realtime_market_worker import realtime_market_worker
+
+        gate = realtime_market_worker.quote_gate_result(
+            symbol=symbol,
+            stale_quote_threshold_seconds=int(config.get("realtime_stale_quote_threshold_seconds") or 30),
+        )
+        return list(gate.get("reason_codes") or [])
 
     @staticmethod
     def _merge_reason_codes(*groups: list[str]) -> list[str]:

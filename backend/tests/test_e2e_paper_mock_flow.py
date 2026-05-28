@@ -189,9 +189,11 @@ def test_e2e_paper_mock_flow_is_local_non_live_and_report_notified(client, tmp_p
         "PAPER_TRADING_NETWORK_ENABLED",
     ):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("KIS_ENV", "paper")
     monkeypatch.setenv("PAPER_TRADING_ENABLED", "true")
     monkeypatch.setenv("PAPER_TRADING_CAN_CREATE", "true")
     monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "false")
+    monkeypatch.setenv("PAPER_BOT_CONFIRM", "true")
     _write_paper_config(tmp_path)
     _write_notification_config(tmp_path)
     _patch_paper_api_config(monkeypatch, tmp_path)

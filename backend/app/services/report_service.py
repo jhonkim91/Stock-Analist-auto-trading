@@ -10,7 +10,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.paths import REPORT_DIR
-from backend.app.models.tables import BacktestTradeLedger, Report, ScreenResult
+from backend.app.models.tables import (
+    BacktestTradeLedger,
+    PaperAuditEvent,
+    PaperBotDecision,
+    PaperFill,
+    PaperOrder,
+    PaperPosition,
+    Report,
+    ScreenResult,
+)
 from backend.app.repositories.report_repository import ReportRepository
 from backend.app.services.regime_service import RegimeService
 from backend.app.services.sector_service import SectorService
@@ -38,6 +47,7 @@ class _ReportContext:
     sectors: list[dict[str, object]]
     parameter_drift: dict[str, object]
     attribution: dict[str, object]
+    paper_trading: dict[str, object]
 
 
 class ReportService:
@@ -149,6 +159,10 @@ class ReportService:
                 end_date=window_dates[-1] if window_dates else target_date,
                 trades=trade_ledger,
                 screen_results=window_results,
+            ),
+            paper_trading=self._paper_trading_summary(
+                start_date=window_dates[0] if window_dates else target_date,
+                end_date=window_dates[-1] if window_dates else target_date,
             ),
         )
 
@@ -412,6 +426,7 @@ class ReportService:
                 f"{row.stop_price:.2f} | mock preview only, no live order |"
             )
 
+        lines.extend(ReportService._paper_trading_lines(context.paper_trading))
         lines.extend(ReportService._audit_trail(report_date))
         return "\n".join(lines)
 
@@ -550,8 +565,76 @@ class ReportService:
             )
         )
 
+        lines.extend(ReportService._paper_trading_lines(context.paper_trading))
         lines.extend(ReportService._audit_trail(report_date))
         return "\n".join(lines)
+
+    def _paper_trading_summary(self, *, start_date: date, end_date: date) -> dict[str, object]:
+        orders = list(self.db.scalars(select(PaperOrder)).all())
+        fills = list(self.db.scalars(select(PaperFill)).all())
+        decisions = list(self.db.scalars(select(PaperBotDecision)).all())
+        audit_events = list(self.db.scalars(select(PaperAuditEvent)).all())
+        positions = list(self.db.scalars(select(PaperPosition)).all())
+        window_orders = [row for row in orders if row.created_ts and start_date <= row.created_ts.date() <= end_date]
+        window_fills = [row for row in fills if row.fill_ts and start_date <= row.fill_ts.date() <= end_date]
+        window_decisions = [
+            row for row in decisions if row.created_at and start_date <= row.created_at.date() <= end_date
+        ]
+        reject_reason_counts = self._paper_reject_reason_counts(window_decisions)
+        return {
+            "order_count": len(window_orders),
+            "fill_count": len(window_fills),
+            "reject_reason": self._reason_breakdown(reject_reason_counts),
+            "realized_pnl": round(sum(float(row.realized_pnl or 0.0) for row in positions), 2),
+            "unrealized_pnl": round(sum(float(row.unrealized_pnl or 0.0) for row in positions), 2),
+            "stale_data_event_count": self._stale_event_count(window_decisions, audit_events, start_date, end_date),
+            "risk_gate_block_count": len([row for row in window_decisions if row.action == "rejected"]),
+        }
+
+    @staticmethod
+    def _paper_trading_lines(summary: dict[str, object]) -> list[str]:
+        return [
+            "",
+            "## Paper Trading",
+            f"- paper_order_count: {summary.get('order_count', 0)}",
+            f"- paper_fill_count: {summary.get('fill_count', 0)}",
+            f"- paper_reject_reason: {summary.get('reject_reason', NOT_AVAILABLE)}",
+            f"- paper_realized_pnl: {summary.get('realized_pnl', 0.0)}",
+            f"- paper_unrealized_pnl: {summary.get('unrealized_pnl', 0.0)}",
+            f"- paper_stale_data_event_count: {summary.get('stale_data_event_count', 0)}",
+            f"- paper_risk_gate_block_count: {summary.get('risk_gate_block_count', 0)}",
+        ]
+
+    @staticmethod
+    def _paper_reject_reason_counts(decisions: list[PaperBotDecision]) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for decision in decisions:
+            if decision.action != "rejected":
+                continue
+            for reason in ReportService._json_list(decision.reason_codes_json):
+                counts[reason] = counts.get(reason, 0) + 1
+        return counts
+
+    @staticmethod
+    def _stale_event_count(
+        decisions: list[PaperBotDecision],
+        audit_events: list[PaperAuditEvent],
+        start_date: date,
+        end_date: date,
+    ) -> int:
+        decision_count = sum(
+            1
+            for decision in decisions
+            if any("STALE" in reason for reason in ReportService._json_list(decision.reason_codes_json))
+        )
+        audit_count = sum(
+            1
+            for event in audit_events
+            if event.created_at
+            and start_date <= event.created_at.date() <= end_date
+            and "STALE" in event.reason_codes_json
+        )
+        return decision_count + audit_count
 
     @staticmethod
     def _audit_trail(report_date: date) -> list[str]:

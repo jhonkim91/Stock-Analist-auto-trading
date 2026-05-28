@@ -2,7 +2,7 @@
 
 주식 분석, 스크리닝, 백테스트, 리포트 생성을 검증 가능한 MVP 형태로 구현한 FastAPI + Next.js 프로젝트입니다.
 
-현재 기준선은 `MVP v0.26.0 / KIS Paper Network Adapter Mock-verified`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실전투자 주문, 실전 주문 취소, 실계좌 체결/자금 이동, 실거래 websocket, live broker, KIS credential/token 저장은 구현하지 않습니다. KIS 모의투자 submit/cancel/query/sync는 paper-only network gate가 모두 열릴 때만 허용되며 실제 KIS dry-run은 Phase 12C로 남겨둡니다.
+현재 기준선은 `MVP v0.26.0 / KIS Paper Auto Bot Phase 1-6 Mock-verified`입니다. 이 저장소는 실거래 자동매매 엔진이 아니라 자동매매 보조 MVP이며, 실전투자 주문, 실전 주문 취소, 실계좌 체결/자금 이동, 실거래 websocket, live broker, KIS credential/token 저장은 구현하지 않습니다. KIS 모의투자 submit/cancel/query/sync와 bot run은 paper-only gate가 모두 열릴 때만 허용되며 실제 KIS 호출은 runbook 수동 절차로 분리합니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -11,14 +11,14 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.26.0` |
-| Phase | `KIS Paper Network Adapter Mock-verified` |
+| Phase | `KIS Paper Auto Bot Phase 1-6 Mock-verified` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석/스크리닝/백테스트/리포트 중심 자동매매 보조 MVP |
-| Trading state | paper-only local submit + KIS paper network submit/cancel/query/sync adapter mock 검증; live order/fallback 미구현 |
-| Latest backend pytest | KIS Phase 12B targeted `22 passed`; bot/order/balance 추가 `11 passed` |
+| Trading state | paper-only local submit + KIS paper network adapter mock + bot executor/dashboard/report mock 검증; live order/fallback 미구현 |
+| Latest backend pytest | full backend `416 passed` |
 | Latest secret scan | `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
-| Next recommended phase | 실제 KIS 모의투자 최소 주문 dry-run은 Phase 12C에서 별도 human confirmation 후 수행 |
+| Next recommended phase | 실제 KIS 호출은 `docs/RUNBOOK_PAPER_TRADING.md` 수동 절차와 paper env 확인 후 별도 수행 |
 
 ## Implemented Scope
 
@@ -61,6 +61,7 @@
 - Goal.md Phase 11 End-to-End Mock Validation: `backend/tests/test_e2e_paper_mock_flow.py`로 preview, local paper submit, order poll, mock fill/position/portfolio, notification outbox, report notify를 KIS credential 없이 검증.
 - KIS Paper Balance Inquiry Read-only: `/api/paper/portfolio`에서 공식 `주식잔고조회[v1_국내주식-006]` paper TR `VTTC8434R`를 조건부 호출하고, disabled/mock 상태는 기존 local snapshot fallback 유지.
 - Goal.md Phase 12B KIS Paper Network Adapter: `KisPaperBrokerAdapter`가 공식 paper endpoint/TR ID 기반 submit/cancel/daily order-fill/balance/sync를 mock HTTP client로 검증하며, `BROKER_MODE=paper_kis`, runtime flags, kill switch, idempotency, duplicate guard, risk cap, `ENABLE_REAL_ORDER=false` 조건 없이는 network submit을 차단한다.
+- docs/goal.md Phase 5-6 KIS Paper Bot Executor/Dashboard: `PaperBotExecutor`, `/api/paper/bot/preview`, `/api/paper/bot/run`, `/api/paper/bot/runs/{run_id}`, `/api/paper/dashboard`, daily/weekly `Paper Trading` report section, paper operational metrics를 추가했다.
 - Frontend strategy selector: backend default/available strategy metadata endpoint and screener/dashboard/backtest selector integration.
 - Alembic migration scaffold: current SQLAlchemy model 기준 initial schema, weekly indicator migration, pullback EMA migration, screen metadata/pattern/earnings migrations, backtest trade ledger migration, indicator breadth fields migration, strategy parameter snapshot migration, paper trading persistence migration.
 
@@ -252,10 +253,15 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `POST` | `/api/broker/orders/preview` | venue/session metadata 포함 dry-run preview only |
 | `GET` | `/api/paper/status` | paper disabled safety status |
 | `POST` | `/api/paper/orders/preview` | venue/session metadata 포함 paper deny preview only |
-| `POST` | `/api/paper/orders/submit` | local-only paper submit, `confirm=true` + idempotency + kill-switch gate 필요 |
-| `POST` | `/api/paper/orders/cancel` | KIS cancel payload 공식 확인 전 disabled |
-| `GET` | `/api/paper/orders`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio` | paper_* table 전용 조회, `/api/paper/portfolio`는 KIS paper balance 조건부 read-only 호출 후 local fallback |
+| `POST` | `/api/paper/orders/submit`, `/api/paper/orders` | local/KIS paper submit alias, `KIS_ENV=paper`, `PAPER_TRADING_ENABLED=true`, `PAPER_BOT_CONFIRM=true`, `confirm=true`, idempotency, kill-switch off 필요 |
+| `POST` | `/api/paper/orders/cancel`, `/api/paper/orders/{order_id}/cancel` | KIS cancel payload 공식 확인 전 기본 disabled |
+| `GET` | `/api/paper/orders`, `/api/paper/orders/{order_id}`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio`, `/api/paper/account` | paper_* table 전용 조회, `/api/paper/portfolio`는 KIS paper balance 조건부 read-only 호출 후 local fallback |
 | `POST` | `/api/paper/sync` | 공식 KIS sync contract 확인 전 fail-closed no-op |
+| `GET` | `/api/paper/realtime/status` | polling quote cache/heartbeat/stale quote gate 상태 |
+| `GET` | `/api/paper/dashboard` | account, positions, open orders, fills, PnL, risk, worker status, metrics |
+| `POST` | `/api/paper/bot/preview` | dry-run bot candidate/risk gate preview, paper order 생성 없음 |
+| `POST` | `/api/paper/bot/run` | `dry_run=false`와 모든 paper gate 통과 시에만 paper submit 시도 |
+| `GET` | `/api/paper/bot/runs/{run_id}` | 저장된 bot run/decision, submitted/skipped/rejected reason code 조회 |
 | `GET` | `/api/bot/status` | paper-only bot runtime status, kill-switch/session/auto-submit gate 표시 |
 | `POST` | `/api/bot/run-once` | paper-only preview decision loop, auto-submit은 명시 opt-in과 backend gate 통과 시에만 허용 |
 | `POST` | `/api/bot/stop` | paper-only scheduler stop marker, live/order side effect 없음 |
@@ -388,7 +394,7 @@ npm.cmd run build
 - `/api/paper/status`는 `enabled=false`, `can_create=false`, `can_simulate_fills=false`, `preview_only=true`를 반환.
 - `/api/paper/orders/preview`는 paper order/fill/position/audit mutation 없이 deny preview만 반환한다. `/api/paper/orders/submit`은 backend confirm/idempotency/kill-switch gate 없이는 생성하지 않는다.
 - KRX/NXT session window 판정은 로컬 정적 metadata이며 실제 거래소, KIS token, 호출량 API와 통신하지 않는다.
-- `POST /api/paper/orders`, `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*` route는 미등록 404 상태를 유지.
+- `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*` route는 미등록 404 상태를 유지.
 - `.cache/kis/token.json`은 생성하지 않음.
 - API key, secret, token, password, account/header/raw credential 값을 저장하거나 출력하지 않음.
 

@@ -134,10 +134,60 @@ class PaperOrderPreviewRequest(BaseModel):
 class PaperOrderSubmitRequest(PaperOrderPreviewRequest):
     confirm: bool = False
     idempotency_key: str | None = None
+    session: str | None = None
+    risk_basis: str | None = None
+    risk_reason: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PaperOrderSubmitResult(BaseModel):
+    """KIS paper order submit 결과 DTO다."""
+
+    ok: bool
+    status: str
+    paper_order_id: str | None = None
+    broker_order_id: str | None = None
+    broker_order_status: str | None = None
+    paper_order_created: bool = False
+    live_order_created: bool = False
+    broker_order_created: bool = False
+    network_call_performed: bool = False
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class PaperExecution(BaseModel):
+    """KIS paper 체결 DTO다."""
+
+    paper_fill_id: str | None = None
+    paper_order_id: str | None = None
+    broker_fill_id: str | None = None
+    broker_order_id: str | None = None
+    symbol: str
+    side: str
+    qty: int
+    price: float
+    fill_ts: datetime | None = None
+    source: str = "kis_paper"
+
+
+class PaperAccountSnapshot(BaseModel):
+    """KIS paper 계좌 snapshot DTO다."""
+
+    snapshot_id: str
+    snapshot_ts: datetime | None = None
+    account_alias: str | None = None
+    cash_balance: float | None = None
+    buying_power: float | None = None
+    market_value: float | None = None
+    total_equity: float | None = None
+    unrealized_pnl: float | None = None
+    realized_pnl: float | None = None
+    source: str = "kis_paper"
+    status: str = "snapshot"
 
 
 class PaperOrderCancelRequest(BaseModel):
-    paper_order_id: str
+    paper_order_id: str = ""
     confirm: bool = False
     idempotency_key: str | None = None
 
@@ -196,6 +246,10 @@ class KisRequestSigningStatus(BaseModel):
 
 class PaperBotRunRequest(BaseModel):
     auto_submit: bool | None = None
+    trade_date: date | None = None
+    strategies: list[str] = Field(default_factory=lambda: list(DEFAULT_STRATEGY_NAMES))
+    max_candidates: int = Field(default=5, ge=1, le=100)
+    dry_run: bool = True
 
 
 class NotificationTestRequest(BaseModel):

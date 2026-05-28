@@ -10,7 +10,16 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from backend.app.core.paths import CONFIG_DIR
-from backend.app.models.tables import BrokerAuditEvent, PaperFill, PaperOrder, PaperPortfolioSnapshot, PaperPosition, utc_now
+from backend.app.models.tables import (
+    BrokerAuditEvent,
+    PaperAccountSnapshot,
+    PaperAuditEvent,
+    PaperFill,
+    PaperOrder,
+    PaperPortfolioSnapshot,
+    PaperPosition,
+    utc_now,
+)
 from backend.app.repositories.paper_repository import PaperRepository
 from backend.app.services.credential_redaction import CredentialRedactionService
 from backend.app.services.kis_paper_broker_adapter import KisPaperBrokerAdapter
@@ -182,6 +191,23 @@ class PaperSyncService:
         fallback["kis_balance"] = balance_status
         return fallback
 
+    def account(self) -> dict[str, Any]:
+        """`paper_account_snapshots` 기준 계좌 snapshot을 반환하고 없으면 portfolio snapshot으로 fallback한다."""
+        account_snapshot = self.repository.latest_account_snapshot()
+        portfolio = self._local_portfolio_payload()
+        return {
+            "ok": True,
+            "source": "paper_account_snapshots" if account_snapshot is not None else portfolio["source"],
+            "account_snapshot": self._account_snapshot_payload(account_snapshot),
+            "snapshot": self._account_snapshot_payload(account_snapshot) or portfolio.get("snapshot"),
+            "positions_summary": portfolio["positions_summary"],
+            "counts": self._counts(),
+            "reason": None if account_snapshot is not None else "PAPER_ACCOUNT_SNAPSHOT_NOT_FOUND",
+            "live_order_created": False,
+            "broker_order_created": False,
+            "network_call_performed": False,
+        }
+
     def _local_portfolio_payload(self) -> dict[str, Any]:
         """기존 `paper_portfolio_snapshots`와 `paper_positions` 조회 응답을 유지한다."""
         snapshot = self.repository.latest_portfolio_snapshot()
@@ -191,6 +217,7 @@ class PaperSyncService:
             "source": "paper_portfolio_snapshots",
             "snapshot": self._snapshot_payload(snapshot) if snapshot is not None else None,
             "positions_summary": self._positions_summary(positions),
+            "account_snapshot": self._account_snapshot_payload(self.repository.latest_account_snapshot()),
             "counts": self._counts(),
             "separation_contract": PortfolioService(self.db).paper_state_separation_contract(),
             "reason": None if snapshot is not None else "PAPER_PORTFOLIO_SNAPSHOT_NOT_FOUND",
@@ -201,9 +228,11 @@ class PaperSyncService:
 
     def _balance_status(self, config: dict[str, object], config_reasons: list[str]) -> dict[str, Any]:
         credentials = KisPaperBalanceCredentials.configured_fields()
-        reason_codes = list(config_reasons)
+        reason_codes: list[str] = []
         if str(config.get("mode")) != "paper":
             reason_codes.append("KIS_PAPER_BALANCE_MODE_NOT_PAPER")
+        if str(config.get("kis_env") or "").strip().lower() != "paper":
+            reason_codes.append("KIS_ENV_PAPER_REQUIRED")
         if str(config.get("broker_mode") or "").strip().lower() != "paper_kis":
             reason_codes.append("BROKER_MODE_PAPER_KIS_REQUIRED")
         if not bool(config.get("enabled")):
@@ -226,7 +255,10 @@ class PaperSyncService:
             reason_codes.append("ENABLE_REAL_ORDER_MUST_BE_FALSE")
         for field_name, configured in credentials.items():
             if not configured:
-                reason_codes.append(field_name.upper().replace("_CONFIGURED", "_MISSING"))
+                if field_name == "kis_env_paper":
+                    reason_codes.append("KIS_ENV_PAPER_REQUIRED")
+                else:
+                    reason_codes.append(field_name.upper().replace("_CONFIGURED", "_MISSING"))
         reason_codes = self._merge_reason_codes(reason_codes)
         enabled = not reason_codes
         return {
@@ -257,6 +289,7 @@ class PaperSyncService:
             "fills_inserted": 0,
             "positions_upserted": 0,
             "portfolio_snapshots_inserted": 0,
+            "account_snapshots_inserted": 0,
         }
 
     @staticmethod
@@ -316,6 +349,25 @@ class PaperSyncService:
         }
 
     @staticmethod
+    def _account_snapshot_payload(snapshot: PaperAccountSnapshot | None) -> dict[str, Any] | None:
+        if snapshot is None:
+            return None
+        return {
+            "snapshot_id": snapshot.snapshot_id,
+            "snapshot_ts": snapshot.snapshot_ts.isoformat() if snapshot.snapshot_ts else None,
+            "account_alias": snapshot.account_alias,
+            "cash_balance": snapshot.cash_balance,
+            "buying_power": snapshot.buying_power,
+            "market_value": snapshot.market_value,
+            "total_equity": snapshot.total_equity,
+            "unrealized_pnl": snapshot.unrealized_pnl,
+            "realized_pnl": snapshot.realized_pnl,
+            "source": snapshot.source,
+            "status": snapshot.status,
+            "created_at": snapshot.created_at.isoformat() if snapshot.created_at else None,
+        }
+
+    @staticmethod
     def _positions_summary(positions: list[PaperPosition]) -> dict[str, Any]:
         market_value = sum(float(position.market_value or 0.0) for position in positions)
         unrealized_pnl = sum(float(position.unrealized_pnl or 0.0) for position in positions)
@@ -336,11 +388,13 @@ class PaperSyncService:
 
     @staticmethod
     def _sync_block_reasons(config: dict[str, object], config_reasons: list[str]) -> list[str]:
-        reason_codes = list(config_reasons)
+        reason_codes: list[str] = []
         if not bool(config.get("official_endpoint_confirmed")):
             reason_codes.append(SYNC_CONFIRMATION_REQUIRED)
         if str(config.get("mode")) != "paper":
             reason_codes.append("KIS_PAPER_MODE_REQUIRED")
+        if str(config.get("kis_env") or "").strip().lower() != "paper":
+            reason_codes.append("KIS_ENV_PAPER_REQUIRED")
         if str(config.get("broker_mode") or "").strip().lower() != "paper_kis":
             reason_codes.append("BROKER_MODE_PAPER_KIS_REQUIRED")
         if not bool(config.get("enabled")):
@@ -357,6 +411,7 @@ class PaperSyncService:
             reason_codes.append("KIS_ORDER_PATH_BLOCKED")
         if kis_real_order_enabled():
             reason_codes.append("ENABLE_REAL_ORDER_MUST_BE_FALSE")
+        reason_codes.extend(config_reasons)
         return PaperSyncService._merge_reason_codes(reason_codes)
 
     def _persist_sync_result(self, result: dict[str, Any], scope: str) -> dict[str, Any]:
@@ -377,6 +432,7 @@ class PaperSyncService:
         if scope in {"portfolio", "all"} and isinstance(result.get("portfolio"), dict):
             if self._insert_portfolio_snapshot(result["portfolio"], result.get("broker_trace")):
                 dedupe["portfolio_snapshots_inserted"] += 1
+                dedupe["account_snapshots_inserted"] += 1
         self.db.add(
             BrokerAuditEvent(
                 event_type="paper_sync",
@@ -386,6 +442,27 @@ class PaperSyncService:
                 decision="allow",
                 reason_codes_json="[]",
                 sanitized_payload_json=json.dumps(
+                    self.redactor.redact(
+                        {
+                            "scope": scope,
+                            "orders": len(result.get("orders") or []),
+                            "fills": len(result.get("fills") or []),
+                            "positions": len(result.get("positions") or []),
+                            "portfolio": bool(result.get("portfolio")),
+                            "broker_trace": result.get("broker_trace"),
+                        }
+                    ),
+                    sort_keys=True,
+                    default=str,
+                ),
+            )
+        )
+        self.db.add(
+            PaperAuditEvent(
+                event_type="paper_sync",
+                decision="allow",
+                reason_codes_json="[]",
+                payload_json=json.dumps(
                     self.redactor.redact(
                         {
                             "scope": scope,
@@ -505,6 +582,21 @@ class PaperSyncService:
             metadata_json=json.dumps(self.redactor.redact({"broker_trace": broker_trace}), sort_keys=True, default=str),
         )
         self.db.add(snapshot)
+        account_snapshot = PaperAccountSnapshot(
+            snapshot_id=snapshot_id,
+            snapshot_ts=snapshot.snapshot_ts,
+            account_alias=snapshot.account_alias,
+            cash_balance=snapshot.cash_balance,
+            buying_power=snapshot.buying_power,
+            market_value=snapshot.market_value,
+            total_equity=snapshot.total_equity,
+            unrealized_pnl=snapshot.unrealized_pnl,
+            realized_pnl=snapshot.realized_pnl,
+            source=snapshot.source,
+            status=snapshot.status,
+            metadata_json=snapshot.metadata_json,
+        )
+        self.db.add(account_snapshot)
         return True
 
     @staticmethod
