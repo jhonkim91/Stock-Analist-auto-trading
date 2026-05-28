@@ -1,19 +1,19 @@
 notifications:
-  enabled: false
+  enabled: true
   default_dry_run: true
   channels:
     discord_ops:
       type: discord
-      enabled: false
-      mode: disabled
+      enabled: true
+      mode: mock
       webhook_env: DISCORD_OPS_WEBHOOK_URL
-      dry_run: true
+      dry_run: false
       allowed_mentions:
         parse: []
     telegram_main:
       type: telegram
-      enabled: false
-      mode: disabled
+      enabled: true
+      mode: live
       bot_token_env: TELEGRAM_BOT_TOKEN
       chat_id_env: TELEGRAM_CHAT_ID
       dry_run: true

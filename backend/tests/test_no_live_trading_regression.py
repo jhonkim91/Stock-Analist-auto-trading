@@ -56,11 +56,13 @@ def test_broker_and_paper_status_do_not_enable_live_or_leak_secret(client, monke
     broker_payload = broker.json()
     paper_payload = paper.json()
     assert broker_payload["live_trading_enabled"] is False
-    assert broker_payload["paper_trading_enabled"] is False
+    assert broker_payload["paper_trading_enabled"] is True
     assert broker_payload["adapters"]["kis_live"]["enabled"] is False
     assert broker_payload["adapters"]["kis_paper"]["enabled"] is False
     assert paper_payload["broker_adapter"]["live_trading_enabled"] is False
-    assert paper_payload["broker_adapter"]["paper_trading_enabled"] is False
+    assert paper_payload["broker_adapter"]["paper_trading_enabled"] is True
+    assert broker_payload["can_submit"] is False
+    assert paper_payload["can_create"] is False
     assert sentinel not in json.dumps({"broker": broker_payload, "paper": paper_payload}, ensure_ascii=False)
     assert not Path(".cache/kis/token.json").exists()
 
@@ -92,11 +94,14 @@ def test_paper_submit_cancel_endpoints_remain_local_fail_closed(client):
     assert submit_payload["live_order_created"] is False
     assert submit_payload["broker_order_created"] is False
     assert submit_payload["network_call_performed"] is False
-    assert "KILL_SWITCH_ACTIVE" in submit_payload["reason_codes"]
+    assert {"PAPER_REALTIME_QUOTE_MISSING", "PAPER_REALTIME_STALE_QUOTE"}.issubset(
+        set(submit_payload["reason_codes"])
+    )
 
     assert cancel.status_code == 200
     cancel_payload = cancel.json()
-    assert cancel_payload["status"] == "cancel_disabled"
+    assert cancel_payload["status"] == "cancel_blocked"
+    assert cancel_payload["reason"] == "PAPER_ORDER_NOT_FOUND"
     assert cancel_payload["order_cancelled"] is False
     assert cancel_payload["live_order_created"] is False
     assert cancel_payload["broker_order_created"] is False
@@ -108,7 +113,7 @@ def test_paper_sync_endpoint_remains_noop_without_network_or_live_path(client):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["status"] == "sync_disabled"
+    assert payload["status"] == "sync_blocked"
     assert payload["sync_performed"] is False
     assert payload["live_order_created"] is False
     assert payload["broker_order_created"] is False

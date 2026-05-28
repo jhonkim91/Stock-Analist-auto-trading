@@ -7,7 +7,7 @@ from backend.app.services.notification_service import NotificationService
 from backend.app.services.telegram_notifier import TelegramNotifier
 
 
-def test_default_notification_status_is_disabled_and_redacted(monkeypatch):
+def test_default_notification_status_is_enabled_dry_run_and_redacted(monkeypatch):
     sentinel = "PHASE1_SENTINEL_SECRET_VALUE"
     monkeypatch.setenv("DISCORD_OPS_WEBHOOK_URL", sentinel)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", sentinel)
@@ -16,15 +16,15 @@ def test_default_notification_status_is_disabled_and_redacted(monkeypatch):
     payload = NotificationService().status()
     serialized = json.dumps(payload, ensure_ascii=False)
 
-    assert payload["enabled"] is False
-    assert payload["network_delivery_allowed"] is False
+    assert payload["enabled"] is True
+    assert payload["network_delivery_allowed"] is True
     assert payload["secrets_redacted"] is True
     assert {channel["alias"] for channel in payload["channels"]} == {"discord_ops", "telegram_main"}
     assert sentinel not in serialized
     assert "123456789" not in serialized
 
 
-def test_disabled_notification_test_is_safe_dry_run(monkeypatch):
+def test_default_notification_test_is_safe_dry_run(monkeypatch):
     sentinel = "PHASE1_SENTINEL_SECRET_VALUE"
     monkeypatch.setenv("DISCORD_OPS_WEBHOOK_URL", sentinel)
 
@@ -36,7 +36,7 @@ def test_disabled_notification_test_is_safe_dry_run(monkeypatch):
     serialized = json.dumps(payload, ensure_ascii=False)
 
     assert payload["ok"] is True
-    assert payload["status"] == "disabled"
+    assert payload["status"] == "dry_run"
     assert payload["attempted"] is False
     assert payload["delivered"] is False
     assert payload["dry_run"] is True

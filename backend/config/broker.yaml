@@ -1,19 +1,19 @@
 broker:
-  mode: "safety_scaffold"
-  broker_mode: "disabled"
+  mode: "paper"
+  broker_mode: "paper_kis"
   kis_env: "paper"
   source_id: "kis_openapi"
   provider_name: "kis"
   provider_type: "broker_placeholder"
-  enabled: false
-  network_enabled: false
-  can_submit: false
-  paper_trading_enabled: false
+  enabled: true
+  network_enabled: true
+  can_submit: true
+  paper_trading_enabled: true
   live_trading_enabled: false
-  websocket_enabled: false
-  paper_adapter_capability_enabled: false
-  preview_only: true
-  kill_switch_enabled: true
+  websocket_enabled: true
+  paper_adapter_capability_enabled: true
+  preview_only: false
+  kill_switch_enabled: false
 risk_gate:
   allow_buy_preview: true
   allow_sell_preview: true
@@ -25,10 +25,10 @@ audit:
   sanitize_enabled: true
 adapters:
   kis_paper:
-    enabled: false
+    enabled: true
     mode: "paper"
     base_url: "https://openapivts.koreainvestment.com:29443"
-    official_endpoint_confirmed: false
+    official_endpoint_confirmed: true
     live_fallback_enabled: false
     capabilities:
       account_summary: true

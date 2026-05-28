@@ -10,6 +10,10 @@ type NavItem = {
   href: string;
   label: string;
   icon: NavIconName;
+  badge?: {
+    label: string;
+    tone: "ok" | "warn";
+  };
 };
 
 type NavSection = {
@@ -34,22 +38,21 @@ const navSections: NavSection[] = [
     label: "OVERVIEW",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-      { href: "/screener", label: "Screener", icon: "filter" }
+      { href: "/screener", label: "Screener", icon: "filter", badge: { label: "7 pass", tone: "ok" } }
     ]
   },
   {
     label: "ANALYSIS",
     items: [
       { href: "/backtest", label: "Backtest", icon: "history" },
-      { href: "/portfolio", label: "Portfolio Risk", icon: "shield" },
+      { href: "/portfolio", label: "Portfolio", icon: "shield", badge: { label: "!", tone: "warn" } },
       { href: "/reports", label: "Reports", icon: "file" }
     ]
   },
   {
     label: "DATA",
     items: [
-      { href: "/data", label: "Data Manager", icon: "database" },
-      { href: "/sessions", label: "Market Sessions", icon: "clock" },
+      { href: "/data", label: "Data Quality", icon: "database" },
       { href: "/paper", label: "Paper Trading", icon: "paper" },
       { href: "/bot", label: "Paper Bot", icon: "bot" },
       { href: "/settings", label: "Settings", icon: "settings" }
@@ -149,11 +152,19 @@ export function AppChrome({ children }: { children: ReactNode }) {
       <aside className="appSidebar" aria-label="Primary navigation">
         <Link className="appLogo" href="/dashboard">
           <span className="appLogoMark" aria-hidden="true">
-            <span />
-            <span />
-            <span />
+            <svg viewBox="0 0 24 24">
+              <path d="M8 5v14" />
+              <path d="M12 5v14" />
+              <path d="M16 5v14" />
+              <circle cx="8" cy="10" r="1.7" />
+              <circle cx="12" cy="15" r="1.7" />
+              <circle cx="16" cy="8" r="1.7" />
+            </svg>
           </span>
-          <span>StockAnalyst</span>
+          <span className="appLogoText">
+            <span className="appLogoName">Stock Analyst</span>
+            <span className="appLogoVersion">MVP v0.24.0</span>
+          </span>
         </Link>
 
         <nav className="appNav">
@@ -166,6 +177,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
                   <Link aria-current={active ? "page" : undefined} className={`appNavItem ${active ? "active" : ""}`} href={item.href} key={item.href}>
                     <NavIcon name={item.icon} />
                     <span>{item.label}</span>
+                    {item.badge ? <span className={`appNavBadge ${item.badge.tone}`}>{item.badge.label}</span> : null}
                   </Link>
                 );
               })}
@@ -174,8 +186,14 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="appSidebarFooter">
-          <div>MVP v0.24.0 · preview-only</div>
-          <div className="appNoOrderBadge">no real orders</div>
+          <div>orders_count == 0 · fail-closed</div>
+          <div className="appNoOrderBadge">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <rect height="10" rx="2" width="14" x="5" y="10" />
+              <path d="M8 10V8a4 4 0 0 1 8 0v2" />
+            </svg>
+            preview-only · no real orders
+          </div>
         </div>
       </aside>
       <div className="appContent">

@@ -35,7 +35,18 @@ class SettingsService:
     def read_settings(self) -> dict[str, Any]:
         """backend/config/*.yaml만 읽어 read-only 설정 요약을 반환한다."""
         result: dict[str, Any] = {}
-        for name in ("strategies", "risk", "backtest", "app", "data_sources", "notifications", "bot"):
+        for name in (
+            "strategies",
+            "risk",
+            "backtest",
+            "app",
+            "data_sources",
+            "notifications",
+            "bot",
+            "paper",
+            "broker",
+            "reports",
+        ):
             path = self.config_dir / f"{name}.yaml"
             if not path.exists():
                 continue

@@ -78,7 +78,7 @@ def _paper_order_count(db_session) -> int:
     return int(db_session.scalar(select(func.count()).select_from(PaperOrder)) or 0)
 
 
-def test_paper_config_true_still_requires_explicit_runtime_flags(tmp_path, monkeypatch, db_session) -> None:
+def test_paper_config_true_uses_yaml_gates_but_still_requires_paper_env(tmp_path, monkeypatch, db_session) -> None:
     _clear_runtime_flags(monkeypatch)
     _write_paper_config(tmp_path)
 
@@ -92,15 +92,10 @@ def test_paper_config_true_still_requires_explicit_runtime_flags(tmp_path, monke
         idempotency_key="runtime-flags-required",
     )
 
-    assert config["enabled"] is False
-    assert config["configured_can_create"] is False
-    assert config["kill_switch_enabled"] is True
-    assert {
-        "PAPER_TRADING_ENV_FLAG_REQUIRED",
-        "PAPER_CREATE_ENV_FLAG_REQUIRED",
-        "PAPER_KILL_SWITCH_ENV_FALSE_REQUIRED",
-        "KIS_ENV_PAPER_REQUIRED",
-    }.issubset(set(reasons))
+    assert config["enabled"] is True
+    assert config["configured_can_create"] is True
+    assert config["kill_switch_enabled"] is False
+    assert set(reasons) == {"KIS_ENV_PAPER_REQUIRED"}
     assert result["paper_order_created"] is False
     assert result["network_call_performed"] is False
     assert _paper_order_count(db_session) == 0
@@ -131,7 +126,7 @@ def test_local_paper_submit_requires_runtime_flags_and_stays_non_network(
     assert _paper_order_count(db_session) == 1
 
 
-def test_network_enabled_requires_explicit_flag_but_submit_network_stays_unsupported(
+def test_network_enabled_requires_paper_broker_submit_and_adapter_gates(
     tmp_path,
     monkeypatch,
     db_session,
@@ -168,13 +163,14 @@ def test_network_enabled_requires_explicit_flag_but_submit_network_stays_unsuppo
         idempotency_key="runtime-flags-network-confirmed-gates",
     )
 
-    assert "PAPER_NETWORK_ENV_FLAG_REQUIRED" in missing_network_flag["reason_codes"]
+    assert "BROKER_MODE_PAPER_KIS_REQUIRED" in missing_network_flag["reason_codes"]
+    assert "PAPER_ORDER_SUBMIT_ENABLED_REQUIRED" in missing_network_flag["reason_codes"]
     assert missing_network_flag["network_call_performed"] is False
     assert "BROKER_MODE_PAPER_KIS_REQUIRED" in missing_broker_submit_flags["reason_codes"]
     assert "PAPER_ORDER_SUBMIT_ENABLED_REQUIRED" in missing_broker_submit_flags["reason_codes"]
     assert missing_broker_submit_flags["network_call_performed"] is False
+    assert "KIS_PAPER_ADAPTER_DISABLED" in unsupported_network_submit["reason_codes"]
     assert "KIS_PAPER_OFFICIAL_ENDPOINT_CONFIRMATION_REQUIRED" in unsupported_network_submit["reason_codes"]
-    assert "KIS_PAPER_CREDENTIALS_MISSING" in unsupported_network_submit["reason_codes"]
     assert unsupported_network_submit["network_call_performed"] is False
     assert unsupported_network_submit["live_order_created"] is False
     assert unsupported_network_submit["broker_order_created"] is False

@@ -17,7 +17,7 @@ def _automation_env(monkeypatch) -> None:
     monkeypatch.setenv("REPORT_AUTOMATION_NOTIFY", "false")
 
 
-def test_report_automation_status_is_disabled_by_default(client, monkeypatch):
+def test_report_automation_status_is_manual_enabled_by_default(client, monkeypatch):
     monkeypatch.delenv("REPORT_AUTOMATION_ENABLED", raising=False)
     monkeypatch.delenv("REPORT_AUTOMATION_MODE", raising=False)
 
@@ -25,8 +25,8 @@ def test_report_automation_status_is_disabled_by_default(client, monkeypatch):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["enabled"] is False
-    assert payload["mode"] == "disabled"
+    assert payload["enabled"] is True
+    assert payload["mode"] == "manual"
     assert payload["scheduler_enabled"] is False
     assert payload["auto_start"] is False
     assert payload["network_call_performed"] is False
@@ -34,10 +34,10 @@ def test_report_automation_status_is_disabled_by_default(client, monkeypatch):
     assert "report_automation_failed" in payload["notification_events"]
 
 
-def test_report_automation_run_once_is_blocked_without_config(client):
+def test_report_automation_run_once_still_requires_confirmation(client):
     response = client.post(
         "/api/reports/automation/run-once",
-        json={"report_types": ["daily"], "confirm": True},
+        json={"report_types": ["daily"], "confirm": False},
     )
 
     assert response.status_code == 200
@@ -47,7 +47,7 @@ def test_report_automation_run_once_is_blocked_without_config(client):
     assert payload["generated_count"] == 0
     assert payload["scheduler_started"] is False
     assert payload["network_call_performed"] is False
-    assert "REPORT_AUTOMATION_DISABLED" in payload["reason_codes"]
+    assert "REPORT_AUTOMATION_CONFIRMATION_REQUIRED" in payload["reason_codes"]
 
 
 def test_report_automation_generates_daily_weekly_and_queues_events(full_flow_client, monkeypatch):

@@ -2,7 +2,7 @@
 
 ## 핵심 요약
 
-이 runbook은 KIS 모의투자 전용 자동매매 기능의 수동 운영 절차다. 기본 상태는 disabled/fail-closed이며, 실제 KIS 호출은 CI에서 실행하지 않는다.
+이 runbook은 KIS 모의투자 전용 자동매매 기능의 수동 운영 절차다. 현재 repo 기본값은 paper/broker/bot/report/notification을 수동 실행 가능 상태로 열어두되, live 주문, live cancel, live fallback, scheduler auto-start, unattended loop는 비활성 상태로 유지한다. 실제 KIS 호출은 CI에서 실행하지 않는다.
 
 ## 사전 조건
 
@@ -45,10 +45,12 @@ Invoke-RestMethod http://127.0.0.1:8000/api/paper/dashboard
 기본 기대값:
 
 - `live_trading_enabled=false`
+- `paper_trading_enabled=true`
+- credential/token/account/fresh quote가 없으면 `can_submit=false`, `can_create=false`
 - `paper_order_created=false`
 - `broker_order_created=false`
 - `network_call_performed=false`
-- `kill_switch.blocking=true`
+- `scheduler_enabled=false`
 - secret/account/token 원문 미노출
 
 ## DB Migration
@@ -74,8 +76,8 @@ Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/status
 
 성공 기준:
 
-- 기본값은 `enabled=false`, `reason_codes`에 `PAPER_REALTIME_DISABLED`가 포함된다.
-- realtime fresh quote gate를 켠 상태에서 quote가 없거나 stale이면 신규 주문은 `PAPER_REALTIME_STALE_QUOTE`로 차단된다.
+- 기본값은 paper realtime status가 enabled 상태로 노출될 수 있지만 장시간 WebSocket loop는 시작하지 않는다.
+- realtime fresh quote gate를 켠 상태에서 quote가 없거나 stale이면 신규 주문은 `PAPER_REALTIME_QUOTE_MISSING` 또는 `PAPER_REALTIME_STALE_QUOTE`로 API 호출 전 차단된다.
 - WebSocket reconnect 지표는 dashboard `metrics.websocket_reconnect_count` 또는 worker status `metrics.websocket_reconnect_count`에서 확인한다.
 - `/api/kis/websocket/*` route는 live성 경계로 계속 미등록 상태를 유지한다.
 

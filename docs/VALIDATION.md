@@ -1,5 +1,25 @@
 # Validation
 
+## 2026-05-28 Non-live Feature Activation and Paper Bot Nav Restore
+
+실거래를 제외한 KIS paper, paper bot, notification, report automation 기능을 수동 실행 가능 기본값으로 활성화했다. live 주문/cancel/fallback, scheduler auto-start, unattended loop는 계속 비활성 상태다. 사라졌던 frontend `Paper Bot` 탭은 app chrome navigation에 복구했고, production 서버를 재빌드/재시작해 실제 3000번 화면에서 확인했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Paper/Broker config | 활성화 | `backend/config/paper.yaml`, `backend/config/broker.yaml` 기본값을 `mode=paper`, `broker_mode=paper_kis`, `enabled=true`, `network_enabled=true`, `preview_only=false`, `kill_switch_enabled=false`로 조정. live 관련 값은 `false` 유지 |
+| Bot/Report/Notification config | 활성화 | `backend/config/bot.yaml`은 manual bot enabled, `scheduler_enabled=false`, `auto_submit=true`; `backend/config/reports.yaml`은 manual/dry-run enabled; `backend/config/notifications.yaml`은 enabled + default dry-run |
+| Runtime status | 확인 | `/api/paper/status` -> enabled true, `network_call_performed=false`, token/account gate 때문에 `can_create=false`; `/api/broker/status` -> paper true, live false, `can_submit=false`; `/api/paper/bot/status` -> enabled true, scheduler false; `/api/reports/automation/status` -> enabled true, manual dry-run |
+| Paper Bot tab | 복구 | `frontend/components/app-chrome.tsx`에 `{ href: "/bot", label: "Paper Bot", icon: "bot" }` 확인 |
+| Rendered HTTP smoke | 통과 | 재시작된 `http://127.0.0.1:3000/dashboard` -> 200, HTML에 `Paper Bot` 및 `href="/bot"` 포함. `/bot` -> 200, heading `Paper Bot` 포함 |
+| Frontend lint/typecheck/build | 통과 | `cd frontend; npm.cmd run lint`; `cd frontend; npm.cmd exec tsc -- --noEmit`; `cd frontend; npm.cmd run build` |
+| Backend paper activation regression | 통과 | `test_paper_runtime_flags.py`, `test_paper_order_service.py`, `test_paper_order_api.py`, `test_paper_submit_cancel_api.py`, `test_paper_sync_service.py`, `test_paper_realtime_worker.py`, `test_paper_bot_decision.py`, `test_paper_bot_executor_phase5.py`, `test_paper_dashboard_report_phase6.py`, `test_no_live_trading_regression.py` -> `39 passed in 17.58s` |
+| Backend manual feature regression | 통과 | `test_phase3e_paper_safety.py`, `test_phase3d_broker_safety.py`, `test_notifications.py`, `test_report_automation.py`, `test_paper_bot_scheduler.py`, `test_no_live_adapter.py` -> `28 passed in 24.17s` |
+| KIS capability/no-live regression | 통과 | `test_kis_paper_adapter_contract.py`, `test_kis_paper_phase12c_tool.py`, `test_kis_paper_phase21_us_activation_tool.py`, `test_kis_paper_phase21_service_lifecycle_tool.py`, `test_kis_paper_token_websocket_activation.py`, `test_kis_token_lifecycle_phase1.py`, `test_kis_token_manager.py` -> `56 passed in 1.45s` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff whitespace check | 통과 | `git diff --check` -> exit 0, CRLF warning only |
+
+주의: `paper.yaml`/`broker.yaml`의 network capability는 켜져 있지만, 실제 submit은 access token/account/product code, fresh quote, 정규장 session, idempotency/risk gate가 모두 통과해야 한다. 현재 재시작된 backend status는 token/account 미상태로 `can_create=false`, `can_submit=false`이며 live 경로는 계속 disabled다.
+
 ## 2026-05-28 App Runtime Recovery Check
 
 앱이 정상 동작하지 않는 원인은 production frontend bundle의 `API_BASE`가 `http://127.0.0.1:8000`으로 컴파일되어 있는데, 실제 backend는 임시 포트 `8001`만 실행 중이었던 runtime mismatch였다. 임시 `next start`/`uvicorn:8001` 프로세스를 종료하고 launcher 기준 8000/3000 조합으로 재기동했다. 코드/API/paper submit gate 변경은 없다.

@@ -1,14 +1,14 @@
 bot:
-  enabled: false
+  enabled: true
   scheduler_enabled: false
-  auto_submit: false
-  kill_switch_enabled: true
+  auto_submit: true
+  kill_switch_enabled: false
   loop_interval_seconds: 300
   max_candidates: 5
   max_auto_submit_orders: 1
   max_order_qty: 1
   max_order_notional: 100000
   default_strategy: "trend_breakout"
-  sync_enabled: false
-  notification_enabled: false
-  report_generation_enabled: false
+  sync_enabled: true
+  notification_enabled: true
+  report_generation_enabled: true

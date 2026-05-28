@@ -132,6 +132,7 @@ def test_submit_requires_confirm_idempotency_and_kill_switch_before_write(db_ses
     )
 
     _write_paper_config(tmp_path, kill_switch_enabled=True)
+    monkeypatch.setenv("PAPER_TRADING_KILL_SWITCH", "true")
     kill_switch = service.submit_order(
         symbol="KR009",
         side="buy",

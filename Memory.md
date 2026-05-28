@@ -3,15 +3,15 @@
 ## 현재 체크포인트
 
 - [x] 현재 branch: `feature/kis-paper-goal-phases`.
-- [x] 현재 작업: KIS paper token 발급, WebSocket approval 발급, US bounded WebSocket 구독 ACK, 국내/미국 paper submit endpoint 도달까지 진행했다. 국내 submit은 장종료, 미국 submit은 HTTP 500 거부로 중단됐다. 프리마켓 일반 주문 `VTTT1002U`는 `40570000`, 공식 미국주간주문 `/daytime-order`, `TTTS6036U`는 paper host에서 `EGW02006 / 모의투자 TR 이 아닙니다.`로 거부됐다. 현재 US submit helper는 정규장 전용으로 제한하고 premarket/aftermarket/daytime/extended는 adapter/network 전 차단한다. service lifecycle helper와 activation 통합 옵션은 mock 정규장 order/fill/position persistence와 no-fill cancel 경로를 검증했다.
+- [x] 현재 작업: KIS paper token 발급, WebSocket approval 발급, US bounded WebSocket 구독 ACK, 미국 정규장 AAPL 1주 paper submit 및 follow-up read-only sync completion을 redacted record와 DB로 확인했다. premarket/aftermarket/daytime/extended는 실제 paper host 거부 확인 후 adapter/network 전 차단한다.
 - [x] 기본 실행 주소: backend `http://127.0.0.1:8000`, frontend `http://127.0.0.1:3000/dashboard`.
-- [x] 현재 로컬 앱은 `py launcher.py run --no-browser`로 재기동했고, `py launcher.py check` 기준 backend 8000/frontend 3000 모두 launcher-owned 상태다.
+- [x] 현재 로컬 앱은 backend 8000, frontend 3000을 재시작한 상태다. frontend production build에 `/bot` route와 `Paper Bot` nav가 포함된다.
 - [x] 현재 셸의 `python --version`은 `Python`만 출력하고 exit 1이다. 검증은 `.\.venv\Scripts\python.exe`로 수행한다.
 - [x] `alembic` 실행 파일은 PATH에 없으므로 `.\.venv\Scripts\python.exe -m alembic ...`를 사용한다.
 
 ## KIS Paper Auto Bot Phase 1-6 상태
 
-- [x] 루트 `goal.md`: `Phase 16A: Controlled KIS Paper Bot Run Validation`은 `.env.local` KIS paper readiness까지 재확인했지만 repo config/bot gate에서 `차단` 상태다.
+- [x] 루트 `goal.md`: `Phase 16A: Controlled KIS Paper Bot Run Validation`은 `.env.local` KIS paper readiness와 dry-run preview/status 확인 후 repo paper/bot config를 수동 활성 상태로 전환했다. 실제 submit은 token/account/fresh quote/정규장/risk gate가 필요하다.
 - [x] 루트 `goal.md`: `KIS Paper Auto Bot Phase 1-6 진행 상태` 섹션을 추가해 설정/secret/token, KIS paper adapter, paper DB/API, realtime worker, bot executor/risk guard, monitoring/report/runbook을 완료 상태로 연결했다.
 - [x] `docs/goal.md`: 목표, 범위, 안전조건, Phase 1-6, 완료기준 문서화.
 - [x] `docs/RUNBOOK_PAPER_TRADING.md`: env 설정, DB migration, backend 실행, worker 상태, dry-run, paper run, kill switch, 장애 복구 절차 문서화.
@@ -37,6 +37,9 @@
 
 ## 최신 검증 결과
 
+- [x] Non-live feature activation and Paper Bot nav restore: `paper.yaml`, `broker.yaml`, `bot.yaml`, `notifications.yaml`, `reports.yaml`을 paper/manual/dry-run 중심으로 활성화하고 live/fallback/scheduler loop는 disabled 유지. `/api/paper/status`, `/api/broker/status`, `/api/paper/bot/status`, `/api/reports/automation/status`, `/api/notifications/status`, `/api/settings` 확인. `frontend/components/app-chrome.tsx`에 `Paper Bot` nav 복구. `http://127.0.0.1:3000/dashboard` HTML에서 `Paper Bot`/`href="/bot"` 확인, `/bot` heading 확인.
+- [x] Activation regression: paper activation suite -> `39 passed in 17.58s`; manual feature suite -> `28 passed in 24.17s`; KIS capability/no-live suite -> `56 passed in 1.45s`.
+- [x] Frontend validation: `cd frontend; npm.cmd run lint`, `cd frontend; npm.cmd exec tsc -- --noEmit`, `cd frontend; npm.cmd run build` 통과. build 전 기존 uvicorn/next process가 `.next\launcher-backend.err.log`를 잠가 `EBUSY`가 났고, 로컬 프로세스 정리 후 재빌드 성공. Browser plugin `iab`는 unavailable이라 HTTP smoke로 대체.
 - [x] Frontend mockup fidelity update: `stock_analyst_actual_redesign.html`와 사용자 제공 참고 이미지 기준으로 app chrome/sidebar/global status bar, Dashboard, Screener, Backtest, Portfolio, Reports, Data Quality, Paper Trading, Settings 첫 화면을 목업형 compact card/table 구조로 재정렬했다. `cd frontend; npm.cmd run lint`, `cd frontend; npm.cmd exec tsc -- --noEmit`, `$env:NEXT_PUBLIC_API_BASE_URL='http://127.0.0.1:8001'; cd frontend; npm.cmd run build`, `.\.venv\Scripts\python.exe tools\secret_scan.py`, `git diff --check` 통과. Browser plugin `iab` unavailable로 Playwright screenshot fallback 사용. 대표 screenshots: `%TEMP%\stock-dashboard-redesign-final-2.png`, `%TEMP%\stock-paper-redesign-final-2.png`.
 - [x] App runtime recovery check: frontend bundle은 `API_BASE=http://127.0.0.1:8000`인데 임시 backend 8001만 떠 있어 API 카드가 실패하는 상태였다. 임시 3000/8001 프로세스를 종료하고 launcher 기준으로 재기동. `py launcher.py check`, `http://127.0.0.1:8000/health`, `http://127.0.0.1:8000/api/data/status`, Playwright `/dashboard`/`/paper` screenshot 통과. 대표 screenshots: `%TEMP%\stock-dashboard-app-check.png`, `%TEMP%\stock-paper-app-check.png`.
 - [x] KIS paper activation: `.env.local`을 현재 Python 검증 프로세스에만 로드하고 process-only gate를 열어 `POST /oauth2/tokenP` 1회 성공, `POST /oauth2/Approval` 1회 성공. raw token/approval key 미출력, `docs/research/kis-paper-phase21-activation-redacted-record.json`와 `docs/research/kis-paper-phase21-us-redacted-record.json` 생성.
@@ -94,8 +97,8 @@
 
 - Backend: FastAPI + SQLite + Alembic, sample seed, CSV import, KIS read-only foundation, broker safety scaffold, paper trading lifecycle, KIS paper adapter, token issue route, paper WebSocket approval route, report notification/automation, paper bot scheduler, Phase 5 bot executor, realtime quote worker skeleton.
 - Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/sessions`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/bot`, `/settings`. App chrome과 주요 dashboard/workflow routes는 사용자가 제공한 실제 목업 이미지 톤에 맞춘 framed sidebar + compact card/table UI를 사용한다.
-- Notification: `backend/config/notifications.yaml` 기본값은 disabled/dry-run.
-- Paper/KIS execution: 기본 config는 fail-closed. KIS paper token/WebSocket approval은 process-only gate로 호출 가능. live broker, live websocket, 실계좌 주문/취소/체결은 활성화하지 않는다.
+- Notification/Report: `backend/config/notifications.yaml`은 enabled + default dry-run, Telegram channel은 live mode라도 channel dry-run true. `backend/config/reports.yaml`은 enabled/manual/dry-run.
+- Paper/KIS execution: 기본 config는 paper 수동 운영을 활성화하지만 token/account/product/fresh quote/session/risk gate가 없으면 `can_create=false`, `can_submit=false`. live broker, live websocket execution, 실계좌 주문/취소/체결, scheduler auto-start는 활성화하지 않는다.
 
 ## 최근 변경 요약
 
@@ -112,13 +115,14 @@
 - `tools/kis_paper_phase21_us_activation.py`에 token/WebSocket/US submit lifecycle record helper 추가.
 - `tools/kis_paper_phase21_service_lifecycle.py`에 service-level submit/sync/cancel lifecycle helper 추가.
 - `tools/kis_paper_phase21_us_activation.py`에 `--execute-service-lifecycle`, `--load-env-local`, `--derive-limit-from-price` 옵션을 추가해 token/WebSocket, process env 준비, quote-derived limit, service persistence proof를 한 record로 연결.
+- paper/broker/bot/notification/report automation 기본 설정을 수동 활성화하고, live/fallback/scheduler loop는 disabled 유지.
+- frontend app chrome에 `Paper Bot` navigation을 복구하고 production build/runtime smoke로 `/bot` 접근을 확인.
 - `docs/KIS_CAPABILITIES.md`에 paper/real 미국주식 session capability와 trace 필드 기준 추가.
 - Phase 21 activation redacted records `docs/research/kis-paper-phase21-activation-redacted-record.json`, `docs/research/kis-paper-phase21-us-redacted-record.json`, `docs/research/kis-paper-phase21-us-window-guard-redacted-record.json`, `docs/research/kis-paper-phase21-us-premarket-redacted-record.json`, `docs/research/kis-paper-phase21-us-premarket-reconfirmation-redacted-record.json`, `docs/research/kis-paper-phase21-us-daytime-premarket-redacted-record.json`, `docs/research/kis-paper-phase21-us-regular-session-required-redacted-record.json` 추가.
 - Phase 21 service lifecycle guard record `docs/research/kis-paper-phase21-us-service-lifecycle-regular-session-required-redacted-record.json` 추가.
 
 ## 남은 작업
 
-- [ ] KIS paper 주문 생성이 가능한 미국 정규장 시간/상품 조건에서 minimum submit -> query -> sync -> cancel을 1회 재시도한다. 프리마켓/미국주간주문은 paper host 비지원으로 확인됐으므로 현재 차단 상태다. 장종료/거부/auth/rate-limit/stale 응답이면 재시도하지 않고 redacted record만 갱신한다.
-- [ ] 실제 KIS paper 주문 생성/체결/포지션 변경 persistence는 아직 미완료다. mock service lifecycle에서는 `paper_orders`/`paper_fills`/`paper_positions` 연결을 검증했지만, 국내는 장종료, 미국은 HTTP 500 또는 paper session 미지원으로 broker order id가 없었다.
-- [ ] 로컬 서버가 필요하면 `py launcher.py run --no-browser` 후 `py launcher.py check`로 확인한다.
+- [ ] 추가 실제 KIS paper 주문은 정규장, fresh quote, process-only credential/token/account/product code, 별도 network 승인 조건에서만 수행한다. premarket/daytime/extended는 현재 차단 상태를 유지한다.
+- [ ] 로컬 서버가 필요하면 현재처럼 backend 8000/frontend 3000을 재시작하거나 `py launcher.py run --no-browser` 후 `py launcher.py check`로 확인한다.
 - [ ] `python` launcher 문제가 계속 필요하면 Windows PATH/App execution alias를 별도 환경 작업으로 정리한다.

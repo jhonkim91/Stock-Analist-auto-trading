@@ -364,7 +364,7 @@ def test_paper_sync_service_payloads_are_consistent_and_secret_free(db_session) 
     assert "raw_account_marker" not in payload_text
 
 
-def test_paper_sync_service_is_idempotent_disabled_noop(db_session) -> None:
+def test_paper_sync_service_is_idempotent_blocked_without_credentials(db_session) -> None:
     _seed_phase5_state(db_session)
     service = PaperSyncService(db_session)
     before = PaperRepository(db_session).counts()
@@ -374,8 +374,8 @@ def test_paper_sync_service_is_idempotent_disabled_noop(db_session) -> None:
     invalid = service.sync(scope="unknown")
     after = PaperRepository(db_session).counts()
 
-    assert first["status"] == "sync_disabled"
-    assert first["reason"] == SYNC_CONFIRMATION_REQUIRED
+    assert first["status"] == "sync_blocked"
+    assert first["reason"] == "KIS_PAPER_CREDENTIALS_MISSING"
     assert first["sync_performed"] is False
     assert first["network_call_performed"] is False
     assert first["live_order_created"] is False

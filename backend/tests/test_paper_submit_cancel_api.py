@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 
 from backend.app.core.database import SessionLocal
 from backend.app.models.tables import Order, PaperOrder
-from backend.app.services.paper_order_service import CANCEL_DISABLED_REASON, PaperOrderService
+from backend.app.services.paper_order_service import PaperOrderService
 
 
 class _FakePaperAdapter:
@@ -152,7 +152,7 @@ def test_paper_submit_api_is_paper_only_and_blocked_by_default(client, monkeypat
     assert payload["broker_trace"]["operation"] == "paper_order_submit"
     assert payload["broker_trace"]["paper_only"] is True
     assert payload["broker_trace"]["live_fallback_enabled"] is False
-    assert "KILL_SWITCH_ACTIVE" in payload["reason_codes"]
+    assert {"PAPER_REALTIME_QUOTE_MISSING", "PAPER_REALTIME_STALE_QUOTE"}.issubset(set(payload["reason_codes"]))
     assert sentinel not in json.dumps(payload, ensure_ascii=False)
     assert _counts() == before
     assert not Path(".cache/kis/token.json").exists()
@@ -172,8 +172,8 @@ def test_paper_cancel_api_is_registered_but_fail_closed(client):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["status"] == "cancel_disabled"
-    assert payload["reason"] == CANCEL_DISABLED_REASON
+    assert payload["status"] == "cancel_blocked"
+    assert payload["reason"] == "PAPER_ORDER_NOT_FOUND"
     assert payload["paper_only"] is True
     assert payload["execution_mode"] == "paper"
     assert payload["live_fallback_enabled"] is False

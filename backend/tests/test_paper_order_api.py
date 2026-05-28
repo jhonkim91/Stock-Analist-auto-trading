@@ -7,8 +7,6 @@ from sqlalchemy import func, select
 
 from backend.app.core.database import SessionLocal
 from backend.app.models.tables import Order, PaperAuditEvent, PaperOrder
-from backend.app.services.paper_order_service import CANCEL_DISABLED_REASON
-
 
 def _row_counts() -> dict[str, int]:
     with SessionLocal() as db:
@@ -19,7 +17,7 @@ def _row_counts() -> dict[str, int]:
         }
 
 
-def test_submit_endpoint_requires_confirm_idempotency_and_blocks_on_default_kill_switch(client, monkeypatch):
+def test_submit_endpoint_requires_confirm_idempotency_and_blocks_without_fresh_quote(client, monkeypatch):
     sentinel = "PHASE4_SENTINEL_SECRET_VALUE"
     monkeypatch.setenv("KIS_APP_KEY", sentinel)
     monkeypatch.setenv("KIS_APP_SECRET", sentinel)
@@ -62,7 +60,7 @@ def test_submit_endpoint_requires_confirm_idempotency_and_blocks_on_default_kill
     assert blocked_payload["live_order_created"] is False
     assert blocked_payload["broker_order_created"] is False
     assert blocked_payload["network_call_performed"] is False
-    assert {"PAPER_TRADING_DISABLED", "PAPER_CREATE_DISABLED", "KILL_SWITCH_ACTIVE"}.issubset(
+    assert {"PAPER_REALTIME_QUOTE_MISSING", "PAPER_REALTIME_STALE_QUOTE"}.issubset(
         set(blocked_payload["reason_codes"])
     )
     assert _row_counts() == before == {"orders": 0, "paper_orders": 0, "paper_audit_events": 0}
@@ -94,8 +92,8 @@ def test_list_and_cancel_routes_are_registered_but_cancel_is_safely_disabled(cli
     assert no_key.status_code == 200
     assert no_key.json()["status"] == "idempotency_required"
     assert disabled.status_code == 200
-    assert disabled.json()["status"] == "cancel_disabled"
-    assert disabled.json()["reason"] == CANCEL_DISABLED_REASON
+    assert disabled.json()["status"] == "cancel_blocked"
+    assert disabled.json()["reason"] == "PAPER_ORDER_NOT_FOUND"
     assert disabled.json()["order_cancelled"] is False
     assert disabled.json()["live_order_created"] is False
     assert disabled.json()["broker_order_created"] is False

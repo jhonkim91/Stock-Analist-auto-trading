@@ -124,7 +124,8 @@ def test_paper_websocket_routes_are_paper_only_and_do_not_register_kis_websocket
     ).json()
     serialized = json.dumps({"status": status, "approval": blocked_approval, "subscription": subscription})
 
-    assert status["websocket_enabled"] is False
+    assert status["websocket_enabled"] is True
+    assert status["connect_enabled"] is False
     assert status["network_call_performed"] is False
     assert blocked_approval["network_call_performed"] is False
     assert "KIS_WEBSOCKET_APPROVAL_CONFIRM_REQUIRED" in blocked_approval["reason_codes"]

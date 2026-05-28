@@ -22,7 +22,7 @@
 | Version | `MVP v0.26.0` |
 | Branch | `feature/kis-paper-goal-phases` |
 | Baseline HEAD | `251db45` |
-| 상태 | KIS paper token/WebSocket approval network 성공, US WebSocket subscribe ACK 성공, 국내/미국 minimum paper submit은 KIS 거부로 차단, 프리마켓 일반 주문 `VTTT1002U`와 미국주간주문 `TTTS6036U` 모두 paper host에서 거부되어 US submit helper는 정규장 전용으로 제한, service lifecycle helper는 mock order/fill/position persistence 검증, Phase 20 live preflight 차단 |
+| 상태 | KIS paper token/WebSocket approval network 성공, US WebSocket subscribe ACK 성공, 미국 정규장 AAPL 1주 paper submit/follow-up sync completion 확인, premarket/daytime/extended는 paper host 거부 확인 후 API 호출 전 차단, paper/bot/report/notification 수동 기능 활성화, live/real order/fallback/scheduler loop 차단 |
 | Backend | FastAPI + SQLite + Alembic |
 | Frontend | Next.js App Router |
 | 최신 backend full pytest | `416 passed` |
@@ -125,7 +125,7 @@ live fallback requested = deny
 | Phase 14 | 완료 | Telegram live opt-in dry-run/redaction 검증 |
 | Phase 15 | 완료 | daily/weekly report automation API/CLI와 outbox event 추가 |
 | Phase 16 | 완료 | paper bot once/loop gate와 no-submit soak 확인 |
-| Phase 16A | 차단 | `.env.local` KIS paper readiness와 dry_run preview/status 확인 후 repo paper/bot config gate에서 차단. KIS paper 주문/조회/sync/cancel network 미실행 |
+| Phase 16A | 부분 해소 | `.env.local` KIS paper readiness와 dry_run preview/status 확인 후 repo paper/bot config는 수동 활성 상태로 전환. 실제 submit은 credential/token/fresh quote/정규장/risk gate 통과 시에만 가능하며 live 경로는 계속 차단 |
 | Phase 17 | 완료 | KIS paper operations runbook 추가 |
 | Phase 18 | 완료 | live trading readiness design-only 문서 추가 |
 | Phase 19 | 완료 | disabled live adapter scaffold와 no-live regression 강화 |
@@ -147,7 +147,7 @@ live fallback requested = deny
 
 검증 기준:
 
-- 기본 runtime은 `enabled=false`, `network_enabled=false`, `preview_only=true`, `kill_switch_enabled=true`를 유지한다.
+- 기본 runtime은 paper/broker/bot/report/notification을 수동 실행 가능 상태로 노출하되, live trading/fallback/scheduler loop는 disabled를 유지한다.
 - `dry_run=true` bot preview는 주문 row를 생성하지 않는다.
 - `dry_run=false` paper run도 kill switch, session, stale quote, duplicate, loss, concentration, cash/notional gate를 통과해야만 submit을 시도한다.
 - 실제 KIS paper network 호출은 별도 승인 전까지 열지 않는다.

@@ -69,7 +69,10 @@ class KisPaperWebSocketService:
         """WebSocket 상태를 secret 없이 반환하고 기본값은 fail-closed로 유지한다."""
         websocket_url = os.getenv(KIS_PAPER_WS_URL_ENV, DEFAULT_KIS_PAPER_WS_URL).strip() or DEFAULT_KIS_PAPER_WS_URL
         configured_approval = KisTokenManager.is_configured_value(os.getenv(KIS_WEBSOCKET_APPROVAL_KEY_ENV, ""))
-        enabled = _env_true(PAPER_WEBSOCKET_ENABLED_ENV)
+        enabled = _env_bool(
+            PAPER_WEBSOCKET_ENABLED_ENV,
+            default=bool((config or {}).get("realtime_websocket_enabled", False)),
+        )
         connect_enabled = enabled and _env_true(PAPER_WEBSOCKET_CONNECT_ENABLED_ENV)
         reason_codes = self._status_reason_codes(
             config=config or {},
@@ -395,6 +398,13 @@ class KisPaperWebSocketService:
 
 def _env_true(name: str) -> bool:
     return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_bool(name: str, *, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _subscription_tr_id_key(

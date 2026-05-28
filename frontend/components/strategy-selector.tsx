@@ -31,22 +31,23 @@ export function StrategySelector({ selected, strategies, onChange }: StrategySel
         {strategies.map((strategy) => {
           const isSelected = selectedSet.has(strategy.name);
           return (
-            <button
-              aria-pressed={isSelected}
+            <label
               className={`strategyPill ${isSelected ? "selected" : ""}`}
               key={strategy.name}
-              onClick={() => toggle(strategy.name)}
               title={strategyTitle(strategy)}
-              type="button"
             >
-              <span aria-hidden="true" className="strategyPillIcon">
-                {isSelected ? "✓" : "+"}
+              <span className="strategyCardTop">
+                <input checked={isSelected} onChange={() => toggle(strategy.name)} type="checkbox" />
+                <span>
+                  <span className="strategyName">{strategy.name}</span>
+                  <span className="strategyMeta">{strategy.display_name}</span>
+                </span>
+                <span className={`strategyTag ${strategy.is_default ? "default" : "available"}`}>
+                  {strategy.is_default ? "default" : "ranking"}
+                </span>
               </span>
-              <span>{strategy.display_name}</span>
-              <span className={`strategyTag ${strategy.is_default ? "default" : "available"}`}>
-                {strategy.is_default ? "default" : "available"}
-              </span>
-            </button>
+              <span className="strategyDescription">{strategy.description}</span>
+            </label>
           );
         })}
       </div>

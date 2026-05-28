@@ -78,18 +78,36 @@ class PaperConfigService:
             config_can_create = bool(paper.get("can_create", False))
             config_network_enabled = bool(paper.get("network_enabled", False))
             config_kill_switch_enabled = bool(paper.get("kill_switch_enabled", True))
-            runtime_enabled = self._env_flag_true("PAPER_TRADING_ENABLED")
-            runtime_can_create = self._env_flag_true("PAPER_TRADING_CAN_CREATE")
-            runtime_network_enabled = self._env_flag_true("PAPER_TRADING_NETWORK_ENABLED")
-            runtime_kill_switch_off = self._env_flag_false("PAPER_TRADING_KILL_SWITCH")
-            runtime_broker_mode = os.getenv(BROKER_MODE_ENV, "").strip().lower()
-            runtime_order_submit_enabled = self._env_flag_true(PAPER_ORDER_SUBMIT_ENABLED_ENV)
-            runtime_bot_confirm = self._env_flag_true(PAPER_BOT_CONFIRM_ENV)
-            runtime_kis_env = os.getenv(KIS_ENV_ENV, "").strip().lower()
-            runtime_market = os.getenv(PAPER_TRADING_MARKET_ENV, "KR").strip().upper() or "KR"
+            runtime_enabled = self._env_bool("PAPER_TRADING_ENABLED", config_enabled)
+            runtime_can_create = self._env_bool("PAPER_TRADING_CAN_CREATE", config_can_create)
+            runtime_network_enabled = self._env_bool("PAPER_TRADING_NETWORK_ENABLED", config_network_enabled)
+            runtime_kill_switch_enabled = self._env_bool("PAPER_TRADING_KILL_SWITCH", config_kill_switch_enabled)
+            runtime_broker_mode = os.getenv(
+                BROKER_MODE_ENV,
+                str(paper.get("broker_mode") or ""),
+            ).strip().lower()
+            runtime_order_submit_enabled = self._env_bool(
+                PAPER_ORDER_SUBMIT_ENABLED_ENV,
+                bool(paper.get("paper_order_submit_enabled", False)),
+            )
+            runtime_bot_confirm = self._env_bool(
+                PAPER_BOT_CONFIRM_ENV,
+                bool(paper.get("require_bot_confirm", True)),
+            )
+            runtime_kis_env = os.getenv(
+                KIS_ENV_ENV,
+                str(paper.get("kis_env") or ""),
+            ).strip().lower()
+            runtime_market = os.getenv(
+                PAPER_TRADING_MARKET_ENV,
+                str(paper.get("market") or "US"),
+            ).strip().upper() or "US"
             runtime_overseas_exchange = os.getenv(KIS_OVERSEAS_EXCHANGE_CODE_ENV, "NASD").strip().upper() or "NASD"
             runtime_overseas_currency = os.getenv(KIS_OVERSEAS_CURRENCY_ENV, "USD").strip().upper() or "USD"
-            runtime_overseas_order_session = os.getenv(KIS_OVERSEAS_ORDER_SESSION_ENV, "").strip().lower()
+            runtime_overseas_order_session = os.getenv(
+                KIS_OVERSEAS_ORDER_SESSION_ENV,
+                str(paper.get("overseas_order_session") or "regular"),
+            ).strip().lower()
             realtime_enabled = bool(realtime.get("enabled", False)) and self._env_bool(
                 PAPER_REALTIME_ENABLED_ENV,
                 bool(realtime.get("enabled", False)),
@@ -115,7 +133,7 @@ class PaperConfigService:
                     "paper_bot_confirm_enabled": runtime_bot_confirm,
                     "configured_can_simulate_fills": bool(paper.get("can_simulate_fills", False)),
                     "preview_only": bool(paper.get("preview_only", True)),
-                    "kill_switch_enabled": config_kill_switch_enabled or not runtime_kill_switch_off,
+                    "kill_switch_enabled": runtime_kill_switch_enabled,
                     "network_enabled": config_network_enabled and runtime_network_enabled,
                     "live_order_enabled": bool(paper.get("live_order_enabled", False)),
                     "broker_order_enabled": bool(paper.get("broker_order_enabled", False)),
@@ -140,6 +158,8 @@ class PaperConfigService:
                     "auto_fill_on_create": bool(simulator.get("auto_fill_on_create", False)),
                     "realtime_enabled": realtime_enabled,
                     "realtime_mode": str(realtime.get("mode") or "polling"),
+                    "realtime_websocket_enabled": bool(realtime.get("websocket_enabled", False)),
+                    "realtime_polling_enabled": bool(realtime.get("polling_enabled", False)),
                     "realtime_require_fresh_quote_for_orders": require_fresh_quotes,
                     "realtime_stale_quote_threshold_seconds": self._env_int(
                         PAPER_REALTIME_STALE_QUOTE_THRESHOLD_SECONDS_ENV,
@@ -163,8 +183,6 @@ class PaperConfigService:
             reasons.append("PAPER_CREATE_ENV_FLAG_REQUIRED")
         if config_network_enabled and not runtime_network_enabled:
             reasons.append("PAPER_NETWORK_ENV_FLAG_REQUIRED")
-        if not config_kill_switch_enabled and not runtime_kill_switch_off:
-            reasons.append("PAPER_KILL_SWITCH_ENV_FALSE_REQUIRED")
         return config, reasons
 
     @staticmethod
@@ -206,6 +224,8 @@ class PaperConfigService:
             "auto_fill_on_create": False,
             "realtime_enabled": False,
             "realtime_mode": "polling",
+            "realtime_websocket_enabled": False,
+            "realtime_polling_enabled": False,
             "realtime_require_fresh_quote_for_orders": False,
             "realtime_stale_quote_threshold_seconds": 30,
             "realtime_heartbeat_timeout_seconds": 60,
@@ -323,39 +343,42 @@ class PaperTradingService:
         config, config_reasons = self.config_service.load()
         token_status = self.token_service.status()
         reason_codes = self._base_reason_codes(config, config_reasons, token_status)
+        blocking = bool(reason_codes)
         return {
             "mode": str(config["mode"]),
-            "enabled": False,
+            "enabled": bool(config.get("enabled", False)),
             "configured_enabled": bool(config.get("enabled", False)),
-            "can_create": False,
-            "can_simulate_fills": False,
-            "preview_only": True,
-            "paper_order_supported": False,
-            "fill_simulator_supported": False,
+            "can_create": bool(config.get("configured_can_create", False)) and not blocking,
+            "can_simulate_fills": bool(config.get("configured_can_simulate_fills", False)),
+            "preview_only": bool(config.get("preview_only", True)),
+            "paper_order_supported": bool(config.get("configured_can_create", False)) and not blocking,
+            "fill_simulator_supported": bool(config.get("simulator_enabled", False)),
             "cancel_supported": False,
             "paper_order_created": False,
             "live_order_created": False,
             "broker_order_created": False,
             "fill_created": False,
             "position_changed": False,
-            "token_issued": False,
-            "token_cache_enabled": False,
+            "token_issued": bool(token_status.get("token_issued", False)),
+            "token_cache_enabled": bool(token_status.get("token_cache_enabled", False)),
             "network_call_performed": False,
             "adapter_order_call_performed": False,
             "adapter_network_call_performed": False,
-            "audit_persistence_enabled": False,
-            "paper_tables_write_enabled": False,
+            "audit_persistence_enabled": bool(config.get("audit_persistence_enabled", False)),
+            "paper_tables_write_enabled": bool(config.get("configured_can_create", False)) and not blocking,
             "paper_bot_confirm_enabled": bool(config.get("paper_bot_confirm_enabled", False)),
             "kis_env": config.get("kis_env"),
             "kis_env_paper": bool(config.get("kis_env_paper", False)),
             "realtime": {
                 "enabled": bool(config.get("realtime_enabled", False)),
+                "websocket_enabled": bool(config.get("realtime_websocket_enabled", False)),
+                "polling_enabled": bool(config.get("realtime_polling_enabled", False)),
                 "require_fresh_quote_for_orders": bool(config.get("realtime_require_fresh_quote_for_orders", False)),
                 "stale_quote_threshold_seconds": int(config.get("realtime_stale_quote_threshold_seconds") or 30),
             },
-            "reason": "paper_trading_safety_scaffold_disabled",
-            "kill_switch": {"blocking": True, "reason_codes": reason_codes},
-            "risk_gate": {"decision": "deny", "passed": False, "reason_codes": reason_codes},
+            "reason": reason_codes[0] if reason_codes else "paper_trading_enabled",
+            "kill_switch": {"blocking": bool(config.get("kill_switch_enabled", True)), "reason_codes": reason_codes},
+            "risk_gate": {"decision": "deny" if blocking else "allow", "passed": not blocking, "reason_codes": reason_codes},
             "token_lifecycle": token_status,
             "broker_adapter": KisPaperBrokerAdapter(config=dict(config)).status(),
             "simulator": self.simulator.status(),
@@ -373,7 +396,7 @@ class PaperTradingService:
         venue: str | None = None,
         as_of: datetime | None = None,
     ) -> dict[str, object]:
-        """DB write 없이 paper order preview deny 응답만 생성한다."""
+        """DB write 없이 paper order preview 응답을 생성한다."""
         config, config_reasons = self.config_service.load()
         token_status = self.token_service.status()
         session_metadata = self.market_session_service.preview_metadata(venue=venue, as_of=as_of)
@@ -392,28 +415,29 @@ class PaperTradingService:
         risk_gate["reason_codes"] = reason_codes
         risk_gate["decision"] = "deny" if reason_codes else "allow"
         risk_gate["passed"] = not reason_codes
+        blocking = bool(reason_codes)
         return {
             "preview_id": f"paper-preview-{uuid4().hex[:12]}",
             "mode": str(config["mode"]),
-            "enabled": False,
-            "can_create": False,
-            "can_simulate_fills": False,
-            "preview_only": True,
-            "paper_order_supported": False,
-            "fill_simulator_supported": False,
+            "enabled": bool(config.get("enabled", False)),
+            "can_create": bool(config.get("configured_can_create", False)) and not blocking,
+            "can_simulate_fills": bool(config.get("configured_can_simulate_fills", False)),
+            "preview_only": bool(config.get("preview_only", True)),
+            "paper_order_supported": bool(config.get("configured_can_create", False)) and not blocking,
+            "fill_simulator_supported": bool(config.get("simulator_enabled", False)),
             "paper_order_created": False,
             "live_order_created": False,
             "broker_order_created": False,
             "fill_created": False,
             "position_changed": False,
-            "token_issued": False,
-            "token_cache_enabled": False,
+            "token_issued": bool(token_status.get("token_issued", False)),
+            "token_cache_enabled": bool(token_status.get("token_cache_enabled", False)),
             "network_call_performed": False,
             "adapter_order_call_performed": False,
             "adapter_network_call_performed": False,
-            "audit_persistence_enabled": False,
-            "paper_tables_write_enabled": False,
-            "reason": "paper_trading_safety_scaffold_disabled",
+            "audit_persistence_enabled": bool(config.get("audit_persistence_enabled", False)),
+            "paper_tables_write_enabled": bool(config.get("configured_can_create", False)) and not blocking,
+            "reason": reason_codes[0] if reason_codes else "paper_order_preview_allowed",
             "symbol": symbol,
             "side": side.strip().lower(),
             "qty": qty,
@@ -424,7 +448,7 @@ class PaperTradingService:
             "stop_price": stop_price,
             "strategy_tag": strategy_tag,
             "risk_gate": risk_gate,
-            "kill_switch": {"blocking": True, "reason_codes": reason_codes},
+            "kill_switch": {"blocking": bool(config.get("kill_switch_enabled", True)), "reason_codes": reason_codes},
             "token_lifecycle": token_status,
             "simulator": self.simulator.status(),
             "counts": self._counts(),
@@ -667,32 +691,41 @@ class PaperTradingService:
         token_status: dict[str, object],
     ) -> list[str]:
         reasons = list(config_reasons)
+        if str(config.get("mode")) != "paper":
+            reasons.append("KIS_PAPER_MODE_REQUIRED")
+        if str(config.get("kis_env") or "").strip().lower() != "paper":
+            reasons.append("KIS_ENV_PAPER_REQUIRED")
         if not bool(config.get("enabled")):
             reasons.append("PAPER_TRADING_DISABLED")
         if not bool(config.get("configured_can_create")):
             reasons.append("PAPER_CREATE_DISABLED")
         if not bool(config.get("paper_bot_confirm_enabled")):
             reasons.append("PAPER_BOT_CONFIRM_REQUIRED")
-        if not bool(config.get("configured_can_simulate_fills")):
-            reasons.append("PAPER_FILL_SIMULATION_DISABLED")
-        reasons.append("PAPER_ORDER_CREATE_NOT_IMPLEMENTED")
-        reasons.append("PAPER_FILL_SIMULATOR_NOT_IMPLEMENTED")
         if bool(config.get("preview_only", True)):
             reasons.append("PAPER_PREVIEW_ONLY")
         if bool(config.get("kill_switch_enabled")) or os.getenv("PAPER_TRADING_KILL_SWITCH", "").strip() in {"1", "true", "TRUE"}:
             reasons.append("KILL_SWITCH_ACTIVE")
-        if bool(config.get("network_enabled")):
-            reasons.append("PAPER_NETWORK_UNSUPPORTED")
         if bool(config.get("live_order_enabled")):
             reasons.append("LIVE_ORDER_UNSUPPORTED")
+        if bool(config.get("live_fallback_enabled")):
+            reasons.append("KIS_LIVE_PATH_BLOCKED")
         if bool(config.get("broker_order_enabled")):
             reasons.append("BROKER_ORDER_UNSUPPORTED")
         if bool(config.get("audit_persistence_enabled")):
             reasons.append("PAPER_AUDIT_PERSISTENCE_DISABLED_IN_PHASE_3E1")
-        if token_status.get("state") != "DISABLED_BLOCKED":
-            reasons.append("TOKEN_UNCONFIGURED")
-        else:
-            reasons.append("TOKEN_DISABLED")
+        if os.getenv("ENABLE_REAL_ORDER", "").strip().lower() in {"1", "true", "yes", "on"}:
+            reasons.append("ENABLE_REAL_ORDER_MUST_BE_FALSE")
+        if bool(config.get("network_enabled")):
+            if str(config.get("broker_mode") or "").strip().lower() != REQUIRED_PAPER_BROKER_MODE:
+                reasons.append("BROKER_MODE_PAPER_KIS_REQUIRED")
+            if not bool(config.get("paper_order_submit_enabled")):
+                reasons.append("PAPER_ORDER_SUBMIT_ENABLED_REQUIRED")
+            if not bool(config.get("broker_adapter_enabled")):
+                reasons.append("KIS_PAPER_ADAPTER_DISABLED")
+            if not bool(config.get("official_endpoint_confirmed")):
+                reasons.append("KIS_PAPER_OFFICIAL_ENDPOINT_CONFIRMATION_REQUIRED")
+            if not bool(token_status.get("token_issued", False)):
+                reasons.append("KIS_ACCESS_TOKEN_REQUIRED_FOR_NETWORK")
         return self._merge_reason_codes(reasons, [])
 
     def _counts(self) -> dict[str, int]:

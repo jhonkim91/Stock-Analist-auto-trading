@@ -206,6 +206,9 @@ class PaperBotService:
             decision_count=len(decisions),
             auto_submit_requested=requested_auto_submit,
             auto_submit_allowed=auto_submit_allowed,
+            sync_enabled=bool(status["sync_enabled"]),
+            notification_enabled=bool(status["notification_enabled"]),
+            report_generation_enabled=bool(status["report_generation_enabled"]),
         )
         run.status = "completed_safely" if status["enabled"] else "disabled"
         if status["kill_switch_enabled"]:
@@ -397,6 +400,9 @@ class PaperBotService:
         decision_count: int,
         auto_submit_requested: bool,
         auto_submit_allowed: bool,
+        sync_enabled: bool,
+        notification_enabled: bool,
+        report_generation_enabled: bool,
     ) -> list[dict[str, str]]:
         disabled_reason = "PAPER_BOT_DISABLED" if not enabled else "OK"
         return [
@@ -423,9 +429,21 @@ class PaperBotService:
                 if auto_submit_allowed
                 else ("PAPER_BOT_AUTO_SUBMIT_DISABLED" if auto_submit_requested else "PAPER_BOT_AUTO_SUBMIT_NOT_REQUESTED"),
             },
-            {"name": "polling_sync", "status": "skipped", "reason": "PAPER_BOT_SYNC_DISABLED"},
-            {"name": "notification", "status": "skipped", "reason": "PAPER_BOT_NOTIFICATION_DISABLED"},
-            {"name": "report_generation", "status": "skipped", "reason": "PAPER_BOT_REPORT_DISABLED"},
+            {
+                "name": "polling_sync",
+                "status": "enabled" if sync_enabled else "skipped",
+                "reason": "OK" if sync_enabled else "PAPER_BOT_SYNC_DISABLED",
+            },
+            {
+                "name": "notification",
+                "status": "enabled" if notification_enabled else "skipped",
+                "reason": "OK" if notification_enabled else "PAPER_BOT_NOTIFICATION_DISABLED",
+            },
+            {
+                "name": "report_generation",
+                "status": "enabled" if report_generation_enabled else "skipped",
+                "reason": "OK" if report_generation_enabled else "PAPER_BOT_REPORT_DISABLED",
+            },
         ]
 
     @staticmethod

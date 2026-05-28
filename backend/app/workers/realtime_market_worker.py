@@ -142,7 +142,7 @@ class RealtimeMarketWorker:
             "mode": str(config.get("realtime_mode") or "polling"),
             "websocket_enabled": bool(websocket_status.get("websocket_enabled", False)),
             "websocket": websocket_status,
-            "polling_enabled": enabled,
+            "polling_enabled": enabled and bool(config.get("realtime_polling_enabled", True)),
             "universe": self.build_universe(),
             "quote_cache": cache_status,
             "stale_quote_blocks_orders": bool(config.get("realtime_require_fresh_quote_for_orders")),

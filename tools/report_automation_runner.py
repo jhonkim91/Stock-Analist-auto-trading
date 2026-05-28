@@ -16,7 +16,7 @@ from backend.app.services.report_automation_service import SUPPORTED_REPORT_AUTO
 
 def build_parser() -> argparse.ArgumentParser:
     """report automation run-once CLI argument parser를 생성한다."""
-    parser = argparse.ArgumentParser(description="Disabled-by-default daily/weekly report automation runner")
+    parser = argparse.ArgumentParser(description="Manual daily/weekly report automation runner")
     parser.add_argument("--execute", action="store_true", help="run automation after config/env gates are enabled")
     parser.add_argument(
         "--report-type",

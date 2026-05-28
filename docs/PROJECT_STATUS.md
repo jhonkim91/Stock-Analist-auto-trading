@@ -5,7 +5,7 @@
 | 항목 | 값 |
 |---|---|
 | Version | `MVP v0.26.0` |
-| Phase | `KIS Paper US WebSocket connected; US paper regular-only guard and service lifecycle helper ready` |
+| Phase | `KIS paper manual operation enabled; live trading disabled; Paper Bot navigation restored` |
 | Goal.md Phase 0 | `docs/research/kis-paper-baseline-audit.md`에서 main 기준선과 현재 작업 브랜치 차이를 분리 감사 |
 | Goal.md Phase 5 | `PaperRepository` 기반 paper fills/positions/portfolio sync 조회 경계 보강 |
 | Goal.md Phase 6 | Telegram-first notification channel decision 문서화 |
@@ -26,14 +26,16 @@
 | Goal.md Phase 20 | controlled live canary runbook/preflight record 추가. 현재 live adapter/route/reviewer/env/rollback 조건 미충족으로 blocked |
 | Goal.md Phase 21 | KIS paper token 발급, WebSocket approval/smoke, US price lookup, 정규장 AAPL 1주 paper submit, sync, fill/position persistence를 redacted record와 DB로 확인. 실제 submit은 `/uapi/overseas-stock/v1/trading/order`, `tr_id=VTTT1002U`, `status_code=200`으로 broker order와 `paper_orders`를 만들었고 follow-up read-only sync에서 `paper_fills_count=1`, `paper_positions_count=1`, `orders_count=0`을 확인. 프리마켓 일반 주문 `VTTT1002U`는 `40570000`, 미국주간주문 `/daytime-order` + `TTTS6036U`는 paper host에서 `EGW02006 / 모의투자 TR 이 아닙니다.`로 거부되어 premarket/aftermarket/daytime/extended는 adapter/network 전 차단. activation helper는 token/WebSocket proof와 service lifecycle proof를 한 record로 묶는 `--execute-service-lifecycle`, read-only `.env.local` process loader `--load-env-local`, 정규장 전용 quote-derived limit `--derive-limit-from-price`, follow-up read-only sync helper, 목표 완료 요구사항을 분리 판정하는 `completion_audit`를 지원 |
 | KIS Capability Map | `docs/KIS_CAPABILITIES.md` 추가. paper US session은 `regular`만 submit 가능, real US session은 capability map상 `regular/premarket/aftermarket/daytime`로 분리하되 live adapter는 계속 disabled |
+| Non-live feature defaults | paper/broker/bot/notification/report automation은 수동 실행 가능 기본값으로 활성화. 실제 submit은 token/account/product, fresh quote, 정규장 session, risk/idempotency gate를 통과해야 하며 scheduler auto-start와 unattended loop는 disabled |
+| Frontend Paper Bot tab | `/bot` route와 app chrome `Paper Bot` navigation 복구. 재빌드/재시작 후 `http://127.0.0.1:3000/dashboard` HTML에서 `Paper Bot` 및 `href="/bot"` 확인 |
 | Goal.md KIS Paper Auto Bot Phase 1-6 | 설정/secret/token, KIS paper adapter, paper DB/API, realtime worker, bot executor/risk guard, monitoring/report/runbook 완료 |
 | docs/goal.md Phase 1-4 | KIS paper 전용 설정/token/http client, adapter facade, account snapshot/API, realtime stale quote gate 추가 |
 | docs/goal.md Phase 5-6 | `PaperBotExecutor`, bot preview/run/runs API, paper dashboard, report paper trading section, operational metrics 추가 |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
-| 상태 | KIS 모의투자 token/WebSocket approval/US bounded WebSocket/network submit path를 process-only로 검증. 기본 config는 계속 disabled/fail-closed |
-| 거래 상태 | KIS paper `tokenP`, WebSocket `Approval`, US WebSocket `HDFSCNT0` subscribe ACK 성공. 국내 order-cash는 장종료 거부, 미국 해외주식 order는 HTTP 500 또는 premarket `40570000`/`EGW02006` 거부로 실제 주문 생성/체결/포지션 변경 미완료. 최신 helper는 `America/New_York` 정규장 `09:30-16:00`만 submit 가능 세션으로 보고, paper adapter는 premarket/aftermarket/daytime/extended를 API 호출 전 차단. service lifecycle helper는 fake adapter로 `paper_orders`/`paper_fills`/`paper_positions` persistence를 검증. 차단/실패 trace는 `tr_id`, `host`, `market`, `symbol`, `order_session`, `rt_cd`, `msg_cd`, `msg1`을 포함. live/real order/fallback disabled |
-| 최신 backend pytest | full backend `416 passed` |
-| 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; rendered smoke 통과 |
+| 상태 | KIS 모의투자 token/WebSocket approval/US bounded WebSocket/network submit path와 정규장 AAPL 1주 paper submit/follow-up sync completion을 redacted record로 검증. 현재 기본 config는 paper 수동 운영을 활성화하되 live/fallback/scheduler loop는 disabled |
+| 거래 상태 | KIS paper `tokenP`, WebSocket `Approval`, US WebSocket `HDFSCNT0` subscribe ACK 성공. 정규장 AAPL 1주 paper submit은 `/uapi/overseas-stock/v1/trading/order`, `tr_id=VTTT1002U`, `status_code=200`으로 broker order와 `paper_orders`를 만들었고 follow-up read-only sync에서 `paper_fills_count=1`, `paper_positions_count=1`, `orders_count=0`을 확인. paper adapter는 premarket/aftermarket/daytime/extended를 API 호출 전 차단. live/real order/fallback disabled |
+| 최신 backend pytest | activation/no-live/KIS targeted: `39 passed`, `28 passed`, `56 passed` |
+| 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; `/dashboard` Paper Bot nav 및 `/bot` rendered HTTP smoke 통과 |
 | 최신 승인 게이트 감사 | Phase 19 완료, Phase 20 preflight blocked. live 주문/route/network call 없음 |
 | 다음 권장 Phase | 실제 KIS 호출은 `docs/RUNBOOK_PAPER_TRADING.md` 수동 절차와 paper env 확인 후 별도 수행 |
 

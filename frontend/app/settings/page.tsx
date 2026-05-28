@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { PaperModeBanner } from "../../components/paper-mode-banner";
 import {
   callApi,
   type ApiStatus,
@@ -16,19 +14,38 @@ import {
 import { getNotificationStatus, sendNotificationTest } from "../../lib/notificationApi";
 import { getBotStatus, getPaperStatus } from "../../lib/paperApi";
 
-const sections = ["strategies", "risk", "backtest", "app", "data_sources", "notifications", "bot"] as const;
+const sections = ["strategies", "risk", "backtest", "app"] as const;
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+function PageIcon() {
+  return (
+    <svg className="pageTitleIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" />
+      <path d="M4 12h2m12 0h2M12 4v2m0 12v2M6.3 6.3l1.4 1.4m8.6 8.6 1.4 1.4M17.7 6.3l-1.4 1.4m-8.6 8.6-1.4 1.4" />
+    </svg>
+  );
 }
 
-function Metric({ label, value }: { label: string; value: string | number | boolean | null | undefined }) {
+function StatRow({ label, tone, value }: { label: string; tone?: "pos" | "neg" | "muted"; value: React.ReactNode }) {
   return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value === undefined || value === null ? "-" : String(value)}</strong>
+    <div className="stat-row">
+      <span className="stat-k">{label}</span>
+      <span className={tone ?? ""}>{value}</span>
     </div>
   );
+}
+
+function boolTone(value: boolean | null | undefined, positiveWhenTrue = true): "pos" | "neg" | "muted" {
+  if (value === null || value === undefined) {
+    return "muted";
+  }
+  return value === positiveWhenTrue ? "pos" : "neg";
+}
+
+function configSnippet(value: unknown) {
+  if (value === null || value === undefined) {
+    return "{}";
+  }
+  return JSON.stringify(value, null, 2);
 }
 
 export default function SettingsPage() {
@@ -47,12 +64,12 @@ export default function SettingsPage() {
       setMessage("조회 중");
     }
     try {
-      const [data, notificationStatus, paperRuntimeStatus] = await Promise.all([
+      const [data, notificationStatus, paperRuntimeStatus, botRuntimeStatus] = await Promise.all([
         callApi<SettingsPayload>("/api/settings"),
         getNotificationStatus(),
-        getPaperStatus()
+        getPaperStatus(),
+        getBotStatus()
       ]);
-      const botRuntimeStatus = await getBotStatus();
       setSettings(data);
       setNotifications(notificationStatus);
       setPaperStatus(paperRuntimeStatus);
@@ -75,9 +92,6 @@ export default function SettingsPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadSettings]);
-
-  const botSettings = asRecord(settings?.bot);
-  const botConfig = asRecord(botSettings.bot);
 
   async function runNotificationTest() {
     setNotificationTestStatus("loading");
@@ -106,101 +120,65 @@ export default function SettingsPage() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 10 · Settings</p>
+          <PageIcon />
           <h1>Settings</h1>
         </div>
-        <nav className="nav">
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/data">Data</Link>
-          <Link href="/screener">Screener</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/backtest">Backtest</Link>
-          <Link href="/portfolio">Portfolio</Link>
-          <Link href="/paper">Paper</Link>
-          <Link href="/bot">Bot</Link>
-        </nav>
-        <span className={`status ${status}`}>{message}</span>
+        <div className="topbar-actions" title={message}>
+          <span className={`status ${status}`}>{message}</span>
+        </div>
       </header>
 
-      <PaperModeBanner title="모의투자 설정 요약 · redacted" />
+      <section className="scroll">
+        <div className="warn-box info">
+          <span aria-hidden="true">i</span>
+          backend/config/*.yaml 읽기 전용 요약 — 웹 수정 기능 없음
+        </div>
 
-      <section className="panel">
-        <h2>Read-only config summary</h2>
-        <p className="muted">backend/config/*.yaml 값만 표시한다. 웹 config 수정 기능은 제공하지 않는다.</p>
-      </section>
-
-      <section className="cardGrid">
-        <article>
-          <h2>Paper summary</h2>
-          <div className="metricGrid">
-            <Metric label="mode" value={paperStatus?.mode ?? "disabled"} />
-            <Metric label="enabled" value={paperStatus?.enabled} />
-            <Metric label="preview_only" value={paperStatus?.preview_only} />
-            <Metric label="kill_switch" value={paperStatus?.kill_switch.blocking} />
-          </div>
-        </article>
-        <article>
-          <h2>Notification summary</h2>
-          <div className="metricGrid">
-            <Metric label="enabled" value={notifications?.enabled} />
-            <Metric label="dry_run" value={notifications?.default_dry_run} />
-            <Metric label="redacted" value={notifications?.secrets_redacted} />
-            <Metric label="channels" value={notifications?.channels.length} />
-            <Metric label="events" value={notifications?.supported_events.length} />
-            <Metric label="test_status" value={notificationTest?.status ?? notificationTestStatus} />
-          </div>
-          <div className="toolbar compactToolbar">
-            <button type="button" onClick={runNotificationTest}>
-              알림 dry-run test
-            </button>
-          </div>
-        </article>
-        <article>
-          <h2>Bot summary</h2>
-          <div className="metricGrid">
-            <Metric label="config_enabled" value={String(botConfig.enabled ?? false)} />
-            <Metric label="runtime_enabled" value={botStatus?.enabled} />
-            <Metric label="kill_switch" value={botStatus?.kill_switch_enabled} />
-            <Metric label="auto_submit_allowed" value={botStatus?.auto_submit_allowed} />
-            <Metric label="mode" value={botStatus?.mode} />
-            <Metric label="paper only" value="실거래 아님" />
-          </div>
-        </article>
-      </section>
-
-      {notifications ? (
-        <>
-          <section className="panel">
-            <h2>Notification status</h2>
-            <p className="muted">
-              {notifications.enabled ? "enabled" : "disabled"} · {notifications.default_dry_run ? "dry-run" : "direct"} ·
-              {notifications.secrets_redacted ? " redacted" : " unredacted"}
-            </p>
-            <p className="muted">supported events: {notifications.supported_events.join(", ")}</p>
-            {notificationTest ? <pre className="tinyPre">{JSON.stringify(notificationTest, null, 2)}</pre> : null}
-          </section>
-
-          <section className="cardGrid">
-            {notifications.channels.map((channel) => (
-              <article key={channel.alias}>
-                <h2>{channel.alias}</h2>
-                <p className="muted">
-                  {channel.type} · {channel.mode} · {channel.configured ? "configured" : "not configured"}
-                </p>
-                <pre className="tinyPre">{JSON.stringify(channel.credential_fields, null, 2)}</pre>
-              </article>
-            ))}
-          </section>
-        </>
-      ) : null}
-
-      <section className="cardGrid">
-        {sections.map((section) => (
-          <article key={section}>
-            <h2>{section}.yaml</h2>
-            <pre className="tinyPre">{JSON.stringify(settings?.[section] ?? {}, null, 2)}</pre>
+        <div className="g3">
+          <article>
+            <div className="card-hd">
+              <span className="card-title">Paper summary</span>
+            </div>
+            <StatRow label="mode" value={paperStatus?.mode ?? "disabled"} />
+            <StatRow label="enabled" value={String(paperStatus?.enabled ?? "-")} tone={boolTone(paperStatus?.enabled)} />
+            <StatRow label="preview_only" value={String(paperStatus?.preview_only ?? "-")} tone={boolTone(paperStatus?.preview_only)} />
+            <StatRow label="kill_switch" value={String(paperStatus?.kill_switch.blocking ?? "-")} tone={boolTone(paperStatus?.kill_switch.blocking, false)} />
           </article>
-        ))}
+
+          <article>
+            <div className="card-hd">
+              <span className="card-title">Notification summary</span>
+              <button type="button" onClick={runNotificationTest}>
+                dry-run
+              </button>
+            </div>
+            <StatRow label="enabled" value={String(notifications?.enabled ?? "-")} tone={boolTone(notifications?.enabled)} />
+            <StatRow label="dry_run" value={String(notifications?.default_dry_run ?? "-")} tone={boolTone(notifications?.default_dry_run)} />
+            <StatRow label="redacted" value={String(notifications?.secrets_redacted ?? "-")} tone={boolTone(notifications?.secrets_redacted)} />
+            <StatRow label="test_status" value={notificationTest?.status ?? notificationTestStatus} />
+          </article>
+
+          <article>
+            <div className="card-hd">
+              <span className="card-title">Bot summary</span>
+            </div>
+            <StatRow label="runtime_enabled" value={String(botStatus?.enabled ?? "-")} tone={boolTone(botStatus?.enabled)} />
+            <StatRow label="kill_switch" value={String(botStatus?.kill_switch_enabled ?? "-")} tone={boolTone(botStatus?.kill_switch_enabled, false)} />
+            <StatRow label="auto_submit_allowed" value={String(botStatus?.auto_submit_allowed ?? "-")} tone={boolTone(botStatus?.auto_submit_allowed)} />
+            <StatRow label="paper only" value="실거래 아님" tone="pos" />
+          </article>
+        </div>
+
+        <div className="g2">
+          {sections.map((section) => (
+            <article key={section}>
+              <div className="card-hd">
+                <span className="card-title">{section}.yaml</span>
+              </div>
+              <pre className="tinyPre configPreview">{configSnippet(settings?.[section])}</pre>
+            </article>
+          ))}
+        </div>
       </section>
     </main>
   );

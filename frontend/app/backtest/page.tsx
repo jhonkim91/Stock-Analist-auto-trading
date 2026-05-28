@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ValidationSummaryCard } from "../../components/validation-summary-card";
 import {
   callApi,
   formatNumber,
@@ -16,23 +14,6 @@ import {
   type StrategyMetadata
 } from "../../lib/api";
 
-const metricLabels: Array<[keyof BacktestRun["metrics"], string, "percent" | "number"]> = [
-  ["total_return", "total_return", "percent"],
-  ["cagr", "cagr", "percent"],
-  ["max_drawdown", "max_drawdown", "percent"],
-  ["win_rate", "win_rate", "percent"],
-  ["avg_win", "avg_win", "number"],
-  ["avg_loss", "avg_loss", "number"],
-  ["profit_factor", "profit_factor", "number"],
-  ["expectancy", "expectancy", "number"],
-  ["average_holding_days", "average_holding_days", "number"],
-  ["trade_count", "trade_count", "number"],
-  ["exposure", "exposure", "percent"],
-  ["portfolio_turnover", "portfolio_turnover", "percent"],
-  ["average_active_positions", "average_active_positions", "number"],
-  ["rebalance_count", "rebalance_count", "number"]
-];
-
 const rankingStrategyNames = new Set(["momentum_rank", "relative_strength_leader"]);
 const weightingOptions: PortfolioWeighting[] = ["equal_risk", "equal_weight"];
 
@@ -41,11 +22,23 @@ function positiveInteger(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function formatMetric(value: number | string | boolean | null | undefined, type: "percent" | "number") {
-  if (typeof value !== "number") {
-    return typeof value === "boolean" ? String(value) : value ?? "-";
-  }
-  return type === "percent" ? formatPercent(value) : formatNumber(value, 4);
+function StatRow({ label, tone, value }: { label: string; tone?: "pos" | "neg" | "muted"; value: React.ReactNode }) {
+  return (
+    <div className="stat-row">
+      <span className="stat-k">{label}</span>
+      <span className={tone ?? ""}>{value}</span>
+    </div>
+  );
+}
+
+function PageIcon() {
+  return (
+    <svg className="pageTitleIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 5v5h5" />
+      <path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.6" />
+      <path d="M12 8v5l3 2" />
+    </svg>
+  );
 }
 
 export default function BacktestPage() {
@@ -63,11 +56,7 @@ export default function BacktestPage() {
 
   const isRankingStrategy = rankingStrategyNames.has(strategyName);
 
-  const strategyNames = useMemo(() => {
-    const names = new Set(strategyCatalog.map((strategy) => strategy.name));
-    runs.forEach((run) => names.add(run.strategy_name));
-    return Array.from(names);
-  }, [runs, strategyCatalog]);
+  const summaryRows = useMemo(() => (strategySummary?.strategies ?? []).slice(0, 6), [strategySummary]);
 
   const loadRuns = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -163,55 +152,57 @@ export default function BacktestPage() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 2</p>
+          <PageIcon />
           <h1>Backtest</h1>
         </div>
-        <nav className="nav">
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/data">Data</Link>
-          <Link href="/screener">Screener</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/portfolio">Portfolio</Link>
-          <Link href="/paper">Paper</Link>
-          <Link href="/settings">Settings</Link>
-        </nav>
-        <span className={`status ${status}`}>{message}</span>
+        <div className="topbar-actions" title={message}>
+          <span className={`status ${status}`}>{message}</span>
+          <button type="button" className="primary" onClick={runBacktest} disabled={!strategyName}>
+            Run Backtest
+          </button>
+        </div>
       </header>
 
-      <section className="panel">
-        <div className="formRow">
-          <label>
-            strategy_name
-            <select value={strategyName} onChange={(event) => setStrategyName(event.target.value)}>
-              {strategyCatalog.map((strategy) => (
-                <option key={strategy.name} value={strategy.name}>
-                  {strategy.display_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {isRankingStrategy ? (
-            <>
-              <label>
-                top_n
-                <input
-                  min={1}
-                  type="number"
-                  value={topN}
-                  onChange={(event) => setTopN(positiveInteger(event.target.value, topN))}
+      <section className="scroll">
+        <div className="g2">
+          <article>
+            <div className="sectionHeader">
+              <h2>설정</h2>
+            </div>
+            <StatRow
+              label="strategy_name"
+              value={
+                <select value={strategyName} onChange={(event) => setStrategyName(event.target.value)}>
+                  {strategyCatalog.map((strategy) => (
+                    <option key={strategy.name} value={strategy.name}>
+                      {strategy.name}
+                    </option>
+                  ))}
+                </select>
+              }
+            />
+            {isRankingStrategy ? (
+              <>
+                <StatRow
+                  label="top_n"
+                  value={<input min={1} type="number" value={topN} onChange={(event) => setTopN(positiveInteger(event.target.value, topN))} />}
                 />
-              </label>
-              <label>
-                max_positions
-                <input
-                  min={1}
-                  type="number"
-                  value={maxPositions}
-                  onChange={(event) => setMaxPositions(positiveInteger(event.target.value, maxPositions))}
+                <StatRow
+                  label="max_positions"
+                  value={
+                    <input
+                      min={1}
+                      type="number"
+                      value={maxPositions}
+                      onChange={(event) => setMaxPositions(positiveInteger(event.target.value, maxPositions))}
+                    />
+                  }
                 />
-              </label>
-              <label>
-                weighting
+              </>
+            ) : null}
+            <StatRow
+              label="weighting"
+              value={
                 <select value={weighting} onChange={(event) => setWeighting(event.target.value as PortfolioWeighting)}>
                   {weightingOptions.map((option) => (
                     <option key={option} value={option}>
@@ -219,48 +210,71 @@ export default function BacktestPage() {
                     </option>
                   ))}
                 </select>
-              </label>
-            </>
-          ) : null}
-          <button type="button" onClick={runBacktest} disabled={!strategyName}>
-            Run Backtest
-          </button>
+              }
+            />
+          </article>
+
+          <article>
+            <div className="sectionHeader">
+              <h2>최근 실행 메트릭</h2>
+            </div>
+            <StatRow label="total_return" value={formatPercent(selectedRun?.metrics.total_return)} tone={(selectedRun?.metrics.total_return ?? 0) >= 0 ? "pos" : "neg"} />
+            <StatRow label="cagr" value={formatPercent(selectedRun?.metrics.cagr)} tone={(selectedRun?.metrics.cagr ?? 0) >= 0 ? "pos" : "neg"} />
+            <StatRow label="max_drawdown" value={formatPercent(selectedRun?.metrics.max_drawdown)} tone="neg" />
+            <StatRow label="win_rate" value={formatPercent(selectedRun?.metrics.win_rate)} tone="pos" />
+            <StatRow label="profit_factor" value={formatNumber(selectedRun?.metrics.profit_factor, 2)} tone="pos" />
+            <StatRow label="trade_count" value={formatNumber(selectedRun?.metrics.trade_count)} />
+          </article>
         </div>
-      </section>
 
-      {selectedRun ? (
-        <section className="cardGrid compactCards">
-          {metricLabels.map(([key, label, type]) => (
-            <article key={String(key)}>
-              <h2>{label}</h2>
-              <p className="bigNumber">{formatMetric(selectedRun.metrics[key], type)}</p>
-            </article>
-          ))}
-        </section>
-      ) : null}
-
-      <section className="panel">
-        <div className="sectionHeader">
-          <h2>Validation Framework</h2>
-          <span className="muted">{summaryMessage}</span>
-        </div>
-        <ValidationSummaryCard summary={strategySummary} message={summaryMessage} />
-      </section>
-
-      <section className="grid wideLeft">
-        <div className="tableWrap">
-          <table>
+        <article className="mockTableCard">
+          <div className="sectionHeader">
+            <h2>252D Validation Summary</h2>
+            <span className="muted">baseline: {strategySummary?.baseline.status ?? "unspecified"}</span>
+          </div>
+          <div className="tableWrap">
+          <table className="tbl">
             <thead>
               <tr>
-                <th>run_id</th>
-                <th>strategy_name</th>
-                <th>created_at</th>
-                <th>total_return</th>
-                <th>cagr</th>
-                <th>max_drawdown</th>
+                <th>strategy</th>
+                <th>pass_rate</th>
+                <th>trades</th>
                 <th>win_rate</th>
-                <th>trade_count</th>
-                <th>exposure</th>
+                <th>return</th>
+                <th>mdd</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summaryRows.map((row) => (
+                <tr key={row.strategy_name}>
+                  <td>{row.strategy_name}</td>
+                  <td>{formatPercent(row.screener.pass_rate)}</td>
+                  <td>{formatNumber(row.backtest.trade_count)}</td>
+                  <td>{formatPercent(row.backtest.win_rate)}</td>
+                  <td>{formatPercent(row.backtest.total_return)}</td>
+                  <td>{formatPercent(row.backtest.max_drawdown)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+          <p className="muted">{summaryMessage}</p>
+        </article>
+
+        <article className="mockTableCard">
+          <div className="sectionHeader">
+            <h2>Run History (최근 20건)</h2>
+          </div>
+          <div className="tableWrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th style={{ width: "28%" }}>run_id</th>
+                <th>strategy</th>
+                <th>return</th>
+                <th>mdd</th>
+                <th>win_rate</th>
+                <th>trades</th>
               </tr>
             </thead>
             <tbody>
@@ -280,82 +294,16 @@ export default function BacktestPage() {
                 >
                   <td>{run.run_id}</td>
                   <td>{run.strategy_name}</td>
-                  <td>{run.created_at}</td>
                   <td>{formatPercent(run.metrics.total_return)}</td>
-                  <td>{formatPercent(run.metrics.cagr)}</td>
                   <td>{formatPercent(run.metrics.max_drawdown)}</td>
                   <td>{formatPercent(run.metrics.win_rate)}</td>
                   <td>{formatNumber(run.metrics.trade_count)}</td>
-                  <td>{formatPercent(run.metrics.exposure)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-
-        <aside className="detailPanel">
-          <h2>252D Validation Summary</h2>
-          <p className="muted">
-            baseline: {strategySummary?.baseline.status ?? "unspecified"} · {summaryMessage}
-          </p>
-          <table className="miniTable">
-            <thead>
-              <tr>
-                <th>strategy</th>
-                <th>pass_rate</th>
-                <th>trades</th>
-                <th>win_rate</th>
-                <th>return</th>
-                <th>mdd</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(strategySummary?.strategies ?? []).map((row) => (
-                <tr key={row.strategy_name}>
-                  <td>{row.strategy_name}</td>
-                  <td>{formatPercent(row.screener.pass_rate)}</td>
-                  <td>{formatNumber(row.backtest.trade_count)}</td>
-                  <td>{formatPercent(row.backtest.win_rate)}</td>
-                  <td>{formatPercent(row.backtest.total_return)}</td>
-                  <td>{formatPercent(row.backtest.max_drawdown)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <h2>Strategy Comparison</h2>
-          <table className="miniTable">
-            <thead>
-              <tr>
-                <th>strategy</th>
-                <th>runs</th>
-                <th>best return</th>
-                <th>latest drawdown</th>
-              </tr>
-            </thead>
-            <tbody>
-              {strategyNames.map((strategy) => {
-                const strategyRuns = runs.filter((run) => run.strategy_name === strategy);
-                const latest = strategyRuns[0];
-                const bestReturn = strategyRuns.reduce(
-                  (best, run) => Math.max(best, Number(run.metrics.total_return ?? 0)),
-                  Number.NEGATIVE_INFINITY
-                );
-                return (
-                  <tr key={strategy}>
-                    <td>{strategy}</td>
-                    <td>{formatNumber(strategyRuns.length)}</td>
-                    <td>{strategyRuns.length ? formatPercent(bestReturn) : "-"}</td>
-                    <td>{latest ? formatPercent(latest.metrics.max_drawdown) : "-"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          <h2>Selected Metrics</h2>
-          <pre className="tinyPre">{JSON.stringify(selectedRun?.metrics ?? {}, null, 2)}</pre>
-        </aside>
+          </div>
+        </article>
       </section>
     </main>
   );

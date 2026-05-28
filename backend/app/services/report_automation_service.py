@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import os
 from datetime import date
+from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from sqlalchemy.orm import Session
 
+from backend.app.core.paths import CONFIG_DIR
 from backend.app.services.notification_outbox_service import NotificationOutboxService
 from backend.app.services.report_service import ReportService
 
@@ -14,30 +17,80 @@ REPORT_AUTOMATION_ENABLED_ENV = "REPORT_AUTOMATION_ENABLED"
 REPORT_AUTOMATION_MODE_ENV = "REPORT_AUTOMATION_MODE"
 REPORT_AUTOMATION_DRY_RUN_ENV = "REPORT_AUTOMATION_DRY_RUN"
 REPORT_AUTOMATION_NOTIFY_ENV = "REPORT_AUTOMATION_NOTIFY"
+REPORTS_CONFIG_NAME = "reports.yaml"
 SUPPORTED_REPORT_AUTOMATION_TYPES: tuple[ReportAutomationType, ...] = ("daily", "weekly")
 
 
-class ReportAutomationService:
-    """일간/주간 report run-once automation을 disabled-by-default로 실행한다."""
+class ReportAutomationConfigService:
+    def __init__(self, config_dir: Path = CONFIG_DIR) -> None:
+        self.config_dir = config_dir
 
-    def __init__(self, db: Session) -> None:
+    def load(self) -> tuple[dict[str, Any], list[str]]:
+        """reports.yaml automation 설정을 읽고 env override를 적용한다."""
+        config = self._default_config()
+        reasons: list[str] = []
+        path = self.config_dir / REPORTS_CONFIG_NAME
+        if path.exists():
+            try:
+                with path.open("r", encoding="utf-8") as file:
+                    raw = yaml.safe_load(file) or {}
+            except Exception:
+                return config, ["REPORT_AUTOMATION_CONFIG_PARSE_FAILED"]
+            automation = raw.get("automation", raw) if isinstance(raw, dict) else {}
+            if not isinstance(automation, dict):
+                return config, ["REPORT_AUTOMATION_CONFIG_PARSE_FAILED"]
+            config.update(
+                {
+                    "enabled": bool(automation.get("enabled", config["enabled"])),
+                    "mode": str(automation.get("mode") or config["mode"]).strip().lower(),
+                    "dry_run": bool(automation.get("dry_run", config["dry_run"])),
+                    "notify_default": bool(automation.get("notify_default", config["notify_default"])),
+                }
+            )
+        else:
+            reasons.append("REPORT_AUTOMATION_CONFIG_NOT_FOUND")
+
+        config["enabled"] = _env_bool(REPORT_AUTOMATION_ENABLED_ENV, default=bool(config["enabled"]))
+        config["mode"] = os.getenv(REPORT_AUTOMATION_MODE_ENV, str(config["mode"])).strip().lower() or "disabled"
+        config["dry_run"] = _env_bool(REPORT_AUTOMATION_DRY_RUN_ENV, default=bool(config["dry_run"]))
+        config["notify_default"] = _env_bool(REPORT_AUTOMATION_NOTIFY_ENV, default=bool(config["notify_default"]))
+        if config["mode"] not in {"disabled", "manual"}:
+            config["mode"] = "disabled"
+            reasons.append("REPORT_AUTOMATION_MODE_UNSUPPORTED")
+        return config, reasons
+
+    @staticmethod
+    def _default_config() -> dict[str, Any]:
+        return {
+            "enabled": False,
+            "mode": "disabled",
+            "dry_run": True,
+            "notify_default": False,
+        }
+
+
+class ReportAutomationService:
+    """일간/주간 report run-once automation을 수동 gate 뒤에서 실행한다."""
+
+    def __init__(self, db: Session, *, config_dir: Path = CONFIG_DIR) -> None:
         self.db = db
         self.report_service = ReportService(db)
         self.outbox = NotificationOutboxService(db)
+        self.config_service = ReportAutomationConfigService(config_dir)
 
     def status(self) -> dict[str, Any]:
         """report automation 상태를 secret 없이 반환한다."""
-        mode = os.getenv(REPORT_AUTOMATION_MODE_ENV, "disabled").strip().lower() or "disabled"
-        if mode not in {"disabled", "manual"}:
-            mode = "disabled"
-        enabled = _env_bool(REPORT_AUTOMATION_ENABLED_ENV, default=False)
-        dry_run = _env_bool(REPORT_AUTOMATION_DRY_RUN_ENV, default=True)
-        notify_default = _env_bool(REPORT_AUTOMATION_NOTIFY_ENV, default=False)
+        config, config_reasons = self.config_service.load()
+        enabled = bool(config["enabled"])
+        mode = str(config["mode"])
+        dry_run = bool(config["dry_run"])
+        notify_default = bool(config["notify_default"])
         reason_codes: list[str] = []
         if not enabled:
             reason_codes.append("REPORT_AUTOMATION_DISABLED")
         if mode == "disabled":
             reason_codes.append("REPORT_AUTOMATION_MODE_DISABLED")
+        reason_codes.extend(config_reasons)
         return {
             "enabled": enabled,
             "mode": mode,

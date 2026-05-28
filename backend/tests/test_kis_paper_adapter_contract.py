@@ -119,7 +119,8 @@ def test_paper_trading_service_uses_service_adapter_boundary():
     assert status["adapter_boundary"] == "paper_only_service"
     assert status["live_fallback_enabled"] is False
     assert status["can_submit"] is False
-    assert status["network_enabled"] is False
+    assert status["network_enabled"] is True
+    assert status["enabled"] is False
 
 
 def test_kis_paper_adapter_submit_cancel_query_sync_with_mock_http(monkeypatch):
