@@ -23,7 +23,7 @@
 | Goal.md Phase 17 | KIS paper operations runbook 추가 |
 | Goal.md Phase 18 | live trading readiness design-only 문서 추가 |
 | Goal.md Phase 19 | disabled live adapter scaffold가 예외 대신 redacted disabled payload를 반환하도록 강화 |
-| Goal.md Phase 20 | controlled live canary runbook/preflight record, disabled live public route scaffold, Phase 3 completion audit 추가. audit는 token refresh proof record와 submit/cancel authority approval record 입력을 redacted summary로 읽을 수 있지만, 현재 live submit authority/token refresh proof 조건 미충족으로 blocked |
+| Goal.md Phase 20 | controlled live canary runbook/preflight record, disabled live public route scaffold, Phase 3 completion audit 추가. token refresh proof record 입력, submit/cancel authority approval preflight/record 입력을 redacted summary로 읽을 수 있지만, 현재 live submit authority/token refresh proof 조건 미충족으로 blocked |
 | Goal.md Phase 21 | KIS paper token 발급, WebSocket approval/smoke, US price lookup, 정규장 AAPL 1주 paper submit, sync, fill/position persistence를 redacted record와 DB로 확인. 실제 submit은 `/uapi/overseas-stock/v1/trading/order`, `tr_id=VTTT1002U`, `status_code=200`으로 broker order와 `paper_orders`를 만들었고 follow-up read-only sync에서 `paper_fills_count=1`, `paper_positions_count=1`, `orders_count=0`을 확인. 프리마켓 일반 주문 `VTTT1002U`는 `40570000`, 미국주간주문 `/daytime-order` + `TTTS6036U`는 paper host에서 `EGW02006 / 모의투자 TR 이 아닙니다.`로 거부되어 premarket/aftermarket/daytime/extended는 adapter/network 전 차단. activation helper는 token/WebSocket proof와 service lifecycle proof를 한 record로 묶는 `--execute-service-lifecycle`, read-only `.env.local` process loader `--load-env-local`, 정규장 전용 quote-derived limit `--derive-limit-from-price`, follow-up read-only sync helper, 목표 완료 요구사항을 분리 판정하는 `completion_audit`를 지원 |
 | KIS Capability Map | `docs/KIS_CAPABILITIES.md` 추가. paper US session은 `regular`만 submit 가능, real US session은 capability map상 `regular/premarket/aftermarket/daytime`로 분리하되 live adapter는 계속 disabled |
 | Non-live feature defaults | paper/broker/bot/notification/report automation은 수동 실행 가능 기본값으로 활성화. 실제 submit은 token/account/product, fresh quote, 정규장 session, risk/idempotency gate를 통과해야 하며 scheduler auto-start와 unattended loop는 disabled |
@@ -36,7 +36,7 @@
 | 거래 상태 | KIS paper `tokenP`, WebSocket `Approval`, US WebSocket `HDFSCNT0` subscribe ACK 성공. 정규장 AAPL 1주 paper submit은 `/uapi/overseas-stock/v1/trading/order`, `tr_id=VTTT1002U`, `status_code=200`으로 broker order와 `paper_orders`를 만들었고 follow-up read-only sync에서 `paper_fills_count=1`, `paper_positions_count=1`, `orders_count=0`을 확인. paper adapter는 premarket/aftermarket/daytime/extended를 API 호출 전 차단. live/real order/fallback disabled |
 | 최신 backend pytest | activation/no-live/KIS targeted: `39 passed`, `28 passed`, `56 passed` |
 | 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; `/dashboard` Paper Bot nav 및 `/bot` rendered HTTP smoke 통과 |
-| 최신 승인 게이트 감사 | Phase 19 완료, Phase 20 route scaffold 및 Phase 3 completion audit blocked. token/authority proof record 입력 경로는 추가됐지만 live 주문/network call 없음 |
+| 최신 승인 게이트 감사 | Phase 19 완료, Phase 20 route scaffold 및 Phase 3 completion audit blocked. token/authority proof record 입력과 authority approval preflight record는 추가됐지만 live 주문/network call 없음 |
 | 다음 권장 Phase | 실제 KIS 호출은 `docs/RUNBOOK_PAPER_TRADING.md` 수동 절차와 paper env 확인 후 별도 수행 |
 
 ## 구현 완료 항목

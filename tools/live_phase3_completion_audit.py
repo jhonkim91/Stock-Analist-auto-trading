@@ -225,6 +225,10 @@ def build_powershell_env_template() -> str:
             ),
             "# Optional redacted authority approval record, still no submit/cancel authority by itself:",
             (
+                r"# .\.venv\Scripts\python.exe tools\live_authority_approval_preflight.py "
+                "--approve --confirm CONFIRM_LIVE_AUTHORITY_APPROVAL --operations submit,cancel --write-record"
+            ),
+            (
                 r"# .\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py "
                 r"--authority-record-path docs\research\live-authority-approval-record.json"
             ),

@@ -40,6 +40,7 @@ def test_live_phase3_completion_audit_powershell_template_is_placeholder_only(tm
     assert "CONFIRM_KIS_LIVE_TOKEN_REFRESH" in template
     assert "tools\\kis_live_token_refresh_preflight.py --execute" in template
     assert "tools\\live_phase3_completion_audit.py --token-refresh-record-path" in template
+    assert "tools\\live_authority_approval_preflight.py --approve" in template
     assert "tools\\live_phase3_completion_audit.py --authority-record-path" in template
     assert "PHASE3_COMPLETION_SECRET" not in template
 

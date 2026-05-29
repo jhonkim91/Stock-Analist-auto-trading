@@ -54,6 +54,8 @@
 
 `tools/kis_live_token_refresh_preflight.py`는 live token refresh real-call proof를 만들기 위한 별도 CLI다. 기본 실행은 preview-only이며 `--execute --confirm CONFIRM_KIS_LIVE_TOKEN_REFRESH`와 모든 refresh gate가 있을 때만 network call을 시도한다.
 
+`tools/live_authority_approval_preflight.py`는 live submit/cancel authority를 열기 전 별도 승인 증거를 no-network record로 남기는 CLI다. `--approve --confirm CONFIRM_LIVE_AUTHORITY_APPROVAL --operations submit,cancel`와 governance/safety gate가 모두 통과해도 이 record는 adapter enablement가 아니며, `network_call_performed=false`, `live_order_created=false`, `order_cancelled=false`를 유지한다.
+
 `tools/live_phase3_completion_audit.py`는 별도 승인 후 생성된 redacted token refresh proof record를 `--token-refresh-record-path`로, submit/cancel authority approval record를 `--authority-record-path`로 읽어 proof gap summary에 반영한다. authority approval record는 증거 요약용이며, live adapter가 `enabled=false`, `network_enabled=false`인 동안에는 `live_submit_authority_present` 또는 `live_cancel_authority_present` 완료 조건을 충족시키지 않는다.
 
 ## Phase 19 허용 범위

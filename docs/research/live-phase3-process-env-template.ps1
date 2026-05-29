@@ -37,4 +37,5 @@ $env:LIVE_ORDER_COOLDOWN_SECONDS = "30"
 # After a successful token refresh proof record:
 # .\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --token-refresh-record-path docs\research\kis-live-token-refresh-preflight-record.json
 # Optional redacted authority approval record, still no submit/cancel authority by itself:
+# .\.venv\Scripts\python.exe tools\live_authority_approval_preflight.py --approve --confirm CONFIRM_LIVE_AUTHORITY_APPROVAL --operations submit,cancel --write-record
 # .\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --authority-record-path docs\research\live-authority-approval-record.json
