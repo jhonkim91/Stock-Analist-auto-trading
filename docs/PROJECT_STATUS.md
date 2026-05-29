@@ -25,7 +25,7 @@
 
 - `goal.md`를 Telegram + KIS paper trading bot 기준으로 압축 갱신.
 - `.env.example`에 `EXECUTION_MODE`, KIS token cache, KIS quote, Telegram command/report scheduler, paper blacklist/cooldown 변수를 추가.
-- KIS paper token manager에 opt-in token cache와 refresh/cache-hit skeleton 추가.
+- KIS paper token manager에 opt-in token cache, issue, refresh-token 우선 갱신, cache-hit ensure 경로를 추가하고 token status가 paper gate 준비 상태를 표시하도록 정렬.
 - `/api/stocks/search`, `/api/stocks/{symbol}` 추가.
 - `MarketRealtimeService.symbol_detail()`가 KIS paper quote를 우선 시도하고 실패/비활성 시 DB 최신 OHLCV로 fallback.
 - 종목 상세 API 응답에 `summary`를 추가해 현재가, 등락률, 시가/고가/저가, 거래량, 거래대금, 주요 지표, 전략 통과 여부를 한 번에 확인할 수 있게 했다.
@@ -44,7 +44,7 @@
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가.
 - paper risk gate는 시장가 주문의 `max_order_notional`을 DB 최신 종가 기준 추정 주문금액으로 평가한다. 최신 가격이 없으면 금액 한도 우회를 막기 위해 market notional 평가 실패로 차단한다.
 - `backend/config/bot.yaml`과 `.env.example`에서 paper bot 자동매매는 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false)로 정렬.
-- Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. 개별 ON/OFF 외에 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 제공한다. runtime env 상태 조회가 늦어져도 preset fallback 버튼은 렌더링되어 같은 preset API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞추고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
+- Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. 개별 ON/OFF 외에 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 제공한다. runtime env 상태 조회가 늦어져도 preset/toggle fallback 버튼은 렌더링되어 같은 API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞추고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
 - 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 KIS paper domestic/overseas regular endpoint/TR ID를 재확인하고 stale Phase 0 matrix 문서를 갱신했다.
 - 국내 정정취소가능주문조회/매도가능수량조회는 공식 샘플에서 real `TTTC0084R`/`TTTC8408R` only로 확인되어, paper TR 확인 전 구현 보류와 fail-closed 정책을 유지한다.
 - `backend.app.jobs.paper_bot_runner` loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 동작한다.
@@ -63,6 +63,10 @@
 |---|---|
 | `GET /api/stocks/search` | 종목 검색 alias |
 | `GET /api/stocks/{symbol}` | KIS quote 우선, DB fallback 종목 상세와 `summary` |
+| `GET /api/kis/token/status` | KIS paper token issue/refresh/cache readiness, live endpoint disabled status |
+| `POST /api/kis/token/issue` | confirm-gated KIS paper token 발급 |
+| `POST /api/kis/token/refresh` | refresh token 우선 갱신, 없으면 paper issue fallback |
+| `POST /api/kis/token/ensure` | cache 우선 token 확보, 만료/임박 시 refresh/issue |
 | `GET /api/telegram/status` | Telegram token/chat id redacted status |
 | `POST /api/telegram/command` | Telegram command local dispatcher. `/search`는 종목 상세 요약, `/orders open|미체결`은 미체결 조회, `/report daily|weekly`는 Markdown report 생성 후 요약 응답, `/cancel`은 paper-only 주문 취소 |
 | `POST /api/telegram/webhook` | Telegram webhook update command dispatcher |
@@ -84,6 +88,12 @@
 
 | 명령 | 결과 |
 |---|---|
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_kis_token_manager.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_token_settings_focused` | `14 passed in 1.73s` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_token_settings` | `536 passed in 464.65s` |
+| `cd frontend; npm.cmd run lint` | exit 0 |
+| `cd frontend; npm.cmd exec tsc -- --noEmit` | exit 0 |
+| `cd frontend; npm.cmd run build` | Next.js build 성공 |
+| `.\.venv\Scripts\python.exe tools\secret_scan.py` | `NO_SECRET_FINDINGS` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_tests` | `4 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_phase1_read_report_api.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_related_tests` | `18 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_frontend_contract_only` | `2 passed` |

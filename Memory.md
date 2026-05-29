@@ -23,7 +23,7 @@
 - `goal.md`와 `docs/PROJECT_STATUS.md`를 Telegram + KIS paper trading bot 기준으로 리셋했다.
 - `.env.example`에 실행 모드, KIS token cache, KIS quote, Telegram, paper blacklist/cooldown 변수를 추가했다.
 - `.gitignore`에 `.cache/`를 추가해 local token cache가 공개 저장소에 포함되지 않도록 했다.
-- `KisTokenManager`에 opt-in file token cache, refresh-token 우선 갱신, cache-hit skeleton을 추가했다.
+- `KisTokenManager`에 opt-in file token cache, issue, refresh-token 우선 갱신, cache-hit ensure 경로를 추가했고 `/api/kis/token/ensure`를 노출했다.
 - `KisMarketQuoteService`를 추가하고 종목 상세 조회가 KIS paper quote를 우선 시도한 뒤 DB 최신 OHLCV로 fallback하도록 했다.
 - `/api/stocks/search`, `/api/stocks/{symbol}` route를 추가했고, 상세 응답 `summary`에 현재가, 등락률, 시가/고가/저가, 거래량, 거래대금, 주요 지표, 전략 통과 요약을 담는다.
 - `TelegramBotService`와 `/api/telegram/status`, `/api/telegram/command` route를 추가했다.
@@ -42,7 +42,7 @@
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가했다.
 - `/api/paper/bot/preview`, `/api/paper/bot/run`은 요청의 `watchlist_symbols`로 저장된 passed screener 후보 universe를 제한할 수 있다.
 - paper bot 자동매매 기본값을 OFF로 정렬했다: `backend/config/bot.yaml`의 `enabled=false`, `auto_submit=false`, scheduler false.
-- Settings runtime env 버튼은 클릭 시 process env에 반영되며 hover/focus에서 한국어 tooltip을 표시한다. `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset은 runtime env 조회가 늦어져도 fallback 버튼으로 렌더링되고 같은 API를 호출한다. `ENABLE_REAL_ORDER`는 항상 `false`로 강제 적용한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다.
+- Settings runtime env 버튼은 클릭 시 process env에 반영되며 hover/focus에서 한국어 tooltip을 표시한다. `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset과 주요 toggle은 runtime env 조회가 늦어져도 fallback 버튼으로 렌더링되고 같은 API를 호출한다. `ENABLE_REAL_ORDER`는 항상 `false`로 강제 적용한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다.
 - 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수 일치를 재확인했다.
 - 국내 정정취소가능주문조회/매도가능수량조회는 공식 샘플에서 real `TTTC0084R`/`TTTC8408R` only로 확인되어 paper TR 확인 전 구현 보류로 유지한다.
 - paper bot loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 실행되도록 보강했다.
@@ -62,6 +62,10 @@
 
 ## 최신 검증 결과
 
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_kis_token_manager.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_token_settings_focused` -> `14 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_token_settings` -> `536 passed`.
+- [x] `cd frontend; npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` -> 모두 통과.
+- [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_tests` -> `4 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_phase1_read_report_api.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_related_tests` -> `18 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_frontend_contract_only` -> `2 passed`.

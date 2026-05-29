@@ -44,7 +44,7 @@
 - Paper bot 자동매매: 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false). Telegram 또는 설정에서 명시적으로 켜야 동작.
 - Paper bot runner: 자동 시작은 없고, loop는 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE`로 제한된 bounded runner만 허용한다.
 - Telegram `/bot status|enable|disable|auto|run|stop`: paper bot을 process env 기준으로 명시 제어한다. `enable`, `disable`, `auto`, `run`은 `confirm`이 필요하다.
-- Settings runtime env 버튼: 개별 gate ON/OFF와 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 현재 backend 프로세스에 즉시 반영한다. Runtime env 상태 조회가 늦어져도 preset fallback 버튼은 먼저 렌더링되어 같은 API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다. 모든 주요 버튼은 hover/focus 시 한국어 설명을 표시하고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로 강제 적용한다.
+- Settings runtime env 버튼: 개별 gate ON/OFF와 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 현재 backend 프로세스에 즉시 반영한다. Runtime env 상태 조회가 늦어져도 preset/toggle fallback 버튼은 먼저 렌더링되어 같은 API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다. 모든 주요 버튼은 hover/focus 시 한국어 설명을 표시하고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로 강제 적용한다.
 - KIS paper API matrix: 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수를 재확인했다. 국내 정정취소가능/매도가능수량조회는 샘플상 real `TTTC0084R`/`TTTC8408R` only라 paper 구현은 계속 보류한다.
 
 ## Implemented Scope
@@ -285,6 +285,10 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `GET` | `/api/trade-journal/entries`, `/api/trade-journal/csv` | backtest ledger와 paper fill/order 기반 매매일지 조회/CSV export |
 | `GET` | `/api/broker/status` | broker safety status |
 | `POST` | `/api/broker/orders/preview` | venue/session metadata 포함 dry-run preview only |
+| `GET` | `/api/kis/token/status` | KIS paper token issue/refresh/cache readiness, live endpoint disabled status |
+| `POST` | `/api/kis/token/issue` | confirm-gated KIS paper access token 발급, secret redacted metadata 반환 |
+| `POST` | `/api/kis/token/refresh` | refresh token 우선 갱신, refresh token 없으면 paper issue fallback |
+| `POST` | `/api/kis/token/ensure` | cache hit 우선, 만료/임박 시 refresh 또는 issue fallback |
 | `GET` | `/api/paper/status` | paper_kis safety status |
 | `POST` | `/api/paper/orders/preview` | venue/session metadata 포함 paper deny preview only |
 | `POST` | `/api/paper/orders/submit`, `/api/paper/orders` | local/KIS paper submit alias, `KIS_ENV=paper`, `PAPER_TRADING_ENABLED=true`, `PAPER_BOT_CONFIRM=true`, `confirm=true`, idempotency, kill-switch off 필요 |

@@ -52,3 +52,11 @@ def refresh_kis_paper_token(payload: KisTokenIssueRequest) -> dict[str, object]:
         confirm=payload.confirm,
         install_to_process_env=payload.install_to_process_env,
     )
+
+
+@router.post("/token/ensure")
+def ensure_kis_paper_token(payload: KisTokenIssueRequest) -> dict[str, object]:
+    return TokenLifecycleService().ensure_paper_access_token(
+        confirm=payload.confirm,
+        install_to_process_env=payload.install_to_process_env,
+    )

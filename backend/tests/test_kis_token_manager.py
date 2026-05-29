@@ -49,4 +49,29 @@ def test_token_lifecycle_remains_disabled_without_issuing_token(monkeypatch):
     assert status["token_refresh_enabled"] is False
     assert status["token_db_persistence_enabled"] is False
     assert status["token_raw_value_persisted"] is False
+    assert status["disabled_reason"] == "KIS_PAPER_TOKEN_GATE_BLOCKED"
+    assert sentinel not in serialized
+
+
+def test_token_lifecycle_status_reports_ready_for_paper_issue_and_refresh(monkeypatch):
+    sentinel = "PHASE3_SENTINEL_SECRET_VALUE"
+    monkeypatch.setenv("KIS_ENV", "paper")
+    monkeypatch.setenv("KIS_APP_KEY", sentinel)
+    monkeypatch.setenv("KIS_APP_SECRET", sentinel)
+    monkeypatch.setenv("KIS_TOKEN_ISSUE_ENABLED", "true")
+    monkeypatch.setenv("KIS_PAPER_BASE_URL", "https://openapivts.koreainvestment.com:29443")
+    monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
+
+    status = TokenLifecycleService().status()
+    serialized = json.dumps(status, ensure_ascii=False)
+
+    assert status["state"] == "READY_FOR_PAPER_TOKEN"
+    assert status["token_issue_enabled"] is True
+    assert status["token_refresh_enabled"] is True
+    assert status["token_ensure_enabled"] is True
+    assert status["token_refresh_supported"] is True
+    assert status["token_refresh_fallback_to_issue"] is True
+    assert status["token_gate_reason_codes"] == []
+    assert status["disabled_reason"] is None
+    assert status["live_endpoint_enabled"] is False
     assert sentinel not in serialized

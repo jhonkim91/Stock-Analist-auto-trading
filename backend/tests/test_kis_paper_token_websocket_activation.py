@@ -67,6 +67,7 @@ def test_token_issue_api_remains_blocked_without_confirm_or_gate(client, monkeyp
     monkeypatch.delenv("KIS_TOKEN_ISSUE_ENABLED", raising=False)
 
     response = client.post("/api/kis/token/issue", json={"confirm": False, "install_to_process_env": True})
+    ensure = client.post("/api/kis/token/ensure", json={"confirm": False, "install_to_process_env": True})
 
     assert response.status_code == 200
     payload = response.json()
@@ -75,6 +76,9 @@ def test_token_issue_api_remains_blocked_without_confirm_or_gate(client, monkeyp
     assert payload["process_env_access_token_installed"] is False
     assert "KIS_TOKEN_CONFIRM_REQUIRED" in payload["reason_codes"]
     assert "KIS_TOKEN_ISSUE_DISABLED" in payload["reason_codes"]
+    assert ensure.status_code == 200
+    assert ensure.json()["ok"] is False
+    assert ensure.json()["network_call_performed"] is False
 
 
 def test_paper_websocket_approval_can_install_key_process_only_without_leaking(monkeypatch) -> None:

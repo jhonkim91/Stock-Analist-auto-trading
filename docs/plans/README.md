@@ -14,8 +14,8 @@
 | 항목 | 값 |
 |---|---|
 | 현재 checkpoint | `Telegram + KIS Paper Trading Bot reset` |
-| 현재 구현 완료 | 기존 분석/스크리너/백테스트/리포트/포트폴리오 보존, Telegram command/webhook/polling/report scheduler, `/report daily|weekly`, `/bot` 명시 제어, Telegram amount buy/sell-all/cancel, KIS token cache skeleton, stock detail KIS quote fallback, paper order guard, paper sync worker bounded loop, paper bot watchlist candidates, Settings one-click runtime presets, KIS paper official sample matrix 재확인, paper bot bounded runner, paper risk exit MA cross |
-| 최신 backend pytest | full backend `531 passed in 520.61s`, KIS preset focused `1 passed`, sync worker loop API `19 passed`, Settings sync preset focused `2 passed`, Telegram cancel/report command `17 passed`, KIS matrix docs suite 통과 |
+| 현재 구현 완료 | 기존 분석/스크리너/백테스트/리포트/포트폴리오 보존, Telegram command/webhook/polling/report scheduler, `/report daily|weekly`, `/bot` 명시 제어, Telegram amount buy/sell-all/cancel, KIS token issue/refresh/ensure/cache, stock detail KIS quote fallback, paper order guard, paper sync worker bounded loop, paper bot watchlist candidates, Settings one-click runtime presets/toggles, KIS paper official sample matrix 재확인, paper bot bounded runner, paper risk exit MA cross |
+| 최신 backend pytest | full backend `536 passed in 464.65s`, token/settings focused `14 passed`, market order/open orders focused `16 passed`, KIS preset/sync/Telegram suites 통과 |
 | 다음 권장 Phase | KIS 포털/운영 문서 또는 paper host 기준 국내 정정취소가능/매도가능수량조회 paper TR ID 확인 |
 | 상태 요약 문서 | `docs/PROJECT_STATUS.md` |
 | 상세 검증 문서 | `docs/VALIDATION.md` |
@@ -61,7 +61,7 @@
 | KIS Paper Broker Phase 8 | 완료 | `frontend/app/paper/page.tsx`, `frontend/components/paper-mode-banner.tsx`, `backend/tests/test_frontend_api_contracts.py` | paper-only UI boundary, backend-gated submit/cancel/sync/notify controls, contract tests |
 | KIS Paper Broker Phase 9 | 완료 | `tools/secret_scan.py`, `backend/tests/test_secret_redaction.py`, `docs/PAPER_TRADING_OPERATION.md`, `.github/workflows/ci.yml` | full validation, CI secret scan, key-name redaction hardening, operation guide |
 | KIS Paper Balance Inquiry | 완료 | `backend/app/services/kis_paper_balance.py`, `backend/tests/test_kis_paper_balance.py`, `docs/VALIDATION.md` | `/api/paper/portfolio` 조건부 read-only KIS balance 조회, disabled/mock local fallback |
-| Project Reset: Telegram + KIS Paper Bot | 진행 중 | `goal.md`, `backend/app/api/telegram.py`, `backend/app/api/settings.py`, `backend/app/jobs/paper_bot_runner.py`, `backend/app/services/paper_bot_executor.py`, `backend/app/services/paper_fill_simulator_service.py`, `backend/app/services/telegram_bot_service.py`, `backend/app/services/telegram_polling_service.py`, `backend/app/services/telegram_report_scheduler_service.py`, `backend/app/services/paper_sync_worker_service.py`, `backend/app/services/settings_service.py`, `docs/PROJECT_STATUS.md` | 실행 모드 재정의, Telegram webhook/polling/report scheduler, `/report daily|weekly`, `/cancel`, `/orders open|미체결`, `/bot` 명시 제어, 지정가/시장가 paper order, market notional risk gate, paper sync worker bounded loop, Settings one-click presets with KIS token/quote/sync gate, bounded paper bot runner, watchlist candidates, MA cross risk exit, live disabled 유지 |
+| Project Reset: Telegram + KIS Paper Bot | 진행 중 | `goal.md`, `backend/app/api/kis.py`, `backend/app/api/telegram.py`, `backend/app/api/settings.py`, `backend/app/jobs/paper_bot_runner.py`, `backend/app/services/kis_token_manager.py`, `backend/app/services/paper_bot_executor.py`, `backend/app/services/paper_fill_simulator_service.py`, `backend/app/services/telegram_bot_service.py`, `backend/app/services/telegram_polling_service.py`, `backend/app/services/telegram_report_scheduler_service.py`, `backend/app/services/paper_sync_worker_service.py`, `backend/app/services/settings_service.py`, `docs/PROJECT_STATUS.md` | 실행 모드 재정의, KIS paper token issue/refresh/ensure/cache, Telegram webhook/polling/report scheduler, `/report daily|weekly`, `/cancel`, `/orders open|미체결`, `/bot` 명시 제어, 지정가/시장가 paper order, market notional risk gate, paper sync worker bounded loop, Settings one-click presets/toggles with KIS token/quote/sync gate, bounded paper bot runner, watchlist candidates, MA cross risk exit, live disabled 유지 |
 | Phase 4A/4B | 보류 | 별도 승인 필요 | broker 또는 live gate |
 
 ## 다음 후보
@@ -89,9 +89,9 @@
 
 ## 고정 안전 경계
 
-- 실주문, 주문 취소, 체결, 계좌 이동, websocket, live broker 구현 금지.
-- KIS/broker paper order, paper fill/position simulator mutation 구현 금지. local `paper_orders`는 confirm/idempotency/kill-switch gate 통과 시에만 허용한다.
-- KIS token 발급/cache/credential 저장 금지.
-- 실제 KIS/KRX/yfinance network call 금지.
+- 실계좌 live 주문, live 주문 취소, live 체결, 계좌 이동, live broker 구현 금지.
+- KIS paper order, paper fill/position simulator mutation은 `paper_kis` 실행 모드와 confirm/idempotency/kill-switch/risk gate 통과 시에만 허용한다.
+- KIS paper token 발급/cache는 명시 gate와 paper endpoint 조건에서만 허용하며, raw token/credential은 문서/API 응답에 남기지 않는다.
+- 실제 live KIS 주문 network call 금지. KIS paper network call은 paper gate 통과 시에만 허용한다.
 - `/api/broker/status`, `/api/broker/orders/preview`, `/api/paper/status`, `/api/paper/orders/preview`, `/paper`는 paper-only/fail-closed 경계를 명시한다.
-- `POST /api/paper/orders`, fill simulator, KIS/live order mutation은 미구현 404 또는 disabled 상태를 유지한다.
+- `POST /api/paper/orders`, fill simulator, KIS paper mutation은 paper gate 통과 시에만 동작하고 live mutation은 disabled 상태를 유지한다.

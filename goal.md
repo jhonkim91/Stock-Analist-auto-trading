@@ -39,8 +39,8 @@
 
 | Phase | 상태 | 완료 기준 |
 |---|---|---|
-| 1. 목표/상태 리셋 | 진행 중 | `goal.md`, `Memory.md`, `docs/PROJECT_STATUS.md`, `.env.example`이 새 실행 모드를 반영 |
-| 2. KIS token/config | 진행 중 | paper token issue/refresh/cache skeleton, live endpoint disabled |
+| 1. 목표/상태 리셋 | 완료 | `goal.md`, `Memory.md`, `docs/PROJECT_STATUS.md`, `.env.example`이 새 실행 모드를 반영 |
+| 2. KIS token/config | 완료 | paper token issue/refresh/ensure/cache, live endpoint disabled |
 | 3. 종목 분석 API | 진행 중 | KIS quote 우선, DB fallback 종목 상세 API |
 | 4. Telegram bot | 진행 중 | `/start`, `/help`, `/status`, `/search`, `/report daily|weekly`, `/portfolio`, `/rank`, `/stop`, `/buy`, `/sell`, `/orders`, `/cancel` command dispatcher |
 | 5. KIS paper 주문 | 진행 중 | buy/sell/order/cancel skeleton, 지정가/시장가 order type, 미체결 조회, Telegram cancel, idempotency, audit, paper-only guard |

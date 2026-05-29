@@ -61,6 +61,52 @@ const fallbackEnvPresets: RuntimeEnvPreset[] = [
 ];
 const notificationDryRunTooltip = "Telegram/Discord 알림 설정을 실제 전송 없이 dry-run으로 검증합니다. 토큰, chat_id, webhook 원문은 화면에 표시하지 않습니다.";
 
+function fallbackToggle(
+  name: string,
+  label: string,
+  category: string,
+  description: string,
+  options: { falseLocked?: boolean; highImpact?: boolean } = {}
+): RuntimeEnvToggle {
+  return {
+    name,
+    label,
+    category,
+    description,
+    enabled: false,
+    configured: false,
+    value: "false",
+    can_toggle: true,
+    false_locked: options.falseLocked ?? false,
+    high_impact: options.highImpact ?? false,
+    scope: "process",
+    reason_codes: options.falseLocked ? ["LIVE_ENV_TOGGLE_LOCKED_FALSE"] : []
+  };
+}
+
+const fallbackEnvToggles: RuntimeEnvToggle[] = [
+  fallbackToggle("PAPER_TRADING_ENABLED", "Paper trading", "paper", "모의투자 기능 전체를 현재 backend 프로세스에서 켜거나 끕니다."),
+  fallbackToggle("PAPER_TRADING_CAN_CREATE", "Paper create", "paper", "paper_orders에 모의 주문을 생성할 수 있는지 제어합니다."),
+  fallbackToggle("PAPER_TRADING_NETWORK_ENABLED", "Paper network", "paper", "KIS 모의투자 API 호출 허용 게이트입니다. 버튼 클릭만으로 주문이 즉시 전송되지는 않습니다.", { highImpact: true }),
+  fallbackToggle("PAPER_TRADING_KILL_SWITCH", "Paper kill switch", "paper", "켜져 있으면 신규 모의 주문 생성을 차단합니다.", { highImpact: true }),
+  fallbackToggle("PAPER_BOT_ENABLED", "Bot enabled", "bot", "모의 자동매매봇 실행 자체를 현재 backend 프로세스에서 켜거나 끕니다."),
+  fallbackToggle("PAPER_BOT_AUTO_SUBMIT", "Bot auto-submit", "bot", "봇 실행 결과가 조건을 통과했을 때 모의 주문 제출까지 허용할지 제어합니다.", { highImpact: true }),
+  fallbackToggle("PAPER_BOT_SCHEDULER_ENABLED", "Bot scheduler", "bot", "모의 자동매매봇 반복 실행 scheduler gate입니다.", { highImpact: true }),
+  fallbackToggle("PAPER_BOT_KILL_SWITCH", "Bot kill switch", "bot", "켜져 있으면 봇의 모의 주문 제출을 차단합니다.", { highImpact: true }),
+  fallbackToggle("PAPER_BOT_CONFIRM", "Bot confirm", "bot", "봇과 모의 주문 제출에 필요한 최종 확인 게이트입니다."),
+  fallbackToggle("PAPER_ORDER_SUBMIT_ENABLED", "Paper order submit", "broker", "KIS 모의투자 주문 adapter 제출 게이트입니다.", { highImpact: true }),
+  fallbackToggle("PAPER_SYNC_WORKER_ENABLED", "Paper sync worker", "broker", "모의투자 미체결/체결/잔고 동기화 worker 실행 게이트입니다.", { highImpact: true }),
+  fallbackToggle("KIS_TOKEN_ISSUE_ENABLED", "Token issue", "kis", "KIS 모의투자 access token 발급 API 호출 게이트입니다.", { highImpact: true }),
+  fallbackToggle("KIS_TOKEN_CACHE_ENABLED", "Token cache", "kis", "KIS 모의투자 access token을 로컬 cache 파일에 저장할지 제어합니다.", { highImpact: true }),
+  fallbackToggle("KIS_MARKET_QUOTE_ENABLED", "KIS quote", "kis", "종목 상세 조회에서 KIS 현재가 API를 우선 사용할지 제어합니다.", { highImpact: true }),
+  fallbackToggle("TELEGRAM_BOT_ENABLED", "Telegram bot", "telegram", "Telegram 명령 dispatcher를 현재 backend 프로세스에서 켜거나 끕니다."),
+  fallbackToggle("TELEGRAM_REPORT_SCHEDULER_ENABLED", "Report scheduler", "telegram", "Telegram 장전/장후/주간 리포트 scheduler 실행 게이트입니다."),
+  fallbackToggle("TELEGRAM_PRE_MARKET_REPORT_ENABLED", "Pre-market report", "telegram", "장 시작 전 Telegram 리포트 slot을 켜거나 끕니다."),
+  fallbackToggle("TELEGRAM_POST_MARKET_REPORT_ENABLED", "Post-market report", "telegram", "장 종료 후 Telegram 리포트 slot을 켜거나 끕니다."),
+  fallbackToggle("TELEGRAM_WEEKLY_REPORT_ENABLED", "Weekly report", "telegram", "주간 Telegram 리포트 slot을 켜거나 끕니다."),
+  fallbackToggle("ENABLE_REAL_ORDER", "Live order lock", "locked", "실계좌 주문 잠금입니다. 버튼을 눌러도 false로만 강제 적용됩니다.", { falseLocked: true, highImpact: true })
+];
+
 function categoryTitle(category: string) {
   const labels: Record<string, string> = {
     paper: "Paper",
@@ -262,10 +308,11 @@ export default function SettingsPage() {
     }
   }
 
+  const envToggles = runtimeEnv?.toggles?.length ? runtimeEnv.toggles : fallbackEnvToggles;
   const groupedEnv = envCategoryOrder
     .map((category) => ({
       category,
-      toggles: runtimeEnv?.toggles.filter((toggle) => toggle.category === category) ?? []
+      toggles: envToggles.filter((toggle) => toggle.category === category)
     }))
     .filter((group) => group.toggles.length > 0);
 

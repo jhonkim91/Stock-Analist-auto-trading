@@ -454,14 +454,24 @@ class TokenLifecycleService:
     def status(self) -> dict[str, object]:
         metadata = self.token_manager.metadata()
         state = metadata["state"]
-        if metadata["app_key_configured"] and metadata["app_secret_configured"] and not metadata["token_issued"]:
+        gate_reason_codes = self.token_manager._token_issue_gate_reasons(confirm=True)
+        token_ready = not gate_reason_codes
+        if metadata["token_issued"]:
+            state = "TOKEN_METADATA_READY"
+        elif token_ready:
+            state = "READY_FOR_PAPER_TOKEN"
+        elif metadata["app_key_configured"] and metadata["app_secret_configured"]:
             state = "DISABLED_BLOCKED"
         return {
             **metadata,
             "state": state,
-            "token_refresh_enabled": False,
+            "token_refresh_enabled": token_ready,
+            "token_ensure_enabled": token_ready,
+            "token_refresh_supported": True,
+            "token_refresh_fallback_to_issue": True,
             "token_issue_enabled": _env_true(KIS_TOKEN_ISSUE_ENABLED_ENV),
             "token_issue_endpoint_path": KIS_TOKEN_PATH,
+            "token_gate_reason_codes": gate_reason_codes,
             "paper_base_url": os.getenv(KIS_PAPER_BASE_URL_ENV, DEFAULT_KIS_PAPER_BASE_URL).strip()
             or DEFAULT_KIS_PAPER_BASE_URL,
             "live_base_url": os.getenv("KIS_LIVE_BASE_URL", DEFAULT_KIS_LIVE_BASE_URL).strip()
@@ -469,7 +479,7 @@ class TokenLifecycleService:
             "execution_mode": "paper_kis" if KisTokenManager.env_is_paper() else "analysis_only",
             "live_endpoint_enabled": False,
             "network_call_performed": False,
-            "disabled_reason": "phase_3_token_manager_metadata_only",
+            "disabled_reason": None if token_ready or metadata["token_issued"] else "KIS_PAPER_TOKEN_GATE_BLOCKED",
         }
 
     def issue_paper_access_token(

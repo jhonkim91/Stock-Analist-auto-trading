@@ -1,5 +1,22 @@
 # Validation
 
+## 2026-05-30 KIS Token Ensure and Settings Toggle Fallback
+
+KIS paper token status가 issue/refresh/ensure 가능 상태를 실제 gate 기준으로 표시하도록 갱신했다. `/api/kis/token/ensure`는 cache hit을 우선 사용하고, 만료/임박 cache는 refresh token 우선으로 갱신한다. Settings runtime-env 화면은 runtime-env 조회가 늦거나 실패해도 주요 toggle fallback 버튼을 먼저 렌더링하며, 모든 버튼은 기존 runtime-env API에 `confirm=true`로 연결된다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Token status readiness | 통과 | paper env, token issue gate, paper base URL, live lock false 조건에서 `READY_FOR_PAPER_TOKEN`, `token_refresh_enabled=true`, `token_ensure_enabled=true` |
+| Token ensure route | 통과 | `POST /api/kis/token/ensure` 추가, confirm/gate 없으면 no-network block |
+| Expired cache refresh | 통과 | 만료 cache와 refresh token이 있으면 `grant_type=refresh_token`으로 갱신하고 cache 갱신 |
+| Secret redaction | 통과 | token status/issue/refresh/ensure 응답은 raw token/app secret 미포함 |
+| Settings fallback toggles | 통과 | `fallbackEnvToggles`가 주요 paper/bot/KIS/Telegram/live-lock 버튼을 렌더링하고 한국어 tooltip 유지 |
+| Focused tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_kis_token_manager.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_token_settings_focused` -> `14 passed in 1.73s` |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_token_settings` -> `536 passed in 464.65s` |
+| Frontend lint/type/build | 통과 | `cd frontend; npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` -> exit 0 |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff check | 통과 | `git diff --check` -> exit 0, CRLF warning만 출력 |
+
 ## 2026-05-30 Market Order Notional Gate and Telegram Open Orders
 
 시장가 paper order가 `max_order_notional`을 우회하지 않도록 DB 최신 종가 기준 추정 주문금액을 risk gate에 추가했다. Telegram `/orders open`과 `/orders 미체결`은 단순 status 문자열 필터 대신 `GET /api/paper/orders/open`과 같은 미체결 상태 집합을 사용한다.
