@@ -106,7 +106,7 @@ live fallback requested = deny
 |---|---|---|
 | 조회/보고 1단계 | 완료 | 종목 상세 검색, 계좌/포트폴리오 리포트, 보유 종목 리스트, 랭킹, 차트, CSV 매매일지를 local read-only API/UI로 추가. 주문, KIS network, live 경로 변경 없음 |
 | 모의투자 주문 엔진 2단계 | 완료 | local paper order 생성/취소, 미체결 조회, gated fill simulator, `paper_positions` 갱신, stop-loss/trailing-stop local exit trigger 구현. live/real order 경로와 legacy `orders` table은 변경 없음 |
-| 실계좌 주문 연동 3단계 | 진행 중 | kill switch, rate limiter, idempotency, audit, max notional, blacklist, cooldown, token refresh preflight와 code-level rate/idempotency/cooldown/audit helper를 추가했지만 live token refresh network implementation, live adapter submit/cancel, live route, reviewer/env isolation/rollback proof 미충족으로 완료 아님 |
+| 실계좌 주문 연동 3단계 | 진행 중 | kill switch, rate limiter, idempotency, audit, max notional, blacklist, cooldown, token refresh preflight와 code-level rate/idempotency/cooldown/audit helper, gated live token refresh scaffold를 추가했지만 live token refresh real-call proof, live adapter submit/cancel, live route, reviewer/env isolation/rollback proof 미충족으로 완료 아님 |
 | Phase 0 | 완료 | baseline audit |
 | Phase 1 | 완료 | KIS paper API confirmation matrix |
 | Phase 2 | 완료 | paper broker adapter hardening |

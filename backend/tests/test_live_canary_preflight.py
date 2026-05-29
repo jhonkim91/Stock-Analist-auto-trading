@@ -25,7 +25,7 @@ def test_live_canary_preflight_is_blocked_and_redacted_by_default() -> None:
     assert "12345678" not in serialized
     assert "LIVE_SUBMIT_NOT_IMPLEMENTED" in record["blockers"]
     assert "KIS_LIVE_ORDER_ROUTE_ABSENT" in record["blockers"]
-    assert "LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT" in record["blockers"]
+    assert "LIVE_TOKEN_REFRESH_NETWORK_DISABLED" in record["blockers"]
     assert record["safety_controls"]["all_required_controls_passed"] is False
 
 
@@ -49,6 +49,12 @@ def test_live_canary_preflight_still_blocks_with_operator_gates_set() -> None:
         "LIVE_ORDER_COOLDOWN_SECONDS": "30",
         "LIVE_TOKEN_REFRESH_ENABLED": "true",
         "LIVE_TOKEN_REFRESH_PROCESS_ONLY": "true",
+        "LIVE_TOKEN_REFRESH_NETWORK_ENABLED": "true",
+        "KIS_LIVE_BASE_URL": "https://openapi.koreainvestment.com:9443",
+        "KIS_APP_KEY": "key",
+        "KIS_APP_SECRET": "s3cr3t",
+        "KIS_REFRESH_TOKEN": "rtok",
+        "ENABLE_REAL_ORDER": "false",
     }
 
     record = live_canary_preflight.build_live_canary_preflight(env)
@@ -59,7 +65,7 @@ def test_live_canary_preflight_still_blocks_with_operator_gates_set() -> None:
     assert record["public_route_checks"]["kis_order_route_present"] is False
     assert "KIS_LIVE_BROKER_DISABLED_PLACEHOLDER" in record["blockers"]
     assert record["safety_controls"]["required_controls"]["rate_limiter"]["passed"] is True
-    assert record["safety_controls"]["required_controls"]["token_refresh"]["passed"] is False
+    assert record["safety_controls"]["required_controls"]["token_refresh"]["passed"] is True
 
 
 def test_live_canary_preflight_blocks_accidental_live_enablement() -> None:

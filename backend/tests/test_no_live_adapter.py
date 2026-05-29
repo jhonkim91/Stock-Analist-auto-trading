@@ -54,7 +54,7 @@ def test_broker_service_reports_disabled_live_adapter_without_secrets(monkeypatc
     assert paper["adapter_boundary"] == "paper_only_service"
     assert paper["live_fallback_enabled"] is False
     assert safety["all_required_controls_passed"] is False
-    assert "LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT" in safety["blockers"]
+    assert "LIVE_TOKEN_REFRESH_NETWORK_DISABLED" in safety["blockers"]
     assert safety["live_order_created"] is False
     assert sentinel not in json.dumps(payload, ensure_ascii=False)
 

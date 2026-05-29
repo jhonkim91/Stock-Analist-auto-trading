@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models.tables import BrokerAuditEvent, Order
+from backend.app.services.kis_live_token_refresh_service import KisLiveTokenRefreshService
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 MAX_CANARY_NOTIONAL_CAP = 1_000_000.0
@@ -436,22 +437,18 @@ class LiveOrderSafetyService:
         )
 
     def _token_refresh_control(self) -> dict[str, Any]:
-        enabled = _env_true(self.env, "LIVE_TOKEN_REFRESH_ENABLED")
-        process_only = _env_true(self.env, "LIVE_TOKEN_REFRESH_PROCESS_ONLY")
-        blockers: list[str] = []
-        if not enabled:
-            blockers.append("LIVE_TOKEN_REFRESH_ENABLED_REQUIRED")
-        if not process_only:
-            blockers.append("LIVE_TOKEN_REFRESH_PROCESS_ONLY_REQUIRED")
-        # 현재 repo에는 live token refresh network implementation이 없으므로 canary는 계속 차단된다.
-        blockers.append("LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT")
+        status = KisLiveTokenRefreshService(self.env).status()
+        blockers = list(status["reason_codes"])
         return _control_payload(
-            passed=False,
+            passed=not blockers,
             blockers=blockers,
             evidence={
-                "token_refresh_enabled": enabled,
-                "process_only": process_only,
-                "network_implementation_present": False,
+                "token_refresh_enabled": bool(status["enabled"]),
+                "process_only": bool(status["process_only"]),
+                "network_enabled": bool(status["network_enabled"]),
+                "network_implementation_present": bool(status["implementation_present"]),
+                "endpoint_path": status["endpoint_path"],
+                "base_url_host": status["base_url_host"],
             },
         )
 

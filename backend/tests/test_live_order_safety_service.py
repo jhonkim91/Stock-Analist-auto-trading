@@ -26,14 +26,14 @@ def test_live_order_safety_preflight_blocks_by_default_and_redacts_values() -> N
     assert "LIVE_KILL_SWITCH_READY_REQUIRED" in record["blockers"]
     assert "LIVE_RATE_LIMIT_PER_SECOND_REQUIRED" in record["blockers"]
     assert "LIVE_IDEMPOTENCY_REQUIRED_FLAG_MISSING" in record["blockers"]
-    assert "LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT" in record["blockers"]
+    assert "LIVE_TOKEN_REFRESH_NETWORK_DISABLED" in record["blockers"]
     assert record["live_order_created"] is False
     assert record["network_call_performed"] is False
     assert "LIVE_SAFETY_SENTINEL_SECRET" not in serialized
     assert "SENTINEL_SECRET_SYMBOL" not in serialized
 
 
-def test_live_order_safety_preflight_accepts_configured_controls_except_live_token_refresh() -> None:
+def test_live_order_safety_preflight_accepts_configured_controls_with_token_refresh_readiness() -> None:
     record = LiveOrderSafetyService(
         {
             "LIVE_CANARY_KILL_SWITCH_READY": "true",
@@ -49,6 +49,12 @@ def test_live_order_safety_preflight_accepts_configured_controls_except_live_tok
             "LIVE_ORDER_COOLDOWN_SECONDS": "30",
             "LIVE_TOKEN_REFRESH_ENABLED": "true",
             "LIVE_TOKEN_REFRESH_PROCESS_ONLY": "true",
+            "LIVE_TOKEN_REFRESH_NETWORK_ENABLED": "true",
+            "KIS_LIVE_BASE_URL": "https://openapi.koreainvestment.com:9443",
+            "KIS_APP_KEY": "key",
+            "KIS_APP_SECRET": "s3cr3t",
+            "KIS_REFRESH_TOKEN": "rtok",
+            "ENABLE_REAL_ORDER": "false",
         }
     ).preflight()
 
@@ -59,9 +65,9 @@ def test_live_order_safety_preflight_accepts_configured_controls_except_live_tok
     assert record["required_controls"]["max_order_notional"]["passed"] is True
     assert record["required_controls"]["blacklist"]["passed"] is True
     assert record["required_controls"]["cooldown"]["passed"] is True
-    assert record["required_controls"]["token_refresh"]["passed"] is False
-    assert record["all_required_controls_passed"] is False
-    assert record["blockers"] == ["LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT"]
+    assert record["required_controls"]["token_refresh"]["passed"] is True
+    assert record["all_required_controls_passed"] is True
+    assert record["blockers"] == []
 
 
 def test_live_order_safety_preflight_rejects_unsafe_rate_and_notional_caps() -> None:
@@ -111,7 +117,7 @@ def test_live_order_safety_evaluates_order_specific_controls_without_live_side_e
     assert "LIVE_ORDER_IDEMPOTENCY_KEY_REQUIRED" in record["request_blockers"]
     assert "LIVE_ORDER_NOTIONAL_EXCEEDS_LIMIT" in record["request_blockers"]
     assert "LIVE_ORDER_COOLDOWN_ACTIVE" in record["request_blockers"]
-    assert "LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT" in record["blockers"]
+    assert "LIVE_TOKEN_REFRESH_NETWORK_DISABLED" in record["blockers"]
     assert record["control_checks"]["rate_limiter"]["network_call_performed"] is False
     assert record["control_checks"]["idempotency"]["key_fingerprint"] is None
     assert record["control_checks"]["audit"]["audit_event_persisted"] is False
