@@ -15,10 +15,10 @@
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석 엔진 + Telegram command/webhook/polling/report scheduler + KIS paper bot 전환 진행 |
 | Trading state | `analysis_only`, `telegram_report`, `paper_kis`, `live_disabled` 실행 모드 분리 |
-| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_full_backend` -> `521 passed in 823.78s` |
+| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_full_backend` -> `521 passed in 823.78s`; bounded bot regression `7 passed` |
 | Latest secret scan | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
-| Next recommended phase | 장시간 자동매매 loop 운영 정책과 stop/kill-switch runbook 보강 |
+| Next recommended phase | KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID 추가 확인 |
 
 ## Execution Modes
 
@@ -41,6 +41,7 @@
 - KIS token cache: `KIS_TOKEN_CACHE_ENABLED=true`일 때만 `.cache/kis/token.json`에 local cache 저장.
 - Paper risk gate: `kill_switch`, `max_order_notional`, `max_order_qty`, `max_open_positions`, `blacklist`, `cooldown_seconds`, `idempotency_key`.
 - Paper bot 자동매매: 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false). Telegram 또는 설정에서 명시적으로 켜야 동작.
+- Paper bot runner: 자동 시작은 없고, loop는 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE`로 제한된 bounded runner만 허용한다.
 - Telegram `/bot status|enable|disable|auto|run|stop`: paper bot을 process env 기준으로 명시 제어한다. `enable`, `disable`, `auto`, `run`은 `confirm`이 필요하다.
 - Settings runtime env 버튼: 개별 gate ON/OFF와 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 현재 backend 프로세스에 즉시 반영한다. 모든 버튼은 hover/focus 시 한국어 설명을 표시하고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로 강제 적용한다.
 - KIS paper API matrix: 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수를 재확인했다.

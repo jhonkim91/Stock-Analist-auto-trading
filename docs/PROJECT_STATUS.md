@@ -38,6 +38,7 @@
 - `backend/config/bot.yaml`과 `.env.example`에서 paper bot 자동매매는 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false)로 정렬.
 - Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. 개별 ON/OFF 외에 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 제공하고 `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
 - 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 KIS paper domestic/overseas regular endpoint/TR ID를 재확인하고 stale Phase 0 matrix 문서를 갱신했다.
+- `backend.app.jobs.paper_bot_runner` loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 동작한다.
 - `.cache/`를 `.gitignore`에 추가해 local token cache가 공개 저장소에 포함되지 않도록 차단.
 
 ## 보존한 기존 기능
@@ -79,6 +80,7 @@
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` | `5 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_tests` | `10 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_api_matrix_docs.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_docs` | `1 passed` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_bounded_loop_regression` | `7 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` | `18 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_full_backend` | `521 passed in 823.78s` |
 | `.\.venv\Scripts\python.exe tools\secret_scan.py` | `NO_SECRET_FINDINGS` |
@@ -92,4 +94,3 @@
 - KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID는 추가 확인 필요.
 - Telegram polling `getUpdates` runner는 run-once/CLI 구조까지 추가됨. 장시간 운영 loop는 bounded loop 옵션만 제공하며 auto-start는 false.
 - paper fill/order/account sync worker wrapper는 추가됨. 실제 조회는 기존 `PaperSyncService`의 paper network gate를 통과한 경우에만 수행.
-- 장시간 자동매매 loop는 기본 OFF로 유지하고 bounded runner/stop/kill-switch 운영 정책을 보강.

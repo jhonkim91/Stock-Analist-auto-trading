@@ -16,7 +16,7 @@
 | Paper sync | `/api/paper/sync`, 공식 sync/network gate 통과 시만 KIS paper 조회 동기화 |
 | Paper sync worker | `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once`, `backend.app.jobs.paper_sync_runner`, 기본 OFF/confirm required |
 | Report notify | `/api/reports/{report_id}/notify`, secret redaction 및 delivery failure isolation |
-| Paper bot | runner/API 존재, scheduler와 auto-submit은 기본 disabled |
+| Paper bot | runner/API 존재, scheduler와 auto-submit은 기본 disabled, loop는 bounded iteration/stop-file 방식만 허용 |
 
 ## 금지 범위
 
@@ -54,6 +54,9 @@ cd ..
 | `PAPER_BOT_AUTO_SUBMIT` | `false` | bot 자동 submit 비활성 |
 | `PAPER_BOT_SCHEDULER_ENABLED` | `false` | scheduler 비활성 |
 | `PAPER_BOT_KILL_SWITCH` | `true` | bot 실행 안전 차단 |
+| `PAPER_BOT_MAX_ITERATIONS` | `1` | CLI loop 기본 반복 수 |
+| `PAPER_BOT_MAX_ITERATIONS_CAP` | `25` | CLI loop 반복 수 상한 |
+| `PAPER_BOT_STOP_FILE` | 빈 값 | 존재하면 loop가 다음 iteration 전에 중지되는 marker path |
 | `PAPER_BOT_MAX_SUBMITS_PER_RUN` | `1` | bot 1회 실행 최대 submit 수 |
 | `PAPER_BOT_MAX_ORDER_QTY` | `1` | bot 자동 submit 종목별 최대 수량 |
 | `PAPER_BOT_MAX_ORDER_NOTIONAL` | `100000` | bot 자동 submit 1건 최대 주문금액 |

@@ -1,5 +1,20 @@
 # Validation
 
+## 2026-05-30 Paper Bot Bounded Runner
+
+Paper bot loop를 unattended 장시간 실행 대신 bounded runner로 제한했다. 기본 auto-start는 없고, loop 실행 시 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준으로 반복 수와 중지 조건을 강제한다. 실제 KIS network call, live 주문, broker 주문 생성은 수행하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Runner 기본 정책 | 통과 | loop status/응답에 `auto_start=false`, `bounded_loop_required=true` 또는 `bounded_loop=true` 표시 |
+| Iteration cap | 통과 | `--max-iterations 3`, `PAPER_BOT_MAX_ITERATIONS_CAP=1`에서 `iterations_run=1` |
+| Stop marker | 통과 | stop file이 존재하면 iteration 전 `status=loop_stopped`, `stop_reason=stop_file_detected`, `iterations_run=0` |
+| Live/no-network safety | 통과 | 신규 runner 응답은 `live_order_created=false`, `network_call_performed=false` 유지 |
+| Targeted scheduler tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_bounded_loop` -> `6 passed` |
+| Bot live regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_bounded_loop_regression` -> `7 passed` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff check | 통과 | `git diff --check` -> exit 0, CRLF warning만 출력 |
+
 ## 2026-05-30 KIS Paper Official Sample Reconfirmation
 
 한국투자증권 공식 GitHub 샘플 저장소 `koreainvestment/open-trading-api`를 임시 폴더에 shallow clone하고, 현재 adapter 상수와 공식 샘플의 endpoint/TR ID를 대조했다. 실제 KIS network call, token 발급, 주문/취소/조회 실행은 수행하지 않았다.

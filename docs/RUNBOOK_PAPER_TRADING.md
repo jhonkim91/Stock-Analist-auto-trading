@@ -168,6 +168,42 @@ Invoke-RestMethod http://127.0.0.1:8000/api/paper/bot/preview -Method Post -Cont
 - decision은 `skipped` 또는 `rejected`와 reason code를 반환한다.
 - 조회는 `GET /api/paper/bot/runs/{run_id}`로 수행한다.
 
+## Paper bot bounded runner
+
+paper bot은 backend/launcher 시작만으로 자동 실행되지 않는다. loop 실행이 필요하면 현재 PowerShell 프로세스에서 gate를 명시적으로 열고, 반복 수와 stop marker를 함께 지정한다.
+
+```powershell
+$env:PAPER_BOT_ENABLED = "true"
+$env:PAPER_BOT_SCHEDULER_ENABLED = "true"
+$env:PAPER_BOT_KILL_SWITCH = "false"
+$env:PAPER_BOT_MAX_ITERATIONS = "1"
+$env:PAPER_BOT_MAX_ITERATIONS_CAP = "25"
+$env:PAPER_BOT_STOP_FILE = "$env:TEMP\paper-bot.stop"
+```
+
+1회 실행:
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.app.jobs.paper_bot_runner --once
+```
+
+bounded loop 실행:
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.app.jobs.paper_bot_runner --loop --max-iterations 1 --stop-file $env:PAPER_BOT_STOP_FILE
+```
+
+중지 절차:
+
+```powershell
+New-Item -ItemType File $env:PAPER_BOT_STOP_FILE -Force
+Invoke-RestMethod http://127.0.0.1:8000/api/bot/stop -Method Post
+$env:PAPER_BOT_KILL_SWITCH = "true"
+$env:PAPER_TRADING_KILL_SWITCH = "true"
+```
+
+Settings 화면에서는 `봇/주문 정지` preset을 누르면 현재 backend 프로세스의 bot/order gate가 즉시 차단 상태로 맞춰진다. 모든 runner 응답은 `auto_start=false`, `bounded_loop=true`, `live_order_created=false`, `network_call_performed=false`를 유지해야 한다.
+
 ## Paper live run
 
 `dry_run=false`는 실전투자가 아니라 KIS 모의투자 전용 run이다. 아래 조건이 모두 충족되지 않으면 실행하지 않는다.

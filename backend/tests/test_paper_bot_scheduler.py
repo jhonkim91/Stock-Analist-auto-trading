@@ -105,5 +105,49 @@ def test_paper_bot_runner_once_and_loop_are_gated(capsys):
     assert loop_code == 0
     assert loop_output["status"] == "loop_disabled"
     assert loop_output["loop_allowed"] is False
+    assert loop_output["auto_start"] is False
+    assert loop_output["bounded_loop_required"] is True
     assert loop_output["network_call_performed"] is False
+    assert _counts() == before
+
+
+def test_paper_bot_runner_loop_is_bounded_by_iteration_cap(capsys, monkeypatch):
+    before = _counts()
+    monkeypatch.setenv("PAPER_BOT_ENABLED", "true")
+    monkeypatch.setenv("PAPER_BOT_SCHEDULER_ENABLED", "true")
+    monkeypatch.setenv("PAPER_BOT_KILL_SWITCH", "false")
+    monkeypatch.setenv("PAPER_BOT_MAX_ITERATIONS_CAP", "1")
+
+    exit_code = paper_bot_runner.main(["--loop", "--max-iterations", "3"])
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert output["status"] == "loop_completed"
+    assert output["auto_start"] is False
+    assert output["bounded_loop"] is True
+    assert output["iterations_requested"] == 3
+    assert output["iterations_cap"] == 1
+    assert output["iterations_run"] == 1
+    assert output["live_order_created"] is False
+    assert output["network_call_performed"] is False
+    assert _counts()["orders"] == before["orders"]
+
+
+def test_paper_bot_runner_loop_stops_before_iteration_when_stop_file_exists(capsys, monkeypatch, tmp_path):
+    before = _counts()
+    stop_file = tmp_path / "paper-bot.stop"
+    stop_file.write_text("stop\n", encoding="utf-8")
+    monkeypatch.setenv("PAPER_BOT_ENABLED", "true")
+    monkeypatch.setenv("PAPER_BOT_SCHEDULER_ENABLED", "true")
+    monkeypatch.setenv("PAPER_BOT_KILL_SWITCH", "false")
+
+    exit_code = paper_bot_runner.main(["--loop", "--max-iterations", "2", "--stop-file", str(stop_file)])
+    output = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert output["status"] == "loop_stopped"
+    assert output["stop_reason"] == "stop_file_detected"
+    assert output["iterations_run"] == 0
+    assert output["live_order_created"] is False
+    assert output["network_call_performed"] is False
     assert _counts() == before

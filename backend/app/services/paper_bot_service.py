@@ -247,6 +247,8 @@ class PaperBotService:
             "status": "loop_ready" if status["loop_allowed"] else "loop_disabled",
             "mode": "scheduled",
             "loop_allowed": status["loop_allowed"],
+            "auto_start": False,
+            "bounded_loop_required": True,
             "scheduler_enabled": status["scheduler_enabled"],
             "kill_switch_enabled": status["kill_switch_enabled"],
             "interval_seconds": status["loop_interval_seconds"],
