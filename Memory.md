@@ -45,11 +45,14 @@
 - `tools/kis_live_token_refresh_preflight.py`는 live token refresh real-call proof용 CLI이며 기본은 preview-only/no-network다.
 - 사용자 승인 범위에 따라 `/api/live/status`, `/api/kis/orders`, `/api/kis/orders/status`, `/api/kis/orders/preview`, `/api/kis/orders/submit`, `/api/kis/orders/cancel` disabled scaffold를 추가했다. 모든 응답은 `live_order_created=false`, `network_call_performed=false`, `endpoint_called=false`를 유지한다.
 - `/api/kis/broker/*`, `/api/kis/websocket/*`는 계속 미등록 404다.
+- `tools/live_phase3_completion_audit.py`는 3단계 완료 조건을 항목별로 판정한다. 현재 record는 `complete=false`, `network_call_performed_by_audit=false`, `live_order_created=false`이며 token refresh proof와 live submit/cancel authority가 미충족이다.
 
 ## 최신 검증 결과
 
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_route_canary_contracts` -> `30 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f_readonly_provider_contract.py::test_read_only_provider_contract_does_not_mutate_execution_tables_or_routes -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_public_route_phase3f_route` -> `1 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_phase3_completion_audit.py backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_phase3_completion_audit` -> `20 passed`.
+- [x] `.\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --write-record --fail-on-incomplete` -> expected nonzero, `complete=false`, token refresh proof/live submit authority 미충족.
 - [x] `.\.venv\Scripts\python.exe tools\live_canary_preflight.py` -> `status=blocked`, public route present, `canary_execution_allowed=false`, `live_order_created=false`, `network_call_performed=false`.
 - [x] `.\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py` -> preview-only, `network_call_performed=false`, `live_order_created=false`, refresh token 미설정으로 blocked.
 - [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only.
