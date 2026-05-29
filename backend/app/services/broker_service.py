@@ -248,7 +248,7 @@ class BrokerService:
         self.market_session_service = market_session_service or MarketSessionService()
         self.paper_adapter = KisPaperBrokerAdapter()
         self.live_adapter = KisLiveBrokerAdapter()
-        self.live_safety_service = LiveOrderSafetyService()
+        self.live_safety_service = LiveOrderSafetyService(db=db)
 
     def status(self) -> dict[str, object]:
         """Phase 3D broker safety scaffold 상태를 secret 없이 반환한다."""

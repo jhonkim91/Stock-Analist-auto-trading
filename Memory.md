@@ -38,6 +38,7 @@
 - `PaperTradingService.sync()`가 test/runtime patch config_dir를 `PaperSyncService`에 전달하도록 수정했다.
 - `README.md`, `docs/VALIDATION.md`, `goal.md`, `Memory.md`를 2단계 모의투자 주문 엔진 상태로 갱신했다.
 - 실계좌 주문 연동 3단계는 `LiveOrderSafetyService`, `/api/broker/status.live_order_safety`, `/api/broker/orders/preview.live_order_safety`, `tools/live_canary_preflight.py`에 kill switch/rate limiter/idempotency/audit/max notional/blacklist/cooldown/token refresh preflight를 추가했지만 아직 완료가 아니다.
+- `LiveRateLimiter`, `LiveIdempotencyGuard`, `LiveCooldownGuard`, `LiveOrderAuditService`를 추가해 rate 소진, duplicate idempotency, cooldown, redacted audit event를 실제 live 주문 없이 검증한다.
 
 ## 최신 검증 결과
 
@@ -49,6 +50,9 @@
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_commit_safety` -> `23 passed`.
 - [x] `.\.venv\Scripts\python.exe tools\live_canary_preflight.py` -> `status=blocked`, `canary_execution_allowed=false`, `live_order_created=false`, `network_call_performed=false`.
 - [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_controls_unit` -> `8 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_controls_regression` -> `28 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_controls_full` -> `32 passed`.
 - [x] pytest 병렬 실행은 `backend/data/test_app.db` 잠금으로 실패할 수 있어 순차 실행과 workspace-external basetemp를 사용한다.
 
 ## 남은 작업

@@ -3,7 +3,14 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from backend.app.services.live_order_safety_service import LiveOrderSafetyService
+from sqlalchemy import func, select
+
+from backend.app.models.tables import BrokerAuditEvent, Order
+from backend.app.services.live_order_safety_service import (
+    LiveOrderAuditService,
+    LiveOrderSafetyService,
+    LiveRateLimiter,
+)
 
 
 def test_live_order_safety_preflight_blocks_by_default_and_redacts_values() -> None:
@@ -105,6 +112,9 @@ def test_live_order_safety_evaluates_order_specific_controls_without_live_side_e
     assert "LIVE_ORDER_NOTIONAL_EXCEEDS_LIMIT" in record["request_blockers"]
     assert "LIVE_ORDER_COOLDOWN_ACTIVE" in record["request_blockers"]
     assert "LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT" in record["blockers"]
+    assert record["control_checks"]["rate_limiter"]["network_call_performed"] is False
+    assert record["control_checks"]["idempotency"]["key_fingerprint"] is None
+    assert record["control_checks"]["audit"]["audit_event_persisted"] is False
 
 
 def test_live_order_safety_blocks_blacklisted_symbol() -> None:
@@ -121,3 +131,90 @@ def test_live_order_safety_blocks_blacklisted_symbol() -> None:
     )
 
     assert "LIVE_ORDER_SYMBOL_BLACKLISTED" in record["request_blockers"]
+
+
+def test_live_rate_limiter_consumes_tokens_without_network_side_effects() -> None:
+    current = {"value": 100.0}
+
+    def clock() -> float:
+        return current["value"]
+
+    limiter = LiveRateLimiter(per_second=2, burst=2, clock=clock)
+
+    first = limiter.check(consume=True)
+    second = limiter.check(consume=True)
+    third = limiter.check(consume=True)
+
+    assert first["passed"] is True
+    assert second["passed"] is True
+    assert third["passed"] is False
+    assert third["reason_codes"] == ["LIVE_ORDER_RATE_LIMIT_EXCEEDED"]
+    assert third["network_call_performed"] is False
+    assert third["live_order_created"] is False
+
+    current["value"] = 101.1
+    assert limiter.check(consume=True)["passed"] is True
+
+
+def test_live_order_safety_detects_duplicate_idempotency_key_from_orders(db_session) -> None:
+    db_session.add(
+        Order(
+            order_id="live-duplicate-source",
+            symbol="AAPL",
+            side="buy",
+            qty=1,
+            price=10.0,
+            status="preview_only",
+            idempotency_key="duplicate-live-key",
+        )
+    )
+    db_session.commit()
+
+    record = LiveOrderSafetyService(
+        {
+            "LIVE_SYMBOL_BLACKLIST": "BLOCKED",
+        },
+        db=db_session,
+    ).evaluate_order_request(
+        symbol="AAPL",
+        side="buy",
+        qty=1,
+        limit_price=10.0,
+        idempotency_key="duplicate-live-key",
+    )
+
+    idempotency = record["control_checks"]["idempotency"]
+    assert "LIVE_ORDER_IDEMPOTENCY_KEY_DUPLICATE" in record["request_blockers"]
+    assert idempotency["existing_order_id"] == "live-duplicate-source"
+    assert idempotency["key_fingerprint"] is not None
+    assert "duplicate-live-key" not in json.dumps(record, ensure_ascii=False)
+
+
+def test_live_order_audit_service_persists_redacted_event_only_when_called(db_session) -> None:
+    service = LiveOrderAuditService(db_session)
+    event = service.build_event(
+        event_type="live_order_safety_test",
+        decision="deny",
+        reason_codes=["LIVE_ORDER_IDEMPOTENCY_KEY_REQUIRED"],
+        payload={
+            "symbol": "AAPL",
+            "access_token": "SENTINEL_TOKEN",
+            "account_no": "SENTINEL_ACCOUNT",
+            "safe": "ok",
+        },
+    )
+    assert event["audit_event_persisted"] is False
+    assert "SENTINEL_TOKEN" not in json.dumps(event, ensure_ascii=False)
+    assert "SENTINEL_ACCOUNT" not in json.dumps(event, ensure_ascii=False)
+
+    persisted = service.persist_event(event)
+    count = int(db_session.scalar(select(func.count()).select_from(BrokerAuditEvent)) or 0)
+    row = db_session.scalar(select(BrokerAuditEvent).where(BrokerAuditEvent.event_type == "live_order_safety_test"))
+
+    assert persisted["audit_event_persisted"] is True
+    assert count == 1
+    assert row is not None
+    assert row.broker_name == "kis_live"
+    assert row.decision == "deny"
+    assert "SENTINEL_TOKEN" not in row.sanitized_payload_json
+    assert "SENTINEL_ACCOUNT" not in row.sanitized_payload_json

@@ -4,6 +4,8 @@
 
 실계좌 주문 연동 3단계의 필수 선행 안전장치를 `LiveOrderSafetyService`와 `tools/live_canary_preflight.py`에 fail-closed preflight로 추가했다. 이 변경은 live 주문 route, live adapter submit/cancel, live network call을 열지 않으며 현재 3단계 완료 조건은 계속 미충족이다.
 
+추가로 rate limiter, idempotency guard, cooldown guard, redacted audit event builder를 코드 수준 helper로 분리했다. 이 helper들은 실제 live 주문을 만들지 않고 `network_call_performed=false`, `live_order_created=false`를 유지하며, DB audit persistence는 명시 호출 시에만 수행된다.
+
 | 항목 | 결과 | 근거 |
 |---|---|---|
 | Kill Switch | preflight 추가 | `LIVE_CANARY_KILL_SWITCH_READY` 또는 `LIVE_KILL_SWITCH_READY`, `LIVE_EMERGENCY_STOP_ARMED` 없으면 차단 |
@@ -20,6 +22,8 @@
 | Targeted tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_commit_safety` -> `23 passed` |
 | Preflight CLI | blocked | `.\.venv\Scripts\python.exe tools\live_canary_preflight.py` -> `status=blocked`, `canary_execution_allowed=false`, `live_order_created=false`, `network_call_performed=false` |
 | Secret/diff check | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only |
+| Code-level safety controls | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_controls_unit` -> `8 passed`; `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_controls_regression` -> `28 passed` |
+| Extended regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_controls_full` -> `32 passed` |
 
 결론: 3단계는 아직 완료가 아니다. 다음 진입 조건은 live token refresh 구현 방식, live adapter/route 구현 승인, reviewer/env isolation/rollback proof, 실제 실행 전 canary confirmation이다.
 
