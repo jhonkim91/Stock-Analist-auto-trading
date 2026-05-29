@@ -15,6 +15,7 @@
 | KIS paper balance | `/api/paper/portfolio`에서 조건부 read-only 호출. 기본 disabled/mock 상태는 local snapshot fallback 유지 |
 | Paper sync | `/api/paper/sync`, 공식 sync/network gate 통과 시만 KIS paper 조회 동기화 |
 | Paper sync worker | `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once`, `backend.app.jobs.paper_sync_runner`, 기본 OFF/confirm required |
+| Paper risk exit | `/api/paper/risk/exit-check`, stop-loss/trailing/이동평균 하향 교차 trigger 시 confirm/idempotency/gate 뒤 local sell fill |
 | Report notify | `/api/reports/{report_id}/notify`, secret redaction 및 delivery failure isolation |
 | Paper bot | runner/API 존재, scheduler와 auto-submit은 기본 disabled, loop는 bounded iteration/stop-file 방식만 허용 |
 

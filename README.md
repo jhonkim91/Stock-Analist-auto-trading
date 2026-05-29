@@ -290,7 +290,7 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `POST` | `/api/paper/orders/cancel`, `/api/paper/orders/{order_id}/cancel` | local paper order는 confirm/idempotency gate 뒤 취소, KIS broker order cancel은 KIS paper network gate 필요 |
 | `GET` | `/api/paper/orders`, `/api/paper/orders/open`, `/api/paper/orders/{order_id}`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio`, `/api/paper/account` | paper_* table 전용 조회, `/api/paper/portfolio`는 KIS paper balance 조건부 read-only 호출 후 local fallback |
 | `POST` | `/api/paper/fill-simulator/run` | simulator gate와 confirm/idempotency 통과 시 local paper fill 생성 및 `paper_positions` 갱신 |
-| `POST` | `/api/paper/risk/exit-check` | stop-loss/trailing-stop trigger 시 local sell order/fill 생성 및 position 감소 |
+| `POST` | `/api/paper/risk/exit-check` | stop-loss/trailing-stop/이동평균 하향 교차 trigger 시 local sell order/fill 생성 및 position 감소 |
 | `POST` | `/api/paper/sync` | KIS paper sync gate 통과 시만 조회 동기화, 기본은 credentials/gate 미충족으로 no-network block |
 | `GET` | `/api/paper/sync-worker/status` | KIS paper sync worker 상태, 기본 OFF/auto-start false |
 | `POST` | `/api/paper/sync-worker/run-once` | `PAPER_SYNC_WORKER_ENABLED=true`와 `confirm=true` 뒤에서 paper sync 1회 실행 |

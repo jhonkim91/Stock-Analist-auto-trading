@@ -186,9 +186,13 @@ class PaperFillSimulatorService:
         stop_price: float | None = None,
         trailing_high_price: float | None = None,
         trailing_stop_pct: float | None = None,
+        ma_fast_current: float | None = None,
+        ma_slow_current: float | None = None,
+        ma_fast_previous: float | None = None,
+        ma_slow_previous: float | None = None,
         strategy_tag: str | None = None,
     ) -> dict[str, Any]:
-        """스탑로스/트레일링 스탑 trigger 시 local sell order와 fill을 생성한다."""
+        """스탑로스/트레일링/이동평균 하향 교차 trigger 시 local sell order와 fill을 생성한다."""
         payload = {
             "operation": "risk_exit",
             "symbol": symbol,
@@ -196,6 +200,10 @@ class PaperFillSimulatorService:
             "stop_price": stop_price,
             "trailing_high_price": trailing_high_price,
             "trailing_stop_pct": trailing_stop_pct,
+            "ma_fast_current": ma_fast_current,
+            "ma_slow_current": ma_slow_current,
+            "ma_fast_previous": ma_fast_previous,
+            "ma_slow_previous": ma_slow_previous,
             "strategy_tag": strategy_tag,
         }
         request_hash = self._request_hash(payload)
@@ -206,7 +214,20 @@ class PaperFillSimulatorService:
             validation_reasons.extend(self._positive_price_reasons(trailing_high_price, "INVALID_TRAILING_HIGH_PRICE"))
         if trailing_stop_pct is not None and not (0 < trailing_stop_pct < 100):
             validation_reasons.append("INVALID_TRAILING_STOP_PCT")
-        if stop_price is None and (trailing_high_price is None or trailing_stop_pct is None):
+        ma_values = (ma_fast_current, ma_slow_current, ma_fast_previous, ma_slow_previous)
+        ma_rule_present = any(value is not None for value in ma_values)
+        ma_rule_complete = all(value is not None for value in ma_values)
+        if ma_rule_present and not ma_rule_complete:
+            validation_reasons.append("INCOMPLETE_MA_CROSS_INPUT")
+        if ma_rule_complete:
+            for value, reason in (
+                (ma_fast_current, "INVALID_MA_FAST_CURRENT"),
+                (ma_slow_current, "INVALID_MA_SLOW_CURRENT"),
+                (ma_fast_previous, "INVALID_MA_FAST_PREVIOUS"),
+                (ma_slow_previous, "INVALID_MA_SLOW_PREVIOUS"),
+            ):
+                validation_reasons.extend(self._positive_price_reasons(value, reason))
+        if stop_price is None and (trailing_high_price is None or trailing_stop_pct is None) and not ma_rule_complete:
             validation_reasons.append("PAPER_EXIT_RULE_REQUIRED")
         if validation_reasons:
             return self._blocked_response(
@@ -230,6 +251,10 @@ class PaperFillSimulatorService:
             stop_price=stop_price,
             trailing_high_price=trailing_high_price,
             trailing_stop_pct=trailing_stop_pct,
+            ma_fast_current=ma_fast_current,
+            ma_slow_current=ma_slow_current,
+            ma_fast_previous=ma_fast_previous,
+            ma_slow_previous=ma_slow_previous,
         )
         if not trigger["triggered"]:
             return {
@@ -290,7 +315,7 @@ class PaperFillSimulatorService:
             qty=qty,
             filled_qty=qty,
             remaining_qty=0,
-            order_type="trailing_stop" if trigger["trailing_stop_triggered"] else "stop_loss",
+            order_type=self._exit_order_type(trigger),
             limit_price=current_price,
             stop_price=float(trigger["trigger_price"]),
             status="filled",
@@ -312,7 +337,7 @@ class PaperFillSimulatorService:
             qty=qty,
             price=current_price,
             fill_ts=now,
-            fill_source="local_trailing_stop" if trigger["trailing_stop_triggered"] else "local_stop_loss",
+            fill_source=self._exit_fill_source(trigger),
             simulator_version="phase2_risk_exit",
             live_order_created=False,
             broker_order_created=False,
@@ -453,24 +478,67 @@ class PaperFillSimulatorService:
         stop_price: float | None,
         trailing_high_price: float | None,
         trailing_stop_pct: float | None,
+        ma_fast_current: float | None,
+        ma_slow_current: float | None,
+        ma_fast_previous: float | None,
+        ma_slow_previous: float | None,
     ) -> dict[str, Any]:
         trailing_stop_price = None
         if trailing_high_price is not None and trailing_stop_pct is not None:
             trailing_stop_price = trailing_high_price * (1 - trailing_stop_pct / 100)
         hard_stop_triggered = stop_price is not None and current_price <= stop_price
         trailing_stop_triggered = trailing_stop_price is not None and current_price <= trailing_stop_price
+        ma_cross_triggered = (
+            ma_fast_current is not None
+            and ma_slow_current is not None
+            and ma_fast_previous is not None
+            and ma_slow_previous is not None
+            and ma_fast_previous >= ma_slow_previous
+            and ma_fast_current < ma_slow_current
+        )
         trigger_candidates = [
-            value for value in (stop_price if hard_stop_triggered else None, trailing_stop_price if trailing_stop_triggered else None) if value is not None
+            value
+            for value in (
+                stop_price if hard_stop_triggered else None,
+                trailing_stop_price if trailing_stop_triggered else None,
+                current_price if ma_cross_triggered else None,
+            )
+            if value is not None
         ]
         trigger_price = max(trigger_candidates) if trigger_candidates else None
         return {
-            "triggered": bool(hard_stop_triggered or trailing_stop_triggered),
+            "triggered": bool(hard_stop_triggered or trailing_stop_triggered or ma_cross_triggered),
             "hard_stop_triggered": hard_stop_triggered,
             "trailing_stop_triggered": trailing_stop_triggered,
+            "ma_cross_triggered": ma_cross_triggered,
             "stop_price": stop_price,
             "trailing_stop_price": trailing_stop_price,
+            "ma_fast_current": ma_fast_current,
+            "ma_slow_current": ma_slow_current,
+            "ma_fast_previous": ma_fast_previous,
+            "ma_slow_previous": ma_slow_previous,
             "trigger_price": trigger_price,
         }
+
+    @staticmethod
+    def _exit_order_type(trigger: dict[str, Any]) -> str:
+        if trigger.get("trailing_stop_triggered"):
+            return "trailing_stop"
+        if trigger.get("hard_stop_triggered"):
+            return "stop_loss"
+        if trigger.get("ma_cross_triggered"):
+            return "ma_cross"
+        return "risk_exit"
+
+    @staticmethod
+    def _exit_fill_source(trigger: dict[str, Any]) -> str:
+        if trigger.get("trailing_stop_triggered"):
+            return "local_trailing_stop"
+        if trigger.get("hard_stop_triggered"):
+            return "local_stop_loss"
+        if trigger.get("ma_cross_triggered"):
+            return "local_ma_cross_exit"
+        return "local_risk_exit"
 
     def _success_response(
         self,

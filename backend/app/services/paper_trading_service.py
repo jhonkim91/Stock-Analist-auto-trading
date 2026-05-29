@@ -693,9 +693,13 @@ class PaperTradingService:
         stop_price: float | None = None,
         trailing_high_price: float | None = None,
         trailing_stop_pct: float | None = None,
+        ma_fast_current: float | None = None,
+        ma_slow_current: float | None = None,
+        ma_fast_previous: float | None = None,
+        ma_slow_previous: float | None = None,
         strategy_tag: str | None = None,
     ) -> dict[str, object]:
-        """스탑로스/트레일링 스탑 조건을 평가하고 trigger 시 local exit fill을 생성한다."""
+        """스탑로스/트레일링/이동평균 하향 교차를 평가하고 trigger 시 local exit fill을 생성한다."""
         if self.db is None:
             return self._paper_sync_unavailable_payload("risk_exit")
         from backend.app.services.paper_fill_simulator_service import PaperFillSimulatorService
@@ -706,6 +710,10 @@ class PaperTradingService:
             stop_price=stop_price,
             trailing_high_price=trailing_high_price,
             trailing_stop_pct=trailing_stop_pct,
+            ma_fast_current=ma_fast_current,
+            ma_slow_current=ma_slow_current,
+            ma_fast_previous=ma_fast_previous,
+            ma_slow_previous=ma_slow_previous,
             strategy_tag=strategy_tag,
             confirm=confirm,
             idempotency_key=idempotency_key,

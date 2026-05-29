@@ -207,3 +207,84 @@ def test_stoploss_and_trailing_exit_create_local_sell_fill(db_session, tmp_path,
     assert _count(db_session, PaperFill) == 1
     assert _count(db_session, PaperAuditEvent) == 1
     assert _count(db_session, Order) == 0
+
+
+def test_ma_cross_exit_creates_local_sell_fill(db_session, tmp_path, monkeypatch) -> None:
+    _enable_phase2_runtime(monkeypatch)
+    _write_phase2_config(tmp_path)
+    db_session.add(
+        PaperPosition(
+            symbol="KR012",
+            strategy_tag="phase2",
+            qty=2,
+            avg_price=100.0,
+            last_price=104.0,
+            market_value=208.0,
+            unrealized_pnl=8.0,
+            updated_at=utc_now(),
+        )
+    )
+    db_session.commit()
+    service = PaperFillSimulatorService(db_session, config_dir=tmp_path)
+
+    not_triggered = service.check_risk_exit(
+        symbol="KR012",
+        strategy_tag="phase2",
+        current_price=103.0,
+        ma_fast_previous=105.0,
+        ma_slow_previous=102.0,
+        ma_fast_current=104.0,
+        ma_slow_current=103.0,
+        confirm=True,
+        idempotency_key="phase2-ma-cross-noop",
+    )
+    triggered = service.check_risk_exit(
+        symbol="KR012",
+        strategy_tag="phase2",
+        current_price=99.0,
+        ma_fast_previous=105.0,
+        ma_slow_previous=102.0,
+        ma_fast_current=98.0,
+        ma_slow_current=101.0,
+        confirm=True,
+        idempotency_key="phase2-ma-cross-exit",
+    )
+    position = db_session.scalar(select(PaperPosition).where(PaperPosition.symbol == "KR012"))
+    exit_order = db_session.scalar(select(PaperOrder).where(PaperOrder.symbol == "KR012", PaperOrder.side == "sell"))
+
+    assert not_triggered["status"] == "not_triggered"
+    assert not_triggered["trigger"]["ma_cross_triggered"] is False
+    assert triggered["ok"] is True
+    assert triggered["status"] == "exit_filled"
+    assert triggered["trigger"]["ma_cross_triggered"] is True
+    assert triggered["fill"]["fill_source"] == "local_ma_cross_exit"
+    assert triggered["exit_order"]["order_type"] == "ma_cross"
+    assert position is not None
+    assert position.qty == 0
+    assert position.realized_pnl == -2.0
+    assert exit_order is not None
+    assert exit_order.network_call_performed is False
+    assert _count(db_session, PaperFill) == 1
+    assert _count(db_session, PaperAuditEvent) == 1
+    assert _count(db_session, Order) == 0
+
+
+def test_ma_cross_exit_requires_complete_ma_inputs(db_session, tmp_path, monkeypatch) -> None:
+    _enable_phase2_runtime(monkeypatch)
+    _write_phase2_config(tmp_path)
+    service = PaperFillSimulatorService(db_session, config_dir=tmp_path)
+
+    result = service.check_risk_exit(
+        symbol="KR012",
+        current_price=99.0,
+        ma_fast_current=98.0,
+        ma_slow_current=101.0,
+        confirm=True,
+        idempotency_key="phase2-incomplete-ma-cross",
+    )
+
+    assert result["status"] == "blocked"
+    assert "INCOMPLETE_MA_CROSS_INPUT" in result["reason_codes"]
+    assert result["fill_created"] is False
+    assert _count(db_session, PaperFill) == 0
+    assert _count(db_session, Order) == 0

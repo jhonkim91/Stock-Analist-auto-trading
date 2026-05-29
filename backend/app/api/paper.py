@@ -37,13 +37,17 @@ class PaperFillSimulationRequest(BaseModel):
 
 
 class PaperRiskExitCheckRequest(BaseModel):
-    """paper 스탑로스/트레일링 스탑 실행 요청 DTO다."""
+    """paper 스탑로스/트레일링/이동평균 하향 교차 실행 요청 DTO다."""
 
     symbol: str
     current_price: float
     stop_price: float | None = None
     trailing_high_price: float | None = None
     trailing_stop_pct: float | None = None
+    ma_fast_current: float | None = None
+    ma_slow_current: float | None = None
+    ma_fast_previous: float | None = None
+    ma_slow_previous: float | None = None
     strategy_tag: str | None = None
     confirm: bool = False
     idempotency_key: str | None = None
@@ -202,6 +206,10 @@ def check_paper_risk_exit(payload: PaperRiskExitCheckRequest, db: Session = Depe
         stop_price=payload.stop_price,
         trailing_high_price=payload.trailing_high_price,
         trailing_stop_pct=payload.trailing_stop_pct,
+        ma_fast_current=payload.ma_fast_current,
+        ma_slow_current=payload.ma_slow_current,
+        ma_fast_previous=payload.ma_fast_previous,
+        ma_slow_previous=payload.ma_slow_previous,
         strategy_tag=payload.strategy_tag,
         confirm=payload.confirm,
         idempotency_key=payload.idempotency_key,

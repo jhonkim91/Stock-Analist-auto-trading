@@ -204,6 +204,31 @@ $env:PAPER_TRADING_KILL_SWITCH = "true"
 
 Settings 화면에서는 `봇/주문 정지` preset을 누르면 현재 backend 프로세스의 bot/order gate가 즉시 차단 상태로 맞춰진다. 모든 runner 응답은 `auto_start=false`, `bounded_loop=true`, `live_order_created=false`, `network_call_performed=false`를 유지해야 한다.
 
+## Paper risk exit check
+
+스탑로스, 트레일링 스탑, 이동평균 하향 교차 감시는 `/api/paper/risk/exit-check`로 수동 또는 bounded worker에서 호출한다. trigger가 발생해도 `confirm=true`, `idempotency_key`, paper fill simulator gate, kill-switch가 모두 통과해야 local sell order/fill과 position 감소가 수행된다.
+
+```powershell
+$exitBody = @{
+  symbol = "005930"
+  current_price = 71000
+  ma_fast_previous = 72000
+  ma_slow_previous = 71500
+  ma_fast_current = 70800
+  ma_slow_current = 71400
+  confirm = $true
+  idempotency_key = "risk-exit-005930-20260530-ma-cross"
+} | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/api/paper/risk/exit-check -Method Post -ContentType "application/json" -Body $exitBody
+```
+
+성공 기준:
+
+- `trigger.ma_cross_triggered=true`
+- `exit_order.order_type=ma_cross`
+- `fill.fill_source=local_ma_cross_exit`
+- `live_order_created=false`, `broker_order_created=false`, `network_call_performed=false`
+
 ## Paper live run
 
 `dry_run=false`는 실전투자가 아니라 KIS 모의투자 전용 run이다. 아래 조건이 모두 충족되지 않으면 실행하지 않는다.

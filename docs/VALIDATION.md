@@ -1,5 +1,18 @@
 # Validation
 
+## 2026-05-30 Paper Risk Exit MA Cross
+
+`POST /api/paper/risk/exit-check`의 paper-only exit trigger를 stop-loss/trailing-stop에서 이동평균 하향 교차까지 확장했다. 이전 fast MA가 slow MA 이상이고 현재 fast MA가 slow MA 아래로 내려가면 `ma_cross` local sell order와 `local_ma_cross_exit` fill을 생성하며, 입력이 일부만 있으면 mutation 없이 차단한다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| MA cross trigger | 통과 | `ma_fast_previous >= ma_slow_previous` 및 `ma_fast_current < ma_slow_current`에서 `ma_cross_triggered=true` |
+| Local paper exit | 통과 | trigger 시 `paper_orders.side=sell`, `order_type=ma_cross`, `paper_fills.fill_source=local_ma_cross_exit`, position qty 감소 |
+| Incomplete MA input | 통과 | fast/slow 현재/이전 값 일부 누락 시 `INCOMPLETE_MA_CROSS_INPUT`으로 차단 |
+| No live/network | 통과 | `live_order_created=false`, `broker_order_created=false`, `network_call_performed=false`, legacy `orders` row 0 |
+| Targeted tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_phase2_engine.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_ma_cross_exit` -> `5 passed` |
+| Live safety regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_phase2_engine.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_ma_cross_exit_regression` -> `6 passed` |
+
 ## 2026-05-30 Domestic KIS Paper 조회 TR ID 재확인
 
 남은 국내 조회 후보인 정정취소가능주문조회와 매도가능수량조회는 공식 샘플에 endpoint와 real TR ID만 존재하고, paper `env_dv` 또는 `VT*` TR ID는 확인되지 않았다. 따라서 추정 변환으로 구현하지 않고 fail-closed 보류 상태를 유지한다.
