@@ -6,9 +6,10 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.tables import PaperAuditEvent
+from backend.app.models.tables import PaperAuditEvent, PaperPosition
 from backend.app.services.account_service import AccountService
 from backend.app.services.market_realtime_service import MarketRealtimeService
 from backend.app.services.paper_bot_service import PaperBotService
@@ -126,7 +127,7 @@ class TelegramBotService:
         message = (
             "명령: /status, /search 종목코드, /report, /portfolio, /rank, "
             "/bot status|enable|disable|auto|run|stop, "
-            "/buy 종목 qty [price] confirm, /sell 종목 qty [price] confirm, /orders, /stop"
+            "/buy 종목 qty|amount=금액 [price] confirm, /sell 종목 qty|all [price] confirm, /orders, /stop"
         )
         return self._response(command, status="ok", message=message)
 
@@ -326,6 +327,15 @@ class TelegramBotService:
         positional = [arg for arg in command.args[1:] if "=" not in arg and arg.lower() not in {"confirm", "confirmed", "확인"}]
         qty = _int_or_none(values.get("qty"))
         amount = _float_or_none(values.get("amount") or values.get("notional"))
+        sell_all_requested = side == "sell" and self._sell_all_requested(values=values, positional=positional)
+        if sell_all_requested:
+            qty = self._open_position_qty(symbol)
+            if qty is None:
+                return {
+                    "ok": False,
+                    "message": "전량 매도할 paper position이 없습니다.",
+                    "reason_codes": ["TELEGRAM_SELL_ALL_POSITION_NOT_FOUND"],
+                }
         if qty is None and positional:
             qty = _int_or_none(positional[0])
         if limit_price is None and len(positional) >= 2:
@@ -344,6 +354,26 @@ class TelegramBotService:
             "confirm": confirm,
             "idempotency_key": self._idempotency_key(command.raw_text, chat_id=chat_id),
         }
+
+    @staticmethod
+    def _sell_all_requested(*, values: dict[str, str], positional: list[str]) -> bool:
+        all_tokens = {"all", "full", "전량", "전체"}
+        qty_value = str(values.get("qty") or "").strip().lower()
+        sell_all_value = str(values.get("sell_all") or values.get("all") or "").strip().lower()
+        return (
+            qty_value in all_tokens
+            or sell_all_value in {"1", "true", "yes", "on", "y", "전량", "전체"}
+            or any(str(item).strip().lower() in all_tokens for item in positional)
+        )
+
+    def _open_position_qty(self, symbol: str) -> int | None:
+        qty = self.db.scalar(
+            select(func.coalesce(func.sum(PaperPosition.qty), 0)).where(
+                PaperPosition.symbol == symbol.strip().upper(),
+                PaperPosition.qty > 0,
+            )
+        )
+        return int(qty or 0) or None
 
     def _latest_price(self, symbol: str) -> float | None:
         try:

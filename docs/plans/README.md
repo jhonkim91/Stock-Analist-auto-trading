@@ -14,7 +14,7 @@
 | 항목 | 값 |
 |---|---|
 | 현재 checkpoint | `Telegram + KIS Paper Trading Bot reset` |
-| 현재 구현 완료 | 기존 분석/스크리너/백테스트/리포트/포트폴리오 보존, Telegram command/webhook/polling/report scheduler, `/bot` 명시 제어, KIS token cache skeleton, stock detail KIS quote fallback, paper order guard, paper sync worker wrapper, Settings one-click runtime presets, KIS paper official sample matrix 재확인, paper bot bounded runner, paper risk exit MA cross |
+| 현재 구현 완료 | 기존 분석/스크리너/백테스트/리포트/포트폴리오 보존, Telegram command/webhook/polling/report scheduler, `/bot` 명시 제어, Telegram amount buy/sell-all, KIS token cache skeleton, stock detail KIS quote fallback, paper order guard, paper sync worker wrapper, Settings one-click runtime presets, KIS paper official sample matrix 재확인, paper bot bounded runner, paper risk exit MA cross |
 | 최신 backend pytest | full backend `521 passed in 823.78s`, bounded bot regression `7 passed`, Telegram polling/bot-control/scheduler/sync worker targeted suites, Settings preset focused suite, KIS matrix docs suite 통과 |
 | 다음 권장 Phase | KIS 포털/운영 문서 또는 paper host 기준 국내 정정취소가능/매도가능수량조회 paper TR ID 확인 |
 | 상태 요약 문서 | `docs/PROJECT_STATUS.md` |

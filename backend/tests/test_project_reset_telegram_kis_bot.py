@@ -5,7 +5,7 @@ from textwrap import dedent
 
 from sqlalchemy import select
 
-from backend.app.models.tables import PaperAuditEvent, PaperOrder
+from backend.app.models.tables import PaperAuditEvent, PaperOrder, PaperPosition, utc_now
 from backend.app.services.kis_token_manager import KisTokenManager
 from backend.app.services.paper_trading_service import PaperTradingService
 from backend.app.services.telegram_bot_service import TelegramBotService
@@ -141,6 +141,33 @@ def test_telegram_command_parsing_and_search_fallback(full_flow_client, monkeypa
     assert buy_preview.status_code == 200
     assert buy_preview.json()["status"] == "preview"
     assert buy_preview.json()["payload"]["paper_order_created"] is False
+
+
+def test_telegram_sell_all_uses_current_paper_position_qty(db_session) -> None:
+    db_session.add(
+        PaperPosition(
+            symbol="KR012",
+            strategy_tag="telegram",
+            qty=7,
+            avg_price=100.0,
+            last_price=101.0,
+            market_value=707.0,
+            unrealized_pnl=7.0,
+            updated_at=utc_now(),
+        )
+    )
+    db_session.commit()
+    service = TelegramBotService(db_session)
+
+    preview = service.handle_text("/sell KR012 all price=101", chat_id="chat-1")
+    blocked = service.handle_text("/sell KR999 all price=101", chat_id="chat-1")
+
+    assert preview["status"] == "preview"
+    assert "qty=7" in preview["message"]
+    assert preview["payload"]["paper_order_created"] is False
+    assert preview["payload"]["network_call_performed"] is False
+    assert blocked["status"] == "bad_request"
+    assert "TELEGRAM_SELL_ALL_POSITION_NOT_FOUND" in blocked["reason_codes"]
 
 
 def test_stock_detail_api_uses_db_fallback_without_kis_network(full_flow_client, monkeypatch) -> None:

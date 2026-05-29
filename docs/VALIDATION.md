@@ -1,5 +1,16 @@
 # Validation
 
+## 2026-05-30 Telegram Sell-All Command
+
+Telegram `/sell` 명령에 전량 매도 입력을 추가했다. `/sell 종목 all` 또는 `qty=all`은 현재 `paper_positions`의 보유 수량을 합산해 preview/submit 수량으로 사용하고, 보유 수량이 없으면 주문 API 호출 전 bad request로 차단한다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Sell all parsing | 통과 | `/sell KR012 all price=101` -> 현재 paper position qty `7`을 preview 수량으로 사용 |
+| Missing position | 통과 | 보유 수량이 없으면 `TELEGRAM_SELL_ALL_POSITION_NOT_FOUND` |
+| No live/network preview | 통과 | preview 응답에서 `paper_order_created=false`, `network_call_performed=false` |
+| Related Telegram tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sell_all_related` -> `15 passed` |
+
 ## 2026-05-30 Paper Risk Exit MA Cross
 
 `POST /api/paper/risk/exit-check`의 paper-only exit trigger를 stop-loss/trailing-stop에서 이동평균 하향 교차까지 확장했다. 이전 fast MA가 slow MA 이상이고 현재 fast MA가 slow MA 아래로 내려가면 `ma_cross` local sell order와 `local_ma_cross_exit` fill을 생성하며, 입력이 일부만 있으면 mutation 없이 차단한다.

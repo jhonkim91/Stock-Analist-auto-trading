@@ -36,7 +36,7 @@
 - `POST /api/telegram/webhook`: Telegram webhook update를 command dispatcher에 연결한다.
 - `GET /api/telegram/polling/status`, `POST /api/telegram/polling/run-once`: Telegram `getUpdates` bounded polling runner다. 기본은 OFF이며 `confirm=true`, `TELEGRAM_BOT_ENABLED=true`, `TELEGRAM_POLLING_ENABLED=true`, token 설정이 모두 필요하다.
 - `GET /api/telegram/scheduler/status`, `POST /api/telegram/scheduler/run-once`: 장 시작 전/장 종료 후/주간 report scheduler 구조를 제공한다. 기본은 OFF이며 `confirm=true`와 dry-run gate 뒤에서만 실행된다.
-- `/buy`, `/sell`: `confirm` 또는 `TELEGRAM_PAPER_TRADE_CONFIRM=true` 없이는 preview만 수행.
+- `/buy`, `/sell`: `confirm` 또는 `TELEGRAM_PAPER_TRADE_CONFIRM=true` 없이는 preview만 수행. `/buy`는 `amount`/`notional` 금액 기반 수량 계산을 지원하고, `/sell 종목 all`은 현재 `paper_positions` 보유 수량을 전량 매도 수량으로 사용한다.
 - `GET /api/paper/sync-worker/status`, `POST /api/paper/sync-worker/run-once`: KIS paper 주문/체결/잔고 sync worker wrapper다. 기본은 OFF이며 `confirm=true`와 paper network gate를 통과해야 조회 동기화를 시도한다.
 - KIS token cache: `KIS_TOKEN_CACHE_ENABLED=true`일 때만 `.cache/kis/token.json`에 local cache 저장.
 - Paper risk gate: `kill_switch`, `max_order_notional`, `max_order_qty`, `max_open_positions`, `blacklist`, `cooldown_seconds`, `idempotency_key`.

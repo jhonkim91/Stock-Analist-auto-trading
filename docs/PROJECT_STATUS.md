@@ -33,6 +33,7 @@
 - `/api/telegram/polling/status`, `/api/telegram/polling/run-once`와 `backend.app.jobs.telegram_polling_runner` 추가. Polling은 기본 OFF, auto-start false, `confirm=true`와 env gate 통과 시에만 `getUpdates`를 1회 조회하고 command dispatch를 수행한다.
 - Telegram command dispatcher가 `/start`, `/help`, `/status`, `/search`, `/report`, `/portfolio`, `/rank`, `/bot`, `/stop`, `/buy`, `/sell`, `/orders`를 파싱.
 - `/bot status|enable|disable|auto|run|stop`으로 paper bot process env를 명시 제어한다. enable/disable/auto/run은 `confirm`이 필요하고 live 주문은 만들지 않는다.
+- Telegram `/buy`는 `amount`/`notional` 금액 기반 수량 계산을 지원하고, `/sell 종목 all`은 현재 `paper_positions` 보유 수량을 사용해 전량 매도 preview/submit을 만든다.
 - `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once` 추가. Worker는 기본 OFF이며 `PAPER_SYNC_WORKER_ENABLED=true`, `confirm=true`, paper network gate 통과 시에만 `PaperSyncService.sync()`를 호출한다.
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가.
 - `backend/config/bot.yaml`과 `.env.example`에서 paper bot 자동매매는 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false)로 정렬.
@@ -84,6 +85,7 @@
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_api_matrix_docs.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_docs` | `1 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_bounded_loop_regression` | `7 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_phase2_engine.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_ma_cross_exit_regression` | `6 passed` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sell_all_related` | `15 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` | `18 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_full_backend` | `521 passed in 823.78s` |
 | `.\.venv\Scripts\python.exe tools\secret_scan.py` | `NO_SECRET_FINDINGS` |
