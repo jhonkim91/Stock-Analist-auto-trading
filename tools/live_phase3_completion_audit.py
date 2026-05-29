@@ -23,6 +23,7 @@ DEFAULT_TEMPLATE_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-proces
 DEFAULT_TOKEN_REFRESH_RECORD_PATH = (
     PROJECT_ROOT / "docs" / "research" / "kis-live-token-refresh-preflight-record.json"
 )
+DEFAULT_AUTHORITY_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-authority-approval-record.json"
 REQUIRED_ENV_NAMES = (
     "KIS_APP_KEY",
     "KIS_APP_SECRET",
@@ -89,10 +90,14 @@ def build_completion_audit(
     env_file_presence_result: Mapping[str, Any] | None = None,
     env_file_access_token: str | None = None,
     token_refresh_record_source: Mapping[str, Any] | None = None,
+    authority_record: Mapping[str, Any] | None = None,
+    authority_record_source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """실계좌 주문 연동 3단계 완료 여부를 네트워크 없이 항목별로 판정한다."""
     current_env = os.environ if env is None else env
     token_record = dict(token_refresh_record or _preview_token_refresh_record())
+    authority = dict(authority_record or {})
+    authority_summary = _authority_record_summary(authority, source=authority_record_source)
     canary = dict(canary_record or live_canary_preflight.build_live_canary_preflight(current_env))
     safety_controls = dict(canary.get("safety_controls") or {})
     control_checks = dict(safety_controls.get("required_controls") or {})
@@ -122,9 +127,13 @@ def build_completion_audit(
         and bool(live_adapter_status.get("network_enabled"))
         and bool(canary.get("canary_execution_allowed")),
         "no_live_order_created_during_audit": not bool(canary.get("live_order_created"))
-        and not bool(token_record.get("live_order_created")),
-        "no_order_cancelled_during_audit": not bool(canary.get("order_cancelled")),
-        "secrets_redacted": bool(canary.get("secrets_redacted")) and bool(token_record.get("secrets_redacted")),
+        and not bool(token_record.get("live_order_created"))
+        and not bool(authority.get("live_order_created")),
+        "no_order_cancelled_during_audit": not bool(canary.get("order_cancelled"))
+        and not bool(authority.get("order_cancelled")),
+        "secrets_redacted": bool(canary.get("secrets_redacted"))
+        and bool(token_record.get("secrets_redacted"))
+        and bool(authority.get("secrets_redacted", True)),
     }
     missing_requirements = [name for name, passed in requirements.items() if not passed]
     blocker_sources = {
@@ -146,10 +155,12 @@ def build_completion_audit(
             token_record,
             source=token_refresh_record_source,
         ),
+        "live_authority_proof_record": authority_summary,
         "proof_gap_summary": _proof_gap_summary(
             requirements=requirements,
             blocker_sources=blocker_sources,
             token_record=token_record,
+            authority_summary=authority_summary,
             live_adapter_status=live_adapter_status,
             canary=canary,
         ),
@@ -212,6 +223,11 @@ def build_powershell_env_template() -> str:
                 r"# .\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py "
                 r"--token-refresh-record-path docs\research\kis-live-token-refresh-preflight-record.json"
             ),
+            "# Optional redacted authority approval record, still no submit/cancel authority by itself:",
+            (
+                r"# .\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py "
+                r"--authority-record-path docs\research\live-authority-approval-record.json"
+            ),
         ]
     )
     return "\n".join(lines) + "\n"
@@ -240,6 +256,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--token-refresh-record-path",
         default="",
         help="optional redacted kis_live_token_refresh_preflight.py --write-record JSON path",
+    )
+    parser.add_argument(
+        "--authority-record-path",
+        default="",
+        help="optional redacted live submit/cancel authority approval JSON path",
     )
     parser.add_argument("--print-powershell-template", action="store_true", help="print a placeholder env template")
     parser.add_argument("--write-powershell-template", action="store_true", help="write a placeholder env template")
@@ -285,12 +306,18 @@ def main(argv: list[str] | None = None) -> int:
         token_refresh_record, token_refresh_record_source = load_token_refresh_record(
             Path(args.token_refresh_record_path)
         )
+    authority_record: Mapping[str, Any] | None = None
+    authority_record_source: Mapping[str, Any] | None = None
+    if str(args.authority_record_path).strip():
+        authority_record, authority_record_source = load_authority_record(Path(args.authority_record_path))
     record = build_completion_audit(
         token_refresh_record=token_refresh_record,
         env_file_load_result=env_file_load_result,
         env_file_presence_result=env_file_presence_result,
         env_file_access_token=env_file_token_values.get(KIS_ACCESS_TOKEN_ENV),
         token_refresh_record_source=token_refresh_record_source,
+        authority_record=authority_record,
+        authority_record_source=authority_record_source,
     )
     if args.write_record:
         write_completion_audit(record, Path(args.record_path))
@@ -347,6 +374,43 @@ def load_token_refresh_record(path: Path) -> tuple[Mapping[str, Any] | None, dic
     return payload, source
 
 
+def load_authority_record(path: Path) -> tuple[Mapping[str, Any] | None, dict[str, Any]]:
+    """별도 승인된 live submit/cancel authority approval record를 raw value 출력 없이 읽는다."""
+    resolved = path if path.is_absolute() else PROJECT_ROOT / path
+    source: dict[str, Any] = {
+        "provided": True,
+        "path": _record_path(resolved),
+        "loaded": False,
+        "status": "not_loaded",
+        "reason_codes": [],
+        "secrets_redacted": True,
+        "network_call_performed": False,
+        "live_order_created": False,
+        "order_cancelled": False,
+    }
+    if not resolved.exists():
+        source.update({"status": "missing", "reason_codes": ["AUTHORITY_RECORD_MISSING"]})
+        return None, source
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        source.update({"status": "invalid", "reason_codes": ["AUTHORITY_RECORD_INVALID"]})
+        return None, source
+    if not isinstance(payload, Mapping):
+        source.update({"status": "invalid", "reason_codes": ["AUTHORITY_RECORD_NOT_OBJECT"]})
+        return None, source
+    source.update(
+        {
+            "loaded": True,
+            "status": "loaded",
+            "network_call_performed": bool(payload.get("network_call_performed")),
+            "live_order_created": bool(payload.get("live_order_created")),
+            "order_cancelled": bool(payload.get("order_cancelled")),
+        }
+    )
+    return payload, source
+
+
 def _token_refresh_record_summary(
     record: Mapping[str, Any],
     *,
@@ -374,6 +438,40 @@ def _token_refresh_record_summary(
     }
 
 
+def _authority_record_summary(
+    record: Mapping[str, Any],
+    *,
+    source: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    default_source = {
+        "provided": False,
+        "loaded": False,
+        "status": "no_authority_record",
+        "path": None,
+        "reason_codes": [],
+        "secrets_redacted": True,
+    }
+    source_payload = dict(source or default_source)
+    operations = _authority_operations(record)
+    return {
+        "source": source_payload,
+        "operations": sorted(operations),
+        "authority_approved": bool(record.get("authority_approved")),
+        "separate_user_approval": bool(record.get("separate_user_approval")),
+        "reviewer_present": bool(record.get("reviewer_present")),
+        "environment_is_prod_live_isolated": bool(record.get("environment_is_prod_live_isolated")),
+        "rollback_ready": bool(record.get("rollback_ready")),
+        "kill_switch_ready": bool(record.get("kill_switch_ready")),
+        "minimum_size_confirmed": bool(record.get("minimum_size_confirmed")),
+        "network_call_performed": bool(record.get("network_call_performed")),
+        "live_order_created": bool(record.get("live_order_created")),
+        "order_cancelled": bool(record.get("order_cancelled")),
+        "submit_approval_proof_passed": _authority_operation_proof_passed(record, "submit"),
+        "cancel_approval_proof_passed": _authority_operation_proof_passed(record, "cancel"),
+        "secrets_redacted": bool(record.get("secrets_redacted", True)),
+    }
+
+
 def _control_passed(controls: Mapping[str, Any], name: str) -> bool:
     control = controls.get(name)
     return bool(isinstance(control, Mapping) and control.get("passed"))
@@ -389,11 +487,45 @@ def _token_refresh_proof_passed(record: Mapping[str, Any]) -> bool:
     )
 
 
+def _authority_operation_proof_passed(record: Mapping[str, Any], operation: str) -> bool:
+    operations = _authority_operations(record)
+    return (
+        operation in operations
+        and bool(record.get("authority_approved"))
+        and bool(record.get("separate_user_approval"))
+        and bool(record.get("reviewer_present"))
+        and bool(record.get("environment_is_prod_live_isolated"))
+        and bool(record.get("rollback_ready"))
+        and bool(record.get("kill_switch_ready"))
+        and bool(record.get("minimum_size_confirmed"))
+        and bool(record.get("secrets_redacted", True))
+        and not bool(record.get("network_call_performed"))
+        and not bool(record.get("live_order_created"))
+        and not bool(record.get("order_cancelled"))
+    )
+
+
+def _authority_operations(record: Mapping[str, Any]) -> set[str]:
+    raw_operations = record.get("operations", record.get("operation", ""))
+    values = raw_operations if isinstance(raw_operations, (list, tuple, set)) else [raw_operations]
+    operations: set[str] = set()
+    for value in values:
+        normalized = str(value or "").strip().lower()
+        if normalized in {"live_submit_cancel_authority", "submit_cancel", "both"}:
+            operations.update({"submit", "cancel"})
+        if "submit" in normalized:
+            operations.add("submit")
+        if "cancel" in normalized:
+            operations.add("cancel")
+    return operations
+
+
 def _proof_gap_summary(
     *,
     requirements: Mapping[str, bool],
     blocker_sources: Mapping[str, list[str]],
     token_record: Mapping[str, Any],
+    authority_summary: Mapping[str, Any],
     live_adapter_status: Mapping[str, Any],
     canary: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -415,6 +547,12 @@ def _proof_gap_summary(
         "token_refresh_real_call_proof_required": not bool(requirements.get("token_refresh_real_call_proof")),
         "token_refresh_network_call_performed": bool(token_record.get("network_call_performed")),
         "token_refresh_blockers_present": bool(token_refresh_blockers),
+        "submit_authority_approval_proof_recorded": bool(
+            authority_summary.get("submit_approval_proof_passed")
+        ),
+        "cancel_authority_approval_proof_recorded": bool(
+            authority_summary.get("cancel_approval_proof_passed")
+        ),
         "safety_controls_blocked": bool(safety_blockers),
         "live_submit_authority_required": not bool(requirements.get("live_submit_authority_present")),
         "live_cancel_authority_required": not bool(requirements.get("live_cancel_authority_present")),

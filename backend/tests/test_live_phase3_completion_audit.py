@@ -40,6 +40,7 @@ def test_live_phase3_completion_audit_powershell_template_is_placeholder_only(tm
     assert "CONFIRM_KIS_LIVE_TOKEN_REFRESH" in template
     assert "tools\\kis_live_token_refresh_preflight.py --execute" in template
     assert "tools\\live_phase3_completion_audit.py --token-refresh-record-path" in template
+    assert "tools\\live_phase3_completion_audit.py --authority-record-path" in template
     assert "PHASE3_COMPLETION_SECRET" not in template
 
     path = tmp_path / "phase3-template.ps1"
@@ -101,6 +102,8 @@ def test_live_phase3_completion_audit_keeps_submit_authority_missing_even_with_o
     assert record["token_refresh_proof_record"]["proof_passed"] is True
     assert record["token_refresh_proof_record"]["network_call_performed"] is True
     assert record["token_refresh_proof_record"]["source"]["status"] == "preview_record"
+    assert record["live_authority_proof_record"]["source"]["status"] == "no_authority_record"
+    assert record["proof_gap_summary"]["submit_authority_approval_proof_recorded"] is False
 
 
 def test_live_phase3_completion_audit_can_load_token_refresh_proof_record(tmp_path) -> None:
@@ -155,6 +158,74 @@ def test_live_phase3_completion_audit_handles_missing_token_refresh_record(tmp_p
     assert record["token_refresh_proof_record"]["source"]["status"] == "missing"
     assert record["token_refresh_proof_record"]["proof_passed"] is False
     assert "token_refresh_real_call_proof" in record["missing_requirements"]
+
+
+def test_live_phase3_completion_audit_can_load_authority_approval_record_without_opening_adapter(tmp_path) -> None:
+    authority_path = tmp_path / "authority-proof.json"
+    authority_path.write_text(
+        json.dumps(
+            {
+                "operations": ["live_submit_authority", "live_cancel_authority"],
+                "authority_approved": True,
+                "separate_user_approval": True,
+                "reviewer_present": True,
+                "reviewer": "VALUE_A",
+                "environment_is_prod_live_isolated": True,
+                "rollback_ready": True,
+                "kill_switch_ready": True,
+                "minimum_size_confirmed": True,
+                "network_call_performed": False,
+                "live_order_created": False,
+                "order_cancelled": False,
+                "secrets_redacted": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    token_record = {
+        "network_call_performed": True,
+        "live_order_created": False,
+        "secrets_redacted": True,
+        "result": {"token_refreshed": True},
+        "status": {"reason_codes": []},
+    }
+
+    authority_record, source = live_phase3_completion_audit.load_authority_record(authority_path)
+    record = live_phase3_completion_audit.build_completion_audit(
+        _operator_ready_env(),
+        token_refresh_record=token_record,
+        authority_record=authority_record,
+        authority_record_source=source,
+    )
+    serialized = json.dumps(record, ensure_ascii=False, default=str)
+
+    assert record["live_authority_proof_record"]["source"]["loaded"] is True
+    assert record["live_authority_proof_record"]["source"]["status"] == "loaded"
+    assert record["live_authority_proof_record"]["submit_approval_proof_passed"] is True
+    assert record["live_authority_proof_record"]["cancel_approval_proof_passed"] is True
+    assert record["proof_gap_summary"]["submit_authority_approval_proof_recorded"] is True
+    assert record["proof_gap_summary"]["cancel_authority_approval_proof_recorded"] is True
+    assert record["requirements"]["live_submit_authority_present"] is False
+    assert record["requirements"]["live_cancel_authority_present"] is False
+    assert "live_submit_authority_present" in record["missing_requirements"]
+    assert "live_cancel_authority_present" in record["missing_requirements"]
+    assert record["complete"] is False
+    assert "VALUE_A" not in serialized
+
+
+def test_live_phase3_completion_audit_handles_missing_authority_record(tmp_path) -> None:
+    authority_record, source = live_phase3_completion_audit.load_authority_record(tmp_path / "missing.json")
+
+    record = live_phase3_completion_audit.build_completion_audit(
+        _operator_ready_env(),
+        authority_record=authority_record,
+        authority_record_source=source,
+    )
+
+    assert record["live_authority_proof_record"]["source"]["status"] == "missing"
+    assert record["live_authority_proof_record"]["submit_approval_proof_passed"] is False
+    assert record["live_authority_proof_record"]["cancel_approval_proof_passed"] is False
+    assert "live_submit_authority_present" in record["missing_requirements"]
 
 
 def test_live_phase3_completion_audit_can_write_redacted_record(tmp_path) -> None:

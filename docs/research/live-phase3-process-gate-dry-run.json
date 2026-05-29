@@ -227,7 +227,31 @@
       "values_redacted": true
     }
   },
-  "generated_at": "2026-05-29T11:27:48.504268+00:00",
+  "generated_at": "2026-05-29T11:34:49.946444+00:00",
+  "live_authority_proof_record": {
+    "authority_approved": false,
+    "cancel_approval_proof_passed": false,
+    "environment_is_prod_live_isolated": false,
+    "kill_switch_ready": false,
+    "live_order_created": false,
+    "minimum_size_confirmed": false,
+    "network_call_performed": false,
+    "operations": [],
+    "order_cancelled": false,
+    "reviewer_present": false,
+    "rollback_ready": false,
+    "secrets_redacted": true,
+    "separate_user_approval": false,
+    "source": {
+      "loaded": false,
+      "path": null,
+      "provided": false,
+      "reason_codes": [],
+      "secrets_redacted": true,
+      "status": "no_authority_record"
+    },
+    "submit_approval_proof_passed": false
+  },
   "live_order_created": false,
   "missing_all_scopes_env_names": [],
   "missing_process_env_names": [],
@@ -243,6 +267,7 @@
     "authority_contract_present": true,
     "authority_contract_status": "disabled_pending_external_approval",
     "canary_execution_allowed": false,
+    "cancel_authority_approval_proof_recorded": false,
     "live_adapter_disabled": true,
     "live_adapter_network_enabled": false,
     "live_cancel_authority_required": true,
@@ -253,6 +278,7 @@
     "safety_controls_blocked": false,
     "secrets_redacted": true,
     "separate_live_order_authority_required": true,
+    "submit_authority_approval_proof_recorded": false,
     "token_refresh_blockers_present": false,
     "token_refresh_network_call_performed": false,
     "token_refresh_real_call_proof_required": true
@@ -289,7 +315,7 @@
     "access_token_payload_decoded": true,
     "access_token_present": true,
     "access_token_process_configured": false,
-    "access_token_seconds_until_expiry": -83560,
+    "access_token_seconds_until_expiry": -83981,
     "access_token_user_configured": false,
     "access_token_variable": "KIS_ACCESS_TOKEN",
     "access_token_without_refresh_token": false,
