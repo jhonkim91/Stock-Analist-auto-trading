@@ -28,6 +28,7 @@
 - KIS paper token manager에 opt-in token cache, issue, refresh-token 우선 갱신, cache-hit ensure 경로를 추가하고 token status가 paper gate 준비 상태를 표시하도록 정렬.
 - `/api/stocks/search`, `/api/stocks/{symbol}` 추가.
 - `MarketRealtimeService.symbol_detail()`가 KIS paper quote를 우선 시도하고 실패/비활성 시 DB 최신 OHLCV로 fallback.
+- 종목 상세 KIS quote 우선 경로와 DB fallback 경로를 모두 테스트로 고정했다.
 - 종목 상세 API 응답에 `summary`를 추가해 현재가, 등락률, 시가/고가/저가, 거래량, 거래대금, 주요 지표, 전략 통과 여부를 한 번에 확인할 수 있게 했다.
 - `/api/telegram/status`, `/api/telegram/command` 추가.
 - `/api/telegram/webhook`, `/api/telegram/scheduler/status`, `/api/telegram/scheduler/run-once` 추가. Scheduler는 기본 OFF, auto-start false, `confirm=true` gate 뒤에서 daily/weekly report summary를 Telegram channel로 dry-run/send한다.
@@ -89,6 +90,8 @@
 
 | 명령 | 결과 |
 |---|---|
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_project_reset_after_quote_priority` | `9 passed in 57.05s` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py::test_stock_detail_api_prefers_kis_quote_when_available backend/tests/test_project_reset_telegram_kis_bot.py::test_stock_detail_api_uses_db_fallback_without_kis_network -q -p no:cacheprovider --basetemp $env:TEMP\stock_detail_kis_quote_priority` | `2 passed in 41.62s` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_paper_sync.py backend/tests/test_paper_sync_service.py backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_sync_docs_alignment` | `32 passed in 51.90s` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_kis_token_manager.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_token_settings_focused` | `14 passed in 1.73s` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_token_settings` | `536 passed in 464.65s` |

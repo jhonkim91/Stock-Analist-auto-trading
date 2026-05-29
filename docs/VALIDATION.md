@@ -11,6 +11,18 @@ Project Reset 이후 허용된 `paper_kis` mutation 정책과 충돌하는 과�
 | Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Diff check | 통과 | `git diff --check` -> exit 0, CRLF warning만 출력 |
 
+## 2026-05-30 Stock Detail KIS Quote Priority
+
+종목 상세 API가 KIS paper quote 성공 시 해당 quote를 우선 사용하고, KIS quote가 비활성/실패하면 DB 최신 OHLCV로 fallback하는 양쪽 경로를 테스트로 고정했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| KIS quote priority | 통과 | mock `KisMarketQuoteService.fetch_quote()` 성공 응답에서 `/api/stocks/KR009`의 `quote.source=kis_paper_quote`, `fallback_used=false`, `summary.current_price=12345.0` |
+| DB fallback | 통과 | `KIS_MARKET_QUOTE_ENABLED=false`에서 `quote.source=local_daily_ohlcv`, `fallback_used=true`, `network_call_performed=false` |
+| Focused tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py::test_stock_detail_api_prefers_kis_quote_when_available backend/tests/test_project_reset_telegram_kis_bot.py::test_stock_detail_api_uses_db_fallback_without_kis_network -q -p no:cacheprovider --basetemp $env:TEMP\stock_detail_kis_quote_priority` -> `2 passed in 41.62s` |
+| Reset regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_project_reset_after_quote_priority` -> `9 passed in 57.05s` |
+| Secret/diff check | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning만 출력 |
+
 ## 2026-05-30 KIS Token Ensure and Settings Toggle Fallback
 
 KIS paper token status가 issue/refresh/ensure 가능 상태를 실제 gate 기준으로 표시하도록 갱신했다. `/api/kis/token/ensure`는 cache hit을 우선 사용하고, 만료/임박 cache는 refresh token 우선으로 갱신한다. Settings runtime-env 화면은 runtime-env 조회가 늦거나 실패해도 주요 toggle fallback 버튼을 먼저 렌더링하며, 모든 버튼은 기존 runtime-env API에 `confirm=true`로 연결된다.

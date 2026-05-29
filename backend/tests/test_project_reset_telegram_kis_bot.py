@@ -6,6 +6,7 @@ from textwrap import dedent
 from sqlalchemy import select
 
 from backend.app.models.tables import PaperAuditEvent, PaperOrder, PaperPosition, utc_now
+from backend.app.services.kis_market_quote_service import KisMarketQuoteService
 from backend.app.services.kis_token_manager import KisTokenManager
 from backend.app.services.paper_trading_service import PaperTradingService
 from backend.app.services.telegram_bot_service import TelegramBotService
@@ -278,6 +279,47 @@ def test_stock_detail_api_uses_db_fallback_without_kis_network(full_flow_client,
     assert "sma20" in payload["summary"]["major_indicators"]
     assert payload["summary"]["strategy_total_count"] == len(payload["screener"])
     assert payload["network_call_performed"] is False
+
+
+def test_stock_detail_api_prefers_kis_quote_when_available(full_flow_client, monkeypatch) -> None:
+    monkeypatch.setenv("KIS_MARKET_QUOTE_ENABLED", "true")
+
+    def fake_fetch_quote(self, symbol: str) -> dict[str, object]:
+        assert isinstance(self, KisMarketQuoteService)
+        return {
+            "ok": True,
+            "status": "quote_ok",
+            "reason_codes": [],
+            "network_call_performed": True,
+            "quote": {
+                "available": True,
+                "symbol": symbol,
+                "current_price": 12345.0,
+                "open": 12000.0,
+                "high": 12500.0,
+                "low": 11900.0,
+                "close": 12345.0,
+                "change_pct": 0.02875,
+                "volume": 987654,
+                "turnover_value": 12192537630.0,
+                "source": "kis_paper_quote",
+            },
+        }
+
+    monkeypatch.setattr(KisMarketQuoteService, "fetch_quote", fake_fetch_quote)
+
+    response = full_flow_client.get("/api/stocks/KR009")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["quote"]["source"] == "kis_paper_quote"
+    assert payload["quote"]["fallback_used"] is False
+    assert payload["quote_provider"]["primary"] == "kis_paper_quote"
+    assert payload["quote_provider"]["status"] == "quote_ok"
+    assert payload["summary"]["current_price"] == 12345.0
+    assert payload["summary"]["turnover_value"] == 12192537630.0
+    assert payload["network_call_performed"] is True
+    assert payload["live_order_created"] is False
 
 
 def test_mock_kis_paper_order_preview_and_create_respect_kill_switch_blacklist_and_cooldown(
