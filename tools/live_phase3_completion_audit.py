@@ -20,6 +20,9 @@ from tools import kis_live_token_refresh_preflight, live_canary_preflight  # noq
 
 DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-completion-audit.json"
 DEFAULT_TEMPLATE_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-process-env-template.ps1"
+DEFAULT_TOKEN_REFRESH_RECORD_PATH = (
+    PROJECT_ROOT / "docs" / "research" / "kis-live-token-refresh-preflight-record.json"
+)
 REQUIRED_ENV_NAMES = (
     "KIS_APP_KEY",
     "KIS_APP_SECRET",
@@ -85,6 +88,7 @@ def build_completion_audit(
     env_file_load_result: Mapping[str, Any] | None = None,
     env_file_presence_result: Mapping[str, Any] | None = None,
     env_file_access_token: str | None = None,
+    token_refresh_record_source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """실계좌 주문 연동 3단계 완료 여부를 네트워크 없이 항목별로 판정한다."""
     current_env = os.environ if env is None else env
@@ -138,6 +142,10 @@ def build_completion_audit(
         "requirements": requirements,
         "missing_requirements": missing_requirements,
         "blocker_sources": blocker_sources,
+        "token_refresh_proof_record": _token_refresh_record_summary(
+            token_record,
+            source=token_refresh_record_source,
+        ),
         "proof_gap_summary": _proof_gap_summary(
             requirements=requirements,
             blocker_sources=blocker_sources,
@@ -199,6 +207,11 @@ def build_powershell_env_template() -> str:
                 r"# .\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py "
                 "--execute --confirm CONFIRM_KIS_LIVE_TOKEN_REFRESH --write-record"
             ),
+            "# After a successful token refresh proof record:",
+            (
+                r"# .\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py "
+                r"--token-refresh-record-path docs\research\kis-live-token-refresh-preflight-record.json"
+            ),
         ]
     )
     return "\n".join(lines) + "\n"
@@ -223,6 +236,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--env-file", default=".env.local", help="env file path used with --load-env-local")
     parser.add_argument("--env-file-override", action="store_true", help="override existing process env values")
+    parser.add_argument(
+        "--token-refresh-record-path",
+        default="",
+        help="optional redacted kis_live_token_refresh_preflight.py --write-record JSON path",
+    )
     parser.add_argument("--print-powershell-template", action="store_true", help="print a placeholder env template")
     parser.add_argument("--write-powershell-template", action="store_true", help="write a placeholder env template")
     parser.add_argument("--template-path", default=str(DEFAULT_TEMPLATE_PATH), help="optional template output path")
@@ -261,10 +279,18 @@ def main(argv: list[str] | None = None) -> int:
             target=env_file_token_values,
             project_root=PROJECT_ROOT,
         )
+    token_refresh_record: Mapping[str, Any] | None = None
+    token_refresh_record_source: Mapping[str, Any] | None = None
+    if str(args.token_refresh_record_path).strip():
+        token_refresh_record, token_refresh_record_source = load_token_refresh_record(
+            Path(args.token_refresh_record_path)
+        )
     record = build_completion_audit(
+        token_refresh_record=token_refresh_record,
         env_file_load_result=env_file_load_result,
         env_file_presence_result=env_file_presence_result,
         env_file_access_token=env_file_token_values.get(KIS_ACCESS_TOKEN_ENV),
+        token_refresh_record_source=token_refresh_record_source,
     )
     if args.write_record:
         write_completion_audit(record, Path(args.record_path))
@@ -284,6 +310,68 @@ def _preview_token_refresh_record() -> dict[str, Any]:
         confirm="",
         install_to_process_env=False,
     )
+
+
+def load_token_refresh_record(path: Path) -> tuple[Mapping[str, Any] | None, dict[str, Any]]:
+    """별도 승인 후 생성된 token refresh proof record를 raw value 출력 없이 읽는다."""
+    resolved = path if path.is_absolute() else PROJECT_ROOT / path
+    source: dict[str, Any] = {
+        "provided": True,
+        "path": _record_path(resolved),
+        "loaded": False,
+        "status": "not_loaded",
+        "reason_codes": [],
+        "secrets_redacted": True,
+        "network_call_performed": False,
+        "live_order_created": False,
+    }
+    if not resolved.exists():
+        source.update({"status": "missing", "reason_codes": ["TOKEN_REFRESH_RECORD_MISSING"]})
+        return None, source
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        source.update({"status": "invalid", "reason_codes": ["TOKEN_REFRESH_RECORD_INVALID"]})
+        return None, source
+    if not isinstance(payload, Mapping):
+        source.update({"status": "invalid", "reason_codes": ["TOKEN_REFRESH_RECORD_NOT_OBJECT"]})
+        return None, source
+    source.update(
+        {
+            "loaded": True,
+            "status": "loaded",
+            "network_call_performed": bool(payload.get("network_call_performed")),
+            "live_order_created": bool(payload.get("live_order_created")),
+        }
+    )
+    return payload, source
+
+
+def _token_refresh_record_summary(
+    record: Mapping[str, Any],
+    *,
+    source: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    result = record.get("result") if isinstance(record.get("result"), Mapping) else {}
+    default_source = {
+        "provided": False,
+        "loaded": False,
+        "status": "preview_record",
+        "path": None,
+        "reason_codes": [],
+        "secrets_redacted": True,
+    }
+    source_payload = dict(source or default_source)
+    return {
+        "source": source_payload,
+        "execute_requested": bool(record.get("execute_requested")),
+        "execute_confirmed": bool(record.get("execute_confirmed")),
+        "network_call_performed": bool(record.get("network_call_performed")),
+        "token_refreshed": bool(result.get("token_refreshed")),
+        "live_order_created": bool(record.get("live_order_created")),
+        "proof_passed": _token_refresh_proof_passed(record),
+        "secrets_redacted": bool(record.get("secrets_redacted")),
+    }
 
 
 def _control_passed(controls: Mapping[str, Any], name: str) -> bool:
@@ -439,6 +527,13 @@ def _first_configured(*values: object) -> str | None:
         if _configured(value):
             return str(value).strip()
     return None
+
+
+def _record_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(PROJECT_ROOT.resolve()))
+    except ValueError:
+        return str(path)
 
 
 def _next_required_action(missing_requirements: list[str]) -> str:

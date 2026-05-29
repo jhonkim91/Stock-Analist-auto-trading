@@ -34,3 +34,5 @@ $env:LIVE_ORDER_COOLDOWN_SECONDS = "30"
 
 # Token refresh proof requires separate operator approval:
 # .\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py --execute --confirm CONFIRM_KIS_LIVE_TOKEN_REFRESH --write-record
+# After a successful token refresh proof record:
+# .\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --token-refresh-record-path docs\research\kis-live-token-refresh-preflight-record.json

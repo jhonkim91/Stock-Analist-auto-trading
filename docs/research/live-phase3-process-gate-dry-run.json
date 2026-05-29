@@ -227,7 +227,7 @@
       "values_redacted": true
     }
   },
-  "generated_at": "2026-05-29T11:17:58.783160+00:00",
+  "generated_at": "2026-05-29T11:27:48.504268+00:00",
   "live_order_created": false,
   "missing_all_scopes_env_names": [],
   "missing_process_env_names": [],
@@ -289,7 +289,7 @@
     "access_token_payload_decoded": true,
     "access_token_present": true,
     "access_token_process_configured": false,
-    "access_token_seconds_until_expiry": -82970,
+    "access_token_seconds_until_expiry": -83560,
     "access_token_user_configured": false,
     "access_token_variable": "KIS_ACCESS_TOKEN",
     "access_token_without_refresh_token": false,
@@ -297,5 +297,24 @@
     "refresh_token_required_variable": "KIS_REFRESH_TOKEN",
     "values_redacted": true
   },
-  "token_refresh_network_call_performed": false
+  "token_refresh_network_call_performed": false,
+  "token_refresh_proof_record": {
+    "execute_confirmed": false,
+    "execute_requested": false,
+    "live_order_created": false,
+    "network_call_performed": false,
+    "proof_passed": false,
+    "secrets_redacted": true,
+    "source": {
+      "live_order_created": false,
+      "loaded": true,
+      "network_call_performed": false,
+      "path": "docs\\research\\kis-live-token-refresh-process-gate-dry-run.json",
+      "provided": true,
+      "reason_codes": [],
+      "secrets_redacted": true,
+      "status": "loaded"
+    },
+    "token_refreshed": false
+  }
 }
