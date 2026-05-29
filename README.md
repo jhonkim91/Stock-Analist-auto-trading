@@ -215,9 +215,9 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `gap_risk_estimate` | configured adverse gap fraction을 notional에 적용한 preview 추정치 |
 | `concentration_warnings` | symbol/sector/strategy 한도와 `max_open_positions` 초과 경고 |
 
-현재 summary는 synthetic/preview 성격입니다. `positions` 테이블은 실제 broker position sync가 아니며, `screen_results`는 주문 의사가 아니라 조건검색 통과 후보입니다. 따라서 실제 trade ledger 기반 계산처럼 체결가, 부분체결, 현금 잠금, 실현/미실현 PnL, 포지션 상태 전이를 완전히 반영하지 않습니다. 데이터가 부족한 gap risk는 거짓 0으로 채우지 않고 `not_available` 또는 warning으로 남깁니다.
+현재 summary는 synthetic/preview 성격입니다. 이 API가 읽는 legacy `positions` 테이블은 live broker position sync가 아니며, `screen_results`는 주문 의사가 아니라 조건검색 통과 후보입니다. KIS paper 주문/체결/잔고 mirror는 별도 `paper_orders`, `paper_fills`, `paper_positions`, `paper_portfolio_snapshots` 표면에서 다룹니다. 이 risk API 자체는 주문/체결 side effect 없이 exposure view만 반환합니다.
 
-아직 구현하지 않은 항목은 broker position sync, paper/live position mutation, cash lock, open position state machine, realized exposure/drawdown, MAE/MFE, 실제 event risk hold입니다. 이 기능은 `orders`, `paper_orders`, broker/KIS route와 연결되지 않으며 preview-only 안전 경계를 유지합니다.
+아직 risk API에 통합하지 않은 항목은 live broker position sync, cash lock, open position state machine, realized exposure/drawdown, MAE/MFE, 실제 event risk hold입니다. paper mutation은 paper 전용 service와 gate에서만 처리하며, live route와는 연결하지 않습니다.
 
 ## Venue-Aware Execution Assumptions
 
@@ -457,8 +457,8 @@ npm.cmd run build
 - live broker order create, live fill, live position mutation.
 - Telegram 장시간 상주 운영 scheduler auto-start. Polling/webhook run-once 구조는 구현됨.
 - KRX/yfinance 실제 network fetch.
-- 완전 자동매매 운영 loop, live broker adapter, AI prediction model.
-- portfolio cash/position state, walk-forward validation.
+- 장시간 상주형 완전 자동매매 운영 loop, live broker adapter, AI prediction model.
+- portfolio risk API의 broker cash lock/open position state machine, walk-forward validation.
 
 ## CI
 

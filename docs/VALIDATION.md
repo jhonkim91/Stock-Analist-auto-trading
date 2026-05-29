@@ -1,5 +1,16 @@
 # Validation
 
+## 2026-05-30 Paper Sync Policy Documentation Alignment
+
+Project Reset 이후 허용된 `paper_kis` mutation 정책과 충돌하는 과거 문구를 정리했다. README, DB migration 문서, validation safety 표, `PaperTradingService` docstring은 이제 `paper_orders`/`paper_fills`/`paper_positions` write가 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용되고, live mutation은 계속 차단된다는 정책으로 정렬된다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Stale deny wording | 통과 | `paper mutation 금지`, `Service-level writes remain disabled`, `KIS token 발급/cache 금지` 검색 결과에서 현재 문서 충돌 문구 제거 |
+| Paper sync/order regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_paper_sync.py backend/tests/test_paper_sync_service.py backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_sync_docs_alignment` -> `32 passed in 51.90s` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff check | 통과 | `git diff --check` -> exit 0, CRLF warning만 출력 |
+
 ## 2026-05-30 KIS Token Ensure and Settings Toggle Fallback
 
 KIS paper token status가 issue/refresh/ensure 가능 상태를 실제 gate 기준으로 표시하도록 갱신했다. `/api/kis/token/ensure`는 cache hit을 우선 사용하고, 만료/임박 cache는 refresh token 우선으로 갱신한다. Settings runtime-env 화면은 runtime-env 조회가 늦거나 실패해도 주요 toggle fallback 버튼을 먼저 렌더링하며, 모든 버튼은 기존 runtime-env API에 `confirm=true`로 연결된다.
@@ -1365,9 +1376,9 @@ git diff --check
 |---|---|
 | 실제 주문/주문 취소/체결/계좌 이동 | 없음 |
 | broker/paper adapter 호출 | 없음 |
-| paper order/fill/position mutation | local `paper_orders` submit만 config opt-in + `confirm=true` + idempotency + kill-switch gate 통과 시 허용. paper fill/position mutation 없음 |
+| paper order/fill/position mutation | Project Reset 이후 `paper_orders`, `paper_fills`, `paper_positions`는 `paper_kis` 실행 모드, confirm/idempotency, kill-switch, risk/simulator/sync gate 통과 시에만 허용 |
 | KIS/KRX/yfinance network call | 없음 |
-| credential/token 저장 | 없음 |
+| credential/token 저장 | raw credential 저장 없음. KIS paper token cache는 `KIS_TOKEN_CACHE_ENABLED=true`와 local cache path 조건에서만 허용하고 응답/문서에는 원문을 노출하지 않음 |
 | earnings/corporate action 실데이터 fetch | 없음 |
 | venue/session metadata가 submit 가능 상태로 전환 | 없음 |
 | 기존 backtest run/list/detail 응답 필드 제거 | 없음 |
@@ -1384,7 +1395,7 @@ git diff --check
 | trade ledger와 주문 테이블 연결 | 없음. validation scaffold에도 `not_connected_to`로 명시 |
 | weekly_ohlcv migration 추가 | 없음 |
 | `orders_count == 0` 정책 변경 | 없음 |
-| paper sync network/fetch | 없음. `POST /api/paper/sync`는 공식 KIS sync contract 확인 전 `KIS_PAPER_SYNC_CONFIRMATION_REQUIRED` no-op |
+| paper sync network/fetch | Project Reset 이후 `POST /api/paper/sync`와 sync worker는 KIS paper endpoint/TR ID, credential, confirm, paper network gate가 모두 충족될 때만 조회 동기화 수행 |
 | paper bot scheduler auto-start | 없음. launcher는 check-only 상태만 표시하며 scheduler/auto-submit은 기본 disabled |
 | frontend paper-mode boundary | `/paper`, `/bot`, `/portfolio`, `/reports`, `/settings`는 `모의투자`, `실거래 아님`, `paper only`를 명시하고 backend safety API만 호출 |
 | settings secret key-name exposure | 없음. `/api/settings`는 민감 key 이름도 `redacted_field_*`로 익명화 |
@@ -1394,4 +1405,4 @@ git diff --check
 
 - Phase 0는 DB schema 변경이 없으므로 Alembic pytest를 재실행하지 않았다.
 - `goal.md` 기준 Phase 11까지 완료됐다.
-- KIS endpoint/path/TR-ID/request field는 공식 문서에서 완전 확인되기 전까지 `확인 필요` 상태로 유지한다.
+- KIS 국내/해외 regular 주문/취소/일별체결/잔고 endpoint/TR ID는 공식 sample 기준으로 확인했다. 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID는 추가 확인 전 fail-closed 보류한다.

@@ -36,7 +36,7 @@ REQUIRED_PAPER_BROKER_MODE = "paper_kis"
 
 class LocalPaperSimulator:
     def status(self) -> dict[str, object]:
-        """Phase 3E-1에서는 체결 시뮬레이션 실행 없이 비활성 상태만 반환한다."""
+        """기본 placeholder simulator 상태를 반환한다. 실제 fill simulation은 전용 service gate 뒤에서 수행된다."""
         return {
             "enabled": False,
             "auto_fill_on_create": False,
@@ -610,7 +610,7 @@ class PaperTradingService:
         confirm: bool,
         idempotency_key: str | None,
     ) -> dict[str, object]:
-        """공식 cancel contract 확인 전에는 submit과 분리된 disabled 응답을 반환한다."""
+        """paper-only cancel service에 위임하고 live/network 경로는 gate 뒤에 둔다."""
         if self.db is None:
             return {
                 "ok": False,
@@ -776,7 +776,7 @@ class PaperTradingService:
         return RealtimeMarketWorker(db=self.db, config_dir=self.config_service.config_dir, quote_cache=realtime_market_worker.quote_cache).status()
 
     def sync(self, *, scope: str = "all") -> dict[str, object]:
-        """공식 KIS sync contract 확인 전에는 no-op sync 응답을 반환한다."""
+        """KIS paper sync gate 통과 시 주문/체결/잔고 조회 결과를 paper tables에 반영한다."""
         if self.db is None:
             return self._paper_sync_unavailable_payload(scope)
         from backend.app.services.paper_sync_service import PaperSyncService
@@ -792,7 +792,7 @@ class PaperTradingService:
         return PaperBotService(self.db, config_dir=self.config_service.config_dir).status()
 
     def run_bot_once(self, *, auto_submit: bool | None = None) -> dict[str, object]:
-        """paper bot once 실행을 안전한 no-op service에 위임한다."""
+        """paper bot once 실행을 paper-only service에 위임한다."""
         if self.db is None:
             return self._paper_sync_unavailable_payload("bot")
         from backend.app.services.paper_bot_service import PaperBotService
