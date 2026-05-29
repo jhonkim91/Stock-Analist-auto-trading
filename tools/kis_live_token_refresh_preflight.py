@@ -29,6 +29,7 @@ from backend.app.services.kis_live_token_refresh_service import (  # noqa: E402
     LIVE_TOKEN_REFRESH_PROCESS_ONLY_ENV,
 )
 from tools.env_file_loader import load_env_file, scan_env_file_keys  # noqa: E402
+from tools.token_diagnostics import build_access_token_diagnostics  # noqa: E402
 
 DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "kis-live-token-refresh-preflight-record.json"
 LIVE_TOKEN_REFRESH_ENV_FILE_KEYS = (
@@ -54,6 +55,7 @@ def build_record(
     env: Mapping[str, str] | None = None,
     env_file_load_result: Mapping[str, object] | None = None,
     env_file_presence_result: Mapping[str, object] | None = None,
+    env_file_access_token: str | None = None,
 ) -> dict[str, object]:
     """KIS live token refresh readiness를 redacted record로 반환한다."""
     service = KisLiveTokenRefreshService(env)
@@ -81,7 +83,12 @@ def build_record(
         "result": result,
         "network_call_performed": bool(result.get("network_call_performed")),
         "live_order_created": False,
-        "token_env_diagnostics": _token_env_diagnostics(service.env, status, env_file_presence_result),
+        "token_env_diagnostics": _token_env_diagnostics(
+            service.env,
+            status,
+            env_file_presence_result,
+            env_file_access_token=env_file_access_token,
+        ),
         "secrets_redacted": True,
     }
     if env_file_load_result is not None:
@@ -131,12 +138,21 @@ def main(argv: list[str] | None = None) -> int:
         if args.load_env_local
         else None
     )
+    env_file_token_values: dict[str, str] = {}
+    if args.load_env_local:
+        load_env_file(
+            Path(args.env_file),
+            allowed_keys=TOKEN_DIAGNOSTIC_ENV_NAMES,
+            target=env_file_token_values,
+            project_root=PROJECT_ROOT,
+        )
     record = build_record(
         execute=bool(args.execute),
         confirm=str(args.confirm),
         install_to_process_env=bool(args.install_to_process_env),
         env_file_load_result=env_file_load_result,
         env_file_presence_result=env_file_presence_result,
+        env_file_access_token=env_file_token_values.get(KIS_ACCESS_TOKEN_ENV),
     )
     if args.write_record:
         path = Path(args.record_path)
@@ -152,11 +168,13 @@ def _token_env_diagnostics(
     env: Mapping[str, str],
     status: Mapping[str, object],
     env_file_presence_result: Mapping[str, object] | None,
+    env_file_access_token: str | None = None,
 ) -> dict[str, object]:
     presence = _env_file_key_presence(env_file_presence_result)
-    access_token_configured = _configured(env.get(KIS_ACCESS_TOKEN_ENV)) or bool(presence.get(KIS_ACCESS_TOKEN_ENV))
+    access_token = _first_configured(env.get(KIS_ACCESS_TOKEN_ENV), env_file_access_token)
+    access_token_configured = bool(access_token) or bool(presence.get(KIS_ACCESS_TOKEN_ENV))
     refresh_token_configured = bool(status.get("refresh_token_configured")) or bool(presence.get(KIS_REFRESH_TOKEN_ENV))
-    return {
+    diagnostics = {
         "access_token_configured": access_token_configured,
         "refresh_token_configured": refresh_token_configured,
         "access_token_without_refresh_token": access_token_configured and not refresh_token_configured,
@@ -165,6 +183,8 @@ def _token_env_diagnostics(
         "access_token_cannot_satisfy_refresh_proof": access_token_configured and not refresh_token_configured,
         "values_redacted": True,
     }
+    diagnostics.update(build_access_token_diagnostics(access_token))
+    return diagnostics
 
 
 def _env_file_key_presence(env_file_presence_result: Mapping[str, object] | None) -> dict[str, bool]:
@@ -179,6 +199,13 @@ def _env_file_key_presence(env_file_presence_result: Mapping[str, object] | None
 def _configured(value: object) -> bool:
     stripped = str(value or "").strip()
     return bool(stripped and "placeholder" not in stripped.lower())
+
+
+def _first_configured(*values: object) -> str | None:
+    for value in values:
+        if _configured(value):
+            return str(value).strip()
+    return None
 
 
 if __name__ == "__main__":

@@ -269,7 +269,7 @@
       "values_redacted": true
     }
   },
-  "generated_at": "2026-05-29T10:53:28.022694+00:00",
+  "generated_at": "2026-05-29T10:58:28.866480+00:00",
   "live_order_created": false,
   "missing_all_scopes_env_names": [
     "KIS_LIVE_BASE_URL",
@@ -359,8 +359,15 @@
     "access_token_cannot_satisfy_refresh_proof": true,
     "access_token_configured": true,
     "access_token_env_file_configured": true,
+    "access_token_exp_present": true,
+    "access_token_expired": true,
+    "access_token_expires_at": "2026-05-28T12:15:08+00:00",
+    "access_token_jwt_like": true,
     "access_token_machine_configured": false,
+    "access_token_payload_decoded": true,
+    "access_token_present": true,
     "access_token_process_configured": false,
+    "access_token_seconds_until_expiry": -81800,
     "access_token_user_configured": false,
     "access_token_variable": "KIS_ACCESS_TOKEN",
     "access_token_without_refresh_token": true,

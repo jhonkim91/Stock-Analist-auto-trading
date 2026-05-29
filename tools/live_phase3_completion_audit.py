@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from backend.app.services.kis_token_manager import KIS_ACCESS_TOKEN_ENV  # noqa: E402
 from tools.env_file_loader import load_env_file, scan_env_file_keys  # noqa: E402
+from tools.token_diagnostics import build_access_token_diagnostics  # noqa: E402
 from tools import kis_live_token_refresh_preflight, live_canary_preflight  # noqa: E402
 
 DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-completion-audit.json"
@@ -83,6 +84,7 @@ def build_completion_audit(
     canary_record: Mapping[str, Any] | None = None,
     env_file_load_result: Mapping[str, Any] | None = None,
     env_file_presence_result: Mapping[str, Any] | None = None,
+    env_file_access_token: str | None = None,
 ) -> dict[str, Any]:
     """실계좌 주문 연동 3단계 완료 여부를 네트워크 없이 항목별로 판정한다."""
     current_env = os.environ if env is None else env
@@ -145,7 +147,12 @@ def build_completion_audit(
         "missing_all_scopes_env_names": [
             name for name, status in env_scope_status.items() if not status["any_scope_configured"]
         ],
-        "token_env_diagnostics": _token_env_diagnostics(current_env, env_scope_status, env_file_presence_result),
+        "token_env_diagnostics": _token_env_diagnostics(
+            current_env,
+            env_scope_status,
+            env_file_presence_result,
+            env_file_access_token=env_file_access_token,
+        ),
         "token_refresh_network_call_performed": bool(token_record.get("network_call_performed")),
         "live_order_created": False,
         "network_call_performed_by_audit": False,
@@ -239,9 +246,18 @@ def main(argv: list[str] | None = None) -> int:
         if args.load_env_local
         else None
     )
+    env_file_token_values: dict[str, str] = {}
+    if args.load_env_local:
+        load_env_file(
+            Path(args.env_file),
+            allowed_keys=TOKEN_DIAGNOSTIC_ENV_NAMES,
+            target=env_file_token_values,
+            project_root=PROJECT_ROOT,
+        )
     record = build_completion_audit(
         env_file_load_result=env_file_load_result,
         env_file_presence_result=env_file_presence_result,
+        env_file_access_token=env_file_token_values.get(KIS_ACCESS_TOKEN_ENV),
     )
     if args.write_record:
         write_completion_audit(record, Path(args.record_path))
@@ -299,9 +315,12 @@ def _token_env_diagnostics(
     env: Mapping[str, str],
     env_scope_status: Mapping[str, Mapping[str, object]],
     env_file_presence_result: Mapping[str, object] | None,
+    env_file_access_token: str | None = None,
 ) -> dict[str, object]:
     presence = _env_file_key_presence(env_file_presence_result)
-    access_process_configured = _configured(env.get(KIS_ACCESS_TOKEN_ENV))
+    process_access_token = _first_configured(env.get(KIS_ACCESS_TOKEN_ENV))
+    access_token = _first_configured(process_access_token, env_file_access_token)
+    access_process_configured = bool(process_access_token)
     access_user_configured = _registry_env_configured(KIS_ACCESS_TOKEN_ENV, scope="user")
     access_machine_configured = _registry_env_configured(KIS_ACCESS_TOKEN_ENV, scope="machine")
     access_env_file_configured = bool(presence.get(KIS_ACCESS_TOKEN_ENV))
@@ -313,7 +332,7 @@ def _token_env_diagnostics(
         or access_machine_configured
         or access_env_file_configured
     )
-    return {
+    diagnostics = {
         "access_token_configured": access_configured,
         "access_token_process_configured": access_process_configured,
         "access_token_user_configured": access_user_configured,
@@ -326,6 +345,8 @@ def _token_env_diagnostics(
         "access_token_cannot_satisfy_refresh_proof": access_configured and not refresh_configured,
         "values_redacted": True,
     }
+    diagnostics.update(build_access_token_diagnostics(access_token))
+    return diagnostics
 
 
 def _env_file_key_presence(env_file_presence_result: Mapping[str, object] | None) -> dict[str, bool]:
@@ -360,6 +381,13 @@ def _registry_env_configured(name: str, *, scope: str) -> bool:
 
 def _configured(value: object) -> bool:
     return bool(str(value or "").strip())
+
+
+def _first_configured(*values: object) -> str | None:
+    for value in values:
+        if _configured(value):
+            return str(value).strip()
+    return None
 
 
 def _next_required_action(missing_requirements: list[str]) -> str:

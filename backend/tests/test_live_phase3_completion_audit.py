@@ -4,6 +4,7 @@ import json
 
 from tools.env_file_loader import load_env_file, scan_env_file_keys
 from tools import live_phase3_completion_audit
+from backend.tests.test_token_diagnostics import _fake_jwt
 
 
 def test_live_phase3_completion_audit_is_incomplete_and_redacted_by_default() -> None:
@@ -142,7 +143,8 @@ def test_live_phase3_completion_audit_can_use_env_file_loader_without_raw_secret
 
 def test_live_phase3_completion_audit_identifies_access_token_without_refresh_token(tmp_path) -> None:
     env_file = tmp_path / ".env.local"
-    env_file.write_text("KIS_ACCESS_" + "TOKEN=ACCESS_ONLY_VALUE\n", encoding="utf-8")
+    access_token = _fake_jwt({"exp": 1_700_000_000})
+    env_file.write_text("KIS_ACCESS_" + f"TOKEN={access_token}\n", encoding="utf-8")
     presence = scan_env_file_keys(
         env_file,
         key_names=live_phase3_completion_audit.TOKEN_DIAGNOSTIC_ENV_NAMES,
@@ -151,12 +153,14 @@ def test_live_phase3_completion_audit_identifies_access_token_without_refresh_to
     record = live_phase3_completion_audit.build_completion_audit(
         {},
         env_file_presence_result=presence,
+        env_file_access_token=access_token,
     )
     serialized = json.dumps(record, ensure_ascii=False, default=str)
 
     assert record["token_env_diagnostics"]["access_token_configured"] is True
     assert record["token_env_diagnostics"]["refresh_token_configured"] is False
     assert record["token_env_diagnostics"]["access_token_without_refresh_token"] is True
+    assert record["token_env_diagnostics"]["access_token_expired"] is True
     assert record["network_call_performed_by_audit"] is False
     assert record["live_order_created"] is False
-    assert "ACCESS_ONLY_VALUE" not in serialized
+    assert access_token not in serialized

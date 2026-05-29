@@ -12,9 +12,10 @@
 | Live token preflight loader | 추가 | `tools/kis_live_token_refresh_preflight.py --load-env-local --env-file .env.local` 지원. 기본은 preview-only이며 no-network 유지 |
 | Completion audit loader | 추가 | `tools/live_phase3_completion_audit.py --load-env-local --write-record` 지원. record에 `env_file_load` redacted summary를 포함 |
 | Access-token-only diagnosis | 추가 | `.env.local` key presence scan으로 `KIS_ACCESS_TOKEN`은 존재하지만 `KIS_REFRESH_TOKEN`은 없음을 raw value 없이 표시. `access_token_without_refresh_token=true`, `access_token_cannot_satisfy_refresh_proof=true` |
+| Access token expiry diagnosis | 추가 | access token 원문 출력 없이 JWT `exp`만 파싱. 현재 `.env.local` access token은 `access_token_expired=true`, `access_token_expires_at=2026-05-28T12:15:08+00:00` |
 | Current no-network preflight | blocked | `.\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py --load-env-local` -> `refresh_token_configured=false`, `network_call_performed=false`, `live_order_created=false` |
 | Current completion audit | incomplete | `.\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --load-env-local --write-record` -> `complete=false`, `network_call_performed_by_audit=false`, `live_order_created=false` |
-| Targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_env_file_loader.py backend/tests/test_kis_live_token_refresh_preflight_tool.py backend/tests/test_live_phase3_completion_audit.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_env_doctor_tests` -> `13 passed` |
+| Targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_diagnostics.py backend/tests/test_env_file_loader.py backend/tests/test_kis_live_token_refresh_preflight_tool.py backend/tests/test_live_phase3_completion_audit.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_token_expiry_tests` -> `16 passed` |
 | Secret/diff check | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only |
 
 결론: 3단계는 아직 완료가 아니다. 현재 선택된 긴 JWT는 `KIS_ACCESS_TOKEN`일 가능성이 높고, `KIS_REFRESH_TOKEN=<refresh token>` 라인이나 process/User env 등록은 확인되지 않았다.
