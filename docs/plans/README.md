@@ -14,9 +14,9 @@
 | 항목 | 값 |
 |---|---|
 | 현재 checkpoint | `Telegram + KIS Paper Trading Bot reset` |
-| 현재 구현 완료 | 기존 분석/스크리너/백테스트/리포트/포트폴리오 보존, Telegram command/webhook/polling/report scheduler, `/bot` 명시 제어, KIS token cache skeleton, stock detail KIS quote fallback, paper order guard, paper sync worker wrapper, Settings one-click runtime presets |
-| 최신 backend pytest | full backend `521 passed in 823.78s`, Telegram polling/bot-control/scheduler/sync worker targeted suites, Settings preset focused suite 통과 |
-| 다음 권장 Phase | KIS paper TR ID/payload 공식 재확인, 장시간 운영 loop 정책 보강 |
+| 현재 구현 완료 | 기존 분석/스크리너/백테스트/리포트/포트폴리오 보존, Telegram command/webhook/polling/report scheduler, `/bot` 명시 제어, KIS token cache skeleton, stock detail KIS quote fallback, paper order guard, paper sync worker wrapper, Settings one-click runtime presets, KIS paper official sample matrix 재확인 |
+| 최신 backend pytest | full backend `521 passed in 823.78s`, Telegram polling/bot-control/scheduler/sync worker targeted suites, Settings preset focused suite, KIS matrix docs suite 통과 |
+| 다음 권장 Phase | 장시간 운영 loop 정책 보강, 국내 정정취소가능/매도가능수량조회 paper TR ID 추가 확인 |
 | 상태 요약 문서 | `docs/PROJECT_STATUS.md` |
 | 상세 검증 문서 | `docs/VALIDATION.md` |
 | 프로젝트 메모리 | `Memory.md` |
@@ -66,8 +66,8 @@
 
 ## 다음 후보
 
-1. 공식 KIS paper endpoint/path/TR-ID/request field는 `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` 항목을 공식 문서로 먼저 보강한다.
-2. 장시간 운영 loop는 기본 OFF를 유지하고 bounded runner와 stop/kill-switch 정책을 먼저 문서화한다.
+1. 장시간 운영 loop는 기본 OFF를 유지하고 bounded runner와 stop/kill-switch 정책을 먼저 문서화한다.
+2. 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID는 `docs/KIS_PAPER_API_MATRIX.md`의 남은 `확인 필요` 항목으로 관리한다.
 3. Phase 4A/4B live gate는 현재 목표 밖이므로 별도 승인 없이 구현하지 않는다.
 
 ## Report 기준

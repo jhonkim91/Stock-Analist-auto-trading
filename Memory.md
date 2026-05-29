@@ -36,6 +36,7 @@
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가했다.
 - paper bot 자동매매 기본값을 OFF로 정렬했다: `backend/config/bot.yaml`의 `enabled=false`, `auto_submit=false`, scheduler false.
 - Settings runtime env 버튼은 클릭 시 process env에 반영되며 hover/focus에서 한국어 tooltip을 표시한다. `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset은 여러 gate를 한 번에 맞추고 `ENABLE_REAL_ORDER`는 항상 `false`로 강제 적용한다.
+- 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수 일치를 재확인했다.
 - Windows sandbox 프로세스 생성 오류는 재부팅 후 재현되지 않았고 PowerShell 기반 backend 검증이 정상 실행됐다.
 - 오래된 `disabled` 전제 테스트는 새 `paper_kis` 정책에 맞춰 `paper 기능은 켜짐, 실계좌/live와 무자격 네트워크 주문은 차단` 기준으로 갱신했다.
 
@@ -58,6 +59,8 @@
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_default_off` -> `5 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` -> `5 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_tests` -> `10 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_api_matrix_docs.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_docs` -> `1 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_adapter_contract` -> `15 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` -> `18 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_full_backend` -> `521 passed in 823.78s`.
 - [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
@@ -68,7 +71,7 @@
 
 ## 남은 작업
 
-- [ ] KIS paper 국내/해외 주문, 취소, 미체결, 체결, 잔고 조회 TR ID와 payload를 공식 문서/샘플 기준으로 재확인한다.
+- [ ] KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID를 추가 확인한다.
 - [ ] 장시간 자동매매 loop는 기본 OFF를 유지하고 bounded runner/stop/kill-switch 운영 정책을 보강한다.
 
 ## 주의 사항

@@ -1,5 +1,19 @@
 # Validation
 
+## 2026-05-30 KIS Paper Official Sample Reconfirmation
+
+한국투자증권 공식 GitHub 샘플 저장소 `koreainvestment/open-trading-api`를 임시 폴더에 shallow clone하고, 현재 adapter 상수와 공식 샘플의 endpoint/TR ID를 대조했다. 실제 KIS network call, token 발급, 주문/취소/조회 실행은 수행하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 공식 샘플 기준 | 확인 | shallow clone commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` |
+| 국내 paper 주문/취소/체결/잔고 | 확인 | `order-cash` `VTTC0012U`/`VTTC0011U`, `order-rvsecncl` `VTTC0013U`, `inquire-daily-ccld` `VTTC0081R`, `inquire-balance` `VTTC8434R` |
+| 해외 US paper regular 주문/취소/체결/잔고 | 확인 | `order` `VTTT1002U`/`VTTT1006U`, `order-rvsecncl` `VTTT1004U`, `inquire-ccnl` `VTTS3035R`, `inquire-balance` `VTTS3012R` |
+| 미국주간주문 paper 정책 | 확인 | 공식 샘플은 `daytime-order` `TTTS6036U`/`TTTS6037U`, `daytime-order-rvsecncl` `TTTS6038U` live TR ID only 구조이며 현재 adapter의 paper 차단 정책 유지 |
+| Matrix docs | 갱신 | `docs/KIS_PAPER_API_MATRIX.md`, `docs/research/kis-paper-api-confirmation-matrix.md`를 stale Phase 0 문구에서 현재 구현/공식 확인 기준으로 교체 |
+| Matrix sync test | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_api_matrix_docs.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_docs` -> `1 passed` |
+| Adapter contract regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_adapter_contract` -> `15 passed` |
+
 ## 2026-05-30 Settings One-Click Runtime Presets
 
 Settings 화면에서 개별 env gate만 토글하던 구조를 보강해 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 추가했다. 모든 preset은 현재 backend 프로세스에만 적용되고 `.env` 파일을 수정하지 않으며, live 실계좌 주문 gate인 `ENABLE_REAL_ORDER`는 항상 `false`로 강제된다.
