@@ -1,0 +1,91 @@
+{
+  "env_file_load": {
+    "ignored_count": 23,
+    "ignored_keys": [
+      "APP_ENV",
+      "BROKER_MODE",
+      "KIS_ENV",
+      "KIS_PAPER_BASE_URL",
+      "KIS_PRODUCT_CODE",
+      "NEXT_PUBLIC_API_BASE_URL",
+      "PAPER_BOT_AUTO_SUBMIT",
+      "PAPER_BOT_CONFIRM",
+      "PAPER_BOT_ENABLED",
+      "PAPER_BOT_KILL_SWITCH",
+      "PAPER_BOT_SCHEDULER_ENABLED",
+      "PAPER_ORDER_SUBMIT_ENABLED",
+      "PAPER_TRADING_CAN_CREATE",
+      "PAPER_TRADING_ENABLED",
+      "PAPER_TRADING_KILL_SWITCH",
+      "PAPER_TRADING_NETWORK_ENABLED"
+    ],
+    "ignored_secret_like_key_count": 7,
+    "loaded_count": 1,
+    "loaded_keys": [],
+    "loaded_secret_like_key_count": 1,
+    "network_call_performed": false,
+    "ok": true,
+    "override": false,
+    "path": ".env.local",
+    "raw_secret_printed": false,
+    "secret_like_key_names_redacted": true,
+    "secrets_redacted": true,
+    "skipped_existing_count": 3,
+    "skipped_existing_keys": [
+      "ENABLE_REAL_ORDER"
+    ],
+    "skipped_secret_like_key_count": 2,
+    "status": "env_file_loaded"
+  },
+  "execute_confirmed": false,
+  "execute_requested": false,
+  "generated_at": "2026-05-29T11:03:48.020046+00:00",
+  "install_to_process_env_requested": false,
+  "live_order_created": false,
+  "network_call_performed": false,
+  "result": {
+    "live_order_created": false,
+    "network_call_performed": false,
+    "ok": false,
+    "reason": "EXECUTE_CONFIRMATION_REQUIRED",
+    "reason_codes": [
+      "EXECUTE_CONFIRMATION_REQUIRED"
+    ],
+    "status": "live_token_refresh_preview_only",
+    "token_refreshed": false
+  },
+  "secrets_redacted": true,
+  "status": {
+    "app_key_configured": true,
+    "app_secret_configured": true,
+    "base_url_host": "openapi.koreainvestment.com",
+    "can_refresh": true,
+    "enabled": true,
+    "endpoint_path": "/oauth2/tokenP",
+    "implementation_present": true,
+    "live_order_created": false,
+    "network_call_performed": false,
+    "network_enabled": true,
+    "process_only": true,
+    "reason_codes": [],
+    "refresh_token_configured": true,
+    "secrets_redacted": true,
+    "token_raw_value_persisted": false
+  },
+  "token_env_diagnostics": {
+    "access_token_cannot_satisfy_refresh_proof": false,
+    "access_token_configured": true,
+    "access_token_exp_present": true,
+    "access_token_expired": true,
+    "access_token_expires_at": "2026-05-28T12:15:08+00:00",
+    "access_token_jwt_like": true,
+    "access_token_payload_decoded": true,
+    "access_token_present": true,
+    "access_token_seconds_until_expiry": -82120,
+    "access_token_variable": "KIS_ACCESS_TOKEN",
+    "access_token_without_refresh_token": false,
+    "refresh_token_configured": true,
+    "refresh_token_required_variable": "KIS_REFRESH_TOKEN",
+    "values_redacted": true
+  }
+}

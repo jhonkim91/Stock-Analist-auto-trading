@@ -1,5 +1,20 @@
 # Validation
 
+## 2026-05-29 Live Phase 3 Process Gate Dry-run
+
+사용자가 `.env.local`에 `KIS_REFRESH_TOKEN`을 추가한 뒤, 실제 KIS network call이나 live order/cancel 없이 process-only gate를 임시 주입해 3단계 선행 조건을 재확인했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Refresh token visibility | 확인 | `tools/kis_live_token_refresh_preflight.py --load-env-local` 기준 `refresh_token_configured=true`. raw 값과 secret-like key name은 출력하지 않음 |
+| Token refresh gate dry-run | 통과 | process-only gate 주입 후 `can_refresh=true`, `reason_codes=[]`, `execute_requested=false`, `network_call_performed=false`, `live_order_created=false` |
+| Safety/control gate dry-run | 통과 | process-only gate 주입 후 kill switch, rate limiter, idempotency, audit log, max notional, blacklist, cooldown, token refresh control이 모두 `true` |
+| Completion audit | 미완료 | `missing_requirements=["token_refresh_real_call_proof","live_submit_authority_present","live_cancel_authority_present"]` |
+| Redacted records | 기록 | `docs/research/kis-live-token-refresh-process-gate-dry-run.json`, `docs/research/live-phase3-process-gate-dry-run.json` |
+| Execution boundary | 유지 | token refresh는 preview-only로 실행했고 live submit/cancel adapter는 `KIS_LIVE_BROKER_DISABLED_PLACEHOLDER`로 계속 차단. 실제 network call/order/cancel 없음 |
+
+결론: `.env.local` 기준 refresh token은 확인됐고, process-only 안전장치 dry-run은 통과했다. 3단계 완료에는 여전히 별도 승인된 live token refresh real-call proof와 live submit/cancel authority 구현/검증이 필요하다.
+
 ## 2026-05-29 Live Phase 3 `.env.local` Loader Recheck
 
 사용자가 `KIS_REFRESH_TOKEN` 등록을 재요청해 Process/User/Machine scope와 프로젝트 루트 `.env.local`을 raw value 없이 다시 확인했다. 현재 기준 `KIS_REFRESH_TOKEN`은 모든 scope와 `.env.local`에서 미탐지이며, 실제 KIS network call이나 live order/cancel은 실행하지 않았다.
