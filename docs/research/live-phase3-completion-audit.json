@@ -266,7 +266,7 @@
       "values_redacted": true
     }
   },
-  "generated_at": "2026-05-29T11:09:01.046703+00:00",
+  "generated_at": "2026-05-29T11:17:58.855592+00:00",
   "live_order_created": false,
   "missing_all_scopes_env_names": [
     "KIS_LIVE_BASE_URL",
@@ -331,6 +331,8 @@
   "next_required_action": "KIS_REFRESH_TOKEN과 live token refresh gate를 process env에 주입한 뒤 별도 승인된 token refresh proof를 먼저 생성한다.",
   "phase": "3단계 실계좌 주문 연동",
   "proof_gap_summary": {
+    "authority_contract_present": true,
+    "authority_contract_status": "disabled_pending_external_approval",
     "canary_execution_allowed": false,
     "live_adapter_disabled": true,
     "live_adapter_network_enabled": false,
@@ -378,7 +380,7 @@
     "access_token_payload_decoded": true,
     "access_token_present": true,
     "access_token_process_configured": false,
-    "access_token_seconds_until_expiry": -82433,
+    "access_token_seconds_until_expiry": -82970,
     "access_token_user_configured": false,
     "access_token_variable": "KIS_ACCESS_TOKEN",
     "access_token_without_refresh_token": false,

@@ -89,6 +89,8 @@ def test_live_phase3_completion_audit_keeps_submit_authority_missing_even_with_o
     assert record["proof_gap_summary"]["token_refresh_real_call_proof_required"] is False
     assert record["proof_gap_summary"]["safety_controls_blocked"] is False
     assert record["proof_gap_summary"]["live_adapter_disabled"] is True
+    assert record["proof_gap_summary"]["authority_contract_present"] is True
+    assert record["proof_gap_summary"]["authority_contract_status"] == "disabled_pending_external_approval"
     assert record["proof_gap_summary"]["separate_live_order_authority_required"] is True
     assert record["env_scope_status"]["KIS_REFRESH_TOKEN"]["process_configured"] is True
     assert "KIS_REFRESH_TOKEN" not in record["missing_process_env_names"]

@@ -25,6 +25,10 @@ def test_service_live_adapter_is_hard_disabled():
     assert status["cancel_network_enabled"] is False
     assert status["adapter_boundary"] == "live_disabled_placeholder"
     assert status["live_fallback_enabled"] is False
+    assert status["authority_contract"]["present"] is True
+    assert status["authority_contract"]["submit_authority_present"] is False
+    assert status["authority_contract"]["cancel_authority_present"] is False
+    assert status["authority_contract"]["network_call_performed"] is False
 
     preview_payload = adapter.preview_order(request)
     submit_payload = adapter.submit_order(request)
@@ -43,6 +47,9 @@ def test_service_live_adapter_is_hard_disabled():
         assert payload["network_call_performed"] is False
         assert payload["endpoint_called"] is False
         assert payload["reason"] == LIVE_DISABLED_REASON
+        if operation in {"preview_order", "submit_order", "cancel_order"}:
+            assert payload["authority_contract"]["requires_separate_user_approval"] is True
+            assert payload["authority_contract"]["live_order_created"] is False
 
     assert preview_payload["live_order_safety"]["decision"] == "deny"
     assert submit_payload["live_order_safety"]["decision"] == "deny"
@@ -65,6 +72,7 @@ def test_broker_service_reports_disabled_live_adapter_without_secrets(monkeypatc
     assert live["adapter_boundary"] == "live_disabled_placeholder"
     assert live["submit_implementation_present"] is True
     assert live["cancel_implementation_present"] is True
+    assert live["authority_contract"]["requires_token_refresh_real_call_proof"] is True
     assert paper["adapter_boundary"] == "paper_only_service"
     assert paper["live_fallback_enabled"] is False
     assert safety["all_required_controls_passed"] is False

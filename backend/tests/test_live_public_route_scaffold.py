@@ -32,6 +32,8 @@ def test_live_status_route_is_public_but_disabled_and_redacted(client, monkeypat
     assert payload["adapter"]["enabled"] is False
     assert payload["adapter"]["can_submit"] is False
     assert payload["adapter"]["network_enabled"] is False
+    assert payload["adapter"]["authority_contract"]["present"] is True
+    assert payload["adapter"]["authority_contract"]["network_authority_present"] is False
     assert payload["live_order_safety"]["network_call_performed"] is False
     assert sentinel not in json.dumps(payload, ensure_ascii=False)
 
@@ -68,8 +70,11 @@ def test_kis_live_order_routes_return_disabled_payloads_without_network(client):
         _assert_disabled_live_route(response.json())
 
     assert responses[2].json()["live_order_safety"]["decision"] == "deny"
+    assert responses[2].json()["authority_contract"]["submit_authority_present"] is False
     assert responses[3].json()["live_order_safety"]["decision"] == "deny"
+    assert responses[3].json()["authority_contract"]["submit_authority_present"] is False
     assert responses[4].json()["live_cancel_safety"]["decision"] == "deny"
+    assert responses[4].json()["authority_contract"]["cancel_authority_present"] is False
 
 
 def test_kis_live_broker_and_websocket_routes_stay_unregistered(client):

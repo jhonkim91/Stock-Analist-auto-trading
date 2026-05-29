@@ -313,7 +313,17 @@ def _proof_gap_summary(
     canary_blockers = set(blocker_sources.get("canary_blockers") or [])
     safety_blockers = set(blocker_sources.get("safety_blockers") or [])
     token_refresh_blockers = set(blocker_sources.get("token_refresh_blockers") or [])
+    authority_contract = live_adapter_status.get("authority_contract")
+    authority_contract_present = bool(
+        isinstance(authority_contract, Mapping) and authority_contract.get("present")
+    )
     return {
+        "authority_contract_present": authority_contract_present,
+        "authority_contract_status": (
+            str(authority_contract.get("status"))
+            if isinstance(authority_contract, Mapping) and authority_contract.get("status")
+            else None
+        ),
         "token_refresh_real_call_proof_required": not bool(requirements.get("token_refresh_real_call_proof")),
         "token_refresh_network_call_performed": bool(token_record.get("network_call_performed")),
         "token_refresh_blockers_present": bool(token_refresh_blockers),

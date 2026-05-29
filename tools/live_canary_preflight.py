@@ -105,6 +105,7 @@ def build_live_canary_preflight(env: Mapping[str, str] | None = None) -> dict[st
             "cancel_network_enabled": live_adapter_status.get("cancel_network_enabled"),
             "adapter_boundary": live_adapter_status.get("adapter_boundary"),
             "live_fallback_enabled": live_adapter_status.get("live_fallback_enabled"),
+            "authority_contract": live_adapter_status.get("authority_contract"),
             "reason": live_adapter_status.get("reason"),
         },
         "credential_fields": {key: {"configured": _configured(current_env.get(key, ""))} for key in SENSITIVE_ENV_KEYS},
