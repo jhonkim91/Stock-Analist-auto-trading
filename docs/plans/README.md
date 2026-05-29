@@ -14,9 +14,9 @@
 | 항목 | 값 |
 |---|---|
 | 현재 checkpoint | `Telegram + KIS Paper Trading Bot reset` |
-| 현재 구현 완료 | 기존 분석/스크리너/백테스트/리포트/포트폴리오 보존, Telegram command/webhook/report scheduler, KIS token cache skeleton, stock detail KIS quote fallback, paper order guard, paper sync worker wrapper |
-| 최신 backend pytest | full backend `516 passed in 861.47s`, Telegram scheduler/sync worker targeted suites 통과 |
-| 다음 권장 Phase | KIS paper TR ID/payload 공식 재확인, Telegram polling `getUpdates`, 자동매매 제어면 보강 |
+| 현재 구현 완료 | 기존 분석/스크리너/백테스트/리포트/포트폴리오 보존, Telegram command/webhook/polling/report scheduler, `/bot` 명시 제어, KIS token cache skeleton, stock detail KIS quote fallback, paper order guard, paper sync worker wrapper |
+| 최신 backend pytest | full backend `520 passed in 1009.90s`, Telegram polling/bot-control/scheduler/sync worker targeted suites 통과 |
+| 다음 권장 Phase | KIS paper TR ID/payload 공식 재확인, 장시간 운영 loop 정책 보강 |
 | 상태 요약 문서 | `docs/PROJECT_STATUS.md` |
 | 상세 검증 문서 | `docs/VALIDATION.md` |
 | 프로젝트 메모리 | `Memory.md` |
@@ -61,15 +61,14 @@
 | KIS Paper Broker Phase 8 | 완료 | `frontend/app/paper/page.tsx`, `frontend/components/paper-mode-banner.tsx`, `backend/tests/test_frontend_api_contracts.py` | paper-only UI boundary, backend-gated submit/cancel/sync/notify controls, contract tests |
 | KIS Paper Broker Phase 9 | 완료 | `tools/secret_scan.py`, `backend/tests/test_secret_redaction.py`, `docs/PAPER_TRADING_OPERATION.md`, `.github/workflows/ci.yml` | full validation, CI secret scan, key-name redaction hardening, operation guide |
 | KIS Paper Balance Inquiry | 완료 | `backend/app/services/kis_paper_balance.py`, `backend/tests/test_kis_paper_balance.py`, `docs/VALIDATION.md` | `/api/paper/portfolio` 조건부 read-only KIS balance 조회, disabled/mock local fallback |
-| Project Reset: Telegram + KIS Paper Bot | 진행 중 | `goal.md`, `backend/app/api/telegram.py`, `backend/app/services/telegram_report_scheduler_service.py`, `backend/app/services/paper_sync_worker_service.py`, `docs/PROJECT_STATUS.md` | 실행 모드 재정의, Telegram webhook/report scheduler, paper sync worker wrapper, live disabled 유지 |
+| Project Reset: Telegram + KIS Paper Bot | 진행 중 | `goal.md`, `backend/app/api/telegram.py`, `backend/app/services/telegram_polling_service.py`, `backend/app/services/telegram_report_scheduler_service.py`, `backend/app/services/paper_sync_worker_service.py`, `docs/PROJECT_STATUS.md` | 실행 모드 재정의, Telegram webhook/polling/report scheduler, `/bot` 명시 제어, paper sync worker wrapper, live disabled 유지 |
 | Phase 4A/4B | 보류 | 별도 승인 필요 | broker 또는 live gate |
 
 ## 다음 후보
 
 1. 공식 KIS paper endpoint/path/TR-ID/request field는 `docs/KIS_PAPER_API_MATRIX.md`의 `확인 필요` 항목을 공식 문서로 먼저 보강한다.
-2. Telegram polling `getUpdates` runner는 token/chat id redaction과 bounded polling gate를 먼저 추가한다.
-3. 자동매매 loop는 기본 OFF를 유지하고 Telegram 또는 Settings에서 명시적으로 켜는 제어면을 추가한다.
-4. Phase 4A/4B live gate는 현재 목표 밖이므로 별도 승인 없이 구현하지 않는다.
+2. 장시간 운영 loop는 기본 OFF를 유지하고 bounded runner와 stop/kill-switch 정책을 먼저 문서화한다.
+3. Phase 4A/4B live gate는 현재 목표 밖이므로 별도 승인 없이 구현하지 않는다.
 
 ## Report 기준
 

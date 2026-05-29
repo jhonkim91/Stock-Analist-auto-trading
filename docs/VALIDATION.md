@@ -1,5 +1,22 @@
 # Validation
 
+## 2026-05-30 Telegram Polling Runner
+
+Telegram `getUpdates` polling runner를 기본 OFF/confirm-gated 구조로 추가했다. Token은 env에서만 읽고 응답/trace에는 bot token path와 chat id를 남기지 않는다. 실제 실계좌 주문이나 KIS live 호출은 수행하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Telegram polling/bot control 신규 테스트 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_tests` -> `10 passed` |
+| 관련 회귀 테스트 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_notification_api.py backend/tests/test_secret_redaction.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_related` -> `21 passed` |
+| 전체 backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_full_backend` -> `520 passed in 1009.90s` |
+| Polling default-off | 통과 | `GET /api/telegram/polling/status`는 기본 `polling_allowed=false`, `auto_start=false`; `POST /api/telegram/polling/run-once`는 `confirm=false`에서 no-network block |
+| getUpdates dispatch | 통과 | fake Telegram HTTP client로 `/help` update를 command dispatcher에 연결. `dry_run=true`에서는 reply network 없음 |
+| explicit reply send | 통과 | `dry_run=false`, `send_replies=true`에서만 `sendMessage` 1회 시도. 결과 payload에는 token/chat id 원문 미노출 |
+| Runner 기본 동작 | 통과 | `backend.app.jobs.telegram_polling_runner`는 기본 status-only이며 `execute_required=true`, `network_call_performed=false` |
+| Telegram bot control | 통과 | `/bot status|enable|disable|auto|run|stop` 명령 추가. enable/disable/auto/run은 `confirm` 필요, `run` 결과는 `live_order_created=false`, `network_call_performed=false` |
+
+결론: Telegram polling run-once/CLI와 `/bot` 명시 제어면이 추가됐다. 남은 작업은 KIS paper TR ID/payload 공식 재확인과 장시간 운영 loop 정책 보강이다.
+
 ## 2026-05-30 Telegram Scheduler + Paper Sync Worker
 
 Telegram command dispatcher를 webhook/report scheduler 구조로 확장하고, KIS paper sync worker wrapper를 추가했다. 기본값은 모두 auto-start false이며, 실제 KIS live 주문과 실계좌 호출은 수행하지 않았다.

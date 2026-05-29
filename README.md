@@ -13,12 +13,12 @@
 | Version | `Project Reset` |
 | Phase | `Telegram + KIS Paper Trading Bot skeleton` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
-| Product state | 분석 엔진 + Telegram command/webhook/report scheduler + KIS paper bot 전환 진행 |
+| Product state | 분석 엔진 + Telegram command/webhook/polling/report scheduler + KIS paper bot 전환 진행 |
 | Trading state | `analysis_only`, `telegram_report`, `paper_kis`, `live_disabled` 실행 모드 분리 |
-| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_full_backend` -> `516 passed in 861.47s` |
+| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_full_backend` -> `520 passed in 1009.90s` |
 | Latest secret scan | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
-| Next recommended phase | KIS paper TR ID/payload 공식 재확인 후 polling getUpdates와 자동매매 제어면 보강 |
+| Next recommended phase | KIS paper TR ID/payload 공식 재확인 후 자동매매 제어면 보강 |
 
 ## Execution Modes
 
@@ -32,14 +32,16 @@
 ## Telegram + KIS Paper Reset Surface
 
 - `GET /api/stocks/search`, `GET /api/stocks/{symbol}`: KIS paper quote 우선, 실패/비활성 시 DB 최신 OHLCV fallback.
-- `GET /api/telegram/status`, `POST /api/telegram/command`: `/start`, `/help`, `/status`, `/search`, `/report`, `/portfolio`, `/rank`, `/stop`, `/buy`, `/sell`, `/orders`.
+- `GET /api/telegram/status`, `POST /api/telegram/command`: `/start`, `/help`, `/status`, `/search`, `/report`, `/portfolio`, `/rank`, `/bot`, `/stop`, `/buy`, `/sell`, `/orders`.
 - `POST /api/telegram/webhook`: Telegram webhook update를 command dispatcher에 연결한다.
+- `GET /api/telegram/polling/status`, `POST /api/telegram/polling/run-once`: Telegram `getUpdates` bounded polling runner다. 기본은 OFF이며 `confirm=true`, `TELEGRAM_BOT_ENABLED=true`, `TELEGRAM_POLLING_ENABLED=true`, token 설정이 모두 필요하다.
 - `GET /api/telegram/scheduler/status`, `POST /api/telegram/scheduler/run-once`: 장 시작 전/장 종료 후/주간 report scheduler 구조를 제공한다. 기본은 OFF이며 `confirm=true`와 dry-run gate 뒤에서만 실행된다.
 - `/buy`, `/sell`: `confirm` 또는 `TELEGRAM_PAPER_TRADE_CONFIRM=true` 없이는 preview만 수행.
 - `GET /api/paper/sync-worker/status`, `POST /api/paper/sync-worker/run-once`: KIS paper 주문/체결/잔고 sync worker wrapper다. 기본은 OFF이며 `confirm=true`와 paper network gate를 통과해야 조회 동기화를 시도한다.
 - KIS token cache: `KIS_TOKEN_CACHE_ENABLED=true`일 때만 `.cache/kis/token.json`에 local cache 저장.
 - Paper risk gate: `kill_switch`, `max_order_notional`, `max_order_qty`, `max_open_positions`, `blacklist`, `cooldown_seconds`, `idempotency_key`.
 - Paper bot 자동매매: 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false). Telegram 또는 설정에서 명시적으로 켜야 동작.
+- Telegram `/bot status|enable|disable|auto|run|stop`: paper bot을 process env 기준으로 명시 제어한다. `enable`, `disable`, `auto`, `run`은 `confirm`이 필요하다.
 - Settings runtime env 버튼: 현재 backend 프로세스에 즉시 반영하고 hover/focus 시 한국어 설명을 표시한다. `ENABLE_REAL_ORDER`는 클릭해도 `false`로 강제 적용한다.
 
 ## Implemented Scope
@@ -298,6 +300,8 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `GET` | `/api/bot/status` | paper-only bot runtime status, kill-switch/session/auto-submit gate 표시 |
 | `POST` | `/api/bot/run-once` | paper-only preview decision loop, auto-submit은 명시 opt-in과 backend gate 통과 시에만 허용 |
 | `POST` | `/api/bot/stop` | paper-only scheduler stop marker, live/order side effect 없음 |
+| `GET` | `/api/telegram/polling/status` | Telegram getUpdates polling 상태, 기본 OFF/auto-start false |
+| `POST` | `/api/telegram/polling/run-once` | confirm-gated getUpdates 1회 조회, command dispatch, 선택적 reply send |
 | `GET` | `/api/telegram/scheduler/status` | Telegram report scheduler 상태, 기본 OFF/auto-start false |
 | `POST` | `/api/telegram/scheduler/run-once` | confirm 뒤 daily/weekly report 생성 및 Telegram summary dry-run/send |
 | `POST` | `/api/telegram/webhook` | Telegram webhook update를 command dispatcher로 연결 |
@@ -440,7 +444,7 @@ npm.cmd run build
 
 - 실계좌 실제 주문, 주문 취소, 체결, 계좌 자금 이동, live broker.
 - live broker order create, live fill, live position mutation.
-- Telegram polling/webhook runner와 운영 scheduler.
+- Telegram 장시간 상주 운영 scheduler auto-start. Polling/webhook run-once 구조는 구현됨.
 - KRX/yfinance 실제 network fetch.
 - 완전 자동매매 운영 loop, live broker adapter, AI prediction model.
 - portfolio cash/position state, walk-forward validation.

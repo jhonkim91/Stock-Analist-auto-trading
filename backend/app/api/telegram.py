@@ -5,8 +5,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.models.schemas import TelegramReportSchedulerRunRequest, TelegramWebhookRequest
+from backend.app.models.schemas import TelegramPollingRunRequest, TelegramReportSchedulerRunRequest, TelegramWebhookRequest
 from backend.app.services.telegram_bot_service import TelegramBotService
+from backend.app.services.telegram_polling_service import TelegramPollingService
 from backend.app.services.telegram_report_scheduler_service import TelegramReportSchedulerService
 
 router = APIRouter(prefix="/api/telegram", tags=["telegram"])
@@ -32,6 +33,23 @@ def dispatch_telegram_command(payload: TelegramCommandRequest, db: Session = Dep
 @router.post("/webhook")
 def dispatch_telegram_webhook(payload: TelegramWebhookRequest, db: Session = Depends(get_db)) -> dict[str, object]:
     return TelegramBotService(db).handle_update(payload.model_dump(exclude_none=True))
+
+
+@router.get("/polling/status")
+def telegram_polling_status(db: Session = Depends(get_db)) -> dict[str, object]:
+    return TelegramPollingService(db).status()
+
+
+@router.post("/polling/run-once")
+def run_telegram_polling(payload: TelegramPollingRunRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    return TelegramPollingService(db).run_once(
+        offset=payload.offset,
+        limit=payload.limit,
+        timeout_seconds=payload.timeout_seconds,
+        dry_run=payload.dry_run,
+        send_replies=payload.send_replies,
+        confirm=payload.confirm,
+    )
 
 
 @router.get("/scheduler/status")

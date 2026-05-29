@@ -14,7 +14,7 @@
 | 모드 | 상태 | 설명 |
 |---|---|---|
 | `analysis_only` | 지원 | 로컬 DB 분석, 스크리너, 백테스트, 리포트 |
-| `telegram_report` | 진행 중 | Telegram 명령, webhook dispatcher, report scheduler |
+| `telegram_report` | 진행 중 | Telegram 명령, webhook/polling dispatcher, report scheduler |
 | `paper_kis` | 진행 중 | KIS 모의투자 token/quote/order/fill/position mirror, sync worker wrapper |
 | `live_disabled` | 유지 | live endpoint/config가 있어도 실계좌 주문 차단 |
 
@@ -28,7 +28,9 @@
 - `/api/stocks/search`, `/api/stocks/{symbol}` route를 추가했다.
 - `TelegramBotService`와 `/api/telegram/status`, `/api/telegram/command` route를 추가했다.
 - `/api/telegram/webhook`, `/api/telegram/scheduler/status`, `/api/telegram/scheduler/run-once`를 추가했다. Scheduler는 기본 OFF, auto-start false, confirm gate 뒤에서 report summary를 Telegram channel로 dry-run/send한다.
-- Telegram command dispatcher는 `/start`, `/help`, `/status`, `/search`, `/report`, `/portfolio`, `/rank`, `/stop`, `/buy`, `/sell`, `/orders`를 지원한다.
+- `/api/telegram/polling/status`, `/api/telegram/polling/run-once`, `backend.app.jobs.telegram_polling_runner`를 추가했다. Polling은 기본 OFF, confirm gate 뒤에서만 `getUpdates`를 1회 조회하며 응답/trace에 token/chat id 원문을 남기지 않는다.
+- Telegram command dispatcher는 `/start`, `/help`, `/status`, `/search`, `/report`, `/portfolio`, `/rank`, `/bot`, `/stop`, `/buy`, `/sell`, `/orders`를 지원한다.
+- `/bot status|enable|disable|auto|run|stop`은 paper bot process env를 명시 제어한다. enable/disable/auto/run은 `confirm`이 필요하다.
 - `/buy`, `/sell`은 `confirm` 또는 `TELEGRAM_PAPER_TRADE_CONFIRM=true` 없이는 preview만 수행한다.
 - `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once`와 `backend.app.jobs.paper_sync_runner`를 추가했다. Worker는 기본 OFF이며 confirm과 paper network gate가 열릴 때만 `PaperSyncService.sync()`를 호출한다.
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가했다.
@@ -55,9 +57,9 @@
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_phase2_only` -> `10 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_default_off` -> `5 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_buttons` -> `4 passed`.
-- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_worker_tests` -> `6 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_tests` -> `10 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` -> `18 passed`.
-- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_full_backend` -> `516 passed in 861.47s`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_full_backend` -> `520 passed in 1009.90s`.
 - [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
 - [x] `cd frontend; npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` -> 모두 통과.
 - [x] `git diff --check` -> exit 0, CRLF warning만 출력.
@@ -66,7 +68,6 @@
 ## 남은 작업
 
 - [ ] KIS paper 국내/해외 주문, 취소, 미체결, 체결, 잔고 조회 TR ID와 payload를 공식 문서/샘플 기준으로 재확인한다.
-- [ ] Telegram polling `getUpdates` 네트워크 runner를 구현한다. Webhook dispatcher와 report scheduler run-once/CLI는 추가됨.
 - [ ] 자동매매 loop는 기본 OFF로 유지하고 Telegram 또는 설정에서 명시적으로 켜는 제어면을 추가한다.
 
 ## 주의 사항

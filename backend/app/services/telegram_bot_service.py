@@ -25,6 +25,7 @@ SUPPORTED_TELEGRAM_COMMANDS = {
     "/portfolio",
     "/rank",
     "/stop",
+    "/bot",
     "/buy",
     "/sell",
     "/orders",
@@ -94,6 +95,7 @@ class TelegramBotService:
             "/portfolio": self._handle_portfolio,
             "/rank": self._handle_rank,
             "/stop": self._handle_stop,
+            "/bot": self._handle_bot,
             "/buy": lambda command: self._handle_order(command, side="buy", chat_id=chat_id),
             "/sell": lambda command: self._handle_order(command, side="sell", chat_id=chat_id),
             "/orders": self._handle_orders,
@@ -123,6 +125,7 @@ class TelegramBotService:
     def _handle_help(self, command: TelegramCommand) -> dict[str, Any]:
         message = (
             "명령: /status, /search 종목코드, /report, /portfolio, /rank, "
+            "/bot status|enable|disable|auto|run|stop, "
             "/buy 종목 qty [price] confirm, /sell 종목 qty [price] confirm, /orders, /stop"
         )
         return self._response(command, status="ok", message=message)
@@ -201,6 +204,75 @@ class TelegramBotService:
     def _handle_stop(self, command: TelegramCommand) -> dict[str, Any]:
         stop = PaperBotService(self.db).stop()
         return self._response(command, status="stopped", message="paper bot stop 요청을 수신했습니다.", payload=stop)
+
+    def _handle_bot(self, command: TelegramCommand) -> dict[str, Any]:
+        action = command.args[0].lower() if command.args else "status"
+        confirm = any(arg.lower() in {"confirm", "confirmed", "확인"} for arg in command.args[1:])
+        service = PaperBotService(self.db)
+        if action in {"status", "상태"}:
+            status = service.status()
+            message = (
+                f"bot enabled={status.get('enabled')} auto_submit={status.get('auto_submit')} "
+                f"kill_switch={status.get('kill_switch_enabled')} loop_allowed={status.get('loop_allowed')}"
+            )
+            return self._response(command, status="ok", message=message, payload=status)
+        if action in {"enable", "on", "start", "켜기"}:
+            if not confirm:
+                return self._response(
+                    command,
+                    status="blocked",
+                    message="사용법: /bot enable confirm",
+                    reason_codes=["TELEGRAM_BOT_CONTROL_CONFIRM_REQUIRED"],
+                )
+            os.environ["PAPER_BOT_ENABLED"] = "true"
+            status = service.status()
+            return self._response(command, status="updated", message="paper bot enabled=true", payload=status)
+        if action in {"disable", "off", "끄기"}:
+            if not confirm:
+                return self._response(
+                    command,
+                    status="blocked",
+                    message="사용법: /bot disable confirm",
+                    reason_codes=["TELEGRAM_BOT_CONTROL_CONFIRM_REQUIRED"],
+                )
+            os.environ["PAPER_BOT_ENABLED"] = "false"
+            os.environ["PAPER_BOT_AUTO_SUBMIT"] = "false"
+            stop = service.stop()
+            return self._response(command, status="updated", message="paper bot disabled; auto_submit=false", payload=stop)
+        if action in {"auto", "autosubmit", "auto-submit"}:
+            value = command.args[1].lower() if len(command.args) >= 2 else ""
+            if value not in {"on", "off", "true", "false"} or not confirm:
+                return self._response(
+                    command,
+                    status="blocked",
+                    message="사용법: /bot auto on confirm 또는 /bot auto off confirm",
+                    reason_codes=["TELEGRAM_BOT_CONTROL_CONFIRM_REQUIRED"],
+                )
+            enabled = value in {"on", "true"}
+            os.environ["PAPER_BOT_AUTO_SUBMIT"] = "true" if enabled else "false"
+            status = service.status()
+            return self._response(command, status="updated", message=f"paper bot auto_submit={enabled}", payload=status)
+        if action in {"run", "once", "실행"}:
+            if not confirm:
+                return self._response(
+                    command,
+                    status="blocked",
+                    message="사용법: /bot run confirm [auto_submit=true]",
+                    reason_codes=["TELEGRAM_BOT_RUN_CONFIRM_REQUIRED"],
+                )
+            values = _key_values(command.args[1:])
+            auto_submit = _bool_or_none(values.get("auto_submit") or values.get("autosubmit"))
+            result = service.run_once(auto_submit=auto_submit)
+            message = f"bot run {result.get('status')} decisions={result.get('decision_count')} submitted={result.get('submitted_count')}"
+            return self._response(command, status=str(result.get("status") or "ok"), message=message, payload=result)
+        if action in {"stop", "중지"}:
+            return self._handle_stop(command)
+        return self._response(
+            command,
+            status="bad_request",
+            message="사용법: /bot status|enable|disable|auto|run|stop",
+            reason_codes=["TELEGRAM_BOT_ACTION_UNSUPPORTED"],
+        )
 
     def _handle_orders(self, command: TelegramCommand) -> dict[str, Any]:
         status = command.args[0] if command.args else None
@@ -358,6 +430,17 @@ def _float_or_none(value: object) -> float | None:
         return float(str(value).replace(",", ""))
     except (TypeError, ValueError):
         return None
+
+
+def _bool_or_none(value: object) -> bool | None:
+    if value in {None, ""}:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return None
 
 
 def _env_true(name: str) -> bool:

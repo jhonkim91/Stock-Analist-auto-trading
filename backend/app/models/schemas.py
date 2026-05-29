@@ -341,6 +341,17 @@ class TelegramReportSchedulerRunRequest(BaseModel):
     confirm: bool = False
 
 
+class TelegramPollingRunRequest(BaseModel):
+    """Telegram getUpdates polling 수동 run-once 요청이다."""
+
+    offset: int | None = None
+    limit: int = Field(default=10, ge=1, le=100)
+    timeout_seconds: int = Field(default=0, ge=0, le=30)
+    dry_run: bool | None = None
+    send_replies: bool | None = None
+    confirm: bool = False
+
+
 class RuntimeEnvToggleRequest(BaseModel):
     """현재 backend 프로세스에만 반영되는 boolean env toggle 요청이다."""
 
