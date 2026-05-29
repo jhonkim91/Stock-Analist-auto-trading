@@ -40,6 +40,7 @@
 - 실계좌 주문 연동 3단계는 `LiveOrderSafetyService`, `/api/broker/status.live_order_safety`, `/api/broker/orders/preview.live_order_safety`, `tools/live_canary_preflight.py`에 kill switch/rate limiter/idempotency/audit/max notional/blacklist/cooldown/token refresh preflight를 추가했지만 아직 완료가 아니다.
 - `LiveRateLimiter`, `LiveIdempotencyGuard`, `LiveCooldownGuard`, `LiveOrderAuditService`를 추가해 rate 소진, duplicate idempotency, cooldown, redacted audit event를 실제 live 주문 없이 검증한다.
 - `KisLiveTokenRefreshService`는 live token refresh를 별도 gated scaffold로 추가했지만 기본 network disabled이며 real KIS refresh proof는 없다.
+- `KisLiveBrokerAdapter`는 submit/cancel safety boundary를 반환하지만 `enabled=false`, `can_submit=false`, `can_cancel=false`, `network_enabled=false`로 고정한다.
 
 ## 최신 검증 결과
 
@@ -55,11 +56,13 @@
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_controls_regression` -> `28 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_controls_full` -> `32 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_live_token_refresh_service.py backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_live_token_controls` -> `35 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_adapter.py backend/tests/test_live_canary_preflight.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_live_adapter_unit` -> `7 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_live_token_refresh_service.py backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_live_adapter_controls` -> `35 passed`.
 - [x] pytest 병렬 실행은 `backend/data/test_app.db` 잠금으로 실패할 수 있어 순차 실행과 workspace-external basetemp를 사용한다.
 
 ## 남은 작업
 
 - [x] 2단계 커밋/푸시는 `5d33512`로 완료했다.
 - [ ] 3단계 안전 preflight 체크포인트는 커밋/푸시 가능하지만 단계 완료 커밋은 아래 미충족 항목 해소 전까지 보류한다.
-- [ ] 3단계 실계좌 주문 연동은 live token refresh real-call proof, live adapter submit/cancel, live public route, reviewer/env isolation/rollback proof가 구현/검증되기 전까지 완료로 보지 않는다.
+- [ ] 3단계 실계좌 주문 연동은 live token refresh real-call proof, live public route, reviewer/env isolation/rollback proof가 구현/검증되기 전까지 완료로 보지 않는다.
 - [ ] 3단계 live 주문 실행/취소는 별도 live canary 조건과 사용자 승인, 정규장/소액/단일 주문/즉시 중단 절차 없이는 수행하지 않는다.

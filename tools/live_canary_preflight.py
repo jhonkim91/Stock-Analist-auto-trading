@@ -62,10 +62,14 @@ def build_live_canary_preflight(env: Mapping[str, str] | None = None) -> dict[st
         blockers.append(LIVE_DISABLED_REASON)
     if not bool(live_adapter_status.get("network_enabled")):
         blockers.append("LIVE_NETWORK_DISABLED")
-    if not bool(live_adapter_status.get("can_submit")):
+    if not bool(live_adapter_status.get("submit_implementation_present")):
         blockers.append("LIVE_SUBMIT_NOT_IMPLEMENTED")
-    if not bool(live_adapter_status.get("can_cancel")):
+    elif not bool(live_adapter_status.get("can_submit")):
+        blockers.append("LIVE_SUBMIT_DISABLED")
+    if not bool(live_adapter_status.get("cancel_implementation_present")):
         blockers.append("LIVE_CANCEL_NOT_IMPLEMENTED")
+    elif not bool(live_adapter_status.get("can_cancel")):
+        blockers.append("LIVE_CANCEL_DISABLED")
     if not public_route_checks["api_live_route_present"]:
         blockers.append("LIVE_PUBLIC_ROUTE_ABSENT")
     if not public_route_checks["kis_order_route_present"]:
@@ -98,6 +102,10 @@ def build_live_canary_preflight(env: Mapping[str, str] | None = None) -> dict[st
             "network_enabled": live_adapter_status.get("network_enabled"),
             "can_submit": live_adapter_status.get("can_submit"),
             "can_cancel": live_adapter_status.get("can_cancel"),
+            "submit_implementation_present": live_adapter_status.get("submit_implementation_present"),
+            "cancel_implementation_present": live_adapter_status.get("cancel_implementation_present"),
+            "submit_network_enabled": live_adapter_status.get("submit_network_enabled"),
+            "cancel_network_enabled": live_adapter_status.get("cancel_network_enabled"),
             "adapter_boundary": live_adapter_status.get("adapter_boundary"),
             "live_fallback_enabled": live_adapter_status.get("live_fallback_enabled"),
             "reason": live_adapter_status.get("reason"),

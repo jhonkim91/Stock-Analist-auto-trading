@@ -19,13 +19,20 @@ def test_service_live_adapter_is_hard_disabled():
     assert status["live_trading_enabled"] is False
     assert status["network_enabled"] is False
     assert status["can_submit"] is False
+    assert status["submit_implementation_present"] is True
+    assert status["cancel_implementation_present"] is True
+    assert status["submit_network_enabled"] is False
+    assert status["cancel_network_enabled"] is False
     assert status["adapter_boundary"] == "live_disabled_placeholder"
     assert status["live_fallback_enabled"] is False
 
+    preview_payload = adapter.preview_order(request)
+    submit_payload = adapter.submit_order(request)
+    cancel_payload = adapter.cancel_order(broker_order_id="live-1", confirm=True)
     for operation, payload in {
-        "preview_order": adapter.preview_order(request),
-        "submit_order": adapter.submit_order(request),
-        "cancel_order": adapter.cancel_order(broker_order_id="live-1", confirm=True),
+        "preview_order": preview_payload,
+        "submit_order": submit_payload,
+        "cancel_order": cancel_payload,
         "list_orders": adapter.list_orders(status="open"),
         "sync": adapter.sync(scope="all"),
     }.items():
@@ -36,6 +43,11 @@ def test_service_live_adapter_is_hard_disabled():
         assert payload["network_call_performed"] is False
         assert payload["endpoint_called"] is False
         assert payload["reason"] == LIVE_DISABLED_REASON
+
+    assert preview_payload["live_order_safety"]["decision"] == "deny"
+    assert submit_payload["live_order_safety"]["decision"] == "deny"
+    assert cancel_payload["live_cancel_safety"]["decision"] == "deny"
+    assert cancel_payload["live_cancel_safety"]["network_call_performed"] is False
 
 
 def test_broker_service_reports_disabled_live_adapter_without_secrets(monkeypatch):
@@ -51,6 +63,8 @@ def test_broker_service_reports_disabled_live_adapter_without_secrets(monkeypatc
     assert live["enabled"] is False
     assert live["live_trading_enabled"] is False
     assert live["adapter_boundary"] == "live_disabled_placeholder"
+    assert live["submit_implementation_present"] is True
+    assert live["cancel_implementation_present"] is True
     assert paper["adapter_boundary"] == "paper_only_service"
     assert paper["live_fallback_enabled"] is False
     assert safety["all_required_controls_passed"] is False
