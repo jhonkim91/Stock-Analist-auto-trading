@@ -1,5 +1,18 @@
 # Validation
 
+## 2026-05-30 Paper Sync Worker Bounded Loop API
+
+KIS paper 주문/체결/잔고 sync worker에 `POST /api/paper/sync-worker/run-loop`를 추가했다. 기본 OFF와 auto-start false는 유지하며, `confirm=true`와 `PAPER_SYNC_WORKER_ENABLED=true`가 있어야 bounded loop를 실행한다. 반복 횟수는 `PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP` 안에서 잘라낸다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Route surface | 통과 | `GET /api/paper/sync-worker/status`의 `public_surface.run_loop_route`가 `POST /api/paper/sync-worker/run-loop`로 노출 |
+| Confirm gate | 통과 | `confirm=false` 요청은 `PAPER_SYNC_WORKER_LOOP_CONFIRMATION_REQUIRED`, `iteration_count=0` |
+| Bounded cap | 통과 | `max_iterations=3`, `PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP=2` 요청은 `iteration_count=2`, `requested_iteration_count=3` |
+| No live/network default | 통과 | `PAPER_TRADING_NETWORK_ENABLED=false`에서 loop 응답 `network_call_performed=false`, `live_order_created=false` |
+| Targeted tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py backend/tests/test_paper_sync.py backend/tests/test_paper_sync_service.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_sync_worker_loop_api` -> `19 passed` |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_sync_loop` -> `531 passed in 775.81s` |
+
 ## 2026-05-30 Telegram Cancel Paper Order Command
 
 Telegram `/cancel paper_order_id confirm` 명령을 추가해 기존 `PaperTradingService.cancel_order()`의 paper-only local cancel gate를 재사용하도록 했다. confirm이 없거나 주문 ID가 없으면 side effect 없이 차단하고, local paper order 취소는 `paper_orders` 상태와 audit log만 갱신한다.
@@ -12,7 +25,7 @@ Telegram `/cancel paper_order_id confirm` 명령을 추가해 기존 `PaperTradi
 | No live/network | 통과 | cancel command 응답 `network_call_performed=false`, `live_order_created=false` |
 | Cancel focused tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_cancel_command` -> `14 passed` |
 | Telegram regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_cancel_related` -> `17 passed` |
-| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_telegram_cancel` -> `530 passed in 753.01s` |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_sync_loop` -> `531 passed in 775.81s` |
 
 ## 2026-05-30 Telegram Report Daily/Weekly Command
 
@@ -112,7 +125,7 @@ Settings 화면에서 개별 env gate만 토글하던 구조를 보강해 `모�
 | Paper bot auto preset | 통과 | `paper_bot_auto_on` 적용 시 `EXECUTION_MODE=paper_kis`, `BROKER_MODE=paper_kis`, `KIS_ENV=paper`, paper/bot gate true, kill switch false, `ENABLE_REAL_ORDER=false` 확인 |
 | Frontend Settings UI | 통과 | `/settings` Runtime env 패널에 preset 버튼 추가. 버튼 hover/focus tooltip은 한국어 설명과 적용 env 목록을 표시 |
 | Focused backend tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` -> `5 passed` |
-| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_telegram_cancel` -> `530 passed in 753.01s` |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_sync_loop` -> `531 passed in 775.81s` |
 | Frontend lint | 통과 | `cd frontend; npm.cmd run lint` -> exit 0 |
 | Frontend typecheck | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit` -> exit 0 |
 | Frontend build | 통과 | `cd frontend; npm.cmd run build` -> Next.js build 성공, 14 static pages 생성 |
@@ -150,7 +163,7 @@ Telegram command dispatcher를 webhook/report scheduler 구조로 확장하고, 
 | 전체 backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_full_backend` -> `516 passed in 861.47s` |
 | Telegram webhook | 통과 | `POST /api/telegram/webhook`가 update payload의 text command를 기존 dispatcher로 연결하고 chat id/token 원문을 응답에 노출하지 않음 |
 | Telegram report scheduler | 통과 | `GET /api/telegram/scheduler/status`, `POST /api/telegram/scheduler/run-once` 추가. 기본 OFF, confirm required, dry-run report summary delivery 확인 |
-| Paper sync worker | 통과 | `GET /api/paper/sync-worker/status`, `POST /api/paper/sync-worker/run-once` 추가. 기본 OFF, confirm required, `PAPER_TRADING_NETWORK_ENABLED=false`에서 no-network block 확인 |
+| Paper sync worker | 통과 | `GET /api/paper/sync-worker/status`, `POST /api/paper/sync-worker/run-once`, `POST /api/paper/sync-worker/run-loop` 추가. 기본 OFF, confirm required, `PAPER_TRADING_NETWORK_ENABLED=false`에서 no-network block 확인 |
 | Runner 기본 동작 | 통과 | `backend.app.jobs.telegram_report_runner`, `backend.app.jobs.paper_sync_runner`는 기본 status-only이며 `execute_required=true`, `network_call_performed=false` |
 
 결론: Telegram webhook/report scheduler와 KIS paper sync worker wrapper가 추가됐다. 남은 작업은 Telegram polling `getUpdates` 네트워크 runner와 자동매매 제어면 보강이다.

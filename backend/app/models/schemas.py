@@ -204,6 +204,12 @@ class PaperSyncWorkerRunRequest(BaseModel):
     confirm: bool = False
 
 
+class PaperSyncWorkerLoopRequest(PaperSyncWorkerRunRequest):
+    """KIS paper sync worker bounded loop 요청이다."""
+
+    max_iterations: int | None = Field(default=None, ge=1, le=20)
+
+
 class BrokerAdapterStatus(BaseModel):
     """broker adapter 상태를 secret 없이 표현하는 공통 schema다."""
 

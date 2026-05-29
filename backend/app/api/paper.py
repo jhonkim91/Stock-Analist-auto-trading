@@ -12,6 +12,7 @@ from backend.app.models.schemas import (
     PaperOrderSubmitRequest,
     PaperBotRunRequest,
     PaperSyncRequest,
+    PaperSyncWorkerLoopRequest,
     PaperSyncWorkerRunRequest,
     KisWebSocketApprovalRequest,
     KisWebSocketSmokeRequest,
@@ -191,6 +192,18 @@ def paper_sync_worker_status(db: Session = Depends(get_db)) -> dict[str, object]
 @router.post("/sync-worker/run-once")
 def run_paper_sync_worker(payload: PaperSyncWorkerRunRequest, db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperSyncWorkerService(db).run_once(scope=payload.scope, confirm=payload.confirm)
+
+
+@router.post("/sync-worker/run-loop")
+def run_paper_sync_worker_loop(
+    payload: PaperSyncWorkerLoopRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return PaperSyncWorkerService(db).run_loop(
+        scope=payload.scope,
+        max_iterations=payload.max_iterations,
+        confirm=payload.confirm,
+    )
 
 
 @router.get("/realtime/status")

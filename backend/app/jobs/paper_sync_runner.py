@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, sort_keys=True, default=str))
             return 0 if result.get("ok") else 2
         if args.loop:
-            result = service.run_loop(scope=args.scope, max_iterations=args.max_iterations)
+            result = service.run_loop(scope=args.scope, max_iterations=args.max_iterations, confirm=True)
             print(json.dumps(result, sort_keys=True, default=str))
             return 0 if result.get("ok") else 2
         payload = service.status()

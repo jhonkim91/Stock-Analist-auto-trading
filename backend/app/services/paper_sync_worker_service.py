@@ -13,6 +13,7 @@ from backend.app.services.paper_sync_service import SUPPORTED_SYNC_SCOPES, Paper
 PAPER_SYNC_WORKER_ENABLED_ENV = "PAPER_SYNC_WORKER_ENABLED"
 PAPER_SYNC_WORKER_INTERVAL_SECONDS_ENV = "PAPER_SYNC_WORKER_INTERVAL_SECONDS"
 PAPER_SYNC_WORKER_MAX_ITERATIONS_ENV = "PAPER_SYNC_WORKER_MAX_ITERATIONS"
+PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP_ENV = "PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP"
 
 
 class PaperSyncWorkerService:
@@ -25,16 +26,19 @@ class PaperSyncWorkerService:
         """paper sync worker 상태를 secret 없이 반환한다."""
         enabled = _env_true(PAPER_SYNC_WORKER_ENABLED_ENV)
         interval_seconds = _env_int(PAPER_SYNC_WORKER_INTERVAL_SECONDS_ENV, default=60)
+        max_iterations_cap = _env_int(PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP_ENV, default=10)
         return {
             "enabled": enabled,
             "loop_allowed": enabled,
             "auto_start": False,
             "interval_seconds": interval_seconds,
             "max_iterations_default": _env_int(PAPER_SYNC_WORKER_MAX_ITERATIONS_ENV, default=1),
+            "max_iterations_cap": max_iterations_cap,
             "supported_scopes": sorted(SUPPORTED_SYNC_SCOPES),
             "public_surface": {
                 "status_route": "GET /api/paper/sync-worker/status",
                 "run_once_route": "POST /api/paper/sync-worker/run-once",
+                "run_loop_route": "POST /api/paper/sync-worker/run-loop",
                 "cli": "backend.app.jobs.paper_sync_runner",
             },
             "network_call_performed": False,
@@ -85,30 +89,51 @@ class PaperSyncWorkerService:
         self._audit(result)
         return result
 
-    def run_loop(self, *, scope: str = "all", max_iterations: int | None = None) -> dict[str, Any]:
+    def run_loop(self, *, scope: str = "all", max_iterations: int | None = None, confirm: bool = False) -> dict[str, Any]:
         """명시적으로 활성화된 worker만 bounded loop를 수행한다."""
         status = self.status()
+        normalized_scope = str(scope or "all").strip().lower()
+        if normalized_scope not in SUPPORTED_SYNC_SCOPES:
+            result = self._loop_blocked(
+                status=status,
+                scope=normalized_scope,
+                reason_codes=["PAPER_SYNC_SCOPE_UNSUPPORTED"],
+            )
+            self._audit(result)
+            return result
+        if not confirm:
+            result = self._loop_blocked(
+                status=status,
+                scope=normalized_scope,
+                reason_codes=["PAPER_SYNC_WORKER_LOOP_CONFIRMATION_REQUIRED"],
+            )
+            self._audit(result)
+            return result
         if not status["loop_allowed"]:
-            return {
-                **status,
-                "status": "loop_blocked",
-                "scope": scope,
-                "iterations": [],
-                "network_call_performed": False,
-                "live_order_created": False,
-            }
-        iterations = max(1, int(max_iterations or status["max_iterations_default"]))
+            result = self._loop_blocked(
+                status=status,
+                scope=normalized_scope,
+                reason_codes=list(status.get("reason_codes") or ["PAPER_SYNC_WORKER_DISABLED"]),
+            )
+            self._audit(result)
+            return result
+        requested_iterations = max(1, int(max_iterations or status["max_iterations_default"]))
+        iterations = min(requested_iterations, int(status["max_iterations_cap"]))
         results: list[dict[str, Any]] = []
         for index in range(iterations):
-            results.append(self.run_once(scope=scope, confirm=True))
+            results.append(self.run_once(scope=normalized_scope, confirm=True))
             if index < iterations - 1:
                 time.sleep(float(status["interval_seconds"]))
         return {
             "ok": all(item.get("ok") for item in results),
             "status": "loop_completed",
-            "scope": scope,
+            "scope": normalized_scope,
             "iterations": results,
             "iteration_count": len(results),
+            "requested_iteration_count": requested_iterations,
+            "max_iterations_cap": status["max_iterations_cap"],
+            "bounded_loop": True,
+            "auto_start": False,
             "network_call_performed": any(bool(item.get("network_call_performed")) for item in results),
             "live_order_created": False,
             "secrets_redacted": True,
@@ -124,6 +149,30 @@ class PaperSyncWorkerService:
             "worker_run_performed": False,
             "supported_scopes": sorted(SUPPORTED_SYNC_SCOPES),
             "reason": reason_codes[0] if reason_codes else "PAPER_SYNC_WORKER_BLOCKED",
+            "reason_codes": reason_codes,
+            "network_call_performed": False,
+            "live_order_created": False,
+            "secrets_redacted": True,
+        }
+
+    def _loop_blocked(
+        self,
+        *,
+        status: dict[str, Any],
+        scope: str,
+        reason_codes: list[str],
+    ) -> dict[str, Any]:
+        return {
+            **status,
+            "ok": False,
+            "status": "loop_blocked",
+            "scope": scope,
+            "sync_performed": False,
+            "worker_run_performed": False,
+            "iterations": [],
+            "iteration_count": 0,
+            "bounded_loop": True,
+            "reason": reason_codes[0] if reason_codes else "PAPER_SYNC_WORKER_LOOP_BLOCKED",
             "reason_codes": reason_codes,
             "network_call_performed": False,
             "live_order_created": False,

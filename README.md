@@ -15,7 +15,7 @@
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석 엔진 + Telegram command/webhook/polling/report scheduler + KIS paper bot 전환 진행 |
 | Trading state | `analysis_only`, `telegram_report`, `paper_kis`, `live_disabled` 실행 모드 분리 |
-| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_telegram_cancel` -> `530 passed in 753.01s`; bounded bot regression `7 passed` |
+| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_sync_loop` -> `531 passed in 775.81s`; sync worker loop API `19 passed` |
 | Latest secret scan | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
 | Next recommended phase | KIS 포털/운영 문서 또는 paper host 기준 국내 정정취소가능/매도가능수량조회 paper TR ID 확인 |
@@ -37,7 +37,7 @@
 - `GET /api/telegram/polling/status`, `POST /api/telegram/polling/run-once`: Telegram `getUpdates` bounded polling runner다. 기본은 OFF이며 `confirm=true`, `TELEGRAM_BOT_ENABLED=true`, `TELEGRAM_POLLING_ENABLED=true`, token 설정이 모두 필요하다.
 - `GET /api/telegram/scheduler/status`, `POST /api/telegram/scheduler/run-once`: 장 시작 전/장 종료 후/주간 report scheduler 구조를 제공한다. 기본은 OFF이며 `confirm=true`와 dry-run gate 뒤에서만 실행된다.
 - `/buy`, `/sell`: `confirm` 또는 `TELEGRAM_PAPER_TRADE_CONFIRM=true` 없이는 preview만 수행. `/buy`는 `amount`/`notional` 금액 기반 수량 계산을 지원하고, `/sell 종목 all`은 현재 `paper_positions` 보유 수량을 전량 매도 수량으로 사용한다.
-- `GET /api/paper/sync-worker/status`, `POST /api/paper/sync-worker/run-once`: KIS paper 주문/체결/잔고 sync worker wrapper다. 기본은 OFF이며 `confirm=true`와 paper network gate를 통과해야 조회 동기화를 시도한다.
+- `GET /api/paper/sync-worker/status`, `POST /api/paper/sync-worker/run-once`, `POST /api/paper/sync-worker/run-loop`: KIS paper 주문/체결/잔고 sync worker wrapper다. 기본은 OFF이며 `confirm=true`와 paper network gate를 통과해야 조회 동기화를 시도한다. loop는 `PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP` 안에서만 bounded 실행된다.
 - KIS token cache: `KIS_TOKEN_CACHE_ENABLED=true`일 때만 `.cache/kis/token.json`에 local cache 저장.
 - Paper risk gate: `kill_switch`, `max_order_notional`, `max_order_qty`, `max_open_positions`, `blacklist`, `cooldown_seconds`, `idempotency_key`.
 - Paper bot 자동매매: 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false). Telegram 또는 설정에서 명시적으로 켜야 동작.
@@ -294,6 +294,7 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `POST` | `/api/paper/sync` | KIS paper sync gate 통과 시만 조회 동기화, 기본은 credentials/gate 미충족으로 no-network block |
 | `GET` | `/api/paper/sync-worker/status` | KIS paper sync worker 상태, 기본 OFF/auto-start false |
 | `POST` | `/api/paper/sync-worker/run-once` | `PAPER_SYNC_WORKER_ENABLED=true`와 `confirm=true` 뒤에서 paper sync 1회 실행 |
+| `POST` | `/api/paper/sync-worker/run-loop` | `confirm=true` 뒤에서 bounded sync loop 실행. `PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP` 초과 반복은 잘라냄 |
 | `GET` | `/api/paper/realtime/status` | polling quote cache/heartbeat/stale quote gate 상태 |
 | `GET` | `/api/paper/dashboard` | account, positions, open orders, fills, PnL, risk, worker status, metrics |
 | `POST` | `/api/paper/bot/preview` | screener 결과 또는 `watchlist_symbols` 기반 dry-run bot candidate/risk gate preview, paper order 생성 없음 |

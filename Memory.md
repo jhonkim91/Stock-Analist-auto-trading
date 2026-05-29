@@ -35,7 +35,7 @@
 - `/buy`, `/sell`은 `confirm` 또는 `TELEGRAM_PAPER_TRADE_CONFIRM=true` 없이는 preview만 수행한다.
 - `/sell 종목 all` 또는 `qty=all`은 현재 `paper_positions` 보유 수량을 전량 매도 수량으로 사용한다.
 - `/cancel paper_order_id confirm`은 paper-only local cancel gate를 사용하며 live/network 호출 없이 `paper_orders` 상태와 audit log만 갱신한다.
-- `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once`와 `backend.app.jobs.paper_sync_runner`를 추가했다. Worker는 기본 OFF이며 confirm과 paper network gate가 열릴 때만 `PaperSyncService.sync()`를 호출한다.
+- `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once`, `/api/paper/sync-worker/run-loop`와 `backend.app.jobs.paper_sync_runner`를 추가했다. Worker는 기본 OFF이며 confirm과 paper network gate가 열릴 때만 `PaperSyncService.sync()`를 호출한다. loop는 `PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP` 안에서만 bounded 실행된다.
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가했다.
 - `/api/paper/bot/preview`, `/api/paper/bot/run`은 요청의 `watchlist_symbols`로 저장된 passed screener 후보 universe를 제한할 수 있다.
 - paper bot 자동매매 기본값을 OFF로 정렬했다: `backend/config/bot.yaml`의 `enabled=false`, `auto_submit=false`, scheduler false.
@@ -74,8 +74,9 @@
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_executor_phase5.py backend/tests/test_paper_bot_scheduler.py backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_watchlist_related` -> `18 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_report_command` -> `16 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_cancel_related` -> `17 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py backend/tests/test_paper_sync.py backend/tests/test_paper_sync_service.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_sync_worker_loop_api` -> `19 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` -> `18 passed`.
-- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_telegram_cancel` -> `530 passed in 753.01s`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_sync_loop` -> `531 passed in 775.81s`.
 - [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
 - [x] `cd frontend; npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` -> 모두 통과.
 - [x] launcher 재기동 후 `/api/settings/runtime-env`, `/api/settings/runtime-env/preset`, `/settings` Playwright screenshot smoke 통과.

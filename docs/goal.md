@@ -64,6 +64,7 @@
 - 관심종목 universe는 최근 screener 통과 종목, 보유 paper position, open paper order 기준으로 구성한다.
 - KIS WebSocket 운영 전까지 polling 기반 latest quote cache와 heartbeat 상태를 제공한다.
 - 체결/포지션/계좌 동기화는 기존 `PaperSyncService`를 통해 mock/fake adapter 기반으로 검증한다.
+- `POST /api/paper/sync-worker/run-loop`는 confirm gate와 `PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP` 안에서만 bounded 반복 동기화를 수행한다.
 - stale quote threshold를 초과하면 신규 주문은 `PAPER_REALTIME_STALE_QUOTE`로 차단한다.
 
 ### Phase 5: Bot Executor/Risk Gate

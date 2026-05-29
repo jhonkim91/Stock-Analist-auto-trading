@@ -207,10 +207,12 @@ def test_telegram_report_scheduler_manual_dry_run_sends_latest_report_summary(fu
 def test_paper_sync_worker_default_off_and_confirm_gate(client) -> None:
     status = client.get("/api/paper/sync-worker/status")
     blocked = client.post("/api/paper/sync-worker/run-once", json={"scope": "all", "confirm": False})
+    loop_blocked = client.post("/api/paper/sync-worker/run-loop", json={"scope": "all", "max_iterations": 1, "confirm": False})
 
     assert status.status_code == 200
     assert status.json()["enabled"] is False
     assert status.json()["auto_start"] is False
+    assert status.json()["public_surface"]["run_loop_route"] == "POST /api/paper/sync-worker/run-loop"
     assert "PAPER_SYNC_WORKER_DISABLED" in status.json()["reason_codes"]
     assert blocked.status_code == 200
     payload = blocked.json()
@@ -218,6 +220,10 @@ def test_paper_sync_worker_default_off_and_confirm_gate(client) -> None:
     assert payload["sync_performed"] is False
     assert payload["network_call_performed"] is False
     assert "PAPER_SYNC_WORKER_CONFIRMATION_REQUIRED" in payload["reason_codes"]
+    assert loop_blocked.status_code == 200
+    assert loop_blocked.json()["status"] == "loop_blocked"
+    assert loop_blocked.json()["iteration_count"] == 0
+    assert "PAPER_SYNC_WORKER_LOOP_CONFIRMATION_REQUIRED" in loop_blocked.json()["reason_codes"]
 
 
 def test_paper_sync_worker_enabled_calls_sync_gate_without_live_network(db_session, monkeypatch) -> None:
@@ -235,6 +241,31 @@ def test_paper_sync_worker_enabled_calls_sync_gate_without_live_network(db_sessi
     assert "PAPER_NETWORK_DISABLED" in result["reason_codes"]
     assert len(events) == 1
     assert events[0].decision == "allow"
+
+
+def test_paper_sync_worker_loop_api_is_confirm_gated_and_bounded(client, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_SYNC_WORKER_ENABLED", "true")
+    monkeypatch.setenv("PAPER_SYNC_WORKER_INTERVAL_SECONDS", "1")
+    monkeypatch.setenv("PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP", "2")
+    monkeypatch.setenv("PAPER_TRADING_NETWORK_ENABLED", "false")
+    monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
+
+    response = client.post(
+        "/api/paper/sync-worker/run-loop",
+        json={"scope": "all", "max_iterations": 3, "confirm": True},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "loop_completed"
+    assert payload["bounded_loop"] is True
+    assert payload["auto_start"] is False
+    assert payload["requested_iteration_count"] == 3
+    assert payload["max_iterations_cap"] == 2
+    assert payload["iteration_count"] == 2
+    assert all(item["worker_run_performed"] is True for item in payload["iterations"])
+    assert payload["network_call_performed"] is False
+    assert payload["live_order_created"] is False
 
 
 def test_runner_defaults_are_status_only(capsys) -> None:

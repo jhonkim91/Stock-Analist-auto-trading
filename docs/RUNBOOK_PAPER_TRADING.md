@@ -206,6 +206,42 @@ $env:PAPER_TRADING_KILL_SWITCH = "true"
 
 Settings 화면에서는 `봇/주문 정지` preset을 누르면 현재 backend 프로세스의 bot/order gate가 즉시 차단 상태로 맞춰진다. 모든 runner 응답은 `auto_start=false`, `bounded_loop=true`, `live_order_created=false`, `network_call_performed=false`를 유지해야 한다.
 
+## Paper sync worker bounded loop
+
+체결/포지션/잔고 동기화는 backend 시작만으로 자동 실행되지 않는다. 반복 조회가 필요하면 현재 PowerShell 프로세스에서 worker gate와 반복 상한을 명시한 뒤 API 또는 CLI를 실행한다.
+
+```powershell
+$env:PAPER_SYNC_WORKER_ENABLED = "true"
+$env:PAPER_SYNC_WORKER_INTERVAL_SECONDS = "60"
+$env:PAPER_SYNC_WORKER_MAX_ITERATIONS = "1"
+$env:PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP = "10"
+```
+
+API bounded loop:
+
+```powershell
+$body = @{
+  scope = "all"
+  max_iterations = 1
+  confirm = $true
+} | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/api/paper/sync-worker/run-loop -Method Post -ContentType "application/json" -Body $body
+```
+
+CLI bounded loop:
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.app.jobs.paper_sync_runner --loop --scope all --max-iterations 1
+```
+
+성공 기준:
+
+- `bounded_loop=true`
+- `iteration_count <= max_iterations_cap`
+- `auto_start=false`
+- `live_order_created=false`
+- paper network gate가 닫혀 있으면 `network_call_performed=false`와 reason code를 반환한다.
+
 ## Paper risk exit check
 
 스탑로스, 트레일링 스탑, 이동평균 하향 교차 감시는 `/api/paper/risk/exit-check`로 수동 또는 bounded worker에서 호출한다. trigger가 발생해도 `confirm=true`, `idempotency_key`, paper fill simulator gate, kill-switch가 모두 통과해야 local sell order/fill과 position 감소가 수행된다.

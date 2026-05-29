@@ -44,7 +44,7 @@
 | 3. 종목 분석 API | 진행 중 | KIS quote 우선, DB fallback 종목 상세 API |
 | 4. Telegram bot | 진행 중 | `/start`, `/help`, `/status`, `/search`, `/report daily|weekly`, `/portfolio`, `/rank`, `/stop`, `/buy`, `/sell`, `/orders`, `/cancel` command dispatcher |
 | 5. KIS paper 주문 | 진행 중 | buy/sell/order/cancel skeleton, Telegram cancel, idempotency, audit, paper-only guard |
-| 6. 자동매매 loop | 진행 중 | screener/watchlist 후보, stop-loss, trailing stop, MA cross 감시, 기본 OFF, bounded runner/stop-file 정책 |
+| 6. 자동매매 loop | 진행 중 | screener/watchlist 후보, paper sync bounded loop, stop-loss, trailing stop, MA cross 감시, 기본 OFF, bounded runner/stop-file 정책 |
 | 7. 운영 검증 | 진행 중 | backend pytest, secret scan, runbook, Telegram/KIS paper dry-run |
 
 ## 안전장치
