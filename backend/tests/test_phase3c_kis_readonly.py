@@ -245,13 +245,18 @@ def test_mock_kis_preview_confirm_flow_and_orders_invariant(client, monkeypatch)
     assert after["orders"] == before["orders"] == 0
 
 
-def test_kis_broker_order_and_websocket_routes_are_not_registered(client):
+def test_kis_order_routes_are_registered_but_disabled_and_websocket_routes_are_not_registered(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
-    assert not any(path.startswith("/api/kis/orders") for path in route_paths)
+    assert "/api/kis/orders" in route_paths
+    assert "/api/kis/orders/preview" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    assert client.get("/api/kis/orders").status_code == 404
-    assert client.post("/api/kis/orders/preview", json={"symbol": "005930"}).status_code == 404
+    orders = client.get("/api/kis/orders")
+    preview = client.post("/api/kis/orders/preview", json={"symbol": "005930"})
+    assert orders.status_code == 200
+    assert preview.status_code == 200
+    assert orders.json()["network_call_performed"] is False
+    assert preview.json()["live_order_created"] is False
     assert client.get("/api/kis/websocket/status").status_code == 404
 
 

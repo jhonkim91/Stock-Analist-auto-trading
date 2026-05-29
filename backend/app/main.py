@@ -12,6 +12,7 @@ from backend.app.api import (
     indicators,
     instruments,
     kis,
+    live,
     market,
     market_realtime,
     notifications,
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(broker.router)
     app.include_router(paper.router)
     app.include_router(kis.router)
+    app.include_router(live.router)
     app.include_router(notifications.router)
     app.include_router(settings.router)
     app.include_router(trade_journal.router)

@@ -23,7 +23,7 @@
 | Goal.md Phase 17 | KIS paper operations runbook 추가 |
 | Goal.md Phase 18 | live trading readiness design-only 문서 추가 |
 | Goal.md Phase 19 | disabled live adapter scaffold가 예외 대신 redacted disabled payload를 반환하도록 강화 |
-| Goal.md Phase 20 | controlled live canary runbook/preflight record 추가. 현재 live adapter/route/reviewer/env/rollback 조건 미충족으로 blocked |
+| Goal.md Phase 20 | controlled live canary runbook/preflight record와 disabled live public route scaffold 추가. 현재 live submit authority/reviewer/env/rollback/token refresh proof 조건 미충족으로 blocked |
 | Goal.md Phase 21 | KIS paper token 발급, WebSocket approval/smoke, US price lookup, 정규장 AAPL 1주 paper submit, sync, fill/position persistence를 redacted record와 DB로 확인. 실제 submit은 `/uapi/overseas-stock/v1/trading/order`, `tr_id=VTTT1002U`, `status_code=200`으로 broker order와 `paper_orders`를 만들었고 follow-up read-only sync에서 `paper_fills_count=1`, `paper_positions_count=1`, `orders_count=0`을 확인. 프리마켓 일반 주문 `VTTT1002U`는 `40570000`, 미국주간주문 `/daytime-order` + `TTTS6036U`는 paper host에서 `EGW02006 / 모의투자 TR 이 아닙니다.`로 거부되어 premarket/aftermarket/daytime/extended는 adapter/network 전 차단. activation helper는 token/WebSocket proof와 service lifecycle proof를 한 record로 묶는 `--execute-service-lifecycle`, read-only `.env.local` process loader `--load-env-local`, 정규장 전용 quote-derived limit `--derive-limit-from-price`, follow-up read-only sync helper, 목표 완료 요구사항을 분리 판정하는 `completion_audit`를 지원 |
 | KIS Capability Map | `docs/KIS_CAPABILITIES.md` 추가. paper US session은 `regular`만 submit 가능, real US session은 capability map상 `regular/premarket/aftermarket/daytime`로 분리하되 live adapter는 계속 disabled |
 | Non-live feature defaults | paper/broker/bot/notification/report automation은 수동 실행 가능 기본값으로 활성화. 실제 submit은 token/account/product, fresh quote, 정규장 session, risk/idempotency gate를 통과해야 하며 scheduler auto-start와 unattended loop는 disabled |
@@ -36,7 +36,7 @@
 | 거래 상태 | KIS paper `tokenP`, WebSocket `Approval`, US WebSocket `HDFSCNT0` subscribe ACK 성공. 정규장 AAPL 1주 paper submit은 `/uapi/overseas-stock/v1/trading/order`, `tr_id=VTTT1002U`, `status_code=200`으로 broker order와 `paper_orders`를 만들었고 follow-up read-only sync에서 `paper_fills_count=1`, `paper_positions_count=1`, `orders_count=0`을 확인. paper adapter는 premarket/aftermarket/daytime/extended를 API 호출 전 차단. live/real order/fallback disabled |
 | 최신 backend pytest | activation/no-live/KIS targeted: `39 passed`, `28 passed`, `56 passed` |
 | 최신 frontend 검증 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과; `/dashboard` Paper Bot nav 및 `/bot` rendered HTTP smoke 통과 |
-| 최신 승인 게이트 감사 | Phase 19 완료, Phase 20 preflight blocked. live 주문/route/network call 없음 |
+| 최신 승인 게이트 감사 | Phase 19 완료, Phase 20 route scaffold blocked. live 주문/network call 없음 |
 | 다음 권장 Phase | 실제 KIS 호출은 `docs/RUNBOOK_PAPER_TRADING.md` 수동 절차와 paper env 확인 후 별도 수행 |
 
 ## 구현 완료 항목
@@ -100,7 +100,7 @@
 - Goal.md Phase 10 Frontend Integration: `/bot` 화면과 `frontend/lib/paperApi.ts`, `frontend/lib/notificationApi.ts` wrapper를 추가하고 `/paper`, `/reports`, `/settings`에서 bot/kill switch/notification/report notify controls를 paper-only로 연결.
 - Goal.md Phase 11 End-to-End Mock Validation: `backend/tests/test_e2e_paper_mock_flow.py`로 preview, local submit, order poll, mock fill/position/portfolio, sync no-op, notification outbox, report notify를 KIS credential 없이 검증.
 - Goal.md Phase 12C Controlled KIS Paper Dry-run Closure: 기존 redacted record는 KIS paper submit endpoint 도달 후 `40580000` / `모의투자 장종료 입니다.` 응답으로 submit 실패를 기록했고, 최신 preflight는 기본 config/env에서 network call 없이 fail-closed를 유지한다.
-- Goal.md Phase 13 Final Paper Safety Hardening: `backend/tests/test_final_safety_hardening.py`로 goal live 승인 gate, live route 부재, Phase 12C redacted record를 검증한다.
+- Goal.md Phase 13 Final Paper Safety Hardening: `backend/tests/test_final_safety_hardening.py`로 goal live 승인 gate, disabled live route scaffold, Phase 12C redacted record를 검증한다.
 - Goal.md Phase 14 Telegram Live Delivery Opt-in Validation: Telegram live mode도 config/env opt-in과 dry-run 기본값에서 원문 token/chat id를 노출하지 않고 dispatch attempt 없이 검증된다.
 - Goal.md Phase 15 Daily/Weekly Report Automation: `GET /api/reports/automation/status`, `POST /api/reports/automation/run-once`, `tools/report_automation_runner.py`, automation 완료/실패 notification event를 추가했다. 기본값은 disabled/manual gate 전까지 report를 생성하지 않는다.
 - Goal.md Phase 16 Paper Bot Operating Loop And Soak: `paper_bot_runner --once`와 `--loop --max-iterations 1`은 기본 disabled/kill-switch 상태에서 paper/live 주문 없이 종료된다.
@@ -254,7 +254,8 @@
 - venue/session metadata는 preview 응답에만 노출하며 submit 가능 여부를 true로 바꾸지 않는다.
 - `orders_count == 0`을 유지한다.
 - 기본 config에서 `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` row count는 0을 유지한다. local `paper_orders`는 confirm/idempotency/kill-switch gate 통과 시에만 생성된다.
-- `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*`는 미등록 404 상태를 유지한다.
+- `/api/kis/orders/*`는 disabled scaffold로만 등록되어 live order/network를 생성하지 않는다.
+- `POST /api/paper/fill-simulator/run`, `/api/kis/broker/*`, `/api/kis/websocket/*`는 미등록 404 상태를 유지한다.
 - KIS token cache 파일 `.cache/kis/token.json`은 생성하지 않는다.
 - secret, token, account/header/raw credential 값을 코드, 문서, 로그, API 응답에 노출하지 않는다.
 
@@ -337,4 +338,4 @@ Alembic migration:
 
 ## 다음 권장 Phase
 
-`goal.md` 기준 Phase 19까지 진행됐다. Phase 20은 runbook/preflight record까지 완료됐지만, 실제 controlled live canary는 live implementation 별도 승인, reviewer, 환경 분리, rollback proof 확보 전까지 진행하지 않는다.
+`goal.md` 기준 Phase 20 route scaffold까지 진행됐다. 실제 controlled live canary는 live submit authority 별도 승인, reviewer, 환경 분리, rollback proof, token refresh proof 확보 전까지 진행하지 않는다.

@@ -31,14 +31,25 @@ def test_live_adapter_methods_are_unreachable():
         assert payload["reason"] == LIVE_DISABLED_REASON
 
 
-def test_kis_execution_routes_remain_unregistered_after_adapter_contract(client):
+def test_kis_execution_routes_are_registered_but_remain_disabled(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
 
-    assert not any(path.startswith("/api/kis/orders") for path in route_paths)
+    assert "/api/live/status" in route_paths
+    assert "/api/kis/orders" in route_paths
+    assert "/api/kis/orders/submit" in route_paths
+    assert "/api/kis/orders/cancel" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    assert client.post("/api/kis/orders/submit", json={"symbol": "005930"}).status_code == 404
-    assert client.post("/api/kis/orders/cancel", json={"symbol": "005930"}).status_code == 404
+    submit = client.post("/api/kis/orders/submit", json={"symbol": "005930"})
+    cancel = client.post("/api/kis/orders/cancel", json={"broker_order_id": "live-1", "confirm": True})
+    assert submit.status_code == 200
+    assert cancel.status_code == 200
+    for payload in (submit.json(), cancel.json()):
+        assert payload["status"] == "live_disabled"
+        assert payload["route_registered"] is True
+        assert payload["live_order_created"] is False
+        assert payload["network_call_performed"] is False
+        assert payload["endpoint_called"] is False
     assert client.get("/api/kis/broker/status").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
 

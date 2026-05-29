@@ -295,12 +295,17 @@ def test_kis_read_only_provider_contract_safety_and_execution_routes_remain_bloc
     }
 
     route_paths = {getattr(route, "path", "") for route in app.routes}
-    assert not any(path.startswith("/api/kis/orders") for path in route_paths)
+    assert "/api/kis/orders" in route_paths
+    assert "/api/kis/orders/preview" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    assert client.get("/api/kis/orders").status_code == 404
-    assert client.post("/api/kis/orders/preview", json={"symbol": "KR001"}).status_code == 404
+    orders = client.get("/api/kis/orders")
+    preview = client.post("/api/kis/orders/preview", json={"symbol": "KR001"})
+    assert orders.status_code == 200
+    assert preview.status_code == 200
+    assert orders.json()["network_call_performed"] is False
+    assert preview.json()["live_order_created"] is False
     assert client.get("/api/kis/broker/account").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
     assert client.post("/api/paper/orders", json={"symbol": "KR001"}).status_code == 422
-    assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 404
+    assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 422

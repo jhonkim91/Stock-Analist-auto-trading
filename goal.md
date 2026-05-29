@@ -30,7 +30,7 @@
 | Telegram | notifier/template/outbox 존재, 기본값 disabled + dry-run |
 | KIS paper adapter | submit/cancel/list/query-balance/sync mock HTTP 검증 완료 |
 | Phase 12C | KIS paper submit endpoint 도달 후 `40580000` / `모의투자 장종료 입니다.`로 중단 |
-| Live trading | disabled, no route, no fallback, no WebSocket execution |
+| Live trading | disabled, public route scaffold only, no order/network, no fallback, no WebSocket execution |
 
 권위 있는 상태 확인 순서는 `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `Memory.md`, `README.md` 순서다. `검토결과2.md`는 개발 방향 입력으로 사용하되, 최신 구현 상태와 충돌하면 상태 문서를 우선한다.
 
@@ -97,7 +97,7 @@ live fallback requested = deny
 - paper-only table과 legacy/synthetic `positions`를 broker truth로 섞지 않는다.
 - notification 실패는 report/trading state commit을 rollback하지 않는다.
 - Telegram/report message는 plain text 기본값, 4096자 분할, secret/account/token 원문 미노출, outbox non-blocking을 유지한다.
-- Phase 20 전까지 live 관련 public route를 추가하지 않는다.
+- live 관련 public route는 별도 명시 승인된 disabled scaffold 외에는 추가하지 않는다.
 - Phase 19는 disabled scaffold와 no-live regression만 허용한다.
 
 ## Phase Status
@@ -106,7 +106,7 @@ live fallback requested = deny
 |---|---|---|
 | 조회/보고 1단계 | 완료 | 종목 상세 검색, 계좌/포트폴리오 리포트, 보유 종목 리스트, 랭킹, 차트, CSV 매매일지를 local read-only API/UI로 추가. 주문, KIS network, live 경로 변경 없음 |
 | 모의투자 주문 엔진 2단계 | 완료 | local paper order 생성/취소, 미체결 조회, gated fill simulator, `paper_positions` 갱신, stop-loss/trailing-stop local exit trigger 구현. live/real order 경로와 legacy `orders` table은 변경 없음 |
-| 실계좌 주문 연동 3단계 | 진행 중 | kill switch, rate limiter, idempotency, audit, max notional, blacklist, cooldown, token refresh preflight와 code-level rate/idempotency/cooldown/audit helper, gated live token refresh scaffold, live adapter submit/cancel safety boundary, reviewer/env/rollback governance proof를 추가했지만 live token refresh real-call proof와 live route 미충족으로 완료 아님 |
+| 실계좌 주문 연동 3단계 | 진행 중 | kill switch, rate limiter, idempotency, audit, max notional, blacklist, cooldown, token refresh preflight와 code-level rate/idempotency/cooldown/audit helper, gated live token refresh scaffold, live adapter submit/cancel safety boundary, reviewer/env/rollback governance proof, disabled live public route scaffold를 추가했지만 live token refresh real-call proof와 live submit authority 미충족으로 완료 아님 |
 | Phase 0 | 완료 | baseline audit |
 | Phase 1 | 완료 | KIS paper API confirmation matrix |
 | Phase 2 | 완료 | paper broker adapter hardening |
@@ -132,7 +132,7 @@ live fallback requested = deny
 | Phase 17 | 완료 | KIS paper operations runbook 추가 |
 | Phase 18 | 완료 | live trading readiness design-only 문서 추가 |
 | Phase 19 | 완료 | disabled live adapter scaffold와 no-live regression 강화 |
-| Phase 20 | preflight 차단 | controlled live canary runbook/preflight record 추가, live 실행 조건 미충족 |
+| Phase 20 | route scaffold 차단 | controlled live canary runbook/preflight record와 disabled live public route scaffold 추가. live 실행 조건 미충족 |
 | Phase 21 | 완료 | KIS paper token 발급, WebSocket approval/smoke, US price lookup, 정규장 AAPL 1주 paper submit, sync, fill/position persistence 확인. submit은 `/uapi/overseas-stock/v1/trading/order`, `tr_id=VTTT1002U`, `status_code=200`으로 broker order와 `paper_orders`를 만들었고 follow-up read-only sync에서 `paper_fills_count=1`, `paper_positions_count=1`, `orders_count=0` 확인. premarket/daytime/extended는 실제 paper host 거부 확인 후 adapter/network 전 차단 |
 
 ## KIS Paper Auto Bot Phase 1-6 진행 상태
@@ -428,7 +428,7 @@ live fallback requested = deny
 - 금지 사항: live endpoint 호출, live submit/cancel 구현, live route 추가, live fallback 금지.
 - 구현 조건:
   - 모든 method는 disabled/fail-closed 응답만 반환한다.
-  - 테스트는 live route 부재와 live submit 불가능 상태를 검증한다.
+  - 테스트는 Phase 19 시점의 live route 부재와 live submit 불가능 상태를 검증한다.
 - 검증 명령: no-live regression, backend full pytest, secret scan, `git diff --check`.
 - 완료 기준: live scaffold가 있어도 실행 가능성이 0임을 테스트로 증명한다.
 - 다음 Phase 진입 조건: 별도 승인형 controlled live canary 요청이 있어야 한다.
@@ -437,9 +437,9 @@ live fallback requested = deny
 
 - 목적: 별도 승인된 조건에서만 최소 범위 live canary를 수행한다.
 - 승인 조건: 사용자의 별도 명시 승인, 환경 분리, required reviewer, live kill switch rollback 절차 필요.
-- 수정 허용 범위: 승인된 canary checklist와 redacted validation record.
+- 수정 허용 범위: 승인된 canary checklist, disabled live public route scaffold, redacted validation record.
 - 금지 사항:
-  - 승인 없는 live endpoint 호출
+  - 승인 없는 live order network call 또는 route 확장
   - 자동 live submit
   - unattended canary
   - secret/account raw output
@@ -451,7 +451,7 @@ live fallback requested = deny
 - 검증 명령: canary checklist, no-live/static guard, post-canary redacted audit, secret scan.
 - 완료 기준: approved live canary 결과가 redacted record로 남고 rollback 경로가 검증된다.
 - 다음 Phase 진입 조건: 별도 운영 승인 없이는 없음.
-- 현재 결과: `tools/live_canary_preflight.py --write-record`는 live adapter disabled, live route 부재, reviewer/환경분리/rollback 증거 미충족으로 `status=blocked`를 반환했다. 실계좌 주문, live endpoint 호출, WebSocket 체결은 수행하지 않았다.
+- 현재 결과: live public route scaffold는 disabled payload로 등록됐고, `tools/live_canary_preflight.py`는 live adapter disabled, reviewer/환경분리/rollback/token refresh proof 미충족으로 `status=blocked`를 반환한다. 실계좌 주문, live order network call, WebSocket 체결은 수행하지 않았다.
 
 ### Phase 21: KIS Paper Network Activation
 
@@ -572,7 +572,7 @@ goal.md Phase 16A controlled KIS paper bot run validation만 수행해. 먼저 d
 ### Phase 18-20 Prompt
 
 ```text
-goal.md Phase 18부터 live readiness만 검토해. Phase 18은 설계/문서/검증 계획만, Phase 19는 disabled scaffold만, Phase 20은 사용자의 별도 명시 승인 없이는 시작하지 마. live submit 가능 상태, live endpoint 호출, 실계좌 주문/취소/체결은 금지한다.
+goal.md Phase 18부터 live readiness만 검토해. Phase 18은 설계/문서/검증 계획만, Phase 19는 disabled scaffold만, Phase 20은 사용자의 별도 명시 승인 없이는 시작하지 마. live public route scaffold는 등록됐지만 network call, live submit 가능 상태, 실계좌 주문/취소/체결은 금지한다.
 ```
 
 ## Validation Plan For This Goal Update

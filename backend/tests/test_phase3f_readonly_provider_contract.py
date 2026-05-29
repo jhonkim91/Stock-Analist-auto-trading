@@ -112,6 +112,6 @@ def test_read_only_provider_contract_does_not_mutate_execution_tables_or_routes(
 
     route_paths = {getattr(route, "path", "") for route in app.routes}
     assert "/api/paper/orders" in route_paths
-    assert "/api/paper/fill-simulator/run" not in route_paths
+    assert "/api/paper/fill-simulator/run" in route_paths
     assert client.post("/api/paper/orders", json={"symbol": "KR009"}).status_code == 422
-    assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 404
+    assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 422

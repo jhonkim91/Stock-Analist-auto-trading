@@ -1,8 +1,25 @@
 # Validation
 
+## 2026-05-29 Live Public Route Scaffold
+
+사용자 승인 범위인 `live public route scaffold 허용. 실제 주문/network call은 계속 금지.`에 맞춰 public route를 등록했다. 이 변경은 route 접근성만 추가하며 live submit authority, live network call, live order 생성, broker/websocket route는 열지 않는다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Public route scaffold | 완료 | `GET /api/live/status`, `GET /api/kis/orders`, `GET /api/kis/orders/status`, `POST /api/kis/orders/preview`, `POST /api/kis/orders/submit`, `POST /api/kis/orders/cancel` 추가 |
+| Execution boundary | 차단 유지 | 모든 route payload가 `status=live_disabled`, `live_order_created=false`, `network_call_performed=false`, `endpoint_called=false`를 반환 |
+| Live broker/websocket | 미등록 유지 | `/api/kis/broker/*`, `/api/kis/websocket/*`는 404 |
+| Targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_route_canary_contracts` -> `30 passed` |
+| Route legacy invariant | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f_readonly_provider_contract.py::test_read_only_provider_contract_does_not_mutate_execution_tables_or_routes -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_public_route_phase3f_route` -> `1 passed` |
+| Live canary preflight | blocked | `.\.venv\Scripts\python.exe tools\live_canary_preflight.py`: public route present, `canary_execution_allowed=false`, `live_order_created=false`, `network_call_performed=false` |
+| Live token refresh preflight | preview-only | `.\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py`: `network_call_performed=false`, `live_order_created=false`, refresh token 미설정으로 blocked |
+| Secret/diff check | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only |
+
+참고: 과거 Phase 3C/3F 묶음 전체 실행은 현재 `backend/config/data_sources.yaml`의 `kis_market_data enabled=true/network_enabled=true` 기준과 오래된 `kis_market_data disabled` 테스트 기대값이 충돌해 이 checkpoint의 합격 기준으로 사용하지 않았다. route scaffold 계약은 위 targeted suite로 검증했다.
+
 ## 2026-05-29 Live Order Safety Preflight Progress
 
-실계좌 주문 연동 3단계의 필수 선행 안전장치를 `LiveOrderSafetyService`와 `tools/live_canary_preflight.py`에 fail-closed preflight로 추가했다. 이 변경은 live 주문 route, live adapter submit/cancel, live network call을 열지 않으며 현재 3단계 완료 조건은 계속 미충족이다.
+실계좌 주문 연동 3단계의 필수 선행 안전장치를 `LiveOrderSafetyService`와 `tools/live_canary_preflight.py`에 fail-closed preflight로 추가했다. 현재 live public route scaffold는 등록됐지만 live adapter submit/cancel과 live network call은 열지 않으며 현재 3단계 완료 조건은 계속 미충족이다.
 
 추가로 rate limiter, idempotency guard, cooldown guard, redacted audit event builder를 코드 수준 helper로 분리했다. 이 helper들은 실제 live 주문을 만들지 않고 `network_call_performed=false`, `live_order_created=false`를 유지하며, DB audit persistence는 명시 호출 시에만 수행된다.
 
@@ -18,7 +35,7 @@
 | Token Refresh | gated scaffold 추가 | `KisLiveTokenRefreshService`가 운영 host `openapi.koreainvestment.com`, `POST /oauth2/tokenP`, `grant_type=refresh_token` 형태를 구현했다. 기본값은 `LIVE_TOKEN_REFRESH_NETWORK_DISABLED`로 차단되며 real KIS 호출 proof는 아직 없음 |
 | Broker status visibility | 완료 | 기존 `GET /api/broker/status` payload에 `live_order_safety`를 추가. 새 live 주문 route는 만들지 않음 |
 | Order-specific safety | 완료 | 기존 `POST /api/broker/orders/preview` payload가 optional `idempotency_key`를 받고, 후보 주문의 blacklist/notional/cooldown/idempotency blocker를 `live_order_safety`로 반환 |
-| Live adapter/route | adapter safety boundary 보강, route 차단 유지 | `KisLiveBrokerAdapter`는 submit/cancel implementation-present 상태를 반환하지만 `enabled=false`, `can_submit=false`, `can_cancel=false`, `network_enabled=false`로 차단. `/api/live*`, `/api/kis/orders*` route 부재 |
+| Live adapter/route | disabled route scaffold 추가 | `KisLiveBrokerAdapter`는 submit/cancel implementation-present 상태를 반환하지만 `enabled=false`, `can_submit=false`, `can_cancel=false`, `network_enabled=false`로 차단. `/api/live/status`, `/api/kis/orders/*`는 disabled payload만 반환 |
 | Targeted tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_commit_safety` -> `23 passed` |
 | Preflight CLI | blocked | `.\.venv\Scripts\python.exe tools\live_canary_preflight.py` -> `status=blocked`, `canary_execution_allowed=false`, `live_order_created=false`, `network_call_performed=false` |
 | Secret/diff check | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only |
@@ -32,7 +49,7 @@
 | Governance extended regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_canary_governance_service.py backend/tests/test_kis_live_token_refresh_service.py backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_governance_controls` -> `37 passed`; `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Live token refresh proof CLI | preview-only | `tools/kis_live_token_refresh_preflight.py` 추가. 기본 실행은 `network_call_performed=false`; `--execute --confirm CONFIRM_KIS_LIVE_TOKEN_REFRESH`와 refresh gate가 모두 있어야 real-call proof를 생성할 수 있음. `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_live_token_refresh_preflight_tool.py backend/tests/test_live_canary_governance_service.py backend/tests/test_kis_live_token_refresh_service.py backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_token_proof_cli` -> `39 passed`; `.\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py` -> `network_call_performed=false`, `live_order_created=false` |
 
-결론: 3단계는 아직 완료가 아니다. 다음 진입 조건은 live token refresh real-call proof, live public route 구현 승인, 실제 실행 전 canary confirmation이다.
+결론: 3단계는 아직 완료가 아니다. 다음 진입 조건은 live token refresh real-call proof, live submit authority 별도 승인, 실제 실행 전 canary confirmation이다.
 
 ## 2026-05-29 Paper Order Engine Phase 2
 

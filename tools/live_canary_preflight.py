@@ -110,8 +110,9 @@ def build_live_canary_preflight(env: Mapping[str, str] | None = None) -> dict[st
         "credential_fields": {key: {"configured": _configured(current_env.get(key, ""))} for key in SENSITIVE_ENV_KEYS},
         "blockers": sorted(set(blockers)),
         "next_required_action": (
-            "live canary execution remains blocked in this repository; add no live endpoint until a separate "
-            "implementation approval, reviewer, environment isolation, and rollback proof are available"
+            "live canary execution remains blocked in this repository; the public route scaffold is disabled and "
+            "requires separate live submit authority, reviewer, environment isolation, rollback proof, and token "
+            "refresh proof before any live order network call"
         ),
     }
 

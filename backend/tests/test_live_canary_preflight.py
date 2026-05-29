@@ -27,7 +27,9 @@ def test_live_canary_preflight_is_blocked_and_redacted_by_default() -> None:
     assert "12345678" not in serialized
     assert "LIVE_SUBMIT_DISABLED" in record["blockers"]
     assert "LIVE_CANCEL_DISABLED" in record["blockers"]
-    assert "KIS_LIVE_ORDER_ROUTE_ABSENT" in record["blockers"]
+    assert "KIS_LIVE_ORDER_ROUTE_ABSENT" not in record["blockers"]
+    assert record["public_route_checks"]["api_live_route_present"] is True
+    assert record["public_route_checks"]["kis_order_route_present"] is True
     assert "LIVE_TOKEN_REFRESH_NETWORK_DISABLED" in record["blockers"]
     assert record["safety_controls"]["all_required_controls_passed"] is False
 
@@ -68,7 +70,7 @@ def test_live_canary_preflight_still_blocks_with_operator_gates_set() -> None:
     assert record["live_adapter_status"]["enabled"] is False
     assert record["live_adapter_status"]["submit_implementation_present"] is True
     assert record["live_adapter_status"]["cancel_implementation_present"] is True
-    assert record["public_route_checks"]["kis_order_route_present"] is False
+    assert record["public_route_checks"]["kis_order_route_present"] is True
     assert "KIS_LIVE_BROKER_DISABLED_PLACEHOLDER" in record["blockers"]
     assert record["safety_controls"]["required_controls"]["rate_limiter"]["passed"] is True
     assert record["safety_controls"]["required_controls"]["token_refresh"]["passed"] is True
