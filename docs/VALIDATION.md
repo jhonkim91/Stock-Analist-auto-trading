@@ -12,7 +12,8 @@ KIS paper 주문/체결/잔고 sync worker에 `POST /api/paper/sync-worker/run-l
 | No live/network default | 통과 | `PAPER_TRADING_NETWORK_ENABLED=false`에서 loop 응답 `network_call_performed=false`, `live_order_created=false` |
 | Targeted tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py backend/tests/test_paper_sync.py backend/tests/test_paper_sync_service.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_sync_worker_loop_api` -> `19 passed` |
 | Settings sync preset | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_telegram_scheduler_and_sync_worker.py::test_paper_sync_worker_loop_api_is_confirm_gated_and_bounded -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_sync_worker_preset` -> `2 passed` |
-| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_settings_sync_preset` -> `531 passed in 669.95s` |
+| KIS preset focused | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_kis_token_quote_preset` -> `1 passed` |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_kis_preset` -> `531 passed in 520.61s` |
 
 ## 2026-05-30 Telegram Cancel Paper Order Command
 
@@ -26,7 +27,7 @@ Telegram `/cancel paper_order_id confirm` 명령을 추가해 기존 `PaperTradi
 | No live/network | 통과 | cancel command 응답 `network_call_performed=false`, `live_order_created=false` |
 | Cancel focused tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_cancel_command` -> `14 passed` |
 | Telegram regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_cancel_related` -> `17 passed` |
-| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_settings_sync_preset` -> `531 passed in 669.95s` |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_kis_preset` -> `531 passed in 520.61s` |
 
 ## 2026-05-30 Telegram Report Daily/Weekly Command
 
@@ -123,10 +124,10 @@ Settings 화면에서 개별 env gate만 토글하던 구조를 보강해 `모�
 | 항목 | 결과 | 근거 |
 |---|---|---|
 | Backend preset API | 통과 | `GET /api/settings/runtime-env`가 `presets` 목록을 반환하고 `POST /api/settings/runtime-env/preset`이 allowlist 값만 process env에 반영 |
-| Paper bot auto preset | 통과 | `paper_bot_auto_on` 적용 시 `EXECUTION_MODE=paper_kis`, `BROKER_MODE=paper_kis`, `KIS_ENV=paper`, paper/bot/sync worker gate true, kill switch false, `ENABLE_REAL_ORDER=false` 확인 |
+| Paper bot auto preset | 통과 | `paper_bot_auto_on` 적용 시 `EXECUTION_MODE=paper_kis`, `BROKER_MODE=paper_kis`, `KIS_ENV=paper`, KIS token/cache/quote, paper/bot/sync worker gate true, kill switch false, `ENABLE_REAL_ORDER=false` 확인 |
 | Frontend Settings UI | 통과 | `/settings` Runtime env 패널에 preset 버튼 추가. 버튼 hover/focus tooltip은 한국어 설명과 적용 env 목록을 표시 |
 | Focused backend tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` -> `5 passed` |
-| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_settings_sync_preset` -> `531 passed in 669.95s` |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_kis_preset` -> `531 passed in 520.61s` |
 | Frontend lint | 통과 | `cd frontend; npm.cmd run lint` -> exit 0 |
 | Frontend typecheck | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit` -> exit 0 |
 | Frontend build | 통과 | `cd frontend; npm.cmd run build` -> Next.js build 성공, 14 static pages 생성 |

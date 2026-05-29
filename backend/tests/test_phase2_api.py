@@ -442,6 +442,9 @@ def test_runtime_env_preset_enables_paper_kis_gates_without_live_order(client, m
         "PAPER_TRADING_NETWORK_ENABLED",
         "PAPER_TRADING_KILL_SWITCH",
         "PAPER_ORDER_SUBMIT_ENABLED",
+        "KIS_TOKEN_ISSUE_ENABLED",
+        "KIS_TOKEN_CACHE_ENABLED",
+        "KIS_MARKET_QUOTE_ENABLED",
         "PAPER_SYNC_WORKER_ENABLED",
         "PAPER_SYNC_WORKER_MAX_ITERATIONS",
         "PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP",
@@ -486,6 +489,9 @@ def test_runtime_env_preset_enables_paper_kis_gates_without_live_order(client, m
     assert os.environ["PAPER_TRADING_NETWORK_ENABLED"] == "true"
     assert os.environ["PAPER_TRADING_KILL_SWITCH"] == "false"
     assert os.environ["PAPER_ORDER_SUBMIT_ENABLED"] == "true"
+    assert os.environ["KIS_TOKEN_ISSUE_ENABLED"] == "true"
+    assert os.environ["KIS_TOKEN_CACHE_ENABLED"] == "true"
+    assert os.environ["KIS_MARKET_QUOTE_ENABLED"] == "true"
     assert os.environ["PAPER_SYNC_WORKER_ENABLED"] == "true"
     assert os.environ["PAPER_SYNC_WORKER_MAX_ITERATIONS"] == "1"
     assert os.environ["PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP"] == "10"
