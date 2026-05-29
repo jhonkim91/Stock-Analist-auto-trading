@@ -102,6 +102,24 @@ class TelegramBotService:
         self._audit(parsed, result, chat_id=chat_id)
         return result
 
+    def handle_update(self, update: dict[str, Any]) -> dict[str, Any]:
+        """Telegram webhook update를 command dispatcher 입력으로 변환한다."""
+        message = _message_from_update(update)
+        text = str(message.get("text") or "").strip()
+        chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+        chat_id = str(chat.get("id") or "").strip() or None
+        if not text:
+            result = self._response(
+                TelegramCommand(command="", args=[], raw_text=""),
+                status="ignored",
+                message="처리할 Telegram text command가 없습니다.",
+                reason_codes=["TELEGRAM_UPDATE_TEXT_NOT_FOUND"],
+            )
+            self._audit(TelegramCommand(command="", args=[], raw_text=""), result, chat_id=chat_id)
+            return {**result, "webhook_update_received": True, "update_id": update.get("update_id")}
+        result = self.handle_text(text, chat_id=chat_id)
+        return {**result, "webhook_update_received": True, "update_id": update.get("update_id")}
+
     def _handle_help(self, command: TelegramCommand) -> dict[str, Any]:
         message = (
             "명령: /status, /search 종목코드, /report, /portfolio, /rank, "
@@ -349,3 +367,14 @@ def _env_true(name: str) -> bool:
 def _configured(value: str) -> bool:
     stripped = value.strip()
     return bool(stripped) and "placeholder" not in stripped.lower()
+
+
+def _message_from_update(update: dict[str, Any]) -> dict[str, Any]:
+    for key in ("message", "edited_message"):
+        value = update.get(key)
+        if isinstance(value, dict):
+            return value
+    callback = update.get("callback_query")
+    if isinstance(callback, dict) and isinstance(callback.get("message"), dict):
+        return callback["message"]
+    return {}

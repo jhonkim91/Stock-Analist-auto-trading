@@ -12,11 +12,13 @@ from backend.app.models.schemas import (
     PaperOrderSubmitRequest,
     PaperBotRunRequest,
     PaperSyncRequest,
+    PaperSyncWorkerRunRequest,
     KisWebSocketApprovalRequest,
     KisWebSocketSmokeRequest,
     KisWebSocketSubscriptionPreviewRequest,
 )
 from backend.app.services.kis_paper_websocket_service import KisPaperWebSocketService
+from backend.app.services.paper_sync_worker_service import PaperSyncWorkerService
 from backend.app.services.paper_trading_service import PaperTradingService
 
 router = APIRouter(prefix="/api/paper", tags=["paper"])
@@ -175,6 +177,16 @@ def paper_account(db: Session = Depends(get_db)) -> dict[str, object]:
 @router.post("/sync")
 def sync_paper(payload: PaperSyncRequest, db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).sync(scope=payload.scope)
+
+
+@router.get("/sync-worker/status")
+def paper_sync_worker_status(db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperSyncWorkerService(db).status()
+
+
+@router.post("/sync-worker/run-once")
+def run_paper_sync_worker(payload: PaperSyncWorkerRunRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperSyncWorkerService(db).run_once(scope=payload.scope, confirm=payload.confirm)
 
 
 @router.get("/realtime/status")

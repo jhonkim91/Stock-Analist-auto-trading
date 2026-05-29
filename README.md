@@ -13,12 +13,12 @@
 | Version | `Project Reset` |
 | Phase | `Telegram + KIS Paper Trading Bot skeleton` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
-| Product state | 분석 엔진 + Telegram command/report + KIS paper bot 전환 진행 |
+| Product state | 분석 엔진 + Telegram command/webhook/report scheduler + KIS paper bot 전환 진행 |
 | Trading state | `analysis_only`, `telegram_report`, `paper_kis`, `live_disabled` 실행 모드 분리 |
-| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_full_backend` -> `510 passed in 380.94s` |
+| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_full_backend` -> `516 passed in 861.47s` |
 | Latest secret scan | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
-| Next recommended phase | KIS paper TR ID/payload 공식 재확인 후 Telegram runner와 paper sync worker 연결 |
+| Next recommended phase | KIS paper TR ID/payload 공식 재확인 후 polling getUpdates와 자동매매 제어면 보강 |
 
 ## Execution Modes
 
@@ -33,7 +33,10 @@
 
 - `GET /api/stocks/search`, `GET /api/stocks/{symbol}`: KIS paper quote 우선, 실패/비활성 시 DB 최신 OHLCV fallback.
 - `GET /api/telegram/status`, `POST /api/telegram/command`: `/start`, `/help`, `/status`, `/search`, `/report`, `/portfolio`, `/rank`, `/stop`, `/buy`, `/sell`, `/orders`.
+- `POST /api/telegram/webhook`: Telegram webhook update를 command dispatcher에 연결한다.
+- `GET /api/telegram/scheduler/status`, `POST /api/telegram/scheduler/run-once`: 장 시작 전/장 종료 후/주간 report scheduler 구조를 제공한다. 기본은 OFF이며 `confirm=true`와 dry-run gate 뒤에서만 실행된다.
 - `/buy`, `/sell`: `confirm` 또는 `TELEGRAM_PAPER_TRADE_CONFIRM=true` 없이는 preview만 수행.
+- `GET /api/paper/sync-worker/status`, `POST /api/paper/sync-worker/run-once`: KIS paper 주문/체결/잔고 sync worker wrapper다. 기본은 OFF이며 `confirm=true`와 paper network gate를 통과해야 조회 동기화를 시도한다.
 - KIS token cache: `KIS_TOKEN_CACHE_ENABLED=true`일 때만 `.cache/kis/token.json`에 local cache 저장.
 - Paper risk gate: `kill_switch`, `max_order_notional`, `max_order_qty`, `max_open_positions`, `blacklist`, `cooldown_seconds`, `idempotency_key`.
 - Paper bot 자동매매: 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false). Telegram 또는 설정에서 명시적으로 켜야 동작.
@@ -285,6 +288,8 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `POST` | `/api/paper/fill-simulator/run` | simulator gate와 confirm/idempotency 통과 시 local paper fill 생성 및 `paper_positions` 갱신 |
 | `POST` | `/api/paper/risk/exit-check` | stop-loss/trailing-stop trigger 시 local sell order/fill 생성 및 position 감소 |
 | `POST` | `/api/paper/sync` | KIS paper sync gate 통과 시만 조회 동기화, 기본은 credentials/gate 미충족으로 no-network block |
+| `GET` | `/api/paper/sync-worker/status` | KIS paper sync worker 상태, 기본 OFF/auto-start false |
+| `POST` | `/api/paper/sync-worker/run-once` | `PAPER_SYNC_WORKER_ENABLED=true`와 `confirm=true` 뒤에서 paper sync 1회 실행 |
 | `GET` | `/api/paper/realtime/status` | polling quote cache/heartbeat/stale quote gate 상태 |
 | `GET` | `/api/paper/dashboard` | account, positions, open orders, fills, PnL, risk, worker status, metrics |
 | `POST` | `/api/paper/bot/preview` | dry-run bot candidate/risk gate preview, paper order 생성 없음 |
@@ -293,6 +298,9 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `GET` | `/api/bot/status` | paper-only bot runtime status, kill-switch/session/auto-submit gate 표시 |
 | `POST` | `/api/bot/run-once` | paper-only preview decision loop, auto-submit은 명시 opt-in과 backend gate 통과 시에만 허용 |
 | `POST` | `/api/bot/stop` | paper-only scheduler stop marker, live/order side effect 없음 |
+| `GET` | `/api/telegram/scheduler/status` | Telegram report scheduler 상태, 기본 OFF/auto-start false |
+| `POST` | `/api/telegram/scheduler/run-once` | confirm 뒤 daily/weekly report 생성 및 Telegram summary dry-run/send |
+| `POST` | `/api/telegram/webhook` | Telegram webhook update를 command dispatcher로 연결 |
 | `POST` | `/api/screener/run` | rule-based screener run |
 | `GET` | `/api/screener/strategies` | frontend strategy selector metadata |
 | `GET` | `/api/screener/results` | screener result list with explanation contract |

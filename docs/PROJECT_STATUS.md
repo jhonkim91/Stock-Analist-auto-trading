@@ -17,8 +17,8 @@
 | 모드 | 상태 | 설명 |
 |---|---|---|
 | `analysis_only` | 지원 | 기존 로컬 분석/스크리너/백테스트/리포트 |
-| `telegram_report` | skeleton 추가 | Telegram command dispatcher와 report/portfolio/search 요약 |
-| `paper_kis` | 진행 중 | KIS paper token/cache, quote fallback, paper order guard |
+| `telegram_report` | 진행 중 | Telegram command/webhook dispatcher와 report scheduler 구조 |
+| `paper_kis` | 진행 중 | KIS paper token/cache, quote fallback, paper order guard, sync worker wrapper |
 | `live_disabled` | 유지 | live endpoint/config가 있어도 실계좌 주문은 비활성 |
 
 ## 이번 리셋 반영 항목
@@ -29,7 +29,9 @@
 - `/api/stocks/search`, `/api/stocks/{symbol}` 추가.
 - `MarketRealtimeService.symbol_detail()`가 KIS paper quote를 우선 시도하고 실패/비활성 시 DB 최신 OHLCV로 fallback.
 - `/api/telegram/status`, `/api/telegram/command` 추가.
+- `/api/telegram/webhook`, `/api/telegram/scheduler/status`, `/api/telegram/scheduler/run-once` 추가. Scheduler는 기본 OFF, auto-start false, `confirm=true` gate 뒤에서 daily/weekly report summary를 Telegram channel로 dry-run/send한다.
 - Telegram command dispatcher가 `/start`, `/help`, `/status`, `/search`, `/report`, `/portfolio`, `/rank`, `/stop`, `/buy`, `/sell`, `/orders`를 파싱.
+- `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once` 추가. Worker는 기본 OFF이며 `PAPER_SYNC_WORKER_ENABLED=true`, `confirm=true`, paper network gate 통과 시에만 `PaperSyncService.sync()`를 호출한다.
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가.
 - `backend/config/bot.yaml`과 `.env.example`에서 paper bot 자동매매는 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false)로 정렬.
 - Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
@@ -49,8 +51,13 @@
 | `GET /api/stocks/{symbol}` | KIS quote 우선, DB fallback 종목 상세 |
 | `GET /api/telegram/status` | Telegram token/chat id redacted status |
 | `POST /api/telegram/command` | Telegram command local dispatcher |
+| `POST /api/telegram/webhook` | Telegram webhook update command dispatcher |
+| `GET /api/telegram/scheduler/status` | Telegram report scheduler status |
+| `POST /api/telegram/scheduler/run-once` | Confirm-gated daily/weekly report Telegram summary |
 | `POST /api/paper/orders/preview` | paper risk gate preview |
 | `POST /api/paper/orders` / `POST /api/paper/orders/submit` | confirm + idempotency 기반 paper order create |
+| `GET /api/paper/sync-worker/status` | paper sync worker status |
+| `POST /api/paper/sync-worker/run-once` | confirm-gated KIS paper sync worker wrapper |
 
 ## 최신 검증
 
@@ -62,7 +69,9 @@
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_phase2_only` | `10 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_default_off` | `5 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_buttons` | `4 passed` |
-| `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_full_backend` | `510 passed in 380.94s` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_worker_tests` | `6 passed` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` | `18 passed` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_full_backend` | `516 passed in 861.47s` |
 | `.\.venv\Scripts\python.exe tools\secret_scan.py` | `NO_SECRET_FINDINGS` |
 | `cd frontend; npm.cmd run lint` | exit 0 |
 | `cd frontend; npm.cmd exec tsc -- --noEmit` | exit 0 |
@@ -72,6 +81,6 @@
 ## 남은 작업
 
 - KIS 국내/해외 paper 주문 TR ID와 request field를 공식 문서/샘플 기준으로 재확인.
-- Telegram polling/webhook runner와 scheduler를 실제 운영 프로세스로 연결.
-- paper fill/order/account sync worker를 KIS paper 조회 API와 연결.
+- Telegram polling `getUpdates` 네트워크 runner는 아직 미구현. Webhook dispatcher와 report scheduler run-once/CLI는 추가됨.
+- paper fill/order/account sync worker wrapper는 추가됨. 실제 조회는 기존 `PaperSyncService`의 paper network gate를 통과한 경우에만 수행.
 - 자동매매 loop는 기본 OFF로 유지하고 Telegram 또는 설정에서 명시적으로 켜는 제어면을 추가.

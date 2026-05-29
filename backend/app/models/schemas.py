@@ -197,6 +197,13 @@ class PaperSyncRequest(BaseModel):
     scope: Literal["orders", "fills", "positions", "portfolio", "all"] = "all"
 
 
+class PaperSyncWorkerRunRequest(BaseModel):
+    """KIS paper sync worker 수동 run-once 요청이다."""
+
+    scope: Literal["orders", "fills", "positions", "portfolio", "all"] = "all"
+    confirm: bool = False
+
+
 class BrokerAdapterStatus(BaseModel):
     """broker adapter 상태를 secret 없이 표현하는 공통 schema다."""
 
@@ -310,6 +317,26 @@ class ReportAutomationRunRequest(BaseModel):
     report_date: date | None = None
     notify: bool = False
     channel_alias: str | None = None
+    dry_run: bool | None = None
+    confirm: bool = False
+
+
+class TelegramWebhookRequest(BaseModel):
+    """Telegram webhook update payload 중 command dispatch에 필요한 필드만 받는다."""
+
+    update_id: int | None = None
+    message: dict[str, Any] | None = None
+    edited_message: dict[str, Any] | None = None
+    callback_query: dict[str, Any] | None = None
+
+
+class TelegramReportSchedulerRunRequest(BaseModel):
+    """Telegram report scheduler 수동 run-once 요청이다."""
+
+    slot: Literal["manual", "pre_market", "post_market", "weekly"] = "manual"
+    report_types: list[Literal["daily", "weekly"]] | None = None
+    report_date: date | None = None
+    channel_alias: str | None = "telegram_main"
     dry_run: bool | None = None
     confirm: bool = False
 

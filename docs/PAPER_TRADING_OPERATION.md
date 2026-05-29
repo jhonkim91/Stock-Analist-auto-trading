@@ -13,7 +13,8 @@
 | Paper cancel | `/api/paper/orders/cancel`, 공식 cancel payload 확인 전 disabled |
 | Paper views | `/api/paper/orders`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio` |
 | KIS paper balance | `/api/paper/portfolio`에서 조건부 read-only 호출. 기본 disabled/mock 상태는 local snapshot fallback 유지 |
-| Paper sync | `/api/paper/sync`, 공식 sync contract 확인 전 fail-closed no-op |
+| Paper sync | `/api/paper/sync`, 공식 sync/network gate 통과 시만 KIS paper 조회 동기화 |
+| Paper sync worker | `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once`, `backend.app.jobs.paper_sync_runner`, 기본 OFF/confirm required |
 | Report notify | `/api/reports/{report_id}/notify`, secret redaction 및 delivery failure isolation |
 | Paper bot | runner/API 존재, scheduler와 auto-submit은 기본 disabled |
 
@@ -56,6 +57,9 @@ cd ..
 | `PAPER_BOT_MAX_SUBMITS_PER_RUN` | `1` | bot 1회 실행 최대 submit 수 |
 | `PAPER_BOT_MAX_ORDER_QTY` | `1` | bot 자동 submit 종목별 최대 수량 |
 | `PAPER_BOT_MAX_ORDER_NOTIONAL` | `100000` | bot 자동 submit 1건 최대 주문금액 |
+| `PAPER_SYNC_WORKER_ENABLED` | `false` | KIS paper sync worker 실행 허용 |
+| `PAPER_SYNC_WORKER_INTERVAL_SECONDS` | `60` | bounded loop 간격 |
+| `PAPER_SYNC_WORKER_MAX_ITERATIONS` | `1` | runner 기본 반복 수 |
 | `ENABLE_REAL_ORDER` | `false` | KIS balance 조회 포함 실전/주문 경로 차단 |
 | `KIS_ACCESS_TOKEN` | `<placeholder>` | KIS paper balance 조회에 필요한 env-only token placeholder |
 | `KIS_ACCOUNT_NO` | `<placeholder>` | KIS paper balance 조회 CANO env placeholder |

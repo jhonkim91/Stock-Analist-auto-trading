@@ -1,5 +1,21 @@
 # Validation
 
+## 2026-05-30 Telegram Scheduler + Paper Sync Worker
+
+Telegram command dispatcher를 webhook/report scheduler 구조로 확장하고, KIS paper sync worker wrapper를 추가했다. 기본값은 모두 auto-start false이며, 실제 KIS live 주문과 실계좌 호출은 수행하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Telegram scheduler/sync worker 신규 테스트 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_worker_tests` -> `6 passed` |
+| 관련 회귀 테스트 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` -> `18 passed` |
+| 전체 backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_full_backend` -> `516 passed in 861.47s` |
+| Telegram webhook | 통과 | `POST /api/telegram/webhook`가 update payload의 text command를 기존 dispatcher로 연결하고 chat id/token 원문을 응답에 노출하지 않음 |
+| Telegram report scheduler | 통과 | `GET /api/telegram/scheduler/status`, `POST /api/telegram/scheduler/run-once` 추가. 기본 OFF, confirm required, dry-run report summary delivery 확인 |
+| Paper sync worker | 통과 | `GET /api/paper/sync-worker/status`, `POST /api/paper/sync-worker/run-once` 추가. 기본 OFF, confirm required, `PAPER_TRADING_NETWORK_ENABLED=false`에서 no-network block 확인 |
+| Runner 기본 동작 | 통과 | `backend.app.jobs.telegram_report_runner`, `backend.app.jobs.paper_sync_runner`는 기본 status-only이며 `execute_required=true`, `network_call_performed=false` |
+
+결론: Telegram webhook/report scheduler와 KIS paper sync worker wrapper가 추가됐다. 남은 작업은 Telegram polling `getUpdates` 네트워크 runner와 자동매매 제어면 보강이다.
+
 ## 2026-05-29 Project Reset: Telegram + KIS Paper Trading Bot
 
 분석 보조 MVP에서 Telegram + KIS paper trading bot 방향으로 전환하면서 신규 skeleton과 paper 안전장치 회귀를 검증했다. 실제 KIS live 주문, 실계좌 호출, secret 출력은 수행하지 않았다.
