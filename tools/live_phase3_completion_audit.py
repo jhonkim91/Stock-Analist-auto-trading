@@ -16,10 +16,16 @@ if str(PROJECT_ROOT) not in sys.path:
 from tools import kis_live_token_refresh_preflight, live_canary_preflight  # noqa: E402
 
 DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-completion-audit.json"
+DEFAULT_TEMPLATE_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-process-env-template.ps1"
 REQUIRED_ENV_NAMES = (
+    "KIS_APP_KEY",
+    "KIS_APP_SECRET",
+    "KIS_LIVE_BASE_URL",
+    "ENABLE_REAL_ORDER",
     "LIVE_TOKEN_REFRESH_ENABLED",
     "LIVE_TOKEN_REFRESH_PROCESS_ONLY",
     "LIVE_TOKEN_REFRESH_NETWORK_ENABLED",
+    "LIVE_TOKEN_REFRESH_CONFIRMATION",
     "KIS_REFRESH_TOKEN",
     "LIVE_CANARY_CONFIRMATION",
     "LIVE_CANARY_REVIEWER",
@@ -37,6 +43,33 @@ REQUIRED_ENV_NAMES = (
     "LIVE_BLACKLIST_ENABLED",
     "LIVE_SYMBOL_BLACKLIST",
     "LIVE_ORDER_COOLDOWN_SECONDS",
+)
+POWERSHELL_TEMPLATE_VALUES = (
+    ("KIS_APP_KEY", "<kis_live_app_key>"),
+    ("KIS_APP_SECRET", "<kis_live_app_credential>"),
+    ("KIS_REFRESH_TOKEN", "<kis_refresh_token_from_authorization_code_flow>"),
+    ("KIS_LIVE_BASE_URL", "https://openapi.koreainvestment.com:9443"),
+    ("ENABLE_REAL_ORDER", "false"),
+    ("LIVE_TOKEN_REFRESH_ENABLED", "true"),
+    ("LIVE_TOKEN_REFRESH_PROCESS_ONLY", "true"),
+    ("LIVE_TOKEN_REFRESH_NETWORK_ENABLED", "true"),
+    ("LIVE_TOKEN_REFRESH_CONFIRMATION", "CONFIRM_KIS_LIVE_TOKEN_REFRESH"),
+    ("LIVE_CANARY_CONFIRMATION", "CONFIRM_LIVE_CANARY_PHASE20"),
+    ("LIVE_CANARY_REVIEWER", "<reviewer_id_no_secret>"),
+    ("LIVE_CANARY_ENVIRONMENT", "prod-live-isolated"),
+    ("LIVE_CANARY_ROLLBACK_READY", "true"),
+    ("LIVE_CANARY_KILL_SWITCH_READY", "true"),
+    ("LIVE_CANARY_MINIMUM_SIZE_CONFIRMED", "true"),
+    ("LIVE_EMERGENCY_STOP_ARMED", "true"),
+    ("LIVE_RATE_LIMIT_PER_SECOND", "2"),
+    ("LIVE_RATE_LIMIT_BURST", "5"),
+    ("LIVE_IDEMPOTENCY_REQUIRED", "true"),
+    ("LIVE_AUDIT_LOG_ENABLED", "true"),
+    ("LIVE_AUDIT_REDACTION_ENABLED", "true"),
+    ("LIVE_MAX_ORDER_NOTIONAL", "100000"),
+    ("LIVE_BLACKLIST_ENABLED", "true"),
+    ("LIVE_SYMBOL_BLACKLIST", "LEVERAGED,INVERSE"),
+    ("LIVE_ORDER_COOLDOWN_SECONDS", "30"),
 )
 
 
@@ -122,11 +155,47 @@ def write_completion_audit(record: Mapping[str, Any], path: Path = DEFAULT_RECOR
     return path
 
 
+def build_powershell_env_template() -> str:
+    """3단계 live proof 준비용 process-only PowerShell env template을 생성한다."""
+    lines = [
+        "# Live Phase 3 process-only environment template.",
+        "# Replace placeholder values in a fresh PowerShell session. Do not commit real values.",
+        "# This template does not run a network call or create an order.",
+        "",
+    ]
+    lines.extend(f'$env:{name} = "{value}"' for name, value in POWERSHELL_TEMPLATE_VALUES)
+    lines.extend(
+        [
+            "",
+            "# No-network verification:",
+            r".\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py",
+            r".\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py",
+            "",
+            "# Token refresh proof requires separate operator approval:",
+            (
+                r"# .\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py "
+                "--execute --confirm CONFIRM_KIS_LIVE_TOKEN_REFRESH --write-record"
+            ),
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def write_powershell_env_template(path: Path = DEFAULT_TEMPLATE_PATH) -> Path:
+    """placeholder-only PowerShell env template을 저장한다."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(build_powershell_env_template(), encoding="utf-8")
+    return path
+
+
 def build_parser() -> argparse.ArgumentParser:
     """3단계 completion audit CLI parser를 생성한다."""
     parser = argparse.ArgumentParser(description="No-network live Phase 3 completion audit")
     parser.add_argument("--write-record", action="store_true", help="write redacted audit under docs/research")
     parser.add_argument("--record-path", default=str(DEFAULT_RECORD_PATH), help="optional output path")
+    parser.add_argument("--print-powershell-template", action="store_true", help="print a placeholder env template")
+    parser.add_argument("--write-powershell-template", action="store_true", help="write a placeholder env template")
+    parser.add_argument("--template-path", default=str(DEFAULT_TEMPLATE_PATH), help="optional template output path")
     parser.add_argument("--fail-on-incomplete", action="store_true", help="exit 2 when Phase 3 is incomplete")
     return parser
 
@@ -138,6 +207,10 @@ def main(argv: list[str] | None = None) -> int:
     record = build_completion_audit()
     if args.write_record:
         write_completion_audit(record, Path(args.record_path))
+    if args.write_powershell_template:
+        write_powershell_env_template(Path(args.template_path))
+    if args.print_powershell_template:
+        print(build_powershell_env_template(), end="")
     print(json.dumps(record, ensure_ascii=False, sort_keys=True, default=str))
     if args.fail_on_incomplete and not record["complete"]:
         return 2

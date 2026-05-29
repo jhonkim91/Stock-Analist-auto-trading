@@ -27,6 +27,21 @@ def test_live_phase3_completion_audit_is_incomplete_and_redacted_by_default() ->
     assert "12345678" not in serialized
 
 
+def test_live_phase3_completion_audit_powershell_template_is_placeholder_only(tmp_path) -> None:
+    template = live_phase3_completion_audit.build_powershell_env_template()
+
+    assert '$env:KIS_REFRESH_TOKEN = "<kis_refresh_token_from_authorization_code_flow>"' in template
+    assert '$env:ENABLE_REAL_ORDER = "false"' in template
+    assert "CONFIRM_KIS_LIVE_TOKEN_REFRESH" in template
+    assert "tools\\kis_live_token_refresh_preflight.py --execute" in template
+    assert "PHASE3_COMPLETION_SECRET" not in template
+
+    path = tmp_path / "phase3-template.ps1"
+    written = live_phase3_completion_audit.write_powershell_env_template(path)
+
+    assert written.read_text(encoding="utf-8") == template
+
+
 def test_live_phase3_completion_audit_keeps_submit_authority_missing_even_with_operator_gates() -> None:
     env = {
         "LIVE_CANARY_CONFIRMATION": "CONFIRM_LIVE_CANARY_PHASE20",

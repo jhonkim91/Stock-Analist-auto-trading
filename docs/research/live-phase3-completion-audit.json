@@ -55,6 +55,34 @@
   "canary_status": "blocked",
   "complete": false,
   "env_scope_status": {
+    "ENABLE_REAL_ORDER": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "KIS_APP_KEY": {
+      "any_scope_configured": true,
+      "machine_configured": false,
+      "process_configured": true,
+      "user_configured": true,
+      "values_redacted": true
+    },
+    "KIS_APP_SECRET": {
+      "any_scope_configured": true,
+      "machine_configured": false,
+      "process_configured": true,
+      "user_configured": true,
+      "values_redacted": true
+    },
+    "KIS_LIVE_BASE_URL": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
     "KIS_REFRESH_TOKEN": {
       "any_scope_configured": false,
       "machine_configured": false,
@@ -174,6 +202,13 @@
       "user_configured": false,
       "values_redacted": true
     },
+    "LIVE_TOKEN_REFRESH_CONFIRMATION": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
     "LIVE_TOKEN_REFRESH_ENABLED": {
       "any_scope_configured": false,
       "machine_configured": false,
@@ -196,12 +231,15 @@
       "values_redacted": true
     }
   },
-  "generated_at": "2026-05-29T10:15:27.469533+00:00",
+  "generated_at": "2026-05-29T10:19:46.609813+00:00",
   "live_order_created": false,
   "missing_all_scopes_env_names": [
+    "KIS_LIVE_BASE_URL",
+    "ENABLE_REAL_ORDER",
     "LIVE_TOKEN_REFRESH_ENABLED",
     "LIVE_TOKEN_REFRESH_PROCESS_ONLY",
     "LIVE_TOKEN_REFRESH_NETWORK_ENABLED",
+    "LIVE_TOKEN_REFRESH_CONFIRMATION",
     "KIS_REFRESH_TOKEN",
     "LIVE_CANARY_CONFIRMATION",
     "LIVE_CANARY_REVIEWER",
@@ -221,9 +259,12 @@
     "LIVE_ORDER_COOLDOWN_SECONDS"
   ],
   "missing_process_env_names": [
+    "KIS_LIVE_BASE_URL",
+    "ENABLE_REAL_ORDER",
     "LIVE_TOKEN_REFRESH_ENABLED",
     "LIVE_TOKEN_REFRESH_PROCESS_ONLY",
     "LIVE_TOKEN_REFRESH_NETWORK_ENABLED",
+    "LIVE_TOKEN_REFRESH_CONFIRMATION",
     "KIS_REFRESH_TOKEN",
     "LIVE_CANARY_CONFIRMATION",
     "LIVE_CANARY_REVIEWER",
