@@ -58,6 +58,8 @@ def test_frontend_static_contracts_are_paper_only_and_redacted():
         "/api/bot/stop",
         "/api/notifications/status",
         "/api/notifications/test",
+        "/api/settings/runtime-env",
+        "/api/settings/runtime-env/toggle",
     ):
         assert endpoint in combined
 
@@ -65,8 +67,11 @@ def test_frontend_static_contracts_are_paper_only_and_redacted():
     assert "모의투자" in combined
     assert "실거래 아님" in combined
     assert "paper only" in combined
-    assert "confirm" in paper_page
-    assert "idempotency_key" in paper_page
+    assert "confirm" in combined
+    assert "idempotency_key" in combined
+    assert "data-tooltip" in combined
+    assert "클릭하면" in combined
+    assert "실계좌 주문은 이 화면에서 켤 수 없습니다" in combined
     assert not SECRET_PATTERN.search(combined)
     assert not FORBIDDEN_LIVE_COPY.search(combined)
     assert "/api/kis/orders" not in combined
@@ -122,7 +127,7 @@ def test_frontend_referenced_api_contracts_are_fail_closed(client):
     assert "PAPER_CONFIRM_TRUE_REQUIRED" in submit_payload["reason_codes"]
     assert cancel_payload["cancel_supported"] is False
     assert cancel_payload["order_cancelled"] is False
-    assert "KIS_PAPER_CANCEL_CONFIRMATION_REQUIRED" in cancel_payload["reason_codes"]
+    assert "PAPER_ORDER_NOT_FOUND" in cancel_payload["reason_codes"]
     assert sync_payload["sync_performed"] is False
     assert sync_payload["synthetic_positions_touched"] is False
     assert orders_payload["live_order_created"] is False

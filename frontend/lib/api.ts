@@ -1011,6 +1011,50 @@ export type ReportNotifyResponse = {
 
 export type SettingsPayload = Record<string, unknown>;
 
+export type RuntimeEnvToggle = {
+  name: string;
+  label: string;
+  category: string;
+  description: string;
+  enabled: boolean;
+  configured: boolean;
+  value: "true" | "false" | string;
+  can_toggle: boolean;
+  false_locked: boolean;
+  high_impact: boolean;
+  scope: string;
+  reason_codes: string[];
+};
+
+export type RuntimeEnvStatus = {
+  scope: string;
+  persistence: string;
+  file_write_performed: boolean;
+  secrets_redacted: boolean;
+  toggles: RuntimeEnvToggle[];
+};
+
+export type RuntimeEnvToggleRequest = {
+  name: string;
+  enabled: boolean;
+  confirm: boolean;
+};
+
+export type RuntimeEnvToggleResponse = {
+  ok: boolean;
+  status: string;
+  name: string;
+  enabled: boolean;
+  scope: string;
+  persistence: string;
+  file_write_performed: boolean;
+  network_call_performed: boolean;
+  live_order_created: boolean;
+  secrets_redacted: boolean;
+  reason_codes: string[];
+  toggle?: RuntimeEnvToggle;
+};
+
 export type ActionResponse = Record<string, unknown>;
 
 export async function callApi<T>(path: string, init?: RequestInit): Promise<T> {

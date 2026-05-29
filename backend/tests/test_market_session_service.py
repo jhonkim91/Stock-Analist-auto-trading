@@ -77,7 +77,7 @@ def test_holiday_and_outside_session_handling():
     assert calendar[1]["is_open"] is False
 
 
-def test_preview_responses_include_session_metadata_and_keep_submit_disabled(client):
+def test_preview_responses_include_session_metadata_and_keep_live_submit_disabled(client):
     broker_response = client.post(
         "/api/broker/orders/preview",
         json={
@@ -105,8 +105,8 @@ def test_preview_responses_include_session_metadata_and_keep_submit_disabled(cli
 
     assert broker_response.status_code == 200
     broker_payload = broker_response.json()
-    assert broker_payload["can_submit"] is False
-    assert broker_payload["paper_trading_enabled"] is False
+    assert broker_payload["can_submit"] is True
+    assert broker_payload["paper_trading_enabled"] is True
     assert broker_payload["live_trading_enabled"] is False
     assert broker_payload["order_created"] is False
     assert broker_payload["venue"] == "NXT"

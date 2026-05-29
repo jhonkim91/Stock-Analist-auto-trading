@@ -6,7 +6,6 @@ from sqlalchemy import func, select
 
 from backend.app.core.database import SessionLocal
 from backend.app.models.tables import PaperFill, PaperPortfolioSnapshot, PaperPosition, Position, utc_now
-from backend.app.services.paper_sync_service import SYNC_CONFIRMATION_REQUIRED
 
 
 def _seed_state() -> None:
@@ -107,8 +106,8 @@ def test_paper_sync_endpoint_is_fail_closed_idempotent_and_no_network(client):
 
     assert first.status_code == 200
     first_payload = first.json()
-    assert first_payload["status"] == "sync_disabled"
-    assert first_payload["reason"] == SYNC_CONFIRMATION_REQUIRED
+    assert first_payload["status"] == "sync_blocked"
+    assert first_payload["reason"] == "KIS_PAPER_CREDENTIALS_MISSING"
     assert first_payload["sync_performed"] is False
     assert first_payload["network_call_performed"] is False
     assert first_payload["live_order_created"] is False

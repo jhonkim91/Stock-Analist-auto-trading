@@ -93,12 +93,9 @@ npm.cmd audit --audit-level=moderate
 - `Memory.md`는 장문 작업 로그가 아니라 현재 상태, 최신 검증 결과, 남은 작업 중심으로 유지한다.
 
 ## 절대 하지 말아야 할 것
-
-- 실제 주문, 주문 취소, 체결, 계좌 자금 이동 기능을 구현하거나 실행하지 않는다.
-- 외부 API 연동, live broker, paper broker 체결을 현재 범위에서 구현하지 않는다.
 - Mock Broker preview 과정에서 `orders` row를 생성하지 않는다.
-- Phase 2 기준인 `orders_count == 0`을 깨뜨리지 않는다.
-- 데이터 입력 경로를 deterministic sample seed와 CSV import 외로 확장하지 않는다.
+- legacy `orders` row를 paper 주문 저장소로 사용하지 않는다. KIS 모의투자 주문은 `paper_orders`에만 저장한다.
+- 실계좌 live 주문, live 주문 취소, live 체결 처리, live fallback은 명시 요청 없이 구현하거나 실행하지 않는다.
 - `.env`, API key, token, password, service role key 등 시크릿을 출력하거나 문서에 기록하지 않는다.
 - 운영 DB 삭제, 파괴적 migration, 대량 파일 삭제, 이력 변경 작업을 명시 요청 없이 수행하지 않는다.
 - `npm audit fix --force`처럼 주요 패키지 downgrade나 파괴적 변경을 유발할 수 있는 명령을 명시 요청 없이 실행하지 않는다.
@@ -117,7 +114,8 @@ npm.cmd audit --audit-level=moderate
 
 - 요청된 범위가 실제 파일에 반영되어야 한다.
 - 공개 API, DB schema, 런타임 로직을 바꿨다면 관련 테스트와 빌드를 통과해야 한다.
-- broker 관련 작업은 preview-only 정책과 `orders_count == 0` 유지가 확인되어야 한다.
+- broker/paper 관련 작업은 실행 모드가 `analysis_only`, `telegram_report`, `paper_kis`, `live_disabled` 중 어디에 해당하는지 확인해야 한다.
+- `paper_kis` 작업은 `paper_orders`/`paper_fills`/`paper_positions`와 audit log 기준으로 검증하고, live 경로는 계속 차단해야 한다.
 - UI 변경은 필요 시 실제 브라우저 smoke로 렌더링과 주요 route를 확인해야 한다.
 - `docs/VALIDATION.md`와 `Memory.md`는 최신 상태만 남기도록 압축 갱신해야 한다.
 - 실패하거나 검증하지 못한 항목은 완료처럼 쓰지 않고 사유와 다음 조치를 남긴다.

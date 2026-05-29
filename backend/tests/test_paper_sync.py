@@ -94,8 +94,8 @@ def test_paper_sync_is_idempotent_disabled_noop_and_does_not_touch_synthetic_pos
     positions = service.list_positions()
     portfolio = service.portfolio()
 
-    assert first["status"] == "sync_disabled"
-    assert first["reason"] == SYNC_CONFIRMATION_REQUIRED
+    assert first["status"] == "sync_blocked"
+    assert first["reason"] == "KIS_PAPER_CREDENTIALS_MISSING"
     assert first["synced_scopes"] == ["orders", "fills", "positions", "portfolio"]
     assert first["dedupe"]["idempotent"] is True
     assert first["dedupe"]["fills_inserted"] == 0

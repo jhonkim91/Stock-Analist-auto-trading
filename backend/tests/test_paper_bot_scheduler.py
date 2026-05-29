@@ -18,7 +18,7 @@ def _counts() -> dict[str, int]:
         }
 
 
-def test_paper_bot_defaults_manual_enabled_without_scheduler_loop(db_session, monkeypatch):
+def test_paper_bot_defaults_disabled_without_scheduler_loop(db_session, monkeypatch):
     monkeypatch.delenv("PAPER_BOT_AUTO_SUBMIT", raising=False)
     monkeypatch.delenv("PAPER_BOT_SCHEDULER_ENABLED", raising=False)
     service = PaperBotService(db_session)
@@ -26,11 +26,12 @@ def test_paper_bot_defaults_manual_enabled_without_scheduler_loop(db_session, mo
     status = service.status()
     result = service.run_once(auto_submit=True)
 
-    assert status["enabled"] is True
+    assert status["enabled"] is False
     assert status["scheduler_enabled"] is False
-    assert status["auto_submit"] is True
+    assert status["auto_submit"] is False
     assert status["loop_allowed"] is False
-    assert status["auto_submit_allowed"] is True
+    assert status["auto_submit_allowed"] is False
+    assert "PAPER_BOT_DISABLED" in status["reason_codes"]
     assert "PAPER_BOT_SCHEDULER_DISABLED" in status["reason_codes"]
     assert result["paper_order_submitted"] is False
     assert result["auto_submit_requested"] is True
@@ -51,7 +52,7 @@ def test_paper_bot_defaults_manual_enabled_without_scheduler_loop(db_session, mo
     assert _counts() == {"orders": 0, "paper_orders": 0}
 
 
-def test_paper_bot_api_and_settings_are_manual_enabled_by_default(client):
+def test_paper_bot_api_and_settings_are_disabled_by_default(client):
     before = _counts()
 
     status = client.get("/api/paper/bot/status")
@@ -60,17 +61,18 @@ def test_paper_bot_api_and_settings_are_manual_enabled_by_default(client):
 
     assert status.status_code == 200
     assert status.json()["scheduler_enabled"] is False
-    assert status.json()["auto_submit_allowed"] is True
+    assert status.json()["auto_submit_allowed"] is False
     assert run.status_code == 200
     assert run.json()["paper_order_submitted"] is False
     assert run.json()["network_call_performed"] is False
     assert settings.status_code == 200
-    assert settings.json()["bot"]["bot"]["auto_submit"] is True
+    assert settings.json()["bot"]["bot"]["enabled"] is False
+    assert settings.json()["bot"]["bot"]["auto_submit"] is False
     assert settings.json()["bot"]["bot"]["scheduler_enabled"] is False
     assert _counts() == before
 
 
-def test_bot_api_routes_are_manual_enabled_by_default(client):
+def test_bot_api_routes_are_disabled_by_default(client):
     before = _counts()
 
     status = client.get("/api/bot/status")
@@ -79,7 +81,7 @@ def test_bot_api_routes_are_manual_enabled_by_default(client):
 
     assert status.status_code == 200
     assert status.json()["supported_modes"] == ["manual", "run_once", "scheduled"]
-    assert status.json()["auto_submit_allowed"] is True
+    assert status.json()["auto_submit_allowed"] is False
     assert run.status_code == 200
     assert run.json()["paper_order_submitted"] is False
     assert run.json()["network_call_performed"] is False

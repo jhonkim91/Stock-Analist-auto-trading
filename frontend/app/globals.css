@@ -2066,6 +2066,127 @@ tr.sel td {
   color: var(--color-text-info);
 }
 
+.envPanel {
+  margin-bottom: 12px;
+}
+
+.envGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.envGroup {
+  min-width: 0;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-primary);
+  padding: 8px;
+}
+
+.envGroupTitle {
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.envToggleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  padding: 6px 0;
+}
+
+.envToggleRow:first-of-type {
+  border-top: 0;
+}
+
+.envToggleMeta {
+  min-width: 0;
+}
+
+.envToggleLabel,
+.envToggleName {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.envToggleLabel {
+  color: var(--color-text-primary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.envToggleName {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono, "Cascadia Mono", Consolas, monospace);
+  font-size: 9px;
+}
+
+.envToggleControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.envSwitch {
+  position: relative;
+  min-width: 44px;
+  min-height: 24px;
+  border-radius: var(--border-radius-sm);
+  font-size: 10px;
+  padding: 0 8px;
+}
+
+.envSwitch[data-tooltip]:hover::after,
+.envSwitch[data-tooltip]:focus-visible::after {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 6px);
+  width: min(260px, 70vw);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-primary);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-primary);
+  content: attr(data-tooltip);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+  padding: 8px;
+  text-align: left;
+  white-space: normal;
+}
+
+.envSwitch.on {
+  border-color: #9abe89;
+  background: var(--color-background-success);
+  color: var(--color-text-success);
+}
+
+.envSwitch.off {
+  border-color: var(--color-border-secondary);
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+}
+
+.envMessage {
+  margin-top: 8px;
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 pre,
 .markdownPreview,
 .compactPre,
@@ -2097,6 +2218,7 @@ pre,
   .strategyPills,
   .actionList,
   .validationGrid,
+  .envGrid,
   .g3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2121,6 +2243,7 @@ pre,
   }
 
   .actionList,
+  .envGrid,
   .g3,
   .validationGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2198,6 +2321,7 @@ pre,
   .strategyPills,
   .actionList,
   .validationGrid,
+  .envGrid,
   .g3 {
     grid-template-columns: 1fr;
   }

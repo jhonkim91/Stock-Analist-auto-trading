@@ -60,6 +60,7 @@ class PaperBotConfigService:
             )
         except (TypeError, ValueError):
             return self._closed_config(), ["BOT_CONFIG_PARSE_FAILED"]
+        config["enabled"] = self._env_bool("PAPER_BOT_ENABLED", bool(config["enabled"]))
         config["auto_submit"] = self._env_bool("PAPER_BOT_AUTO_SUBMIT", bool(config["auto_submit"]))
         config["scheduler_enabled"] = self._env_bool("PAPER_BOT_SCHEDULER_ENABLED", bool(config["scheduler_enabled"]))
         config["kill_switch_enabled"] = self._env_bool("PAPER_BOT_KILL_SWITCH", bool(config["kill_switch_enabled"]))

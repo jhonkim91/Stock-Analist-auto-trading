@@ -11,11 +11,61 @@ TEST_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "test_app.db"
 EMPTY_DB_SNAPSHOT_PATH = TEST_DB_PATH.with_name("test_app_empty_snapshot.db")
 SEEDED_DB_SNAPSHOT_PATH = TEST_DB_PATH.with_name("test_app_seeded_snapshot.db")
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH.as_posix()}"
+TEST_ISOLATED_ENV_VARS = (
+    "BROKER_MODE",
+    "DISCORD_OPS_WEBHOOK_URL",
+    "ENABLE_REAL_ORDER",
+    "EXECUTION_MODE",
+    "KIS_ACCESS_TOKEN",
+    "KIS_ACCOUNT_NO",
+    "KIS_APP_KEY",
+    "KIS_APP_SECRET",
+    "KIS_ENV",
+    "KIS_MARKET_QUOTE_ENABLED",
+    "KIS_PAPER_BASE_URL",
+    "KIS_PRODUCT_CODE",
+    "KIS_REFRESH_TOKEN",
+    "KIS_TOKEN_CACHE_ENABLED",
+    "KIS_TOKEN_CACHE_PATH",
+    "KIS_TOKEN_ISSUE_ENABLED",
+    "KIS_WEBSOCKET_APPROVAL_ENABLED",
+    "NOTIFICATIONS_DEFAULT_DRY_RUN",
+    "NOTIFICATIONS_ENABLED",
+    "PAPER_BOT_CONFIRM",
+    "PAPER_BOT_ENABLED",
+    "PAPER_BOT_KILL_SWITCH",
+    "PAPER_FILL_SIMULATOR_ENABLED",
+    "PAPER_ORDER_COOLDOWN_SECONDS",
+    "PAPER_ORDER_SUBMIT_ENABLED",
+    "PAPER_REALTIME_ENABLED",
+    "PAPER_SYMBOL_BLACKLIST",
+    "PAPER_TRADING_CAN_CREATE",
+    "PAPER_TRADING_CAN_SIMULATE_FILLS",
+    "PAPER_TRADING_ENABLED",
+    "PAPER_TRADING_KILL_SWITCH",
+    "PAPER_TRADING_MARKET",
+    "PAPER_TRADING_NETWORK_ENABLED",
+    "TELEGRAM_BOT_ENABLED",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID",
+    "TELEGRAM_PAPER_TRADE_CONFIRM",
+    "TELEGRAM_POLLING_ENABLED",
+    "TELEGRAM_REPORT_SCHEDULER_ENABLED",
+    "TELEGRAM_WEBHOOK_ENABLED",
+)
 
 from backend.app.core.database import SessionLocal, engine, init_db
 from backend.app.main import app
 from backend.app.services.indicator_service import IndicatorService
 from backend.app.services.market_data_service import MarketDataService
+
+
+@pytest.fixture(autouse=True)
+def isolated_runtime_env(monkeypatch: pytest.MonkeyPatch):
+    """테스트는 로컬 KIS/Telegram/Paper env가 있어도 기본 fail-closed 상태로 시작한다."""
+    for name in TEST_ISOLATED_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    yield
 
 
 def _recreate_database() -> None:

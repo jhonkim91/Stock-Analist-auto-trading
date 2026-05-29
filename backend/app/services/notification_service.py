@@ -64,6 +64,8 @@ class NotificationConfigService:
                 "templates": self._merge_templates(notifications.get("templates")),
             }
         )
+        config["enabled"] = _env_bool("NOTIFICATIONS_ENABLED", bool(config["enabled"]))
+        config["default_dry_run"] = _env_bool("NOTIFICATIONS_DEFAULT_DRY_RUN", bool(config["default_dry_run"]))
         return config, []
 
     @staticmethod
@@ -102,6 +104,13 @@ class NotificationConfigService:
             if isinstance(template, str) and template.strip():
                 templates[str(event_type)] = template.strip()
         return templates
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class NotificationService:

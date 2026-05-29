@@ -14,7 +14,7 @@ def test_notification_status_endpoint_redacts_env_values(client, monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     serialized = json.dumps(payload, ensure_ascii=False)
-    assert payload["enabled"] is False
+    assert payload["enabled"] is True
     assert payload["secrets_redacted"] is True
     assert "discord_ops" in {channel["alias"] for channel in payload["channels"]}
     assert "telegram_main" in {channel["alias"] for channel in payload["channels"]}
@@ -35,7 +35,7 @@ def test_notification_test_endpoint_supports_disabled_dry_run(client, monkeypatc
     payload = response.json()
     serialized = json.dumps(payload, ensure_ascii=False)
     assert payload["ok"] is True
-    assert payload["status"] == "disabled"
+    assert payload["status"] == "dry_run"
     assert payload["attempted"] is False
     assert payload["delivered"] is False
     assert sentinel not in serialized

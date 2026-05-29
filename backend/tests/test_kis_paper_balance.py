@@ -188,7 +188,7 @@ def test_kis_paper_balance_client_uses_required_get_headers_params_and_maps_resp
     assert payload["network_call_performed"] is True
 
 
-def test_paper_portfolio_default_disabled_uses_local_snapshot_fallback(client, monkeypatch):
+def test_paper_portfolio_default_paper_mode_uses_local_snapshot_without_credentials(client, monkeypatch):
     def fail_fetch(self):
         raise AssertionError("KIS balance client must not be called while disabled")
 
@@ -201,7 +201,8 @@ def test_paper_portfolio_default_disabled_uses_local_snapshot_fallback(client, m
     assert payload["source"] == "paper_portfolio_snapshots"
     assert payload["network_call_performed"] is False
     assert payload["kis_balance"]["status"] == "fallback"
-    assert "KIS_PAPER_BALANCE_DISABLED" in payload["kis_balance"]["reason_codes"]
+    assert "ACCESS_TOKEN_MISSING" in payload["kis_balance"]["reason_codes"]
+    assert "ACCOUNT_MISSING" in payload["kis_balance"]["reason_codes"]
 
 
 def test_paper_portfolio_enabled_paper_mode_calls_kis_balance_client_without_secret_logs(

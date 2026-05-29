@@ -9,12 +9,29 @@ import {
   type NotificationTestResponse,
   type PaperBotStatus,
   type PaperStatus,
+  type RuntimeEnvStatus,
+  type RuntimeEnvToggle,
+  type RuntimeEnvToggleResponse,
   type SettingsPayload
 } from "../../lib/api";
 import { getNotificationStatus, sendNotificationTest } from "../../lib/notificationApi";
 import { getBotStatus, getPaperStatus } from "../../lib/paperApi";
 
 const sections = ["strategies", "risk", "backtest", "app"] as const;
+const envCategoryOrder = ["paper", "bot", "broker", "kis", "reports", "notifications", "locked"] as const;
+
+function categoryTitle(category: string) {
+  const labels: Record<string, string> = {
+    paper: "Paper",
+    bot: "Bot",
+    broker: "Broker",
+    kis: "KIS",
+    reports: "Reports",
+    notifications: "Notifications",
+    locked: "Locked"
+  };
+  return labels[category] ?? category;
+}
 
 function PageIcon() {
   return (
@@ -48,6 +65,15 @@ function configSnippet(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
+function runtimeToggleTooltip(toggle: RuntimeEnvToggle, nextEnabled: boolean) {
+  if (toggle.false_locked) {
+    return `${toggle.description} 클릭하면 현재 backend 프로세스에서 ${toggle.name}=false를 다시 적용합니다. 실계좌 주문은 이 화면에서 켤 수 없습니다.`;
+  }
+  const nextLabel = nextEnabled ? "켜짐" : "꺼짐";
+  const impact = toggle.high_impact ? "주문, 토큰, 네트워크 호출 가능성에 영향을 줄 수 있으므로 관련 gate를 함께 확인해야 합니다." : "현재 프로세스에만 반영됩니다.";
+  return `${toggle.description} 클릭하면 ${toggle.name} 값이 ${nextLabel} 상태로 바뀝니다. ${impact} 서버를 재시작하면 초기 설정으로 돌아갈 수 있습니다.`;
+}
+
 export default function SettingsPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [message, setMessage] = useState("조회 중");
@@ -55,8 +81,11 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState<NotificationStatus | null>(null);
   const [paperStatus, setPaperStatus] = useState<PaperStatus | null>(null);
   const [botStatus, setBotStatus] = useState<PaperBotStatus | null>(null);
+  const [runtimeEnv, setRuntimeEnv] = useState<RuntimeEnvStatus | null>(null);
   const [notificationTest, setNotificationTest] = useState<NotificationTestResponse | null>(null);
   const [notificationTestStatus, setNotificationTestStatus] = useState<ApiStatus>("idle");
+  const [envUpdating, setEnvUpdating] = useState<string | null>(null);
+  const [envMessage, setEnvMessage] = useState("process env");
 
   const loadSettings = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -64,16 +93,18 @@ export default function SettingsPage() {
       setMessage("조회 중");
     }
     try {
-      const [data, notificationStatus, paperRuntimeStatus, botRuntimeStatus] = await Promise.all([
+      const [data, notificationStatus, paperRuntimeStatus, botRuntimeStatus, runtimeEnvStatus] = await Promise.all([
         callApi<SettingsPayload>("/api/settings"),
         getNotificationStatus(),
         getPaperStatus(),
-        getBotStatus()
+        getBotStatus(),
+        callApi<RuntimeEnvStatus>("/api/settings/runtime-env")
       ]);
       setSettings(data);
       setNotifications(notificationStatus);
       setPaperStatus(paperRuntimeStatus);
       setBotStatus(botRuntimeStatus);
+      setRuntimeEnv(runtimeEnvStatus);
       setStatus("ok");
       setMessage("조회 완료");
     } catch (error) {
@@ -83,6 +114,7 @@ export default function SettingsPage() {
       setNotifications(null);
       setPaperStatus(null);
       setBotStatus(null);
+      setRuntimeEnv(null);
     }
   }, []);
 
@@ -116,6 +148,39 @@ export default function SettingsPage() {
     }
   }
 
+  async function toggleRuntimeEnv(toggle: RuntimeEnvToggle) {
+    const nextEnabled = toggle.false_locked ? false : !toggle.enabled;
+    setEnvUpdating(toggle.name);
+    setEnvMessage(`${toggle.name} 변경 중`);
+    try {
+      const result = await callApi<RuntimeEnvToggleResponse>("/api/settings/runtime-env/toggle", {
+        method: "POST",
+        body: JSON.stringify({
+          name: toggle.name,
+          enabled: nextEnabled,
+          confirm: true
+        })
+      });
+      if (!result.ok) {
+        setEnvMessage(`${toggle.name}: ${result.reason_codes.join(", ") || "blocked"}`);
+        return;
+      }
+      setEnvMessage(`${toggle.name}=${result.enabled ? "true" : "false"}`);
+      await loadSettings(false);
+    } catch (error) {
+      setEnvMessage(error instanceof Error ? error.message : "env toggle failed");
+    } finally {
+      setEnvUpdating(null);
+    }
+  }
+
+  const groupedEnv = envCategoryOrder
+    .map((category) => ({
+      category,
+      toggles: runtimeEnv?.toggles.filter((toggle) => toggle.category === category) ?? []
+    }))
+    .filter((group) => group.toggles.length > 0);
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -131,8 +196,52 @@ export default function SettingsPage() {
       <section className="scroll">
         <div className="warn-box info">
           <span aria-hidden="true">i</span>
-          backend/config/*.yaml 읽기 전용 요약 — 웹 수정 기능 없음
+          backend/config/*.yaml 읽기 전용 요약 · env 버튼은 현재 backend 프로세스에만 반영
         </div>
+
+        <article className="envPanel">
+          <div className="card-hd">
+            <span className="card-title">Runtime env</span>
+            <span className="status ok" title={envMessage}>
+              {runtimeEnv?.persistence ?? "process_only"}
+            </span>
+          </div>
+          <div className="envGrid">
+            {groupedEnv.map((group) => (
+              <section className="envGroup" key={group.category}>
+                <div className="envGroupTitle">{categoryTitle(group.category)}</div>
+                {group.toggles.map((toggle) => {
+                  const nextEnabled = toggle.false_locked ? false : !toggle.enabled;
+                  const tooltip = runtimeToggleTooltip(toggle, nextEnabled);
+                  const disabled = envUpdating === toggle.name;
+                  return (
+                    <div className="envToggleRow" key={toggle.name} title={tooltip}>
+                      <div className="envToggleMeta">
+                        <span className="envToggleLabel">{toggle.label}</span>
+                        <span className="envToggleName">{toggle.name}</span>
+                      </div>
+                      <div className="envToggleControls">
+                        {toggle.high_impact ? <span className="badge gradeC">gate</span> : null}
+                        {toggle.false_locked ? <span className="badge fail">locked</span> : null}
+                        <button
+                          className={`envSwitch ${toggle.enabled ? "on" : "off"}`}
+                          disabled={disabled}
+                          data-tooltip={tooltip}
+                          onClick={() => void toggleRuntimeEnv(toggle)}
+                          title={tooltip}
+                          type="button"
+                        >
+                          {envUpdating === toggle.name ? "..." : toggle.false_locked ? "LOCK" : toggle.enabled ? "ON" : "OFF"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </section>
+            ))}
+          </div>
+          <div className="envMessage">{envMessage}</div>
+        </article>
 
         <div className="g3">
           <article>

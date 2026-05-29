@@ -54,11 +54,11 @@ sources:
   - source_id: "kis_market_data"
     provider_type: "external_market_data"
     provider_name: "kis"
-    enabled: true
-    network_enabled: true
+    enabled: false
+    network_enabled: false
     read_only_capable: true
-    read_only_enabled: true
-    manual_preview_only: false
+    read_only_enabled: false
+    manual_preview_only: true
     requires_api_key: true
     asset_scope:
       - "daily_ohlcv"
@@ -69,10 +69,9 @@ sources:
       - "paper_latest_quote_cache"
     supported_markets:
       - "KR"
-      - "US"
-    market: "US"
-    venue: "NASD"
-    timezone: "America/New_York"
+    market: "KR"
+    venue: "KRX"
+    timezone: "Asia/Seoul"
     zero_volume_policy: "warn"
     unknown_symbol_policy: "reject"
     max_rows: 100
@@ -80,9 +79,9 @@ sources:
     timeout_seconds: 10
     retry_count: 0
     realtime:
-      enabled: true
-      websocket_enabled: true
-      polling_enabled: true
+      enabled: false
+      websocket_enabled: false
+      polling_enabled: false
       stale_quote_threshold_seconds: 30
   - source_id: "krx_index_sector"
     provider_type: "krx_market_reference"

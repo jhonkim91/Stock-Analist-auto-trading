@@ -8,13 +8,15 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.app.models.tables import DailyOhlcv, FundamentalsPti, IndicatorSnapshot, ScreenResult, SymbolMaster
+from backend.app.services.kis_market_quote_service import KisMarketQuoteService
 
 
 class MarketRealtimeService:
     """로컬 OHLCV와 screener 결과로 종목 조회/랭킹 payload를 생성한다."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, *, quote_service: KisMarketQuoteService | None = None) -> None:
         self.db = db
+        self.quote_service = quote_service or KisMarketQuoteService()
 
     def search_symbols(self, *, q: str | None = None, limit: int = 20) -> dict[str, object]:
         """종목명, 심볼, 섹터 기준으로 로컬 종목 master를 검색한다."""
@@ -53,18 +55,26 @@ class MarketRealtimeService:
             raise ValueError("종목을 찾을 수 없습니다.")
         latest_daily = self._latest_daily(normalized)
         previous_daily = self._previous_daily(normalized, latest_daily.trade_date if latest_daily else None)
+        kis_quote = self.quote_service.fetch_quote(normalized)
         latest_indicator = self._latest_indicator(normalized)
         latest_screens = self._latest_screens(normalized)
         fundamentals = self._fundamentals_asof(normalized, latest_daily.trade_date if latest_daily else None)
+        quote = self._quote_with_kis_fallback(kis_quote, latest_daily, previous_daily)
         return {
             "ok": True,
             "symbol": self._symbol_payload(symbol_row),
-            "quote": self._quote_payload(latest_daily, previous_daily),
+            "quote": quote,
             "indicator": self._indicator_payload(latest_indicator),
             "fundamentals": self._fundamentals_payload(fundamentals),
             "screener": [self._screen_payload(row) for row in latest_screens],
-            "source": "local_daily_ohlcv",
-            "network_call_performed": False,
+            "source": quote.get("source") or "local_daily_ohlcv",
+            "quote_provider": {
+                "primary": "kis_paper_quote",
+                "fallback": "local_daily_ohlcv",
+                "status": kis_quote["status"],
+                "reason_codes": kis_quote["reason_codes"],
+            },
+            "network_call_performed": bool(kis_quote.get("network_call_performed")),
             "live_order_created": False,
             "broker_order_created": False,
         }
@@ -353,13 +363,14 @@ class MarketRealtimeService:
     @staticmethod
     def _quote_payload(latest: DailyOhlcv | None, previous: DailyOhlcv | None) -> dict[str, object]:
         if latest is None:
-            return {"available": False}
+            return {"available": False, "source": "local_daily_ohlcv"}
         previous_close = float(previous.close) if previous is not None else None
         change = None if previous_close is None else round(float(latest.close) - previous_close, 4)
         change_pct = None if previous_close in {None, 0.0} else round((float(latest.close) - previous_close) / previous_close, 6)
         return {
             "available": True,
             "trade_date": latest.trade_date,
+            "current_price": latest.close,
             "open": latest.open,
             "high": latest.high,
             "low": latest.low,
@@ -370,7 +381,28 @@ class MarketRealtimeService:
             "volume": latest.volume,
             "turnover_value": latest.turnover_value,
             "venue": latest.venue,
+            "source": "local_daily_ohlcv",
         }
+
+    @classmethod
+    def _quote_with_kis_fallback(
+        cls,
+        kis_quote: dict[str, Any],
+        latest: DailyOhlcv | None,
+        previous: DailyOhlcv | None,
+    ) -> dict[str, object]:
+        if kis_quote.get("ok") and isinstance(kis_quote.get("quote"), dict):
+            quote = dict(kis_quote["quote"])
+            fallback = cls._quote_payload(latest, previous)
+            for key in ("previous_close", "venue"):
+                quote.setdefault(key, fallback.get(key))
+            quote["fallback_used"] = False
+            quote["fallback_reason_codes"] = []
+            return quote
+        quote = cls._quote_payload(latest, previous)
+        quote["fallback_used"] = True
+        quote["fallback_reason_codes"] = list(kis_quote.get("reason_codes") or [])
+        return quote
 
     @staticmethod
     def _indicator_payload(row: IndicatorSnapshot | None) -> dict[str, object] | None:

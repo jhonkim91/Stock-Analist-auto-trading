@@ -94,7 +94,7 @@ def _seed_portfolio_snapshot(db_session) -> None:
     db_session.commit()
 
 
-def test_report_notify_endpoint_logs_disabled_delivery_without_secret_leak(client):
+def test_report_notify_endpoint_logs_dry_run_delivery_without_secret_leak(client):
     report_id = "phase6-disabled-report"
     secret_marker = "PHASE6_SECRET_SHOULD_NOT_LEAK"
     _create_report(
@@ -106,7 +106,7 @@ def test_report_notify_endpoint_logs_disabled_delivery_without_secret_leak(clien
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["status"] == "disabled"
+    assert payload["status"] == "dry_run"
     assert payload["ok"] is True
     assert payload["report_preserved"] is True
     assert payload["secrets_redacted"] is True
@@ -118,8 +118,8 @@ def test_report_notify_endpoint_logs_disabled_delivery_without_secret_leak(clien
     assert len(events) == 1
     assert len(logs) == 1
     assert events[0].event_type == "report_notify"
-    assert events[0].status == "disabled"
-    assert logs[0].status == "disabled"
+    assert events[0].status == "dry_run"
+    assert logs[0].status == "dry_run"
     assert logs[0].attempt_count == 0
     assert secret_marker not in events[0].payload_summary_json
 

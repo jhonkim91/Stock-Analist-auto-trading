@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -158,6 +158,12 @@ class PaperConfigService:
                     "allow_short_sell": bool(risk_gate.get("allow_short_sell", False)),
                     "max_order_qty": int(risk_gate.get("max_order_qty") or 0),
                     "max_order_notional": float(risk_gate.get("max_order_notional") or 0),
+                    "max_open_positions": int(risk_gate.get("max_open_positions") or 0),
+                    "blacklist": self._env_list("PAPER_SYMBOL_BLACKLIST", risk_gate.get("blacklist") or []),
+                    "cooldown_seconds": self._env_int(
+                        "PAPER_ORDER_COOLDOWN_SECONDS",
+                        int(risk_gate.get("cooldown_seconds") or 0),
+                    ),
                     "audit_persistence_enabled": bool(audit.get("persistence_enabled", False)),
                     "audit_sanitize_enabled": bool(audit.get("sanitize_enabled", True)),
                     "simulator_enabled": config_simulator_enabled and runtime_simulator_enabled,
@@ -224,6 +230,9 @@ class PaperConfigService:
             "allow_short_sell": False,
             "max_order_qty": 0,
             "max_order_notional": 0.0,
+            "max_open_positions": 0,
+            "blacklist": [],
+            "cooldown_seconds": 0,
             "audit_persistence_enabled": False,
             "audit_sanitize_enabled": True,
             "simulator_enabled": False,
@@ -264,6 +273,14 @@ class PaperConfigService:
         except ValueError:
             return default
 
+    @staticmethod
+    def _env_list(name: str, default: object) -> list[str]:
+        value = os.getenv(name)
+        raw_items = value.split(",") if value is not None else default
+        if not isinstance(raw_items, list):
+            return []
+        return [str(item).strip().upper() for item in raw_items if str(item).strip()]
+
 
 class PaperRiskGate:
     def __init__(self, db: Session | None = None) -> None:
@@ -302,6 +319,26 @@ class PaperRiskGate:
         max_notional = float(config.get("max_order_notional") or 0)
         if max_notional and limit_price is not None and qty > 0 and qty * limit_price > max_notional:
             reason_codes.append("PAPER_ORDER_NOTIONAL_LIMIT_EXCEEDED")
+        blacklist = {str(item).strip().upper() for item in config.get("blacklist") or []}
+        if normalized_symbol and normalized_symbol.upper() in blacklist:
+            reason_codes.append("PAPER_SYMBOL_BLACKLISTED")
+        cooldown_seconds = int(config.get("cooldown_seconds") or 0)
+        if cooldown_seconds > 0:
+            reason_codes.extend(
+                self._cooldown_reasons(
+                    symbol=normalized_symbol,
+                    side=normalized_side,
+                    cooldown_seconds=cooldown_seconds,
+                )
+            )
+        max_open_positions = int(config.get("max_open_positions") or 0)
+        if max_open_positions > 0 and normalized_side == "buy":
+            reason_codes.extend(
+                self._open_position_reasons(
+                    symbol=normalized_symbol,
+                    max_open_positions=max_open_positions,
+                )
+            )
 
         if normalized_side == "buy" and not bool(config.get("allow_buy_preview")):
             reason_codes.append("PAPER_BUY_PREVIEW_DISABLED")
@@ -312,6 +349,45 @@ class PaperRiskGate:
 
         passed = not reason_codes
         return {"decision": "allow" if passed else "deny", "passed": passed, "reason_codes": reason_codes}
+
+    def _cooldown_reasons(self, *, symbol: str, side: str, cooldown_seconds: int) -> list[str]:
+        if self.db is None or not symbol:
+            return []
+        latest = self.db.scalar(
+            select(PaperOrder)
+            .where(PaperOrder.symbol == symbol, PaperOrder.side == side)
+            .order_by(PaperOrder.created_ts.desc())
+            .limit(1)
+        )
+        if latest is None:
+            return []
+        created_ts = latest.created_ts
+        if created_ts.tzinfo is None:
+            created_ts = created_ts.replace(tzinfo=UTC)
+        elapsed = (datetime.now(UTC) - created_ts).total_seconds()
+        if elapsed < cooldown_seconds:
+            return ["PAPER_ORDER_COOLDOWN_ACTIVE"]
+        return []
+
+    def _open_position_reasons(self, *, symbol: str, max_open_positions: int) -> list[str]:
+        if self.db is None or not symbol:
+            return []
+        held_symbols = {
+            row
+            for row in self.db.scalars(select(PaperPosition.symbol).where(PaperPosition.qty > 0)).all()
+            if row
+        }
+        open_symbols = {
+            row
+            for row in self.db.scalars(
+                select(PaperOrder.symbol).where(PaperOrder.status.in_(["pending_submitted", "submitted", "pending", "open", "partially_filled"]))
+            ).all()
+            if row
+        }
+        active_symbols = held_symbols | open_symbols
+        if symbol not in active_symbols and len(active_symbols) >= max_open_positions:
+            return ["PAPER_MAX_OPEN_POSITIONS_EXCEEDED"]
+        return []
 
     def _sell_position_reasons(self, *, symbol: str, qty: int) -> list[str]:
         if not symbol or qty <= 0:
@@ -444,6 +520,7 @@ class PaperTradingService:
             "audit_persistence_enabled": bool(config.get("audit_persistence_enabled", False)),
             "paper_tables_write_enabled": bool(config.get("configured_can_create", False)) and not blocking,
             "reason": reason_codes[0] if reason_codes else "paper_order_preview_allowed",
+            "reason_codes": reason_codes,
             "symbol": symbol,
             "side": side.strip().lower(),
             "qty": qty,

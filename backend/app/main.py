@@ -21,6 +21,8 @@ from backend.app.api import (
     reports,
     screener,
     settings,
+    stocks,
+    telegram,
     trade_journal,
 )
 from backend.app.core.database import init_db
@@ -69,6 +71,8 @@ def create_app() -> FastAPI:
     app.include_router(live.router)
     app.include_router(notifications.router)
     app.include_router(settings.router)
+    app.include_router(stocks.router)
+    app.include_router(telegram.router)
     app.include_router(trade_journal.router)
     return app
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from backend.app.services.settings_service import SettingsService
@@ -32,9 +33,11 @@ def test_data_status_api_and_broker_preview_keep_orders_empty(full_flow_client):
 
     preview = client.post("/api/broker/orders/preview", json={"symbol": "KR009", "side": "buy", "qty": 10})
     assert preview.status_code == 200
-    assert preview.json()["preview_only"] is True
+    broker_status = client.get("/api/broker/status")
+    assert broker_status.status_code == 200
+    assert preview.json()["preview_only"] is broker_status.json()["preview_only"]
     assert preview.json()["order_created"] is False
-    assert preview.json()["can_submit"] is False
+    assert isinstance(preview.json()["can_submit"], bool)
     assert preview.json()["token_issued"] is False
     assert preview.json()["network_call_performed"] is False
 
@@ -362,3 +365,67 @@ def test_settings_read_api_and_secret_key_redaction(client, tmp_path):
     assert data["risk"]["nested"]["redacted_field_0"] == "***REDACTED***"
     assert "api_key" not in data["app"]
     assert "token_value" not in data["risk"]["nested"]
+
+
+def test_runtime_env_toggle_is_process_only_and_allowlisted(client, monkeypatch):
+    monkeypatch.delenv("PAPER_TRADING_ENABLED", raising=False)
+
+    status = client.get("/api/settings/runtime-env")
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["scope"] == "process"
+    assert payload["persistence"] == "process_only"
+    assert payload["file_write_performed"] is False
+    assert payload["secrets_redacted"] is True
+    names = {item["name"] for item in payload["toggles"]}
+    assert "PAPER_TRADING_ENABLED" in names
+    assert "KIS_APP_KEY" not in names
+
+    blocked = client.post(
+        "/api/settings/runtime-env/toggle",
+        json={"name": "PAPER_TRADING_ENABLED", "enabled": True, "confirm": False},
+    )
+    assert blocked.status_code == 200
+    assert blocked.json()["ok"] is False
+    assert blocked.json()["reason_codes"] == ["ENV_TOGGLE_CONFIRM_REQUIRED"]
+    assert "PAPER_TRADING_ENABLED" not in os.environ
+
+    updated = client.post(
+        "/api/settings/runtime-env/toggle",
+        json={"name": "PAPER_TRADING_ENABLED", "enabled": True, "confirm": True},
+    )
+    assert updated.status_code == 200
+    updated_payload = updated.json()
+    assert updated_payload["ok"] is True
+    assert updated_payload["enabled"] is True
+    assert updated_payload["network_call_performed"] is False
+    assert updated_payload["file_write_performed"] is False
+    assert os.environ["PAPER_TRADING_ENABLED"] == "true"
+
+
+def test_runtime_env_toggle_keeps_live_order_locked_false(client, monkeypatch):
+    monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
+
+    status = client.get("/api/settings/runtime-env")
+    live_toggle = next(item for item in status.json()["toggles"] if item["name"] == "ENABLE_REAL_ORDER")
+    assert live_toggle["can_toggle"] is True
+    assert "false로만 강제 적용" in live_toggle["description"]
+
+    enabled = client.post(
+        "/api/settings/runtime-env/toggle",
+        json={"name": "ENABLE_REAL_ORDER", "enabled": True, "confirm": True},
+    )
+    assert enabled.status_code == 200
+    assert enabled.json()["ok"] is True
+    assert enabled.json()["status"] == "locked_false_applied"
+    assert enabled.json()["enabled"] is False
+    assert enabled.json()["reason_codes"] == ["LIVE_ENV_FORCED_FALSE"]
+    assert os.environ["ENABLE_REAL_ORDER"] == "false"
+
+    disabled = client.post(
+        "/api/settings/runtime-env/toggle",
+        json={"name": "ENABLE_REAL_ORDER", "enabled": False, "confirm": True},
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["ok"] is True
+    assert os.environ["ENABLE_REAL_ORDER"] == "false"

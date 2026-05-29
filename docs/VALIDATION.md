@@ -1,5 +1,34 @@
 # Validation
 
+## 2026-05-29 Project Reset: Telegram + KIS Paper Trading Bot
+
+분석 보조 MVP에서 Telegram + KIS paper trading bot 방향으로 전환하면서 신규 skeleton과 paper 안전장치 회귀를 검증했다. 실제 KIS live 주문, 실계좌 호출, secret 출력은 수행하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 신규 reset 테스트 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_tests` -> `4 passed` |
+| 관련 회귀 테스트 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_phase1_read_report_api.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_related_tests` -> `18 passed` |
+| Frontend API contract | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_frontend_contract_only` -> `2 passed` |
+| Phase 2 API 단독 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_phase2_only` -> `10 passed` |
+| reset + Phase 2 결합 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_phase2_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_combo_after_reboot` -> `14 passed` |
+| stale contract patch 대상 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_balance.py::test_paper_portfolio_default_paper_mode_uses_local_snapshot_without_credentials backend/tests/test_market_session_service.py::test_preview_responses_include_session_metadata_and_keep_live_submit_disabled backend/tests/test_notification_api.py::test_notification_status_endpoint_redacts_env_values backend/tests/test_notification_api.py::test_notification_test_endpoint_supports_disabled_dry_run backend/tests/test_paper_portfolio_api.py::test_paper_sync_endpoint_is_fail_closed_idempotent_and_no_network backend/tests/test_paper_sync.py::test_paper_sync_is_idempotent_disabled_noop_and_does_not_touch_synthetic_positions backend/tests/test_report_notify.py::test_report_notify_endpoint_logs_dry_run_delivery_without_secret_leak -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_stale_contracts` -> `7 passed` |
+| bot 기본 OFF 회귀 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_default_off` -> `5 passed` |
+| Settings runtime env buttons | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_buttons` -> `4 passed` |
+| 전체 backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_full_backend` -> `510 passed in 380.94s` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Frontend lint | 통과 | `cd frontend; npm.cmd run lint` -> exit 0 |
+| Frontend typecheck | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit` -> exit 0 |
+| Frontend build | 통과 | `cd frontend; npm.cmd run build` -> 최초 실행은 stale server가 잡은 `.next\launcher-backend.err.log` lock으로 실패, project uvicorn/Next 프로세스 종료 후 재실행 성공. Next.js build 성공, 14 static pages 생성 |
+| Diff whitespace check | 통과 | `git diff --check` -> exit 0, CRLF warning만 출력 |
+| 후속 shell 재시도 | 통과 | `Get-Location`, `whoami`, `Get-Date`, `py launcher.py check` 실행 성공. `CreateProcessAsUserW failed: 1312` 재현 안 됨 |
+| Node REPL 재시도 | 통과 | `node_repl` MCP에서 `nodeRepl.write(...)` 실행 성공. `windows sandbox failed: spawn setup refresh` 재현 안 됨 |
+| Token cache | 통과 | fake HTTP client로 token issue/cache write/cache-hit 확인. 응답에는 raw token/refresh token 미노출 |
+| Telegram command | 통과 | `/api/telegram/status`, `/api/telegram/command`, `/search`, `/buy` preview parsing 확인 |
+| Stock detail fallback | 통과 | `KIS_MARKET_QUOTE_ENABLED=false`에서 `/api/stocks/KR009`가 DB 최신 OHLCV fallback을 사용하고 network call 없음 |
+| Paper order guard | 통과 | paper preview/create, kill switch, blacklist, cooldown gate 확인. legacy `orders` table 미사용 |
+
+결론: Windows sandbox 프로세스 생성 장애는 재부팅 후 재현되지 않았고, 새 방향의 skeleton/guard와 전체 backend 회귀 테스트가 통과했다. 남은 작업은 실제 운영 runner/scheduler와 KIS paper sync worker 연결이다.
+
 ## 2026-05-29 Live Phase 3 Process Gate Dry-run
 
 사용자가 `.env.local`에 `KIS_REFRESH_TOKEN`을 추가한 뒤, 실제 KIS network call이나 live order/cancel 없이 process-only gate를 임시 주입해 3단계 선행 조건을 재확인했다.
