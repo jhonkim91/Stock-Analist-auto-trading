@@ -26,4 +26,5 @@ def preview_order(payload: BrokerPreviewRequest, db: Session = Depends(get_db)) 
         strategy_tag=payload.strategy_tag,
         venue=payload.venue,
         as_of=payload.as_of,
+        idempotency_key=payload.idempotency_key,
     )

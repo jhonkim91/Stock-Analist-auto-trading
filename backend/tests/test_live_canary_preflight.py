@@ -25,6 +25,8 @@ def test_live_canary_preflight_is_blocked_and_redacted_by_default() -> None:
     assert "12345678" not in serialized
     assert "LIVE_SUBMIT_NOT_IMPLEMENTED" in record["blockers"]
     assert "KIS_LIVE_ORDER_ROUTE_ABSENT" in record["blockers"]
+    assert "LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT" in record["blockers"]
+    assert record["safety_controls"]["all_required_controls_passed"] is False
 
 
 def test_live_canary_preflight_still_blocks_with_operator_gates_set() -> None:
@@ -35,6 +37,18 @@ def test_live_canary_preflight_still_blocks_with_operator_gates_set() -> None:
         "LIVE_CANARY_ROLLBACK_READY": "true",
         "LIVE_CANARY_KILL_SWITCH_READY": "true",
         "LIVE_CANARY_MINIMUM_SIZE_CONFIRMED": "true",
+        "LIVE_EMERGENCY_STOP_ARMED": "true",
+        "LIVE_RATE_LIMIT_PER_SECOND": "2",
+        "LIVE_RATE_LIMIT_BURST": "5",
+        "LIVE_IDEMPOTENCY_REQUIRED": "true",
+        "LIVE_AUDIT_LOG_ENABLED": "true",
+        "LIVE_AUDIT_REDACTION_ENABLED": "true",
+        "LIVE_MAX_ORDER_NOTIONAL": "100000",
+        "LIVE_BLACKLIST_ENABLED": "true",
+        "LIVE_SYMBOL_BLACKLIST": "LEVERAGED,INVERSE",
+        "LIVE_ORDER_COOLDOWN_SECONDS": "30",
+        "LIVE_TOKEN_REFRESH_ENABLED": "true",
+        "LIVE_TOKEN_REFRESH_PROCESS_ONLY": "true",
     }
 
     record = live_canary_preflight.build_live_canary_preflight(env)
@@ -44,6 +58,8 @@ def test_live_canary_preflight_still_blocks_with_operator_gates_set() -> None:
     assert record["live_adapter_status"]["enabled"] is False
     assert record["public_route_checks"]["kis_order_route_present"] is False
     assert "KIS_LIVE_BROKER_DISABLED_PLACEHOLDER" in record["blockers"]
+    assert record["safety_controls"]["required_controls"]["rate_limiter"]["passed"] is True
+    assert record["safety_controls"]["required_controls"]["token_refresh"]["passed"] is False
 
 
 def test_live_canary_preflight_blocks_accidental_live_enablement() -> None:

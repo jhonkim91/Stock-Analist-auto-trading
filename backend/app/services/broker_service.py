@@ -15,6 +15,7 @@ from backend.app.core.paths import CONFIG_DIR
 from backend.app.models.tables import Position
 from backend.app.services.kis_live_broker_adapter import KisLiveBrokerAdapter
 from backend.app.services.kis_paper_broker_adapter import KisPaperBrokerAdapter
+from backend.app.services.live_order_safety_service import LiveOrderSafetyService
 from backend.app.services.market_data_import_service import DataSourceService
 from backend.app.services.market_session_service import MarketSessionService
 from backend.app.services.token_manager import TokenLifecycleService
@@ -247,6 +248,7 @@ class BrokerService:
         self.market_session_service = market_session_service or MarketSessionService()
         self.paper_adapter = KisPaperBrokerAdapter()
         self.live_adapter = KisLiveBrokerAdapter()
+        self.live_safety_service = LiveOrderSafetyService()
 
     def status(self) -> dict[str, object]:
         """Phase 3D broker safety scaffold 상태를 secret 없이 반환한다."""
@@ -290,6 +292,7 @@ class BrokerService:
                 "reason_codes": reason_codes,
             },
             "token_lifecycle": token_status,
+            "live_order_safety": self.live_safety_service.preflight(),
             "adapters": {
                 "kis_paper": paper_adapter_status,
                 "kis_live": live_adapter_status,
@@ -306,6 +309,7 @@ class BrokerService:
         strategy_tag: str | None = None,
         venue: str | None = None,
         as_of: datetime | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         """실제 주문 없이 broker safety scaffold용 dry-run preview만 생성한다."""
         config, config_reasons = self.config_service.load()
@@ -358,6 +362,13 @@ class BrokerService:
             "limit_price": limit_price,
             "stop_price": stop_price,
             "strategy_tag": strategy_tag,
+            "live_order_safety": self.live_safety_service.evaluate_order_request(
+                symbol=symbol,
+                side=side,
+                qty=qty,
+                limit_price=limit_price,
+                idempotency_key=idempotency_key,
+            ),
             "risk_gate": risk_gate,
             "kill_switch": {
                 "blocking": bool(config.get("kill_switch_enabled", True)),

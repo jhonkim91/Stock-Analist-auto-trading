@@ -46,13 +46,39 @@ def test_broker_service_reports_disabled_live_adapter_without_secrets(monkeypatc
     payload = BrokerService().status()
     live = payload["adapters"]["kis_live"]
     paper = payload["adapters"]["kis_paper"]
+    safety = payload["live_order_safety"]
 
     assert live["enabled"] is False
     assert live["live_trading_enabled"] is False
     assert live["adapter_boundary"] == "live_disabled_placeholder"
     assert paper["adapter_boundary"] == "paper_only_service"
     assert paper["live_fallback_enabled"] is False
+    assert safety["all_required_controls_passed"] is False
+    assert "LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT" in safety["blockers"]
+    assert safety["live_order_created"] is False
     assert sentinel not in json.dumps(payload, ensure_ascii=False)
+
+
+def test_broker_preview_includes_order_specific_live_safety_without_live_route(monkeypatch):
+    monkeypatch.setenv("LIVE_MAX_ORDER_NOTIONAL", "100")
+    monkeypatch.setenv("LIVE_SYMBOL_BLACKLIST", "KR009")
+
+    payload = BrokerService().preview_order(
+        symbol="KR009",
+        side="buy",
+        qty=2,
+        limit_price=80.0,
+        idempotency_key=None,
+    )
+    safety = payload["live_order_safety"]
+
+    assert payload["order_created"] is False
+    assert payload["network_call_performed"] is False
+    assert safety["decision"] == "deny"
+    assert safety["live_order_created"] is False
+    assert "LIVE_ORDER_IDEMPOTENCY_KEY_REQUIRED" in safety["request_blockers"]
+    assert "LIVE_ORDER_SYMBOL_BLACKLISTED" in safety["request_blockers"]
+    assert "LIVE_ORDER_NOTIONAL_EXCEEDS_LIMIT" in safety["request_blockers"]
 
 
 def test_live_execution_routes_remain_unregistered():

@@ -31,11 +31,13 @@
 ## 최근 변경 요약
 
 - Goal Read/Report Phase 1 완료 후 커밋 `ff1408d`로 `origin/feature/kis-paper-goal-phases`에 푸시했다.
-- 모의투자 주문 엔진 2단계 완료: local paper cancel, `GET /api/paper/orders/open`, `POST /api/paper/fill-simulator/run`, `POST /api/paper/risk/exit-check`를 추가했다.
+- 모의투자 주문 엔진 2단계 완료 후 커밋 `5d33512`로 `origin/feature/kis-paper-goal-phases`에 푸시했다.
+- 2단계 구현 범위: local paper cancel, `GET /api/paper/orders/open`, `POST /api/paper/fill-simulator/run`, `POST /api/paper/risk/exit-check`를 추가했다.
 - `PaperFillSimulatorService`가 confirm/idempotency/simulator/no-live gate 통과 시 `paper_fills` 생성, `paper_positions` 갱신, stop-loss/trailing-stop local exit fill을 처리한다.
 - `PaperOrderService.cancel_order`는 broker order가 아닌 local paper order를 network call 없이 `cancelled`로 전환하고, broker order cancel은 기존 KIS paper network gate를 유지한다.
 - `PaperTradingService.sync()`가 test/runtime patch config_dir를 `PaperSyncService`에 전달하도록 수정했다.
 - `README.md`, `docs/VALIDATION.md`, `goal.md`, `Memory.md`를 2단계 모의투자 주문 엔진 상태로 갱신했다.
+- 실계좌 주문 연동 3단계는 `LiveOrderSafetyService`, `/api/broker/status.live_order_safety`, `/api/broker/orders/preview.live_order_safety`, `tools/live_canary_preflight.py`에 kill switch/rate limiter/idempotency/audit/max notional/blacklist/cooldown/token refresh preflight를 추가했지만 아직 완료가 아니다.
 
 ## 최신 검증 결과
 
@@ -44,10 +46,14 @@
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase2_safety_tests` -> `11 passed`.
 - [x] `cd frontend; npm.cmd run lint` -> 통과.
 - [x] `cd frontend; npm.cmd run build`; `npm.cmd exec tsc -- --noEmit` -> 통과.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_commit_safety` -> `23 passed`.
+- [x] `.\.venv\Scripts\python.exe tools\live_canary_preflight.py` -> `status=blocked`, `canary_execution_allowed=false`, `live_order_created=false`, `network_call_performed=false`.
+- [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only.
 - [x] pytest 병렬 실행은 `backend/data/test_app.db` 잠금으로 실패할 수 있어 순차 실행과 workspace-external basetemp를 사용한다.
 
 ## 남은 작업
 
-- [ ] 2단계 커밋/푸시는 secret scan, diff check, scoped staging 확인 후 진행한다.
-- [ ] 3단계 실계좌 주문 연동은 kill switch, rate limiter, idempotency, audit log, max notional, blacklist, cooldown, token refresh proof가 모두 구현/검증되기 전까지 완료로 보지 않는다.
+- [x] 2단계 커밋/푸시는 `5d33512`로 완료했다.
+- [ ] 3단계 안전 preflight 체크포인트는 커밋/푸시 가능하지만 단계 완료 커밋은 아래 미충족 항목 해소 전까지 보류한다.
+- [ ] 3단계 실계좌 주문 연동은 live token refresh network implementation, live adapter submit/cancel, live public route, reviewer/env isolation/rollback proof가 구현/검증되기 전까지 완료로 보지 않는다.
 - [ ] 3단계 live 주문 실행/취소는 별도 live canary 조건과 사용자 승인, 정규장/소액/단일 주문/즉시 중단 절차 없이는 수행하지 않는다.

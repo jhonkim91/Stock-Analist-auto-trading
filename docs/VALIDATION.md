@@ -1,5 +1,28 @@
 # Validation
 
+## 2026-05-29 Live Order Safety Preflight Progress
+
+실계좌 주문 연동 3단계의 필수 선행 안전장치를 `LiveOrderSafetyService`와 `tools/live_canary_preflight.py`에 fail-closed preflight로 추가했다. 이 변경은 live 주문 route, live adapter submit/cancel, live network call을 열지 않으며 현재 3단계 완료 조건은 계속 미충족이다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Kill Switch | preflight 추가 | `LIVE_CANARY_KILL_SWITCH_READY` 또는 `LIVE_KILL_SWITCH_READY`, `LIVE_EMERGENCY_STOP_ARMED` 없으면 차단 |
+| RateLimiter | preflight 추가 | `LIVE_RATE_LIMIT_PER_SECOND`, `LIVE_RATE_LIMIT_BURST`가 없거나 과도하면 차단 |
+| Idempotency Key | preflight 추가 | `LIVE_IDEMPOTENCY_REQUIRED=true` 없으면 차단 |
+| Audit Log | preflight 추가 | `LIVE_AUDIT_LOG_ENABLED=true`, `LIVE_AUDIT_REDACTION_ENABLED=true` 없으면 차단 |
+| Max Order Notional | preflight 추가 | `LIVE_MAX_ORDER_NOTIONAL` 미설정 또는 canary cap 초과 시 차단 |
+| Blacklist | preflight 추가 | `LIVE_BLACKLIST_ENABLED=true`, `LIVE_SYMBOL_BLACKLIST` 미설정 시 차단 |
+| Cooldown | preflight 추가 | `LIVE_ORDER_COOLDOWN_SECONDS` 미설정 또는 0 이하 시 차단 |
+| Token Refresh | 차단 유지 | process-only gate는 검사하지만 live token refresh network implementation이 없어 `LIVE_TOKEN_REFRESH_NETWORK_IMPLEMENTATION_ABSENT`로 차단 |
+| Broker status visibility | 완료 | 기존 `GET /api/broker/status` payload에 `live_order_safety`를 추가. 새 live 주문 route는 만들지 않음 |
+| Order-specific safety | 완료 | 기존 `POST /api/broker/orders/preview` payload가 optional `idempotency_key`를 받고, 후보 주문의 blacklist/notional/cooldown/idempotency blocker를 `live_order_safety`로 반환 |
+| Live adapter/route | 차단 유지 | `KisLiveBrokerAdapter`는 disabled scaffold, `/api/live*`, `/api/kis/orders*` route 부재 |
+| Targeted tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_commit_safety` -> `23 passed` |
+| Preflight CLI | blocked | `.\.venv\Scripts\python.exe tools\live_canary_preflight.py` -> `status=blocked`, `canary_execution_allowed=false`, `live_order_created=false`, `network_call_performed=false` |
+| Secret/diff check | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only |
+
+결론: 3단계는 아직 완료가 아니다. 다음 진입 조건은 live token refresh 구현 방식, live adapter/route 구현 승인, reviewer/env isolation/rollback proof, 실제 실행 전 canary confirmation이다.
+
 ## 2026-05-29 Paper Order Engine Phase 2
 
 모의투자 주문 엔진 2단계를 local paper-only 범위로 보강했다. 신규 mutation은 `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events`에 한정되며 legacy `orders` table, live broker, KIS live route, raw secret 저장은 사용하지 않는다.

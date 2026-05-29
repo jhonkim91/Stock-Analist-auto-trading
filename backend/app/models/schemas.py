@@ -118,6 +118,7 @@ class BrokerPreviewRequest(BaseModel):
     strategy_tag: str | None = None
     venue: str | None = None
     as_of: datetime | None = None
+    idempotency_key: str | None = None
 
 
 class PaperOrderPreviewRequest(BaseModel):

@@ -29,6 +29,25 @@
 | 롤백 | kill switch, scheduler stop, notifier-only mode |
 | 검증 | no-live regression, secret scan, paper soak 결과 |
 
+## 3단계 선행 안전장치 Preflight
+
+`LiveOrderSafetyService`는 아래 항목을 네트워크 호출 없이 검사한다. 하나라도 미충족이면 `tools/live_canary_preflight.py`는 `status=blocked`를 유지한다.
+
+| 안전장치 | Preflight 입력 |
+|---|---|
+| Kill Switch | `LIVE_CANARY_KILL_SWITCH_READY` 또는 `LIVE_KILL_SWITCH_READY`, `LIVE_EMERGENCY_STOP_ARMED` |
+| RateLimiter | `LIVE_RATE_LIMIT_PER_SECOND`, `LIVE_RATE_LIMIT_BURST` |
+| Idempotency Key | `LIVE_IDEMPOTENCY_REQUIRED=true` |
+| Audit Log | `LIVE_AUDIT_LOG_ENABLED=true`, `LIVE_AUDIT_REDACTION_ENABLED=true` |
+| Max Order Notional | `LIVE_MAX_ORDER_NOTIONAL` |
+| Blacklist | `LIVE_BLACKLIST_ENABLED=true`, `LIVE_SYMBOL_BLACKLIST` |
+| Cooldown | `LIVE_ORDER_COOLDOWN_SECONDS` |
+| Token Refresh | `LIVE_TOKEN_REFRESH_ENABLED=true`, `LIVE_TOKEN_REFRESH_PROCESS_ONLY=true`, live token refresh implementation proof |
+
+현재 live token refresh network implementation, live submit/cancel adapter, live public route가 없으므로 3단계 완료 조건은 충족되지 않는다.
+
+기존 `POST /api/broker/orders/preview`는 새 live route 없이 주문 후보별 안전장치 판정만 반환한다. optional `idempotency_key`를 받아 후보 주문의 blacklist, max notional, cooldown, idempotency blocker를 `live_order_safety`에 포함하며, `order_created=false`, `network_call_performed=false`를 유지한다.
+
 ## Phase 19 허용 범위
 
 Phase 19는 disabled live adapter scaffold와 no-live regression만 허용한다. live endpoint URL, live order mapper, live route, live network call은 넣지 않는다.

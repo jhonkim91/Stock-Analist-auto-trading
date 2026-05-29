@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.main import app
+from backend.app.services.live_order_safety_service import LiveOrderSafetyService
 from backend.app.services.kis_live_broker_adapter import LIVE_DISABLED_REASON, KisLiveBrokerAdapter
 
 CONFIRMATION_TOKEN = "CONFIRM_LIVE_CANARY_PHASE20"
@@ -39,6 +40,7 @@ def build_live_canary_preflight(env: Mapping[str, str] | None = None) -> dict[st
     current_env = os.environ if env is None else env
     route_paths = sorted(getattr(route, "path", "") for route in app.routes)
     live_adapter_status = KisLiveBrokerAdapter().status()
+    safety_preflight = LiveOrderSafetyService(current_env).preflight()
     operator_gates = {
         "confirmation": current_env.get(REQUIRED_CONFIRMATION_ENV, "") == CONFIRMATION_TOKEN,
         "reviewer_present": bool(current_env.get(REQUIRED_REVIEWER_ENV, "").strip()),
@@ -55,6 +57,7 @@ def build_live_canary_preflight(env: Mapping[str, str] | None = None) -> dict[st
         "kis_websocket_route_present": any(path.startswith("/api/kis/websocket") for path in route_paths),
     }
     blockers = [f"{key.upper()}_REQUIRED" for key, passed in operator_gates.items() if not passed]
+    blockers.extend(safety_preflight["blockers"])
     if not bool(live_adapter_status.get("enabled")):
         blockers.append(LIVE_DISABLED_REASON)
     if not bool(live_adapter_status.get("network_enabled")):
@@ -85,6 +88,7 @@ def build_live_canary_preflight(env: Mapping[str, str] | None = None) -> dict[st
         "account_redacted": True,
         "generated_at": datetime.now(UTC).isoformat(),
         "operator_gates": operator_gates,
+        "safety_controls": safety_preflight,
         "public_route_checks": public_route_checks,
         "live_adapter_status": {
             "name": live_adapter_status.get("name"),
