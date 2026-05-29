@@ -9,9 +9,11 @@
 | Refresh token visibility | 확인 | `tools/kis_live_token_refresh_preflight.py --load-env-local` 기준 `refresh_token_configured=true`. raw 값과 secret-like key name은 출력하지 않음 |
 | Token refresh gate dry-run | 통과 | process-only gate 주입 후 `can_refresh=true`, `reason_codes=[]`, `execute_requested=false`, `network_call_performed=false`, `live_order_created=false` |
 | Safety/control gate dry-run | 통과 | process-only gate 주입 후 kill switch, rate limiter, idempotency, audit log, max notional, blacklist, cooldown, token refresh control이 모두 `true` |
+| Proof gap summary | 추가 | `proof_gap_summary`가 `token_refresh_real_call_proof_required=true`, `live_submit_authority_required=true`, `live_cancel_authority_required=true`, `safety_controls_blocked=false`, `live_adapter_disabled=true`를 redacted payload로 기록 |
 | Completion audit | 미완료 | `missing_requirements=["token_refresh_real_call_proof","live_submit_authority_present","live_cancel_authority_present"]` |
 | Redacted records | 기록 | `docs/research/kis-live-token-refresh-process-gate-dry-run.json`, `docs/research/live-phase3-process-gate-dry-run.json` |
 | Execution boundary | 유지 | token refresh는 preview-only로 실행했고 live submit/cancel adapter는 `KIS_LIVE_BROKER_DISABLED_PLACEHOLDER`로 계속 차단. 실제 network call/order/cancel 없음 |
+| Targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_phase3_completion_audit.py backend/tests/test_live_canary_preflight.py backend/tests/test_kis_live_token_refresh_preflight_tool.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_phase3_proof_gap` -> `14 passed` |
 
 결론: `.env.local` 기준 refresh token은 확인됐고, process-only 안전장치 dry-run은 통과했다. 3단계 완료에는 여전히 별도 승인된 live token refresh real-call proof와 live submit/cancel authority 구현/검증이 필요하다.
 

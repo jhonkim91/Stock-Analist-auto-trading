@@ -4,7 +4,7 @@
 
 - [x] 현재 branch: `feature/kis-paper-goal-phases`.
 - [x] 기본 실행 주소: backend `http://127.0.0.1:8000`, frontend `http://127.0.0.1:3000/dashboard`.
-- [x] 최근 런타임 확인 기준 backend 8000은 `.env.local`을 process-only로 로드한 uvicorn 프로세스에서 실행 중이다.
+- [x] backend 8000은 `.env.local`을 process-only로 로드한 uvicorn 프로세스지만, 최신 `KIS_REFRESH_TOKEN` 추가 전 시작돼 `/api/live/status`에는 refresh token blocker가 남아 있다.
 - [x] `python --version`은 이 환경에서 불안정할 수 있으므로 검증은 `.\.venv\Scripts\python.exe`를 우선 사용한다.
 - [x] `alembic` 실행 파일은 PATH에 없으므로 `.\.venv\Scripts\python.exe -m alembic ...`를 사용한다.
 
@@ -47,14 +47,17 @@
 - `/api/kis/broker/*`, `/api/kis/websocket/*`는 계속 미등록 404다.
 - `tools/live_phase3_completion_audit.py`는 3단계 완료 조건과 live env Process/User/Machine 설정 여부를 항목별로 판정한다. 현재 record는 `complete=false`, `network_call_performed_by_audit=false`, `live_order_created=false`이며 required live env, token refresh proof, live submit/cancel authority가 미충족이다. `docs/research/live-phase3-process-env-template.ps1`는 placeholder-only process env 템플릿이다.
 - `tools/env_file_loader.py`와 `--load-env-local` 옵션을 live token preflight/completion audit에 추가했다. `.env.local`을 수정하지 않고 현재 helper process에만 allowlist key를 로드하며 raw value와 secret-like key name은 record에서 redaction한다.
-- 최신 재확인 기준 `KIS_REFRESH_TOKEN`은 `.env.local`에서 감지된다. process-only gate dry-run에서는 token refresh control과 kill switch/rate limiter/idempotency/audit/max notional/blacklist/cooldown이 통과했지만, 실제 network call은 실행하지 않았고 live submit/cancel adapter는 계속 disabled다.
+- 최신 재확인 기준 `KIS_REFRESH_TOKEN`은 `.env.local`과 Windows User env에서 감지된다. helper/process-only 검증에서는 `refresh_token_configured=true`지만, 기존 backend 8000은 재시작 전까지 새 User env를 상속하지 않는다.
+- process-only gate dry-run에서는 token refresh control과 kill switch/rate limiter/idempotency/audit/max notional/blacklist/cooldown이 통과했지만, 실제 network call은 실행하지 않았고 live submit/cancel adapter는 계속 disabled다.
 - `.env.local`의 `KIS_ACCESS_TOKEN`은 `2026-05-28T12:15:08+00:00` 기준 만료 상태다. 현재 3단계 미충족 항목은 `token_refresh_real_call_proof`, `live_submit_authority_present`, `live_cancel_authority_present`다.
+- `tools/live_phase3_completion_audit.py`는 `proof_gap_summary`로 token refresh real-call proof, live submit authority, live cancel authority, adapter disabled 여부를 분리해 기록한다.
 
 ## 최신 검증 결과
 
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_diagnostics.py backend/tests/test_env_file_loader.py backend/tests/test_kis_live_token_refresh_preflight_tool.py backend/tests/test_live_phase3_completion_audit.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_token_expiry_tests` -> `16 passed`.
 - [x] process-only gate dry-run으로 `tools\kis_live_token_refresh_preflight.py --load-env-local --write-record --record-path docs\research\kis-live-token-refresh-process-gate-dry-run.json` 실행 -> `can_refresh=true`, `refresh_token_configured=true`, `execute_requested=false`, `network_call_performed=false`, `live_order_created=false`.
-- [x] process-only gate dry-run으로 `tools\live_phase3_completion_audit.py --load-env-local --write-record --record-path docs\research\live-phase3-process-gate-dry-run.json` 실행 -> safety/control gate 통과, `complete=false`, 미충족 `token_refresh_real_call_proof`, `live_submit_authority_present`, `live_cancel_authority_present`.
+- [x] process-only gate dry-run으로 `tools\live_phase3_completion_audit.py --load-env-local --write-record --record-path docs\research\live-phase3-process-gate-dry-run.json` 실행 -> safety/control gate 통과, `proof_gap_summary.safety_controls_blocked=false`, `complete=false`, 미충족 `token_refresh_real_call_proof`, `live_submit_authority_present`, `live_cancel_authority_present`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_phase3_completion_audit.py backend/tests/test_live_canary_preflight.py backend/tests/test_kis_live_token_refresh_preflight_tool.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_phase3_proof_gap` -> `14 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_route_canary_contracts` -> `30 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f_readonly_provider_contract.py::test_read_only_provider_contract_does_not_mutate_execution_tables_or_routes -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_public_route_phase3f_route` -> `1 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_phase3_completion_audit.py backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_phase3_completion_audit` -> `20 passed`.

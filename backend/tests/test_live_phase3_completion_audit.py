@@ -21,6 +21,9 @@ def test_live_phase3_completion_audit_is_incomplete_and_redacted_by_default() ->
     assert record["live_order_created"] is False
     assert record["network_call_performed_by_audit"] is False
     assert record["secrets_redacted"] is True
+    assert record["proof_gap_summary"]["token_refresh_real_call_proof_required"] is True
+    assert record["proof_gap_summary"]["live_submit_authority_required"] is True
+    assert record["proof_gap_summary"]["network_call_performed_by_audit"] is False
     assert "token_refresh_real_call_proof" in record["missing_requirements"]
     assert "live_submit_authority_present" in record["missing_requirements"]
     assert record["env_scope_status"]["KIS_REFRESH_TOKEN"]["process_configured"] is False
@@ -83,6 +86,10 @@ def test_live_phase3_completion_audit_keeps_submit_authority_missing_even_with_o
 
     assert record["requirements"]["token_refresh_real_call_proof"] is True
     assert record["requirements"]["kill_switch_ready"] is True
+    assert record["proof_gap_summary"]["token_refresh_real_call_proof_required"] is False
+    assert record["proof_gap_summary"]["safety_controls_blocked"] is False
+    assert record["proof_gap_summary"]["live_adapter_disabled"] is True
+    assert record["proof_gap_summary"]["separate_live_order_authority_required"] is True
     assert record["env_scope_status"]["KIS_REFRESH_TOKEN"]["process_configured"] is True
     assert "KIS_REFRESH_TOKEN" not in record["missing_process_env_names"]
     assert record["complete"] is False
@@ -141,7 +148,8 @@ def test_live_phase3_completion_audit_can_use_env_file_loader_without_raw_secret
     assert "VALUE_C" not in serialized
 
 
-def test_live_phase3_completion_audit_identifies_access_token_without_refresh_token(tmp_path) -> None:
+def test_live_phase3_completion_audit_identifies_access_token_without_refresh_token(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(live_phase3_completion_audit, "_registry_env_configured", lambda *args, **kwargs: False)
     env_file = tmp_path / ".env.local"
     access_token = _fake_jwt({"exp": 1_700_000_000})
     env_file.write_text("KIS_ACCESS_" + f"TOKEN={access_token}\n", encoding="utf-8")

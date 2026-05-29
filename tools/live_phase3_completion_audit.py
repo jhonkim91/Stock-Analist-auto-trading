@@ -138,6 +138,13 @@ def build_completion_audit(
         "requirements": requirements,
         "missing_requirements": missing_requirements,
         "blocker_sources": blocker_sources,
+        "proof_gap_summary": _proof_gap_summary(
+            requirements=requirements,
+            blocker_sources=blocker_sources,
+            token_record=token_record,
+            live_adapter_status=live_adapter_status,
+            canary=canary,
+        ),
         "canary_status": canary.get("status"),
         "canary_execution_allowed": bool(canary.get("canary_execution_allowed")),
         "env_scope_status": env_scope_status,
@@ -292,6 +299,40 @@ def _token_refresh_proof_passed(record: Mapping[str, Any]) -> bool:
         and bool(record.get("secrets_redacted"))
         and not bool(record.get("live_order_created"))
     )
+
+
+def _proof_gap_summary(
+    *,
+    requirements: Mapping[str, bool],
+    blocker_sources: Mapping[str, list[str]],
+    token_record: Mapping[str, Any],
+    live_adapter_status: Mapping[str, Any],
+    canary: Mapping[str, Any],
+) -> dict[str, Any]:
+    """3단계 완료를 막는 proof gap을 secret 없이 요약한다."""
+    canary_blockers = set(blocker_sources.get("canary_blockers") or [])
+    safety_blockers = set(blocker_sources.get("safety_blockers") or [])
+    token_refresh_blockers = set(blocker_sources.get("token_refresh_blockers") or [])
+    return {
+        "token_refresh_real_call_proof_required": not bool(requirements.get("token_refresh_real_call_proof")),
+        "token_refresh_network_call_performed": bool(token_record.get("network_call_performed")),
+        "token_refresh_blockers_present": bool(token_refresh_blockers),
+        "safety_controls_blocked": bool(safety_blockers),
+        "live_submit_authority_required": not bool(requirements.get("live_submit_authority_present")),
+        "live_cancel_authority_required": not bool(requirements.get("live_cancel_authority_present")),
+        "live_adapter_disabled": "KIS_LIVE_BROKER_DISABLED_PLACEHOLDER" in canary_blockers
+        or not bool(live_adapter_status.get("enabled")),
+        "live_adapter_network_enabled": bool(live_adapter_status.get("network_enabled")),
+        "canary_execution_allowed": bool(canary.get("canary_execution_allowed")),
+        "network_call_required_to_close_token_refresh_proof": not bool(
+            requirements.get("token_refresh_real_call_proof")
+        ),
+        "separate_live_order_authority_required": not bool(requirements.get("live_submit_authority_present"))
+        or not bool(requirements.get("live_cancel_authority_present")),
+        "network_call_performed_by_audit": False,
+        "live_order_created": False,
+        "secrets_redacted": True,
+    }
 
 
 def _env_scope_status(names: tuple[str, ...], env: Mapping[str, str]) -> dict[str, dict[str, bool | str]]:
