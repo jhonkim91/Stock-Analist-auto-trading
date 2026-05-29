@@ -24,6 +24,16 @@ Phase 20은 실전 주문 기능 구현이 아니라 별도 승인형 canary 절
 | public route | live route는 Phase 20 실제 승인 전까지 없음 | 없음 |
 | secret | env-level secret, 원문 출력 금지 | 원문 미노출 유지 |
 
+## Rollback 절차
+
+아래 절차가 실행 직전 검토되지 않으면 `LIVE_CANARY_ROLLBACK_READY=true`를 설정하지 않는다.
+
+1. `LIVE_CANARY_KILL_SWITCH_READY=true` 상태를 확인하고, 이상 징후 발생 시 kill switch를 먼저 켠다.
+2. scheduler, bot loop, report automation, notification dispatch를 신규 실행하지 않는 notifier-only 상태로 전환한다.
+3. live/public route가 열린 배포라면 해당 route를 즉시 disabled/fail-closed 설정으로 되돌린다.
+4. canary 주문 또는 취소 후보의 redacted audit event, correlation id, reviewer, rollback 수행자를 기록한다.
+5. secret 원문, 계좌번호 원문, raw token을 문서나 로그에 남기지 않는다.
+
 ## 실행 금지 조건
 
 - `tools/live_canary_preflight.py`가 `status=ready`가 아닌 경우

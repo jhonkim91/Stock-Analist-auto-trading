@@ -13,17 +13,20 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.main import app
+from backend.app.services.live_canary_governance_service import (
+    CONFIRMATION_TOKEN,
+    REQUIRED_CONFIRMATION_ENV,
+    REQUIRED_ENVIRONMENT_ENV,
+    REQUIRED_KILL_SWITCH_ENV,
+    REQUIRED_MINIMUM_SIZE_ENV,
+    REQUIRED_REVIEWER_ENV,
+    REQUIRED_ROLLBACK_ENV,
+    LiveCanaryGovernanceService,
+)
 from backend.app.services.live_order_safety_service import LiveOrderSafetyService
 from backend.app.services.kis_live_broker_adapter import LIVE_DISABLED_REASON, KisLiveBrokerAdapter
 
-CONFIRMATION_TOKEN = "CONFIRM_LIVE_CANARY_PHASE20"
 DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-canary-phase20-preflight-record.json"
-REQUIRED_CONFIRMATION_ENV = "LIVE_CANARY_CONFIRMATION"
-REQUIRED_REVIEWER_ENV = "LIVE_CANARY_REVIEWER"
-REQUIRED_ENVIRONMENT_ENV = "LIVE_CANARY_ENVIRONMENT"
-REQUIRED_ROLLBACK_ENV = "LIVE_CANARY_ROLLBACK_READY"
-REQUIRED_KILL_SWITCH_ENV = "LIVE_CANARY_KILL_SWITCH_READY"
-REQUIRED_MINIMUM_SIZE_ENV = "LIVE_CANARY_MINIMUM_SIZE_CONFIRMED"
 SENSITIVE_ENV_KEYS = (
     "KIS_APP_KEY",
     "KIS_APP_SECRET",
@@ -41,22 +44,15 @@ def build_live_canary_preflight(env: Mapping[str, str] | None = None) -> dict[st
     route_paths = sorted(getattr(route, "path", "") for route in app.routes)
     live_adapter_status = KisLiveBrokerAdapter().status()
     safety_preflight = LiveOrderSafetyService(current_env).preflight()
-    operator_gates = {
-        "confirmation": current_env.get(REQUIRED_CONFIRMATION_ENV, "") == CONFIRMATION_TOKEN,
-        "reviewer_present": bool(current_env.get(REQUIRED_REVIEWER_ENV, "").strip()),
-        "environment_is_prod_live": current_env.get(REQUIRED_ENVIRONMENT_ENV, "").strip().lower()
-        == "prod-live-isolated",
-        "rollback_ready": _is_true(current_env.get(REQUIRED_ROLLBACK_ENV, "")),
-        "kill_switch_ready": _is_true(current_env.get(REQUIRED_KILL_SWITCH_ENV, "")),
-        "minimum_size_confirmed": _is_true(current_env.get(REQUIRED_MINIMUM_SIZE_ENV, "")),
-    }
+    governance = LiveCanaryGovernanceService(current_env, project_root=PROJECT_ROOT).evaluate()
+    operator_gates = governance["operator_gates"]
     public_route_checks = {
         "api_live_route_present": any(path.startswith("/api/live") for path in route_paths),
         "kis_order_route_present": any(path.startswith("/api/kis/orders") for path in route_paths),
         "kis_broker_route_present": any(path.startswith("/api/kis/broker") for path in route_paths),
         "kis_websocket_route_present": any(path.startswith("/api/kis/websocket") for path in route_paths),
     }
-    blockers = [f"{key.upper()}_REQUIRED" for key, passed in operator_gates.items() if not passed]
+    blockers = list(governance["blockers"])
     blockers.extend(safety_preflight["blockers"])
     if not bool(live_adapter_status.get("enabled")):
         blockers.append(LIVE_DISABLED_REASON)
@@ -92,6 +88,7 @@ def build_live_canary_preflight(env: Mapping[str, str] | None = None) -> dict[st
         "account_redacted": True,
         "generated_at": datetime.now(UTC).isoformat(),
         "operator_gates": operator_gates,
+        "governance": governance,
         "safety_controls": safety_preflight,
         "public_route_checks": public_route_checks,
         "live_adapter_status": {
@@ -150,10 +147,6 @@ def main(argv: list[str] | None = None) -> int:
 
 def _configured(value: str | None) -> bool:
     return bool(value and value.strip() and value.strip().lower() not in {"changeme", "todo", "none", "null"})
-
-
-def _is_true(value: str | None) -> bool:
-    return bool(value and value.strip().lower() in {"1", "true", "yes", "on"})
 
 
 if __name__ == "__main__":

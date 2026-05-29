@@ -20,6 +20,8 @@ def test_live_canary_preflight_is_blocked_and_redacted_by_default() -> None:
     assert record["network_call_performed"] is False
     assert record["live_order_created"] is False
     assert record["secrets_redacted"] is True
+    assert record["governance"]["passed"] is False
+    assert "ROLLBACK_RUNBOOK_PRESENT_REQUIRED" not in record["blockers"]
     assert record["credential_fields"]["KIS_APP_KEY"]["configured"] is True
     assert "PHASE20_SENTINEL_SECRET" not in serialized
     assert "12345678" not in serialized
@@ -61,6 +63,7 @@ def test_live_canary_preflight_still_blocks_with_operator_gates_set() -> None:
     record = live_canary_preflight.build_live_canary_preflight(env)
 
     assert all(record["operator_gates"].values())
+    assert record["governance"]["passed"] is True
     assert record["canary_execution_allowed"] is False
     assert record["live_adapter_status"]["enabled"] is False
     assert record["live_adapter_status"]["submit_implementation_present"] is True
