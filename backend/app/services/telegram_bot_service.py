@@ -4,11 +4,13 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.app.core.paths import CONFIG_DIR
 from backend.app.models.tables import PaperAuditEvent, PaperPosition
 from backend.app.services.account_service import AccountService
 from backend.app.services.market_realtime_service import MarketRealtimeService
@@ -30,6 +32,7 @@ SUPPORTED_TELEGRAM_COMMANDS = {
     "/buy",
     "/sell",
     "/orders",
+    "/cancel",
 }
 
 
@@ -43,8 +46,9 @@ class TelegramCommand:
 class TelegramBotService:
     """Telegram command를 기존 분석/paper 서비스에 연결하는 thin dispatcher다."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, *, config_dir: Path = CONFIG_DIR) -> None:
         self.db = db
+        self.config_dir = config_dir
 
     def status(self) -> dict[str, object]:
         """Telegram bot 설정 상태를 secret 없이 반환한다."""
@@ -100,6 +104,7 @@ class TelegramBotService:
             "/buy": lambda command: self._handle_order(command, side="buy", chat_id=chat_id),
             "/sell": lambda command: self._handle_order(command, side="sell", chat_id=chat_id),
             "/orders": self._handle_orders,
+            "/cancel": lambda command: self._handle_cancel(command, chat_id=chat_id),
         }
         result = handlers[parsed.command](parsed)
         self._audit(parsed, result, chat_id=chat_id)
@@ -127,12 +132,13 @@ class TelegramBotService:
         message = (
             "명령: /status, /search 종목코드, /report [daily|weekly], /portfolio, /rank, "
             "/bot status|enable|disable|auto|run|stop, "
-            "/buy 종목 qty|amount=금액 [price] confirm, /sell 종목 qty|all [price] confirm, /orders, /stop"
+            "/buy 종목 qty|amount=금액 [price] confirm, /sell 종목 qty|all [price] confirm, "
+            "/orders, /cancel 주문ID confirm, /stop"
         )
         return self._response(command, status="ok", message=message)
 
     def _handle_status(self, command: TelegramCommand) -> dict[str, Any]:
-        paper = PaperTradingService(self.db).status()
+        paper = self._paper_trading_service().status()
         token = TokenLifecycleService().status()
         message = (
             f"mode={paper.get('mode')} can_create={paper.get('can_create')} "
@@ -302,12 +308,45 @@ class TelegramBotService:
 
     def _handle_orders(self, command: TelegramCommand) -> dict[str, Any]:
         status = command.args[0] if command.args else None
-        orders = PaperTradingService(self.db).list_orders(status=status)
+        orders = self._paper_trading_service().list_orders(status=status)
         lines = [
             f"{row['paper_order_id']} {row['symbol']} {row['side']} {row['qty']} {row['status']}"
             for row in orders.get("orders", [])[:10]
         ]
         return self._response(command, status="ok", message="\n".join(lines) or "주문 없음", payload=orders)
+
+    def _handle_cancel(self, command: TelegramCommand, *, chat_id: str | None) -> dict[str, Any]:
+        paper_order_id = self._parse_cancel_order_id(command)
+        if paper_order_id is None:
+            return self._response(
+                command,
+                status="bad_request",
+                message="사용법: /cancel paper_order_id confirm",
+                reason_codes=["TELEGRAM_CANCEL_ORDER_ID_REQUIRED"],
+            )
+        confirm = any(arg.lower() in {"confirm", "confirmed", "확인"} for arg in command.args)
+        if not confirm:
+            return self._response(
+                command,
+                status="blocked",
+                message="사용법: /cancel paper_order_id confirm",
+                payload={"paper_order_id": paper_order_id, "network_call_performed": False},
+                reason_codes=["TELEGRAM_CANCEL_CONFIRM_REQUIRED"],
+            )
+        result = self._paper_trading_service().cancel_order(
+            paper_order_id=paper_order_id,
+            confirm=True,
+            idempotency_key=self._idempotency_key(command.raw_text, chat_id=chat_id),
+        )
+        status = "cancelled" if result.get("order_cancelled") else str(result.get("status") or "blocked")
+        message = f"cancel {status} {paper_order_id} reason={result.get('reason')}"
+        return self._response(
+            command,
+            status=status,
+            message=message,
+            payload=result,
+            reason_codes=list(result.get("reason_codes") or []),
+        )
 
     def _handle_order(self, command: TelegramCommand, *, side: str, chat_id: str | None) -> dict[str, Any]:
         order = self._parse_order_args(command, side=side, chat_id=chat_id)
@@ -318,7 +357,7 @@ class TelegramBotService:
                 message=str(order["message"]),
                 reason_codes=list(order["reason_codes"]),
             )
-        service = PaperTradingService(self.db)
+        service = self._paper_trading_service()
         if not bool(order["confirm"]):
             preview = service.preview_order(
                 symbol=str(order["symbol"]),
@@ -399,6 +438,22 @@ class TelegramBotService:
             )
         )
         return int(qty or 0) or None
+
+    @staticmethod
+    def _parse_cancel_order_id(command: TelegramCommand) -> str | None:
+        values = _key_values(command.args)
+        explicit = str(values.get("paper_order_id") or values.get("order_id") or "").strip()
+        if explicit:
+            return explicit
+        for arg in command.args:
+            normalized = arg.strip()
+            if not normalized or "=" in normalized or normalized.lower() in {"confirm", "confirmed", "확인"}:
+                continue
+            return normalized
+        return None
+
+    def _paper_trading_service(self) -> PaperTradingService:
+        return PaperTradingService(self.db, config_dir=self.config_dir)
 
     def _latest_price(self, symbol: str) -> float | None:
         try:

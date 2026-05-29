@@ -53,6 +53,7 @@
 - Alembic migration으로 `paper_account_snapshots`를 추가하고 기존 paper persistence와 분리한다.
 - 주문 상태는 `pending_submitted`, `submitted`, `partially_filled`, `filled`, `cancelled`, `rejected`, `expired`, `failed`를 표준 상태로 둔다.
 - API는 기존 route를 유지하면서 `POST /api/paper/orders`, `POST /api/paper/orders/{order_id}/cancel`, `GET /api/paper/orders/{order_id}`, `GET /api/paper/account`를 추가한다.
+- Telegram `/cancel paper_order_id confirm`은 paper-only local cancel gate를 재사용한다.
 - `idempotency_key`는 submit/cancel mutation에서 필수로 유지한다.
 - 주문 수량, 금액, 전략, 세션, 리스크 판단 근거, adapter 응답 요약은 raw secret 없이 저장한다.
 - 성공 mutation은 audit event를 저장하고, 거부 mutation은 side effect 없이 reason code를 반환한다.

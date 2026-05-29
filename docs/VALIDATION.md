@@ -1,5 +1,18 @@
 # Validation
 
+## 2026-05-30 Telegram Cancel Paper Order Command
+
+Telegram `/cancel paper_order_id confirm` 명령을 추가해 기존 `PaperTradingService.cancel_order()`의 paper-only local cancel gate를 재사용하도록 했다. confirm이 없거나 주문 ID가 없으면 side effect 없이 차단하고, local paper order 취소는 `paper_orders` 상태와 audit log만 갱신한다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Missing order id | 통과 | `/cancel` -> `TELEGRAM_CANCEL_ORDER_ID_REQUIRED` |
+| Confirm gate | 통과 | `/cancel {paper_order_id}` -> `TELEGRAM_CANCEL_CONFIRM_REQUIRED`, 주문 상태 변경 없음 |
+| Local paper cancel | 통과 | `/cancel order_id={paper_order_id} confirm` -> `order_cancelled=true`, `paper_orders.status=cancelled` |
+| No live/network | 통과 | cancel command 응답 `network_call_performed=false`, `live_order_created=false` |
+| Cancel focused tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_cancel_command` -> `14 passed` |
+| Telegram regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_cancel_related` -> `17 passed` |
+
 ## 2026-05-30 Telegram Report Daily/Weekly Command
 
 Telegram `/report` 명령을 최신 리포트 조회 기본값으로 유지하면서 `/report daily`, `/report weekly`, `/report type=daily|weekly` 입력은 해당 Markdown 리포트를 생성한 뒤 Telegram reply-safe 요약 메시지로 반환하도록 보강했다. 이 경로는 Telegram/KIS 네트워크 호출과 live 주문을 수행하지 않는다.

@@ -197,6 +197,38 @@ def test_telegram_sell_all_uses_current_paper_position_qty(db_session) -> None:
     assert "TELEGRAM_SELL_ALL_POSITION_NOT_FOUND" in blocked["reason_codes"]
 
 
+def test_telegram_cancel_requires_confirm_and_cancels_local_paper_order(db_session, tmp_path, monkeypatch) -> None:
+    _enable_paper_runtime(monkeypatch)
+    _write_paper_config(tmp_path)
+    trading = PaperTradingService(db_session, config_dir=tmp_path)
+    created = trading.submit_order(
+        symbol="KR013",
+        side="buy",
+        qty=1,
+        limit_price=100.0,
+        confirm=True,
+        idempotency_key="telegram-cancel-create",
+    )
+    paper_order_id = created["order"]["paper_order_id"]
+    bot = TelegramBotService(db_session, config_dir=tmp_path)
+
+    no_id = bot.handle_text("/cancel")
+    blocked = bot.handle_text(f"/cancel {paper_order_id}")
+    cancelled = bot.handle_text(f"/cancel order_id={paper_order_id} confirm")
+    order = db_session.scalar(select(PaperOrder).where(PaperOrder.paper_order_id == paper_order_id))
+
+    assert "/cancel" in bot.status()["supported_commands"]
+    assert no_id["status"] == "bad_request"
+    assert "TELEGRAM_CANCEL_ORDER_ID_REQUIRED" in no_id["reason_codes"]
+    assert blocked["status"] == "blocked"
+    assert "TELEGRAM_CANCEL_CONFIRM_REQUIRED" in blocked["reason_codes"]
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["payload"]["order_cancelled"] is True
+    assert cancelled["payload"]["network_call_performed"] is False
+    assert order is not None
+    assert order.status == "cancelled"
+
+
 def test_stock_detail_api_uses_db_fallback_without_kis_network(full_flow_client, monkeypatch) -> None:
     monkeypatch.setenv("KIS_MARKET_QUOTE_ENABLED", "false")
 
