@@ -96,11 +96,20 @@ def _enable_paper_env(monkeypatch, *, realtime_enabled: bool = False) -> None:
         monkeypatch.delenv("PAPER_REALTIME_REQUIRE_FRESH_QUOTES", raising=False)
 
 
-def _seed_symbol_and_screen(db_session, *, metadata: dict[str, object] | None = None) -> None:
+def _seed_symbol_and_screen(
+    db_session,
+    *,
+    symbol: str = "KR009",
+    name: str = "KR Test",
+    score: float = 95.0,
+    entry_price: float = 100.0,
+    stop_price: float = 94.0,
+    metadata: dict[str, object] | None = None,
+) -> None:
     db_session.add(
         SymbolMaster(
-            symbol="KR009",
-            name="KR Test",
+            symbol=symbol,
+            name=name,
             sector="Technology",
             industry="Software",
         )
@@ -112,7 +121,7 @@ def _seed_symbol_and_screen(db_session, *, metadata: dict[str, object] | None = 
     db_session.add(
         ScreenResult(
             trade_date=date(2026, 5, 27),
-            symbol="KR009",
+            symbol=symbol,
             strategy_tag="trend_breakout",
             passed=True,
             pass_flags='{"trend":true}',
@@ -122,14 +131,14 @@ def _seed_symbol_and_screen(db_session, *, metadata: dict[str, object] | None = 
             risk_flags_json="{}",
             score_breakdown_json="{}",
             data_quality_flags_json='{"price_ok":true,"risk_ok":true}',
-            total_score=95.0,
-            entry_price=100.0,
-            stop_price=94.0,
+            total_score=score,
+            entry_price=entry_price,
+            stop_price=stop_price,
             target_price=118.0,
-            risk_per_share=6.0,
+            risk_per_share=max(entry_price - stop_price, 1.0),
             reward_risk_ratio=3.0,
             position_size=10,
-            position_notional=1000.0,
+            position_notional=entry_price * 10,
         )
     )
     db_session.commit()
@@ -190,6 +199,35 @@ def test_bot_executor_run_submits_local_paper_order_when_all_gates_pass(db_sessi
     assert result["network_call_performed"] is False
     assert detail["submitted_count"] == 1
     assert _order_count(db_session) == 1
+
+
+def test_bot_executor_watchlist_filters_screen_candidates(db_session, tmp_path, monkeypatch) -> None:
+    _write_bot_config(tmp_path)
+    _write_paper_config(tmp_path)
+    _enable_paper_env(monkeypatch)
+    _seed_symbol_and_screen(db_session, symbol="KR009", score=98.0, entry_price=100.0, stop_price=94.0)
+    _seed_symbol_and_screen(db_session, symbol="KR010", name="Watch", score=70.0, entry_price=80.0, stop_price=75.0)
+    service = PaperBotExecutor(db_session, config_dir=tmp_path, market_session_service=_OpenSessionService())
+
+    result = service.preview(
+        trade_date=date(2026, 5, 27),
+        strategies=["trend_breakout"],
+        watchlist_symbols=["kr010", "KR010", ""],
+        max_candidates=3,
+    )
+
+    run = db_session.get(PaperBotRun, result["run_id"])
+    decisions = list(db_session.scalars(select(PaperBotDecision).where(PaperBotDecision.run_id == result["run_id"])))
+
+    assert result["candidate_source"] == "watchlist_screen_results"
+    assert result["watchlist_symbols"] == ["KR010"]
+    assert result["decision_count"] == 1
+    assert result["decisions"][0]["symbol"] == "KR010"
+    assert run is not None
+    assert json.loads(run.request_json)["watchlist_symbols"] == ["KR010"]
+    assert len(decisions) == 1
+    assert decisions[0].symbol == "KR010"
+    assert _order_count(db_session) == 0
 
 
 def test_bot_executor_rejects_stale_quote_before_order(db_session, tmp_path, monkeypatch) -> None:

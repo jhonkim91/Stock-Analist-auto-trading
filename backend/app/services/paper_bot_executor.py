@@ -51,6 +51,7 @@ class PaperBotExecutor:
         *,
         trade_date: date | None,
         strategies: list[str],
+        watchlist_symbols: list[str] | None = None,
         max_candidates: int,
     ) -> dict[str, Any]:
         """주문 생성 없이 bot 후보와 risk gate 결과만 저장 및 반환한다."""
@@ -58,6 +59,7 @@ class PaperBotExecutor:
             mode="preview",
             trade_date=trade_date,
             strategies=strategies,
+            watchlist_symbols=watchlist_symbols or [],
             max_candidates=max_candidates,
             dry_run=True,
         )
@@ -67,6 +69,7 @@ class PaperBotExecutor:
         *,
         trade_date: date | None,
         strategies: list[str],
+        watchlist_symbols: list[str] | None = None,
         max_candidates: int,
         dry_run: bool,
     ) -> dict[str, Any]:
@@ -75,6 +78,7 @@ class PaperBotExecutor:
             mode="run",
             trade_date=trade_date,
             strategies=strategies,
+            watchlist_symbols=watchlist_symbols or [],
             max_candidates=max_candidates,
             dry_run=dry_run,
         )
@@ -126,14 +130,17 @@ class PaperBotExecutor:
         mode: str,
         trade_date: date | None,
         strategies: list[str],
+        watchlist_symbols: list[str],
         max_candidates: int,
         dry_run: bool,
     ) -> dict[str, Any]:
         normalized_strategies = [item.strip() for item in strategies if item and item.strip()]
+        normalized_watchlist = self._normalize_symbols(watchlist_symbols)
         target_date = self._resolve_trade_date(trade_date)
         request_payload = {
             "trade_date": target_date.isoformat() if target_date else None,
             "strategies": normalized_strategies,
+            "watchlist_symbols": normalized_watchlist,
             "max_candidates": max(1, int(max_candidates)),
             "dry_run": bool(dry_run),
         }
@@ -173,6 +180,7 @@ class PaperBotExecutor:
                 run=run,
                 target_date=target_date,
                 strategies=normalized_strategies,
+                watchlist_symbols=normalized_watchlist,
                 max_candidates=max(1, int(max_candidates)),
                 dry_run=dry_run,
                 run_reasons=run_reasons,
@@ -186,6 +194,8 @@ class PaperBotExecutor:
         result_summary = {
             **summary,
             "candidate_count": len(decisions),
+            "candidate_source": "watchlist_screen_results" if normalized_watchlist else "screen_results",
+            "watchlist_symbols": normalized_watchlist,
             "target_trade_date": target_date.isoformat() if target_date else None,
             "dry_run": bool(dry_run),
             "reason_codes": run_reasons,
@@ -217,6 +227,8 @@ class PaperBotExecutor:
             "rejected_count": int(run.rejected_count or 0),
             "submitted_count": int(run.submitted_count or 0),
             "decisions": decisions,
+            "candidate_source": "watchlist_screen_results" if normalized_watchlist else "screen_results",
+            "watchlist_symbols": normalized_watchlist,
             "reason_codes": run_reasons,
             "session": self._session_payload(session),
             "paper_order_created": int(run.submitted_count or 0) > 0,
@@ -232,6 +244,7 @@ class PaperBotExecutor:
         run: PaperBotRun,
         target_date: date,
         strategies: list[str],
+        watchlist_symbols: list[str],
         max_candidates: int,
         dry_run: bool,
         run_reasons: list[str],
@@ -242,6 +255,7 @@ class PaperBotExecutor:
         candidates = self._screen_candidates(
             target_date=target_date,
             strategies=strategies,
+            watchlist_symbols=watchlist_symbols,
             max_candidates=max_candidates,
         )
         decisions: list[dict[str, Any]] = []
@@ -318,6 +332,7 @@ class PaperBotExecutor:
         *,
         target_date: date,
         strategies: list[str],
+        watchlist_symbols: list[str],
         max_candidates: int,
     ) -> list[ScreenResult]:
         statement = (
@@ -328,6 +343,8 @@ class PaperBotExecutor:
         )
         if strategies:
             statement = statement.where(ScreenResult.strategy_tag.in_(strategies))
+        if watchlist_symbols:
+            statement = statement.where(ScreenResult.symbol.in_(watchlist_symbols))
         return list(self.db.scalars(statement).all())
 
     def _candidate_eligibility_reasons(self, candidate: ScreenResult) -> list[str]:
@@ -471,6 +488,15 @@ class PaperBotExecutor:
         if requested is not None:
             return requested
         return self.db.scalar(select(ScreenResult.trade_date).order_by(ScreenResult.trade_date.desc()).limit(1))
+
+    @staticmethod
+    def _normalize_symbols(symbols: list[str] | None) -> list[str]:
+        normalized: list[str] = []
+        for symbol in symbols or []:
+            value = str(symbol or "").strip().upper()
+            if value and value not in normalized:
+                normalized.append(value)
+        return normalized
 
     def _cash_available(self, *, default: float) -> float:
         snapshot = self.db.scalar(

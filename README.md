@@ -296,8 +296,8 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `POST` | `/api/paper/sync-worker/run-once` | `PAPER_SYNC_WORKER_ENABLED=true`와 `confirm=true` 뒤에서 paper sync 1회 실행 |
 | `GET` | `/api/paper/realtime/status` | polling quote cache/heartbeat/stale quote gate 상태 |
 | `GET` | `/api/paper/dashboard` | account, positions, open orders, fills, PnL, risk, worker status, metrics |
-| `POST` | `/api/paper/bot/preview` | dry-run bot candidate/risk gate preview, paper order 생성 없음 |
-| `POST` | `/api/paper/bot/run` | `dry_run=false`와 모든 paper gate 통과 시에만 paper submit 시도 |
+| `POST` | `/api/paper/bot/preview` | screener 결과 또는 `watchlist_symbols` 기반 dry-run bot candidate/risk gate preview, paper order 생성 없음 |
+| `POST` | `/api/paper/bot/run` | screener/watchlist 후보에서 `dry_run=false`와 모든 paper gate 통과 시에만 paper submit 시도 |
 | `GET` | `/api/paper/bot/runs/{run_id}` | 저장된 bot run/decision, submitted/skipped/rejected reason code 조회 |
 | `GET` | `/api/bot/status` | paper-only bot runtime status, kill-switch/session/auto-submit gate 표시 |
 | `POST` | `/api/bot/run-once` | paper-only preview decision loop, auto-submit은 명시 opt-in과 backend gate 통과 시에만 허용 |

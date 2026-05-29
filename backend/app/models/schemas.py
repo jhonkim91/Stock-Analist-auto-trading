@@ -287,6 +287,7 @@ class PaperBotRunRequest(BaseModel):
     auto_submit: bool | None = None
     trade_date: date | None = None
     strategies: list[str] = Field(default_factory=lambda: list(DEFAULT_STRATEGY_NAMES))
+    watchlist_symbols: list[str] = Field(default_factory=list)
     max_candidates: int = Field(default=5, ge=1, le=100)
     dry_run: bool = True
 

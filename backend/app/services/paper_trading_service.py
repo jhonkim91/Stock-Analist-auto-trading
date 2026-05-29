@@ -780,6 +780,7 @@ class PaperTradingService:
         *,
         trade_date,
         strategies: list[str],
+        watchlist_symbols: list[str] | None = None,
         max_candidates: int,
     ) -> dict[str, object]:
         """Phase 5 bot executor dry-run preview를 실행한다."""
@@ -790,6 +791,7 @@ class PaperTradingService:
         return PaperBotExecutor(self.db, config_dir=self.config_service.config_dir).preview(
             trade_date=trade_date,
             strategies=strategies,
+            watchlist_symbols=watchlist_symbols or [],
             max_candidates=max_candidates,
         )
 
@@ -798,6 +800,7 @@ class PaperTradingService:
         *,
         trade_date,
         strategies: list[str],
+        watchlist_symbols: list[str] | None = None,
         max_candidates: int,
         dry_run: bool,
     ) -> dict[str, object]:
@@ -809,6 +812,7 @@ class PaperTradingService:
         return PaperBotExecutor(self.db, config_dir=self.config_service.config_dir).run(
             trade_date=trade_date,
             strategies=strategies,
+            watchlist_symbols=watchlist_symbols or [],
             max_candidates=max_candidates,
             dry_run=dry_run,
         )

@@ -267,6 +267,7 @@ def preview_paper_bot(payload: PaperBotRunRequest, db: Session = Depends(get_db)
     return PaperTradingService(db).bot_preview(
         trade_date=payload.trade_date,
         strategies=payload.strategies,
+        watchlist_symbols=payload.watchlist_symbols,
         max_candidates=payload.max_candidates,
     )
 
@@ -276,6 +277,7 @@ def run_paper_bot(payload: PaperBotRunRequest, db: Session = Depends(get_db)) ->
     return PaperTradingService(db).run_bot(
         trade_date=payload.trade_date,
         strategies=payload.strategies,
+        watchlist_symbols=payload.watchlist_symbols,
         max_candidates=payload.max_candidates,
         dry_run=payload.dry_run,
     )

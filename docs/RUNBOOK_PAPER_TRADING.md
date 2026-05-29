@@ -154,6 +154,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/paper/realtime/websocket/smoke -Meth
 $body = @{
   trade_date = "2026-05-27"
   strategies = @("trend_breakout")
+  watchlist_symbols = @("005930", "000660")
   max_candidates = 5
   dry_run = $true
 } | ConvertTo-Json
@@ -163,6 +164,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/paper/bot/preview -Method Post -Cont
 성공 기준:
 
 - `dry_run=true`
+- `watchlist_symbols`가 있으면 해당 종목의 저장된 passed screener 결과만 후보로 사용한다.
 - `paper_order_submitted=false`
 - `live_order_created=false`
 - decision은 `skipped` 또는 `rejected`와 reason code를 반환한다.

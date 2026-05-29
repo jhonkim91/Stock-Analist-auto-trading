@@ -1,5 +1,17 @@
 # Validation
 
+## 2026-05-30 Paper Bot Watchlist Candidates
+
+`/api/paper/bot/preview`와 `/api/paper/bot/run` 요청에 `watchlist_symbols`를 추가했다. 값이 있으면 저장된 passed screener 결과 중 watchlist에 포함된 종목만 후보로 사용하고, 요청/결과 payload에 정규화된 watchlist와 `candidate_source=watchlist_screen_results`를 남긴다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Watchlist normalization | 통과 | `["kr010", "KR010", ""]` -> `["KR010"]` |
+| Candidate filtering | 통과 | 더 높은 score의 비watchlist 종목을 제외하고 watchlist 종목만 decision 생성 |
+| Dry-run safety | 통과 | watchlist preview는 paper order를 생성하지 않음 |
+| Targeted tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_executor_phase5.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_watchlist` -> `7 passed` |
+| Related regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_executor_phase5.py backend/tests/test_paper_bot_scheduler.py backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_watchlist_related` -> `18 passed` |
+
 ## 2026-05-30 Telegram Sell-All Command
 
 Telegram `/sell` 명령에 전량 매도 입력을 추가했다. `/sell 종목 all` 또는 `qty=all`은 현재 `paper_positions`의 보유 수량을 합산해 preview/submit 수량으로 사용하고, 보유 수량이 없으면 주문 API 호출 전 bad request로 차단한다.

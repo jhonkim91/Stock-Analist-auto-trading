@@ -69,7 +69,7 @@
 
 - `backend/app/services/paper_bot_executor.py`를 추가한다.
 - API는 `POST /api/paper/bot/preview`, `POST /api/paper/bot/run`, `GET /api/paper/bot/runs/{run_id}`를 제공한다.
-- 입력은 `trade_date`, `strategies`, `max_candidates`, `dry_run`이며 기존 `auto_submit` key는 호환만 유지한다.
+- 입력은 `trade_date`, `strategies`, `watchlist_symbols`, `max_candidates`, `dry_run`이며 기존 `auto_submit` key는 호환만 유지한다.
 - 후보는 `passed=true`, 유효한 `risk_metadata`, 통과한 `data_quality_flags`를 가진 screener 결과만 사용한다.
 - sizing은 risk per trade, max order notional, max positions, cash available, current exposure, stop price, risk per share를 반영한다.
 - 주문 전 gate는 kill switch, market session, stale quote, duplicate order, daily loss limit, symbol/sector/strategy concentration, cash/order notional limit를 확인한다.
