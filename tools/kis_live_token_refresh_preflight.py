@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from backend.app.services.kis_token_manager import (  # noqa: E402
     ENABLE_REAL_ORDER_ENV,
+    KIS_ACCESS_TOKEN_ENV,
     KIS_APP_KEY_ENV,
     KIS_APP_SECRET_ENV,
 )
@@ -27,7 +28,7 @@ from backend.app.services.kis_live_token_refresh_service import (  # noqa: E402
     LIVE_TOKEN_REFRESH_NETWORK_ENABLED_ENV,
     LIVE_TOKEN_REFRESH_PROCESS_ONLY_ENV,
 )
-from tools.env_file_loader import load_env_file  # noqa: E402
+from tools.env_file_loader import load_env_file, scan_env_file_keys  # noqa: E402
 
 DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "kis-live-token-refresh-preflight-record.json"
 LIVE_TOKEN_REFRESH_ENV_FILE_KEYS = (
@@ -42,6 +43,7 @@ LIVE_TOKEN_REFRESH_ENV_FILE_KEYS = (
     LIVE_TOKEN_REFRESH_NETWORK_ENABLED_ENV,
     LIVE_TOKEN_REFRESH_PROCESS_ONLY_ENV,
 )
+TOKEN_DIAGNOSTIC_ENV_NAMES = (KIS_ACCESS_TOKEN_ENV, KIS_REFRESH_TOKEN_ENV)
 
 
 def build_record(
@@ -51,6 +53,7 @@ def build_record(
     install_to_process_env: bool,
     env: Mapping[str, str] | None = None,
     env_file_load_result: Mapping[str, object] | None = None,
+    env_file_presence_result: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """KIS live token refresh readiness를 redacted record로 반환한다."""
     service = KisLiveTokenRefreshService(env)
@@ -78,6 +81,7 @@ def build_record(
         "result": result,
         "network_call_performed": bool(result.get("network_call_performed")),
         "live_order_created": False,
+        "token_env_diagnostics": _token_env_diagnostics(service.env, status, env_file_presence_result),
         "secrets_redacted": True,
     }
     if env_file_load_result is not None:
@@ -118,11 +122,21 @@ def main(argv: list[str] | None = None) -> int:
         if args.load_env_local
         else None
     )
+    env_file_presence_result = (
+        scan_env_file_keys(
+            Path(args.env_file),
+            key_names=TOKEN_DIAGNOSTIC_ENV_NAMES,
+            project_root=PROJECT_ROOT,
+        )
+        if args.load_env_local
+        else None
+    )
     record = build_record(
         execute=bool(args.execute),
         confirm=str(args.confirm),
         install_to_process_env=bool(args.install_to_process_env),
         env_file_load_result=env_file_load_result,
+        env_file_presence_result=env_file_presence_result,
     )
     if args.write_record:
         path = Path(args.record_path)
@@ -132,6 +146,39 @@ def main(argv: list[str] | None = None) -> int:
     if args.fail_on_blocked and not record["network_call_performed"]:
         return 2
     return 0
+
+
+def _token_env_diagnostics(
+    env: Mapping[str, str],
+    status: Mapping[str, object],
+    env_file_presence_result: Mapping[str, object] | None,
+) -> dict[str, object]:
+    presence = _env_file_key_presence(env_file_presence_result)
+    access_token_configured = _configured(env.get(KIS_ACCESS_TOKEN_ENV)) or bool(presence.get(KIS_ACCESS_TOKEN_ENV))
+    refresh_token_configured = bool(status.get("refresh_token_configured")) or bool(presence.get(KIS_REFRESH_TOKEN_ENV))
+    return {
+        "access_token_configured": access_token_configured,
+        "refresh_token_configured": refresh_token_configured,
+        "access_token_without_refresh_token": access_token_configured and not refresh_token_configured,
+        "refresh_token_required_variable": KIS_REFRESH_TOKEN_ENV,
+        "access_token_variable": KIS_ACCESS_TOKEN_ENV,
+        "access_token_cannot_satisfy_refresh_proof": access_token_configured and not refresh_token_configured,
+        "values_redacted": True,
+    }
+
+
+def _env_file_key_presence(env_file_presence_result: Mapping[str, object] | None) -> dict[str, bool]:
+    if not isinstance(env_file_presence_result, Mapping):
+        return {}
+    raw_presence = env_file_presence_result.get("key_presence")
+    if not isinstance(raw_presence, Mapping):
+        return {}
+    return {str(name): bool(value) for name, value in raw_presence.items()}
+
+
+def _configured(value: object) -> bool:
+    stripped = str(value or "").strip()
+    return bool(stripped and "placeholder" not in stripped.lower())
 
 
 if __name__ == "__main__":

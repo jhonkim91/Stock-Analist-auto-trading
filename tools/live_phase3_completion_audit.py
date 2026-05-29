@@ -13,7 +13,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from tools.env_file_loader import load_env_file  # noqa: E402
+from backend.app.services.kis_token_manager import KIS_ACCESS_TOKEN_ENV  # noqa: E402
+from tools.env_file_loader import load_env_file, scan_env_file_keys  # noqa: E402
 from tools import kis_live_token_refresh_preflight, live_canary_preflight  # noqa: E402
 
 DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-completion-audit.json"
@@ -45,6 +46,7 @@ REQUIRED_ENV_NAMES = (
     "LIVE_SYMBOL_BLACKLIST",
     "LIVE_ORDER_COOLDOWN_SECONDS",
 )
+TOKEN_DIAGNOSTIC_ENV_NAMES = (KIS_ACCESS_TOKEN_ENV, "KIS_REFRESH_TOKEN")
 POWERSHELL_TEMPLATE_VALUES = (
     ("KIS_APP_KEY", "<kis_live_app_key>"),
     ("KIS_APP_SECRET", "<kis_live_app_credential>"),
@@ -80,6 +82,7 @@ def build_completion_audit(
     token_refresh_record: Mapping[str, Any] | None = None,
     canary_record: Mapping[str, Any] | None = None,
     env_file_load_result: Mapping[str, Any] | None = None,
+    env_file_presence_result: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """실계좌 주문 연동 3단계 완료 여부를 네트워크 없이 항목별로 판정한다."""
     current_env = os.environ if env is None else env
@@ -142,6 +145,7 @@ def build_completion_audit(
         "missing_all_scopes_env_names": [
             name for name, status in env_scope_status.items() if not status["any_scope_configured"]
         ],
+        "token_env_diagnostics": _token_env_diagnostics(current_env, env_scope_status, env_file_presence_result),
         "token_refresh_network_call_performed": bool(token_record.get("network_call_performed")),
         "live_order_created": False,
         "network_call_performed_by_audit": False,
@@ -226,7 +230,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.load_env_local
         else None
     )
-    record = build_completion_audit(env_file_load_result=env_file_load_result)
+    env_file_presence_result = (
+        scan_env_file_keys(
+            Path(args.env_file),
+            key_names=TOKEN_DIAGNOSTIC_ENV_NAMES,
+            project_root=PROJECT_ROOT,
+        )
+        if args.load_env_local
+        else None
+    )
+    record = build_completion_audit(
+        env_file_load_result=env_file_load_result,
+        env_file_presence_result=env_file_presence_result,
+    )
     if args.write_record:
         write_completion_audit(record, Path(args.record_path))
     if args.write_powershell_template:
@@ -277,6 +293,48 @@ def _single_env_scope_status(name: str, env: Mapping[str, str]) -> dict[str, boo
         "any_scope_configured": process_configured or user_configured or machine_configured,
         "values_redacted": True,
     }
+
+
+def _token_env_diagnostics(
+    env: Mapping[str, str],
+    env_scope_status: Mapping[str, Mapping[str, object]],
+    env_file_presence_result: Mapping[str, object] | None,
+) -> dict[str, object]:
+    presence = _env_file_key_presence(env_file_presence_result)
+    access_process_configured = _configured(env.get(KIS_ACCESS_TOKEN_ENV))
+    access_user_configured = _registry_env_configured(KIS_ACCESS_TOKEN_ENV, scope="user")
+    access_machine_configured = _registry_env_configured(KIS_ACCESS_TOKEN_ENV, scope="machine")
+    access_env_file_configured = bool(presence.get(KIS_ACCESS_TOKEN_ENV))
+    refresh_status = env_scope_status.get("KIS_REFRESH_TOKEN", {})
+    refresh_configured = bool(refresh_status.get("any_scope_configured")) or bool(presence.get("KIS_REFRESH_TOKEN"))
+    access_configured = (
+        access_process_configured
+        or access_user_configured
+        or access_machine_configured
+        or access_env_file_configured
+    )
+    return {
+        "access_token_configured": access_configured,
+        "access_token_process_configured": access_process_configured,
+        "access_token_user_configured": access_user_configured,
+        "access_token_machine_configured": access_machine_configured,
+        "access_token_env_file_configured": access_env_file_configured,
+        "refresh_token_configured": refresh_configured,
+        "access_token_without_refresh_token": access_configured and not refresh_configured,
+        "refresh_token_required_variable": "KIS_REFRESH_TOKEN",
+        "access_token_variable": KIS_ACCESS_TOKEN_ENV,
+        "access_token_cannot_satisfy_refresh_proof": access_configured and not refresh_configured,
+        "values_redacted": True,
+    }
+
+
+def _env_file_key_presence(env_file_presence_result: Mapping[str, object] | None) -> dict[str, bool]:
+    if not isinstance(env_file_presence_result, Mapping):
+        return {}
+    raw_presence = env_file_presence_result.get("key_presence")
+    if not isinstance(raw_presence, Mapping):
+        return {}
+    return {str(name): bool(value) for name, value in raw_presence.items()}
 
 
 def _registry_env_configured(name: str, *, scope: str) -> bool:

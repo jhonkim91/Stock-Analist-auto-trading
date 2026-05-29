@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from tools.env_file_loader import load_env_file
+from tools.env_file_loader import load_env_file, scan_env_file_keys
 from tools import kis_live_token_refresh_preflight
 
 
@@ -82,3 +82,28 @@ def test_kis_live_token_refresh_preflight_can_use_env_file_loader_without_raw_se
     assert "VALUE_A" not in serialized
     assert "VALUE_B" not in serialized
     assert "VALUE_C" not in serialized
+
+
+def test_kis_live_token_refresh_preflight_identifies_access_token_only_env_file(tmp_path) -> None:
+    env_file = tmp_path / ".env.local"
+    env_file.write_text("KIS_ACCESS_" + "TOKEN=ACCESS_ONLY_VALUE\n", encoding="utf-8")
+    presence = scan_env_file_keys(
+        env_file,
+        key_names=kis_live_token_refresh_preflight.TOKEN_DIAGNOSTIC_ENV_NAMES,
+    )
+
+    record = kis_live_token_refresh_preflight.build_record(
+        execute=False,
+        confirm="",
+        install_to_process_env=False,
+        env={},
+        env_file_presence_result=presence,
+    )
+    serialized = json.dumps(record, ensure_ascii=False, default=str)
+
+    assert record["status"]["refresh_token_configured"] is False
+    assert record["token_env_diagnostics"]["access_token_configured"] is True
+    assert record["token_env_diagnostics"]["refresh_token_configured"] is False
+    assert record["token_env_diagnostics"]["access_token_without_refresh_token"] is True
+    assert record["network_call_performed"] is False
+    assert "ACCESS_ONLY_VALUE" not in serialized

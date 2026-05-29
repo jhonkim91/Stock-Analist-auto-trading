@@ -4,7 +4,7 @@
 
 - [x] 현재 branch: `feature/kis-paper-goal-phases`.
 - [x] 기본 실행 주소: backend `http://127.0.0.1:8000`, frontend `http://127.0.0.1:3000/dashboard`.
-- [x] 현재 로컬 앱은 `py launcher.py run --no-browser` 후 backend 8000/frontend 3000이 launcher-owned 상태다.
+- [x] 최근 런타임 확인 기준 backend 8000은 `.env.local`을 process-only로 로드한 uvicorn 프로세스에서 실행 중이다.
 - [x] `python --version`은 이 환경에서 불안정할 수 있으므로 검증은 `.\.venv\Scripts\python.exe`를 우선 사용한다.
 - [x] `alembic` 실행 파일은 PATH에 없으므로 `.\.venv\Scripts\python.exe -m alembic ...`를 사용한다.
 
@@ -47,19 +47,20 @@
 - `/api/kis/broker/*`, `/api/kis/websocket/*`는 계속 미등록 404다.
 - `tools/live_phase3_completion_audit.py`는 3단계 완료 조건과 live env Process/User/Machine 설정 여부를 항목별로 판정한다. 현재 record는 `complete=false`, `network_call_performed_by_audit=false`, `live_order_created=false`이며 required live env, token refresh proof, live submit/cancel authority가 미충족이다. `docs/research/live-phase3-process-env-template.ps1`는 placeholder-only process env 템플릿이다.
 - `tools/env_file_loader.py`와 `--load-env-local` 옵션을 live token preflight/completion audit에 추가했다. `.env.local`을 수정하지 않고 현재 helper process에만 allowlist key를 로드하며 raw value와 secret-like key name은 record에서 redaction한다.
-- 최신 재확인 기준 `KIS_REFRESH_TOKEN`은 Process/User/Machine scope와 프로젝트 루트 `.env.local` 모두에서 미탐지다. `.env.local`에 선택된 긴 JWT는 `KIS_ACCESS_TOKEN`일 가능성이 높으며 refresh token proof는 아직 없다.
+- 최신 재확인 기준 `KIS_REFRESH_TOKEN`은 Process/User/Machine scope와 프로젝트 루트 `.env.local` 모두에서 미탐지다. `.env.local`에는 `KIS_ACCESS_TOKEN`이 있어 `access_token_without_refresh_token=true`로 진단되며, access token은 refresh token proof를 대체할 수 없다.
 
 ## 최신 검증 결과
 
-- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_env_file_loader.py backend/tests/test_kis_live_token_refresh_preflight_tool.py backend/tests/test_live_phase3_completion_audit.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_env_local_loader_tests` -> `10 passed`.
-- [x] `.\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py --load-env-local` -> `.env.local` no-network 로드, `refresh_token_configured=false`, `network_call_performed=false`, `live_order_created=false`.
-- [x] `.\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --load-env-local --write-record` -> `complete=false`, `KIS_REFRESH_TOKEN` 미탐지, token refresh proof/live submit authority 미충족.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_env_file_loader.py backend/tests/test_kis_live_token_refresh_preflight_tool.py backend/tests/test_live_phase3_completion_audit.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_env_doctor_tests` -> `13 passed`.
+- [x] `.\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py --load-env-local` -> `.env.local` no-network 로드, `access_token_without_refresh_token=true`, `refresh_token_configured=false`, `network_call_performed=false`, `live_order_created=false`.
+- [x] `.\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --load-env-local --write-record` -> `complete=false`, `access_token_env_file_configured=true`, `KIS_REFRESH_TOKEN` 미탐지, token refresh proof/live submit authority 미충족.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_route_canary_contracts` -> `30 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f_readonly_provider_contract.py::test_read_only_provider_contract_does_not_mutate_execution_tables_or_routes -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_public_route_phase3f_route` -> `1 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_phase3_completion_audit.py backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_phase3_completion_audit` -> `20 passed`.
 - [x] `.\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --write-record --fail-on-incomplete` -> expected nonzero, `complete=false`, token refresh proof/live submit authority 미충족.
 - [x] `.\.venv\Scripts\python.exe tools\live_canary_preflight.py` -> `status=blocked`, public route present, `canary_execution_allowed=false`, `live_order_created=false`, `network_call_performed=false`.
 - [x] `.\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py` -> preview-only, `network_call_performed=false`, `live_order_created=false`, refresh token 미설정으로 blocked.
+- [x] `GET /api/kis/status` -> `process_access_token_configured=true`, `token_issued=false`, `token_cache_enabled=false`, `token_raw_value_persisted=false`; raw token 미출력/미기록.
 - [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only.
 - [x] pytest 병렬 실행은 `backend/data/test_app.db` 잠금으로 실패할 수 있어 순차 실행과 workspace-external basetemp를 사용한다.
 
