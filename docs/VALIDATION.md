@@ -7,6 +7,7 @@
 | 항목 | 결과 | 근거 |
 |---|---|---|
 | Completion audit tool | 추가 | `tools/live_phase3_completion_audit.py`가 kill switch, rate limiter, idempotency, audit, max notional, blacklist, cooldown, token refresh proof, public route scaffold, live submit/cancel authority를 requirement별 boolean으로 반환 |
+| Env scope audit | 추가 | completion audit record가 `env_scope_status`, `missing_process_env_names`, `missing_all_scopes_env_names`를 raw value 없이 기록. 현재 required live env는 Process/User/Machine 모두 미설정 |
 | Targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_phase3_completion_audit.py backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_phase3_completion_audit` -> `20 passed` |
 | Current completion audit | incomplete | `.\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --write-record --fail-on-incomplete` -> expected nonzero, `complete=false`, `network_call_performed_by_audit=false`, `live_order_created=false` |
 | Redacted record | 완료 | `docs/research/live-phase3-completion-audit.json` 기록. 누락 항목: `kill_switch_ready`, `rate_limiter_ready`, `idempotency_required`, `audit_log_ready`, `max_order_notional_ready`, `blacklist_ready`, `cooldown_ready`, `token_refresh_control_ready`, `token_refresh_real_call_proof`, `live_submit_authority_present`, `live_cancel_authority_present` |

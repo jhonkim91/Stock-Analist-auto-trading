@@ -16,6 +16,28 @@ if str(PROJECT_ROOT) not in sys.path:
 from tools import kis_live_token_refresh_preflight, live_canary_preflight  # noqa: E402
 
 DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-completion-audit.json"
+REQUIRED_ENV_NAMES = (
+    "LIVE_TOKEN_REFRESH_ENABLED",
+    "LIVE_TOKEN_REFRESH_PROCESS_ONLY",
+    "LIVE_TOKEN_REFRESH_NETWORK_ENABLED",
+    "KIS_REFRESH_TOKEN",
+    "LIVE_CANARY_CONFIRMATION",
+    "LIVE_CANARY_REVIEWER",
+    "LIVE_CANARY_ENVIRONMENT",
+    "LIVE_CANARY_ROLLBACK_READY",
+    "LIVE_CANARY_KILL_SWITCH_READY",
+    "LIVE_CANARY_MINIMUM_SIZE_CONFIRMED",
+    "LIVE_EMERGENCY_STOP_ARMED",
+    "LIVE_RATE_LIMIT_PER_SECOND",
+    "LIVE_RATE_LIMIT_BURST",
+    "LIVE_IDEMPOTENCY_REQUIRED",
+    "LIVE_AUDIT_LOG_ENABLED",
+    "LIVE_AUDIT_REDACTION_ENABLED",
+    "LIVE_MAX_ORDER_NOTIONAL",
+    "LIVE_BLACKLIST_ENABLED",
+    "LIVE_SYMBOL_BLACKLIST",
+    "LIVE_ORDER_COOLDOWN_SECONDS",
+)
 
 
 def build_completion_audit(
@@ -68,6 +90,7 @@ def build_completion_audit(
             set(str(item) for item in (token_record.get("status", {}) or {}).get("reason_codes", []) or [])
         ),
     }
+    env_scope_status = _env_scope_status(REQUIRED_ENV_NAMES, current_env)
     return {
         "phase": "3단계 실계좌 주문 연동",
         "generated_at": datetime.now(UTC).isoformat(),
@@ -77,6 +100,13 @@ def build_completion_audit(
         "blocker_sources": blocker_sources,
         "canary_status": canary.get("status"),
         "canary_execution_allowed": bool(canary.get("canary_execution_allowed")),
+        "env_scope_status": env_scope_status,
+        "missing_process_env_names": [
+            name for name, status in env_scope_status.items() if not status["process_configured"]
+        ],
+        "missing_all_scopes_env_names": [
+            name for name, status in env_scope_status.items() if not status["any_scope_configured"]
+        ],
         "token_refresh_network_call_performed": bool(token_record.get("network_call_performed")),
         "live_order_created": False,
         "network_call_performed_by_audit": False,
@@ -135,6 +165,48 @@ def _token_refresh_proof_passed(record: Mapping[str, Any]) -> bool:
         and bool(record.get("secrets_redacted"))
         and not bool(record.get("live_order_created"))
     )
+
+
+def _env_scope_status(names: tuple[str, ...], env: Mapping[str, str]) -> dict[str, dict[str, bool | str]]:
+    return {name: _single_env_scope_status(name, env) for name in names}
+
+
+def _single_env_scope_status(name: str, env: Mapping[str, str]) -> dict[str, bool | str]:
+    process_configured = _configured(env.get(name))
+    user_configured = _registry_env_configured(name, scope="user")
+    machine_configured = _registry_env_configured(name, scope="machine")
+    return {
+        "process_configured": process_configured,
+        "user_configured": user_configured,
+        "machine_configured": machine_configured,
+        "any_scope_configured": process_configured or user_configured or machine_configured,
+        "values_redacted": True,
+    }
+
+
+def _registry_env_configured(name: str, *, scope: str) -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        import winreg
+    except ImportError:
+        return False
+    hive = winreg.HKEY_CURRENT_USER if scope == "user" else winreg.HKEY_LOCAL_MACHINE
+    path = (
+        "Environment"
+        if scope == "user"
+        else r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+    )
+    try:
+        with winreg.OpenKey(hive, path) as key:
+            value, _value_type = winreg.QueryValueEx(key, name)
+    except OSError:
+        return False
+    return _configured(value)
+
+
+def _configured(value: object) -> bool:
+    return bool(str(value or "").strip())
 
 
 def _next_required_action(missing_requirements: list[str]) -> str:

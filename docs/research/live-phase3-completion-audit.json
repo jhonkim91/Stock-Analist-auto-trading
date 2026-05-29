@@ -54,8 +54,194 @@
   "canary_execution_allowed": false,
   "canary_status": "blocked",
   "complete": false,
-  "generated_at": "2026-05-29T10:09:55.763660+00:00",
+  "env_scope_status": {
+    "KIS_REFRESH_TOKEN": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_AUDIT_LOG_ENABLED": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_AUDIT_REDACTION_ENABLED": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_BLACKLIST_ENABLED": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_CANARY_CONFIRMATION": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_CANARY_ENVIRONMENT": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_CANARY_KILL_SWITCH_READY": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_CANARY_MINIMUM_SIZE_CONFIRMED": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_CANARY_REVIEWER": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_CANARY_ROLLBACK_READY": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_EMERGENCY_STOP_ARMED": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_IDEMPOTENCY_REQUIRED": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_MAX_ORDER_NOTIONAL": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_ORDER_COOLDOWN_SECONDS": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_RATE_LIMIT_BURST": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_RATE_LIMIT_PER_SECOND": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_SYMBOL_BLACKLIST": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_TOKEN_REFRESH_ENABLED": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_TOKEN_REFRESH_NETWORK_ENABLED": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    },
+    "LIVE_TOKEN_REFRESH_PROCESS_ONLY": {
+      "any_scope_configured": false,
+      "machine_configured": false,
+      "process_configured": false,
+      "user_configured": false,
+      "values_redacted": true
+    }
+  },
+  "generated_at": "2026-05-29T10:15:27.469533+00:00",
   "live_order_created": false,
+  "missing_all_scopes_env_names": [
+    "LIVE_TOKEN_REFRESH_ENABLED",
+    "LIVE_TOKEN_REFRESH_PROCESS_ONLY",
+    "LIVE_TOKEN_REFRESH_NETWORK_ENABLED",
+    "KIS_REFRESH_TOKEN",
+    "LIVE_CANARY_CONFIRMATION",
+    "LIVE_CANARY_REVIEWER",
+    "LIVE_CANARY_ENVIRONMENT",
+    "LIVE_CANARY_ROLLBACK_READY",
+    "LIVE_CANARY_KILL_SWITCH_READY",
+    "LIVE_CANARY_MINIMUM_SIZE_CONFIRMED",
+    "LIVE_EMERGENCY_STOP_ARMED",
+    "LIVE_RATE_LIMIT_PER_SECOND",
+    "LIVE_RATE_LIMIT_BURST",
+    "LIVE_IDEMPOTENCY_REQUIRED",
+    "LIVE_AUDIT_LOG_ENABLED",
+    "LIVE_AUDIT_REDACTION_ENABLED",
+    "LIVE_MAX_ORDER_NOTIONAL",
+    "LIVE_BLACKLIST_ENABLED",
+    "LIVE_SYMBOL_BLACKLIST",
+    "LIVE_ORDER_COOLDOWN_SECONDS"
+  ],
+  "missing_process_env_names": [
+    "LIVE_TOKEN_REFRESH_ENABLED",
+    "LIVE_TOKEN_REFRESH_PROCESS_ONLY",
+    "LIVE_TOKEN_REFRESH_NETWORK_ENABLED",
+    "KIS_REFRESH_TOKEN",
+    "LIVE_CANARY_CONFIRMATION",
+    "LIVE_CANARY_REVIEWER",
+    "LIVE_CANARY_ENVIRONMENT",
+    "LIVE_CANARY_ROLLBACK_READY",
+    "LIVE_CANARY_KILL_SWITCH_READY",
+    "LIVE_CANARY_MINIMUM_SIZE_CONFIRMED",
+    "LIVE_EMERGENCY_STOP_ARMED",
+    "LIVE_RATE_LIMIT_PER_SECOND",
+    "LIVE_RATE_LIMIT_BURST",
+    "LIVE_IDEMPOTENCY_REQUIRED",
+    "LIVE_AUDIT_LOG_ENABLED",
+    "LIVE_AUDIT_REDACTION_ENABLED",
+    "LIVE_MAX_ORDER_NOTIONAL",
+    "LIVE_BLACKLIST_ENABLED",
+    "LIVE_SYMBOL_BLACKLIST",
+    "LIVE_ORDER_COOLDOWN_SECONDS"
+  ],
   "missing_requirements": [
     "kill_switch_ready",
     "rate_limiter_ready",

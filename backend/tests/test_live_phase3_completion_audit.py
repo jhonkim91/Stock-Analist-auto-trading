@@ -21,6 +21,8 @@ def test_live_phase3_completion_audit_is_incomplete_and_redacted_by_default() ->
     assert record["secrets_redacted"] is True
     assert "token_refresh_real_call_proof" in record["missing_requirements"]
     assert "live_submit_authority_present" in record["missing_requirements"]
+    assert record["env_scope_status"]["KIS_REFRESH_TOKEN"]["process_configured"] is False
+    assert "KIS_REFRESH_TOKEN" in record["missing_process_env_names"]
     assert "PHASE3_COMPLETION_SECRET" not in serialized
     assert "12345678" not in serialized
 
@@ -64,6 +66,8 @@ def test_live_phase3_completion_audit_keeps_submit_authority_missing_even_with_o
 
     assert record["requirements"]["token_refresh_real_call_proof"] is True
     assert record["requirements"]["kill_switch_ready"] is True
+    assert record["env_scope_status"]["KIS_REFRESH_TOKEN"]["process_configured"] is True
+    assert "KIS_REFRESH_TOKEN" not in record["missing_process_env_names"]
     assert record["complete"] is False
     assert "live_submit_authority_present" in record["missing_requirements"]
     assert "live_cancel_authority_present" in record["missing_requirements"]

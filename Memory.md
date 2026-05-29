@@ -45,7 +45,7 @@
 - `tools/kis_live_token_refresh_preflight.py`는 live token refresh real-call proof용 CLI이며 기본은 preview-only/no-network다.
 - 사용자 승인 범위에 따라 `/api/live/status`, `/api/kis/orders`, `/api/kis/orders/status`, `/api/kis/orders/preview`, `/api/kis/orders/submit`, `/api/kis/orders/cancel` disabled scaffold를 추가했다. 모든 응답은 `live_order_created=false`, `network_call_performed=false`, `endpoint_called=false`를 유지한다.
 - `/api/kis/broker/*`, `/api/kis/websocket/*`는 계속 미등록 404다.
-- `tools/live_phase3_completion_audit.py`는 3단계 완료 조건을 항목별로 판정한다. 현재 record는 `complete=false`, `network_call_performed_by_audit=false`, `live_order_created=false`이며 token refresh proof와 live submit/cancel authority가 미충족이다.
+- `tools/live_phase3_completion_audit.py`는 3단계 완료 조건과 live env Process/User/Machine 설정 여부를 항목별로 판정한다. 현재 record는 `complete=false`, `network_call_performed_by_audit=false`, `live_order_created=false`이며 required live env, token refresh proof, live submit/cancel authority가 미충족이다.
 
 ## 최신 검증 결과
 
