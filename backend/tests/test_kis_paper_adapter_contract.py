@@ -235,6 +235,26 @@ def test_kis_paper_adapter_submit_cancel_query_sync_with_mock_http(monkeypatch):
     assert client.calls[5]["headers"]["tr_id"] == "VTTC8434R"
 
 
+def test_kis_paper_adapter_maps_domestic_market_order_to_market_division(monkeypatch):
+    _set_kis_env(monkeypatch)
+    client = _FakeHttpClient(
+        [
+            _FakeResponse(
+                {"rt_cd": "0", "msg_cd": "0", "msg1": "OK", "output": {"KRX_FWDG_ORD_ORGNO": "001", "ODNO": "000003"}}
+            )
+        ]
+    )
+    adapter = KisPaperBrokerAdapter(config=_enabled_config(), http_client=client, max_retries=0)
+
+    submit = adapter.submit_order(BrokerOrderRequest(symbol="005930", side="buy", qty=3, limit_price=None))
+
+    assert submit["ok"] is True
+    assert submit["order"]["remaining_qty"] == 3
+    assert client.calls[0]["headers"]["tr_id"] == "VTTC0012U"
+    assert client.calls[0]["json"]["ORD_DVSN"] == "01"
+    assert client.calls[0]["json"]["ORD_UNPR"] == "0"
+
+
 def test_kis_paper_adapter_keeps_domestic_path_when_metadata_exchange_is_krx(monkeypatch):
     _set_kis_env(monkeypatch)
     client = _FakeHttpClient(

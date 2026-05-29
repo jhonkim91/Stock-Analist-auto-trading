@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import date
 from textwrap import dedent
 
 from sqlalchemy import func, select
 
-from backend.app.models.tables import Order, PaperAuditEvent, PaperOrder
+from backend.app.models.tables import DailyOhlcv, Order, PaperAuditEvent, PaperOrder
 from backend.app.services.paper_order_service import PaperOrderService
 
 
@@ -220,6 +221,53 @@ def test_submit_creates_local_paper_order_idempotently_without_live_side_effects
     assert _count(db_session, PaperOrder) == 1
     assert _count(db_session, PaperAuditEvent) == 1
     assert _count(db_session, Order) == 0
+
+
+def test_market_order_uses_latest_close_for_notional_gate(db_session, tmp_path, monkeypatch):
+    _enable_manual_paper_runtime(monkeypatch)
+    _write_paper_config(tmp_path)
+    db_session.add(
+        DailyOhlcv(
+            trade_date=date(2026, 5, 29),
+            symbol="KR015",
+            open=100.0,
+            high=110.0,
+            low=95.0,
+            close=100.0,
+            adj_close=100.0,
+            volume=1000,
+            turnover_value=100000.0,
+            venue="KRX",
+        )
+    )
+    db_session.commit()
+    service = PaperOrderService(db_session, config_dir=tmp_path)
+
+    allowed = service.submit_order(
+        symbol="KR015",
+        side="buy",
+        qty=100,
+        limit_price=None,
+        confirm=True,
+        idempotency_key="phase4-market-order",
+    )
+    blocked = service.submit_order(
+        symbol="KR015",
+        side="buy",
+        qty=1000001,
+        limit_price=None,
+        confirm=True,
+        idempotency_key="phase4-market-notional-block",
+    )
+
+    assert allowed["ok"] is True
+    assert allowed["order"]["order_type"] == "market"
+    assert allowed["risk_gate"]["estimated_notional"] == 10000.0
+    assert allowed["risk_gate"]["notional_basis"] == "latest_daily_close"
+    assert allowed["network_call_performed"] is False
+    assert blocked["ok"] is False
+    assert "PAPER_ORDER_NOTIONAL_LIMIT_EXCEEDED" in blocked["reason_codes"]
+    assert blocked["risk_gate"]["estimated_notional"] == 100000100.0
 
 
 def test_network_submit_uses_us_market_metadata_from_runtime_env(db_session, tmp_path, monkeypatch):

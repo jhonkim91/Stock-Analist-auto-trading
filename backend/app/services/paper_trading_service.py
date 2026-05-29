@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.paths import CONFIG_DIR
-from backend.app.models.tables import Order, PaperAccountSnapshot, PaperAuditEvent, PaperFill, PaperOrder, PaperPosition
+from backend.app.models.tables import DailyOhlcv, Order, PaperAccountSnapshot, PaperAuditEvent, PaperFill, PaperOrder, PaperPosition
 from backend.app.services.kis_paper_broker_adapter import KisPaperBrokerAdapter
 from backend.app.services.market_session_service import MarketSessionService
 from backend.app.services.token_manager import TokenLifecycleService
@@ -296,7 +296,7 @@ class PaperRiskGate:
         limit_price: float | None,
         stop_price: float | None,
     ) -> dict[str, object]:
-        """Paper preview 입력을 검증하되 Phase 3E-1에서는 항상 deny로 반환한다."""
+        """Paper preview/submit 입력을 조건부 allow/deny gate로 검증한다."""
         reason_codes: list[str] = []
         normalized_symbol = symbol.strip()
         normalized_side = side.strip().lower()
@@ -317,7 +317,11 @@ class PaperRiskGate:
         if max_order_qty and qty > max_order_qty:
             reason_codes.append("PAPER_ORDER_QTY_LIMIT_EXCEEDED")
         max_notional = float(config.get("max_order_notional") or 0)
-        if max_notional and limit_price is not None and qty > 0 and qty * limit_price > max_notional:
+        notional_price = limit_price if limit_price is not None else self._latest_market_price(normalized_symbol)
+        estimated_notional = float(qty) * float(notional_price) if qty > 0 and notional_price is not None else None
+        if max_notional and qty > 0 and notional_price is None:
+            reason_codes.append("PAPER_MARKET_ORDER_PRICE_UNAVAILABLE_FOR_NOTIONAL")
+        if max_notional and estimated_notional is not None and estimated_notional > max_notional:
             reason_codes.append("PAPER_ORDER_NOTIONAL_LIMIT_EXCEEDED")
         blacklist = {str(item).strip().upper() for item in config.get("blacklist") or []}
         if normalized_symbol and normalized_symbol.upper() in blacklist:
@@ -348,7 +352,27 @@ class PaperRiskGate:
             reason_codes.extend(self._sell_position_reasons(symbol=normalized_symbol, qty=qty))
 
         passed = not reason_codes
-        return {"decision": "allow" if passed else "deny", "passed": passed, "reason_codes": reason_codes}
+        return {
+            "decision": "allow" if passed else "deny",
+            "passed": passed,
+            "reason_codes": reason_codes,
+            "estimated_notional": estimated_notional,
+            "notional_basis": "limit_price" if limit_price is not None else "latest_daily_close",
+            "notional_price": notional_price,
+        }
+
+    def _latest_market_price(self, symbol: str) -> float | None:
+        if self.db is None or not symbol:
+            return None
+        row = self.db.scalar(
+            select(DailyOhlcv)
+            .where(DailyOhlcv.symbol == symbol.strip().upper())
+            .order_by(DailyOhlcv.trade_date.desc())
+            .limit(1)
+        )
+        if row is None:
+            return None
+        return float(row.close)
 
     def _cooldown_reasons(self, *, symbol: str, side: str, cooldown_seconds: int) -> list[str]:
         if self.db is None or not symbol:

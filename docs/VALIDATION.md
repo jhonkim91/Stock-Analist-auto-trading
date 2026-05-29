@@ -1,5 +1,20 @@
 # Validation
 
+## 2026-05-30 Market Order Notional Gate and Telegram Open Orders
+
+시장가 paper order가 `max_order_notional`을 우회하지 않도록 DB 최신 종가 기준 추정 주문금액을 risk gate에 추가했다. Telegram `/orders open`과 `/orders 미체결`은 단순 status 문자열 필터 대신 `GET /api/paper/orders/open`과 같은 미체결 상태 집합을 사용한다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Market order type | 통과 | `limit_price=None` paper order는 `order_type=market`으로 저장 |
+| Market notional gate | 통과 | DB 최신 종가 기준 `estimated_notional`, `notional_basis=latest_daily_close` 반환 및 한도 초과 시 `PAPER_ORDER_NOTIONAL_LIMIT_EXCEEDED` |
+| KIS domestic market mapping | 통과 | KIS paper 국내 시장가 주문 body는 `ORD_DVSN=01`, `ORD_UNPR=0`, paper TR `VTTC0012U` |
+| Telegram open orders | 통과 | `/orders open`, `/orders 미체결`은 `submitted` 주문을 미체결 목록으로 반환 |
+| Related tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_service.py backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_kis_paper_adapter_contract.py::test_kis_paper_adapter_submit_cancel_query_sync_with_mock_http backend/tests/test_kis_paper_adapter_contract.py::test_kis_paper_adapter_maps_domestic_market_order_to_market_division -q -p no:cacheprovider --basetemp $env:TEMP\stock_market_order_open_orders` -> `16 passed in 45.58s` |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_market_orders` -> `534 passed in 477.90s` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff check | 통과 | `git diff --check` -> exit 0, CRLF warning만 출력 |
+
 ## 2026-05-30 Stock Search Summary and Settings Button Fallback
 
 종목 상세 API에 `summary` payload를 추가하고 Telegram `/search` 응답을 현재가, 등락률, 시가/고가/저가, 거래량, 거래대금, 주요 지표, 통과전략까지 포함하도록 보강했다. Settings runtime env preset은 runtime-env 상태 조회가 늦어져도 fallback 버튼을 먼저 렌더링해 같은 preset API를 호출하며, notification dry-run 버튼에도 한국어 hover/focus 설명을 추가했다.

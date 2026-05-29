@@ -234,6 +234,31 @@ def test_telegram_cancel_requires_confirm_and_cancels_local_paper_order(db_sessi
     assert order.status == "cancelled"
 
 
+def test_telegram_orders_open_uses_unfilled_order_view(db_session, tmp_path, monkeypatch) -> None:
+    _enable_paper_runtime(monkeypatch)
+    _write_paper_config(tmp_path)
+    trading = PaperTradingService(db_session, config_dir=tmp_path)
+    created = trading.submit_order(
+        symbol="KR014",
+        side="buy",
+        qty=1,
+        limit_price=100.0,
+        confirm=True,
+        idempotency_key="telegram-open-order-create",
+    )
+    bot = TelegramBotService(db_session, config_dir=tmp_path)
+
+    open_orders = bot.handle_text("/orders open")
+    unfilled_orders = bot.handle_text("/orders 미체결")
+
+    assert created["order"]["status"] == "submitted"
+    assert open_orders["status"] == "ok"
+    assert open_orders["payload"]["status"] == "ok"
+    assert "submitted" in open_orders["payload"]["open_statuses"]
+    assert created["order"]["paper_order_id"] in open_orders["message"]
+    assert unfilled_orders["payload"]["orders"][0]["paper_order_id"] == created["order"]["paper_order_id"]
+
+
 def test_stock_detail_api_uses_db_fallback_without_kis_network(full_flow_client, monkeypatch) -> None:
     monkeypatch.setenv("KIS_MARKET_QUOTE_ENABLED", "false")
 

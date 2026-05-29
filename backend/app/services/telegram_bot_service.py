@@ -300,7 +300,10 @@ class TelegramBotService:
 
     def _handle_orders(self, command: TelegramCommand) -> dict[str, Any]:
         status = command.args[0] if command.args else None
-        orders = self._paper_trading_service().list_orders(status=status)
+        if self._orders_open_requested(status):
+            orders = self._paper_trading_service().list_open_orders()
+        else:
+            orders = self._paper_trading_service().list_orders(status=status)
         lines = [
             f"{row['paper_order_id']} {row['symbol']} {row['side']} {row['qty']} {row['status']}"
             for row in orders.get("orders", [])[:10]
@@ -443,6 +446,11 @@ class TelegramBotService:
                 continue
             return normalized
         return None
+
+    @staticmethod
+    def _orders_open_requested(status: str | None) -> bool:
+        normalized = str(status or "").strip().lower()
+        return normalized in {"open", "pending", "submitted", "unfilled", "working", "미체결", "대기"}
 
     def _paper_trading_service(self) -> PaperTradingService:
         return PaperTradingService(self.db, config_dir=self.config_dir)

@@ -221,6 +221,7 @@ class PaperOrderService:
             request_hash=request_hash,
             idempotency_key=normalized_key,
             created=True,
+            risk_gate=risk_gate,
         )
 
     def cancel_order(
@@ -659,6 +660,7 @@ class PaperOrderService:
             idempotency_key=idempotency_key,
             created=True,
             reason="KIS_PAPER_ORDER_SUBMITTED",
+            risk_gate=risk_gate,
             broker_trace=broker_result.get("broker_trace"),
         )
 
@@ -700,6 +702,7 @@ class PaperOrderService:
         idempotency_key: str,
         created: bool,
         reason: str = "PAPER_ORDER_LOCAL_ONLY",
+        risk_gate: dict[str, Any] | None = None,
         broker_trace: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return {
@@ -711,7 +714,7 @@ class PaperOrderService:
             "network_call_performed": bool(order.network_call_performed),
             "reason": reason,
             "reason_codes": [],
-            "risk_gate": {"decision": "allow", "passed": True, "reason_codes": []},
+            "risk_gate": risk_gate or {"decision": "allow", "passed": True, "reason_codes": []},
             "request_hash": request_hash,
             "idempotency_key": idempotency_key,
             "order": self._order_payload(order),
