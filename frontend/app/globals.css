@@ -2092,8 +2092,14 @@ tr.sel td {
   font-size: 11px;
 }
 
+.card-hd button[data-tooltip] {
+  position: relative;
+}
+
 .presetButton[data-tooltip]:hover::after,
-.presetButton[data-tooltip]:focus-visible::after {
+.presetButton[data-tooltip]:focus-visible::after,
+.card-hd button[data-tooltip]:hover::after,
+.card-hd button[data-tooltip]:focus-visible::after {
   position: absolute;
   z-index: 24;
   left: 0;

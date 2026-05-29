@@ -1,5 +1,23 @@
 # Validation
 
+## 2026-05-30 Stock Search Summary and Settings Button Fallback
+
+종목 상세 API에 `summary` payload를 추가하고 Telegram `/search` 응답을 현재가, 등락률, 시가/고가/저가, 거래량, 거래대금, 주요 지표, 통과전략까지 포함하도록 보강했다. Settings runtime env preset은 runtime-env 상태 조회가 늦어져도 fallback 버튼을 먼저 렌더링해 같은 preset API를 호출하며, notification dry-run 버튼에도 한국어 hover/focus 설명을 추가했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Stock detail summary | 통과 | `GET /api/stocks/{symbol}` 응답 `summary`에 가격/거래/지표/전략 통과 요약 포함 |
+| Telegram `/search` | 통과 | 메시지에 `현재가`, `등락률`, `시가`, `고가`, `저가`, `거래량`, `거래대금`, `주요지표`, `통과전략` 포함 |
+| Settings preset fallback | 통과 | frontend fallback preset 버튼은 `paper_kis_ready`, `paper_bot_auto_on`, `telegram_report_ready`, `paper_bot_safe_stop`을 렌더링하고 `confirm=true`로 preset API 호출 |
+| Settings tooltip | 통과 | preset/toggle/notification dry-run 버튼은 `data-tooltip`과 `title` 기반 한국어 설명 표시 |
+| Targeted tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_search_settings_contract` -> `9 passed in 82.52s` |
+| Frontend typecheck | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit` -> exit 0 |
+| Frontend lint | 통과 | `cd frontend; npm.cmd run lint` -> exit 0 |
+| Frontend build | 통과 | 최초 build는 실행 중인 workspace `next start`/`uvicorn`의 `.next\launcher-backend.err.log` 잠금 때문에 `EBUSY`로 실패. 해당 로컬 서버 프로세스만 종료 후 `cd frontend; npm.cmd run build` 재실행 -> exit 0 |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_search_settings` -> `531 passed in 498.97s` |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Diff check | 통과 | `git diff --check` -> exit 0, CRLF warning만 출력 |
+
 ## 2026-05-30 Paper Sync Worker Bounded Loop API
 
 KIS paper 주문/체결/잔고 sync worker에 `POST /api/paper/sync-worker/run-loop`를 추가했다. 기본 OFF와 auto-start false는 유지하며, `confirm=true`와 `PAPER_SYNC_WORKER_ENABLED=true`가 있어야 bounded loop를 실행한다. 반복 횟수는 `PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP` 안에서 잘라낸다.

@@ -21,6 +21,45 @@ import { getBotStatus, getPaperStatus } from "../../lib/paperApi";
 
 const sections = ["strategies", "risk", "backtest", "app"] as const;
 const envCategoryOrder = ["paper", "bot", "broker", "kis", "telegram", "reports", "notifications", "locked"] as const;
+const fallbackEnvPresets: RuntimeEnvPreset[] = [
+  {
+    name: "paper_kis_ready",
+    label: "모의 주문 준비",
+    category: "paper",
+    description: "KIS 모의투자 주문/취소/조회에 필요한 paper_kis gate를 한 번에 켭니다. 실계좌 주문은 계속 false로 잠급니다.",
+    high_impact: true,
+    scope: "process",
+    changes: []
+  },
+  {
+    name: "paper_bot_auto_on",
+    label: "자동매매 ON",
+    category: "bot",
+    description: "모의 자동매매봇을 paper_kis 기준으로 켜고 auto-submit gate까지 켭니다. live 주문은 계속 차단됩니다.",
+    high_impact: true,
+    scope: "process",
+    changes: []
+  },
+  {
+    name: "telegram_report_ready",
+    label: "텔레그램 리포트 ON",
+    category: "telegram",
+    description: "Telegram bot/report scheduler와 장전/장후/주간 리포트 gate를 켭니다. 토큰과 chat_id 값은 .env에서만 읽습니다.",
+    high_impact: true,
+    scope: "process",
+    changes: []
+  },
+  {
+    name: "paper_bot_safe_stop",
+    label: "봇/주문 정지",
+    category: "locked",
+    description: "모의 자동매매와 신규 모의 주문을 즉시 막는 process-only 정지 preset입니다. live 주문은 계속 false입니다.",
+    high_impact: true,
+    scope: "process",
+    changes: []
+  }
+];
+const notificationDryRunTooltip = "Telegram/Discord 알림 설정을 실제 전송 없이 dry-run으로 검증합니다. 토큰, chat_id, webhook 원문은 화면에 표시하지 않습니다.";
 
 function categoryTitle(category: string) {
   const labels: Record<string, string> = {
@@ -79,7 +118,8 @@ function runtimeToggleTooltip(toggle: RuntimeEnvToggle, nextEnabled: boolean) {
 
 function runtimePresetTooltip(preset: RuntimeEnvPreset) {
   const changes = preset.changes.map((change) => `${change.name}=${change.value}`).join(", ");
-  return `${preset.description} 클릭하면 현재 backend 프로세스에 즉시 반영됩니다. 적용값: ${changes}. 서버를 재시작하면 .env 또는 실행 환경 값으로 돌아갈 수 있습니다.`;
+  const changeText = changes ? `적용값: ${changes}.` : "적용값은 서버 allowlist 기준으로 적용됩니다.";
+  return `${preset.description} 클릭하면 현재 backend 프로세스에 즉시 반영됩니다. ${changeText} 서버를 재시작하면 .env 또는 실행 환경 값으로 돌아갈 수 있습니다.`;
 }
 
 function settledValue<T>(result: PromiseSettledResult<T>): T | null {
@@ -229,7 +269,7 @@ export default function SettingsPage() {
     }))
     .filter((group) => group.toggles.length > 0);
 
-  const envPresets = runtimeEnv?.presets ?? [];
+  const envPresets = runtimeEnv?.presets?.length ? runtimeEnv.presets : fallbackEnvPresets;
 
   return (
     <main className="shell">
@@ -325,7 +365,7 @@ export default function SettingsPage() {
           <article>
             <div className="card-hd">
               <span className="card-title">Notification summary</span>
-              <button type="button" onClick={runNotificationTest}>
+              <button data-tooltip={notificationDryRunTooltip} title={notificationDryRunTooltip} type="button" onClick={runNotificationTest}>
                 dry-run
               </button>
             </div>

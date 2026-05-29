@@ -74,6 +74,8 @@ def test_frontend_static_contracts_are_paper_only_and_redacted():
     assert "data-tooltip" in combined
     assert "클릭하면" in combined
     assert "실계좌 주문은 이 화면에서 켤 수 없습니다" in combined
+    assert "fallbackEnvPresets" in combined
+    assert "dry-run으로 검증" in combined
     assert not SECRET_PATTERN.search(combined)
     assert not FORBIDDEN_LIVE_COPY.search(combined)
     assert "/api/kis/orders" not in combined

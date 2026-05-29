@@ -60,13 +60,22 @@ class MarketRealtimeService:
         latest_screens = self._latest_screens(normalized)
         fundamentals = self._fundamentals_asof(normalized, latest_daily.trade_date if latest_daily else None)
         quote = self._quote_with_kis_fallback(kis_quote, latest_daily, previous_daily)
+        indicator_payload = self._indicator_payload(latest_indicator)
+        screener_payloads = [self._screen_payload(row) for row in latest_screens]
+        symbol_payload = self._symbol_payload(symbol_row)
         return {
             "ok": True,
-            "symbol": self._symbol_payload(symbol_row),
+            "symbol": symbol_payload,
             "quote": quote,
-            "indicator": self._indicator_payload(latest_indicator),
+            "indicator": indicator_payload,
             "fundamentals": self._fundamentals_payload(fundamentals),
-            "screener": [self._screen_payload(row) for row in latest_screens],
+            "screener": screener_payloads,
+            "summary": self._detail_summary_payload(
+                symbol=symbol_payload,
+                quote=quote,
+                indicator=indicator_payload,
+                screener=screener_payloads,
+            ),
             "source": quote.get("source") or "local_daily_ohlcv",
             "quote_provider": {
                 "primary": "kis_paper_quote",
@@ -358,6 +367,41 @@ class MarketRealtimeService:
             "latest_score": latest_screen.total_score if latest_screen else None,
             "latest_grade": self._grade(latest_screen.total_score) if latest_screen else None,
             "latest_passed": latest_screen.passed if latest_screen else None,
+        }
+
+    @staticmethod
+    def _detail_summary_payload(
+        *,
+        symbol: dict[str, object],
+        quote: dict[str, object],
+        indicator: dict[str, object] | None,
+        screener: list[dict[str, object]],
+    ) -> dict[str, object]:
+        passed = [row for row in screener if row.get("passed")]
+        return {
+            "symbol": symbol.get("symbol"),
+            "name": symbol.get("name"),
+            "current_price": quote.get("current_price") or quote.get("close"),
+            "change_pct": quote.get("change_pct"),
+            "open": quote.get("open"),
+            "high": quote.get("high"),
+            "low": quote.get("low"),
+            "volume": quote.get("volume"),
+            "turnover_value": quote.get("turnover_value"),
+            "major_indicators": {
+                "sma20": (indicator or {}).get("sma20"),
+                "sma50": (indicator or {}).get("sma50"),
+                "sma200": (indicator or {}).get("sma200"),
+                "relative_strength_score": (indicator or {}).get("relative_strength_score"),
+                "atr20_pct": (indicator or {}).get("atr20_pct"),
+                "volume_ratio_50": (indicator or {}).get("volume_ratio_50"),
+            },
+            "strategy_total_count": len(screener),
+            "strategy_passed_count": len(passed),
+            "passed_strategies": [str(row.get("strategy_name") or row.get("strategy_tag") or "") for row in passed],
+            "quote_source": quote.get("source"),
+            "fallback_used": quote.get("fallback_used"),
+            "fallback_reason_codes": list(quote.get("fallback_reason_codes") or []),
         }
 
     @staticmethod

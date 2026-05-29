@@ -165,15 +165,7 @@ class TelegramBotService:
                 message=f"{symbol} 종목을 찾을 수 없습니다.",
                 reason_codes=["TELEGRAM_SEARCH_NOT_FOUND"],
             )
-        quote = detail["quote"]
-        screens = detail.get("screener") or []
-        passed = [row for row in screens if row.get("passed")]
-        message = (
-            f"{detail['symbol']['symbol']} {detail['symbol']['name']}\n"
-            f"현재가 {quote.get('current_price') or quote.get('close')} "
-            f"등락률 {quote.get('change_pct')}\n"
-            f"거래량 {quote.get('volume')} 통과전략 {len(passed)}/{len(screens)}"
-        )
+        message = self._search_summary(detail)
         return self._response(command, status="ok", message=message, payload=detail)
 
     def _handle_report(self, command: TelegramCommand) -> dict[str, Any]:
@@ -501,6 +493,53 @@ class TelegramBotService:
         return f"{prefix}\n{summary}".strip() if summary else prefix
 
     @staticmethod
+    def _search_summary(detail: dict[str, Any]) -> str:
+        summary = detail.get("summary") if isinstance(detail.get("summary"), dict) else {}
+        symbol = detail.get("symbol") if isinstance(detail.get("symbol"), dict) else {}
+        quote = detail.get("quote") if isinstance(detail.get("quote"), dict) else {}
+        indicator = detail.get("indicator") if isinstance(detail.get("indicator"), dict) else {}
+        screens = detail.get("screener") if isinstance(detail.get("screener"), list) else []
+        passed_names = list(summary.get("passed_strategies") or [])
+        if not passed_names:
+            passed_names = [
+                str(row.get("strategy_name") or row.get("strategy_tag") or "")
+                for row in screens
+                if isinstance(row, dict) and row.get("passed")
+            ]
+        strategy_text = ", ".join(name for name in passed_names[:5] if name) or "없음"
+        if len(passed_names) > 5:
+            strategy_text = f"{strategy_text} 외 {len(passed_names) - 5}개"
+        source = str(summary.get("quote_source") or quote.get("source") or detail.get("source") or "unknown")
+        fallback_reasons = list(summary.get("fallback_reason_codes") or quote.get("fallback_reason_codes") or [])
+        fallback_text = f" fallback={','.join(str(item) for item in fallback_reasons[:3])}" if fallback_reasons else ""
+        major_indicators = summary.get("major_indicators") if isinstance(summary.get("major_indicators"), dict) else indicator
+        return "\n".join(
+            [
+                f"{symbol.get('symbol') or summary.get('symbol')} {symbol.get('name') or summary.get('name')}",
+                "현재가 "
+                f"{_format_number(summary.get('current_price') or quote.get('current_price') or quote.get('close'))} "
+                f"등락률 {_format_percent(summary.get('change_pct') or quote.get('change_pct'))}",
+                "시가 "
+                f"{_format_number(summary.get('open') or quote.get('open'))} "
+                f"고가 {_format_number(summary.get('high') or quote.get('high'))} "
+                f"저가 {_format_number(summary.get('low') or quote.get('low'))}",
+                "거래량 "
+                f"{_format_number(summary.get('volume') or quote.get('volume'), decimals=0)} "
+                f"거래대금 {_format_number(summary.get('turnover_value') or quote.get('turnover_value'), decimals=0)}",
+                "주요지표 "
+                f"SMA20={_format_number(major_indicators.get('sma20'))} "
+                f"SMA50={_format_number(major_indicators.get('sma50'))} "
+                f"SMA200={_format_number(major_indicators.get('sma200'))} "
+                f"RS={_format_number(major_indicators.get('relative_strength_score'))} "
+                f"ATR20%={_format_percent(major_indicators.get('atr20_pct'))}",
+                "통과전략 "
+                f"{summary.get('strategy_passed_count', len(passed_names))}/{summary.get('strategy_total_count', len(screens))}: "
+                f"{strategy_text}",
+                f"데이터 {source}{fallback_text}",
+            ]
+        )
+
+    @staticmethod
     def _idempotency_key(raw_text: str, *, chat_id: str | None) -> str:
         basis = f"{chat_id or 'telegram'}:{raw_text.strip().lower()}"
         return f"telegram-{hashlib.sha256(basis.encode('utf-8')).hexdigest()[:24]}"
@@ -584,6 +623,29 @@ def _bool_or_none(value: object) -> bool | None:
     if normalized in {"0", "false", "no", "off"}:
         return False
     return None
+
+
+def _format_number(value: object, *, decimals: int = 2) -> str:
+    if value in {None, ""}:
+        return "N/A"
+    try:
+        numeric = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return str(value)
+    if decimals <= 0:
+        return f"{numeric:,.0f}"
+    return f"{numeric:,.{decimals}f}".rstrip("0").rstrip(".")
+
+
+def _format_percent(value: object) -> str:
+    if value in {None, ""}:
+        return "N/A"
+    try:
+        numeric = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return str(value)
+    text = f"{numeric * 100:.2f}".rstrip("0").rstrip(".")
+    return f"{text}%"
 
 
 def _env_true(name: str) -> bool:

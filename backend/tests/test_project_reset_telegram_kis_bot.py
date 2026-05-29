@@ -138,6 +138,11 @@ def test_telegram_command_parsing_and_search_fallback(full_flow_client, monkeypa
     assert search_payload["command"] == "/search"
     assert search_payload["payload"]["quote"]["fallback_used"] is True
     assert "KIS_MARKET_QUOTE_DISABLED" in search_payload["payload"]["quote"]["fallback_reason_codes"]
+    assert search_payload["payload"]["summary"]["current_price"] == search_payload["payload"]["quote"]["current_price"]
+    assert search_payload["payload"]["summary"]["strategy_total_count"] == len(search_payload["payload"]["screener"])
+    search_message = search_payload["message"]
+    for label in ("현재가", "등락률", "시가", "고가", "저가", "거래량", "거래대금", "주요지표", "통과전략"):
+        assert label in search_message
     assert buy_preview.status_code == 200
     assert buy_preview.json()["status"] == "preview"
     assert buy_preview.json()["payload"]["paper_order_created"] is False
@@ -240,6 +245,13 @@ def test_stock_detail_api_uses_db_fallback_without_kis_network(full_flow_client,
     assert payload["quote"]["available"] is True
     assert payload["quote"]["source"] == "local_daily_ohlcv"
     assert payload["quote"]["fallback_used"] is True
+    assert payload["summary"]["current_price"] == payload["quote"]["current_price"]
+    assert payload["summary"]["open"] == payload["quote"]["open"]
+    assert payload["summary"]["high"] == payload["quote"]["high"]
+    assert payload["summary"]["low"] == payload["quote"]["low"]
+    assert payload["summary"]["turnover_value"] == payload["quote"]["turnover_value"]
+    assert "sma20" in payload["summary"]["major_indicators"]
+    assert payload["summary"]["strategy_total_count"] == len(payload["screener"])
     assert payload["network_call_performed"] is False
 
 
