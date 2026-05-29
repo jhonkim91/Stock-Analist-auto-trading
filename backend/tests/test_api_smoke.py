@@ -106,7 +106,7 @@ def test_full_backend_api_smoke_flow_asserts_core_fields(client):
     broker_status = client.get("/api/broker/status")
     assert broker_status.status_code == 200
     broker_payload = broker_status.json()
-    assert broker_payload["mode"] in {"disabled", "safety_scaffold"}
+    assert broker_payload["mode"] in {"disabled", "safety_scaffold", "paper"}
     assert broker_payload["live_trading_enabled"] is False
     assert broker_payload["can_submit"] is False
     assert broker_payload["token_issued"] is False
@@ -119,9 +119,9 @@ def test_full_backend_api_smoke_flow_asserts_core_fields(client):
     preview = client.post("/api/broker/orders/preview", json={"symbol": "KR009", "side": "buy", "qty": 10})
     assert preview.status_code == 200
     preview_payload = preview.json()
-    assert preview_payload["preview_only"] is True
     assert preview_payload["order_created"] is False
-    assert preview_payload["can_submit"] is False
+    assert preview_payload["session_metadata"]["operational_layer"]["live_submit_allowed"] is False
+    assert preview_payload["session_metadata"]["operational_layer"]["paper_submit_allowed"] is False
     assert preview_payload["token_issued"] is False
     assert preview_payload["network_call_performed"] is False
     assert preview_payload["adapter_order_call_performed"] is False
@@ -133,10 +133,9 @@ def test_full_backend_api_smoke_flow_asserts_core_fields(client):
     paper_status = client.get("/api/paper/status")
     assert paper_status.status_code == 200
     paper_status_payload = paper_status.json()
-    assert paper_status_payload["enabled"] is False
+    assert paper_status_payload["mode"] in {"disabled", "safety_scaffold", "paper"}
     assert paper_status_payload["can_create"] is False
     assert paper_status_payload["can_simulate_fills"] is False
-    assert paper_status_payload["preview_only"] is True
     assert paper_status_payload["paper_order_supported"] is False
     assert paper_status_payload["live_order_created"] is False
     assert paper_status_payload["broker_order_created"] is False

@@ -1,5 +1,41 @@
 # Validation
 
+## 2026-05-29 Goal Read/Report Phase 1
+
+실제 주문 없이 동작하는 조회/보고 1단계 surface를 추가했다. 신규 기능은 local DB 조회 전용이며 KIS network, broker submit, live order, paper fill/position mutation을 수행하지 않는다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 종목 상세 검색 | 완료 | `GET /api/market-realtime/search`, `GET /api/market-realtime/symbols/{symbol}` 추가. symbol master, 최신 daily OHLCV quote, indicator, screener, fundamentals as-of를 반환 |
+| 랭킹/차트 | 완료 | `GET /api/market-realtime/rankings`, `GET /api/market-realtime/symbols/{symbol}/chart` 추가. frontend `/market`에서 line/volume SVG chart와 ranking table 표시 |
+| 계좌/포트폴리오 리포트 | 완료 | `GET /api/account/summary`, `/holdings`, `/report` 추가. `paper_positions`와 `paper_account_snapshots`를 조회하며 `positions` synthetic table과 분리 |
+| CSV 매매일지 | 완료 | `GET /api/trade-journal/entries`, `/csv` 추가. `backtest_trade_ledger`, `paper_fills`, `paper_orders`를 CSV column으로 정규화 |
+| Frontend | 완료 | `/market` route와 sidebar `Market` navigation 추가. `http://127.0.0.1:3000/market` HTTP 200 및 screenshot `%TEMP%\stock-market-phase1.png` 확인 |
+| Backend targeted | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase1_read_report_api.py -q` -> `3 passed` |
+| Backend smoke/contracts | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q` -> `4 passed` |
+| No-live regression | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py -q` -> `7 passed` |
+| Frontend validation | 통과 | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` |
+| Secret scan / diff | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only |
+
+주의: 첫 frontend build는 기존 launcher 프로세스가 `.next\launcher-backend.err.log`를 잠가 `EBUSY`로 실패했다. repo 소유 backend/frontend 프로세스를 정리한 뒤 재빌드했고, 이후 `py launcher.py run --no-browser`, `py launcher.py check` 기준 backend 8000/frontend 3000은 launcher-owned 상태다.
+
+## 2026-05-29 Runtime Env Toggle Controls
+
+Settings 화면에 현재 backend 프로세스 환경변수 gate를 켜고 끄는 버튼을 추가했다. `.env.local`이나 config 파일은 수정하지 않으며, allowlist boolean 값만 `os.environ`에 반영한다. 실전 주문 gate인 `ENABLE_REAL_ORDER`는 UI/API에서 true로 켤 수 없고 false로만 고정된다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Backend runtime env API | 완료 | `GET /api/settings/runtime-env`, `POST /api/settings/runtime-env/toggle` 추가. 응답은 `scope=process`, `persistence=process_only`, `file_write_performed=false`, `network_call_performed=false`, `live_order_created=false`, `secrets_redacted=true` |
+| Allowlist/lock | 완료 | paper, bot, broker, KIS paper token/WebSocket, report, notification gate만 노출. `ENABLE_REAL_ORDER`는 `LIVE_ENV_TOGGLE_LOCKED_FALSE`로 true 전환 차단 |
+| Runtime override wiring | 완료 | `PAPER_BOT_ENABLED`, `PAPER_BOT_AUTO_SUBMIT`, `PAPER_BOT_KILL_SWITCH`, notification enabled/dry-run, report/paper 관련 기존 env gate가 현재 프로세스 값으로 상태 API에 반영됨 |
+| Frontend Settings UI | 완료 | `/settings` 상단 `Runtime env` 패널에 category별 ON/OFF 버튼 추가. 버튼은 현재 backend 프로세스에만 반영되고, high-impact gate/locked badge를 표시 |
+| API toggle smoke | 통과 | `REPORT_AUTOMATION_DRY_RUN`을 `/api/settings/runtime-env/toggle`로 false -> true -> false 왕복. file write/network/live order 모두 false |
+| Runtime HTTP smoke | 통과 | `py launcher.py check`; `http://127.0.0.1:3000/settings` -> 200, Runtime/env/settings text 확인; `GET /api/settings/runtime-env` -> 19 toggles, `ENABLE_REAL_ORDER false_locked=true` |
+| Browser/Playwright UI check | 제한 | Browser plugin은 `iab` unavailable. Playwright CLI screenshot도 로컬 환경에서 timeout되어 중단. 대체로 HTTP 렌더링과 API POST 왕복을 사용 |
+| Backend targeted tests | 통과 | `test_phase2_api.py` -> `10 passed in 268.76s`; `test_secret_redaction.py` -> `4 passed in 3.23s`; `test_frontend_api_contracts.py` -> `2 passed in 1.49s` |
+| Ops/no-live regression | 통과 | `test_notifications.py`, `test_paper_bot_scheduler.py`, `test_report_automation.py`, `test_no_live_trading_regression.py` -> `22 passed in 53.33s` |
+| Frontend validation | 통과 | `cd frontend; npm.cmd run lint`; `cd frontend; npm.cmd exec tsc -- --noEmit`; `cd frontend; npm.cmd run build` |
+
 ## 2026-05-28 Non-live Feature Activation and Paper Bot Nav Restore
 
 실거래를 제외한 KIS paper, paper bot, notification, report automation 기능을 수동 실행 가능 기본값으로 활성화했다. live 주문/cancel/fallback, scheduler auto-start, unattended loop는 계속 비활성 상태다. 사라졌던 frontend `Paper Bot` 탭은 app chrome navigation에 복구했고, production 서버를 재빌드/재시작해 실제 3000번 화면에서 확인했다.

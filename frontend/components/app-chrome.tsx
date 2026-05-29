@@ -23,6 +23,7 @@ type NavSection = {
 
 type NavIconName =
   | "dashboard"
+  | "market"
   | "filter"
   | "history"
   | "shield"
@@ -38,6 +39,7 @@ const navSections: NavSection[] = [
     label: "OVERVIEW",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
+      { href: "/market", label: "Market", icon: "market" },
       { href: "/screener", label: "Screener", icon: "filter", badge: { label: "7 pass", tone: "ok" } }
     ]
   },
@@ -84,6 +86,12 @@ function NavIcon({ name }: { name: NavIconName }) {
           <rect {...common} height="6" width="6" x="14" y="4" />
           <rect {...common} height="6" width="6" x="4" y="14" />
           <rect {...common} height="6" width="6" x="14" y="14" />
+        </>
+      ) : null}
+      {name === "market" ? (
+        <>
+          <path {...common} d="M4 18 10 9l4 5 6-8" />
+          <path {...common} d="M4 20h16" />
         </>
       ) : null}
       {name === "filter" ? <path {...common} d="M4 5h16l-6.4 7.2v5.1L10.4 19v-6.8L4 5Z" /> : null}

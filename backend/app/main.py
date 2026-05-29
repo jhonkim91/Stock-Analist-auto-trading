@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api import (
+    account,
     backtest,
     bot,
     broker,
@@ -12,12 +13,14 @@ from backend.app.api import (
     instruments,
     kis,
     market,
+    market_realtime,
     notifications,
     paper,
     portfolio,
     reports,
     screener,
     settings,
+    trade_journal,
 )
 from backend.app.core.database import init_db
 from backend.app.core.paths import ensure_runtime_dirs
@@ -51,7 +54,9 @@ def create_app() -> FastAPI:
     app.include_router(data.router)
     app.include_router(indicators.router)
     app.include_router(market.router)
+    app.include_router(market_realtime.router)
     app.include_router(instruments.router)
+    app.include_router(account.router)
     app.include_router(screener.router)
     app.include_router(reports.router)
     app.include_router(backtest.router)
@@ -62,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(kis.router)
     app.include_router(notifications.router)
     app.include_router(settings.router)
+    app.include_router(trade_journal.router)
     return app
 
 

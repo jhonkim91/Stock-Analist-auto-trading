@@ -23,6 +23,7 @@
 ## Implemented Scope
 
 - Phase 1: FastAPI backend core MVP.
+- Goal Read/Report Phase 1: `/api/market-realtime/*`, `/api/account/*`, `/api/trade-journal/*`와 frontend `/market` 화면으로 종목 상세 검색, 계좌/포트폴리오 리포트, 보유 종목 조회, 랭킹, 차트, CSV 매매일지를 local read-only surface로 제공한다.
 - Phase 2: Next.js MVP web flow.
 - Phase 3A: CSV data quality validation and preview-confirm import.
 - Phase 3B: provider-neutral external daily OHLCV preview-confirm flow.
@@ -249,6 +250,12 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `GET` | `/api/market/session` | venue/as_of 기준 현재 세션과 다음 window |
 | `GET` | `/api/market/sessions` | venue별 session window 목록 |
 | `GET` | `/api/market/calendar` | 정적 거래일 calendar preview |
+| `GET` | `/api/market-realtime/search` | local symbol master 기반 종목 검색 |
+| `GET` | `/api/market-realtime/symbols/{symbol}` | 종목 master, 최신 OHLCV quote, 지표, screener, 재무 as-of 상세 |
+| `GET` | `/api/market-realtime/symbols/{symbol}/chart` | frontend chart용 OHLCV/이동평균 series |
+| `GET` | `/api/market-realtime/rankings` | screener score 또는 OHLCV 기반 랭킹 |
+| `GET` | `/api/account/summary`, `/api/account/holdings`, `/api/account/report` | paper table 기반 계좌/보유/포트폴리오 리포트 조회 |
+| `GET` | `/api/trade-journal/entries`, `/api/trade-journal/csv` | backtest ledger와 paper fill/order 기반 매매일지 조회/CSV export |
 | `GET` | `/api/broker/status` | broker safety status |
 | `POST` | `/api/broker/orders/preview` | venue/session metadata 포함 dry-run preview only |
 | `GET` | `/api/paper/status` | paper disabled safety status |

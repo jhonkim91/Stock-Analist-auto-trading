@@ -104,6 +104,7 @@ live fallback requested = deny
 
 | Phase | 상태 | 기준 |
 |---|---|---|
+| 조회/보고 1단계 | 완료 | 종목 상세 검색, 계좌/포트폴리오 리포트, 보유 종목 리스트, 랭킹, 차트, CSV 매매일지를 local read-only API/UI로 추가. 주문, KIS network, live 경로 변경 없음 |
 | Phase 0 | 완료 | baseline audit |
 | Phase 1 | 완료 | KIS paper API confirmation matrix |
 | Phase 2 | 완료 | paper broker adapter hardening |
