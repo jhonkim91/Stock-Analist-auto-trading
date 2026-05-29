@@ -2076,6 +2076,43 @@ tr.sel td {
   gap: 8px;
 }
 
+.envPresetBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.presetButton {
+  position: relative;
+  min-height: 28px;
+  border-color: var(--color-border-secondary);
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
+  font-size: 11px;
+}
+
+.presetButton[data-tooltip]:hover::after,
+.presetButton[data-tooltip]:focus-visible::after {
+  position: absolute;
+  z-index: 24;
+  left: 0;
+  top: calc(100% + 6px);
+  width: min(360px, 78vw);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-primary);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-primary);
+  content: attr(data-tooltip);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+  padding: 8px;
+  text-align: left;
+  white-space: normal;
+}
+
 .envGroup {
   min-width: 0;
   border: 0.5px solid var(--color-border-tertiary);

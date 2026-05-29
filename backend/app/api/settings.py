@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from backend.app.models.schemas import RuntimeEnvToggleRequest
+from backend.app.models.schemas import RuntimeEnvPresetRequest, RuntimeEnvToggleRequest
 from backend.app.services.settings_service import SettingsService
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -23,5 +23,13 @@ def update_runtime_env(payload: RuntimeEnvToggleRequest) -> dict[str, object]:
     return SettingsService().set_runtime_env_toggle(
         name=payload.name,
         enabled=payload.enabled,
+        confirm=payload.confirm,
+    )
+
+
+@router.post("/runtime-env/preset")
+def apply_runtime_env_preset(payload: RuntimeEnvPresetRequest) -> dict[str, object]:
+    return SettingsService().set_runtime_env_preset(
+        name=payload.name,
         confirm=payload.confirm,
     )

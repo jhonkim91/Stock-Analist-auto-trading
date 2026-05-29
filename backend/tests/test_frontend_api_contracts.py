@@ -60,11 +60,13 @@ def test_frontend_static_contracts_are_paper_only_and_redacted():
         "/api/notifications/test",
         "/api/settings/runtime-env",
         "/api/settings/runtime-env/toggle",
+        "/api/settings/runtime-env/preset",
     ):
         assert endpoint in combined
 
     assert "/api/reports/${encodeURIComponent(reportId)}/notify" in combined
     assert "모의투자" in combined
+    assert "즉시 반영" in combined
     assert "실거래 아님" in combined
     assert "paper only" in combined
     assert "confirm" in combined
@@ -81,6 +83,7 @@ def test_frontend_static_contracts_are_paper_only_and_redacted():
 def test_frontend_referenced_api_contracts_are_fail_closed(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
     assert "/api/reports/{report_id}/notify" in route_paths
+    assert "/api/settings/runtime-env/preset" in route_paths
 
     status = client.get("/api/paper/status")
     submit = client.post(

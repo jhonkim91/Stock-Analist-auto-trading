@@ -36,7 +36,7 @@
 - `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once` 추가. Worker는 기본 OFF이며 `PAPER_SYNC_WORKER_ENABLED=true`, `confirm=true`, paper network gate 통과 시에만 `PaperSyncService.sync()`를 호출한다.
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가.
 - `backend/config/bot.yaml`과 `.env.example`에서 paper bot 자동매매는 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false)로 정렬.
-- Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
+- Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. 개별 ON/OFF 외에 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 제공하고 `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
 - `.cache/`를 `.gitignore`에 추가해 local token cache가 공개 저장소에 포함되지 않도록 차단.
 
 ## 보존한 기존 기능
@@ -62,6 +62,9 @@
 | `POST /api/paper/orders` / `POST /api/paper/orders/submit` | confirm + idempotency 기반 paper order create |
 | `GET /api/paper/sync-worker/status` | paper sync worker status |
 | `POST /api/paper/sync-worker/run-once` | confirm-gated KIS paper sync worker wrapper |
+| `GET /api/settings/runtime-env` | process-only runtime gate/preset status |
+| `POST /api/settings/runtime-env/toggle` | allowlist boolean env gate 1개 적용 |
+| `POST /api/settings/runtime-env/preset` | paper_kis/Telegram/bot gate 묶음 적용, live lock false 유지 |
 
 ## 최신 검증
 
@@ -72,10 +75,10 @@
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_frontend_contract_only` | `2 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_phase2_only` | `10 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_default_off` | `5 passed` |
-| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_buttons` | `4 passed` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` | `5 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_tests` | `10 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` | `18 passed` |
-| `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_full_backend` | `520 passed in 1009.90s` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_full_backend` | `521 passed in 823.78s` |
 | `.\.venv\Scripts\python.exe tools\secret_scan.py` | `NO_SECRET_FINDINGS` |
 | `cd frontend; npm.cmd run lint` | exit 0 |
 | `cd frontend; npm.cmd exec tsc -- --noEmit` | exit 0 |
@@ -87,4 +90,4 @@
 - KIS 국내/해외 paper 주문 TR ID와 request field를 공식 문서/샘플 기준으로 재확인.
 - Telegram polling `getUpdates` runner는 run-once/CLI 구조까지 추가됨. 장시간 운영 loop는 bounded loop 옵션만 제공하며 auto-start는 false.
 - paper fill/order/account sync worker wrapper는 추가됨. 실제 조회는 기존 `PaperSyncService`의 paper network gate를 통과한 경우에만 수행.
-- 자동매매 loop는 기본 OFF로 유지하고 Telegram 또는 설정에서 명시적으로 켜는 제어면을 추가.
+- 장시간 자동매매 loop는 기본 OFF로 유지하고 bounded runner/stop/kill-switch 운영 정책을 보강.

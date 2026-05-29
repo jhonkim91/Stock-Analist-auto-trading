@@ -429,3 +429,62 @@ def test_runtime_env_toggle_keeps_live_order_locked_false(client, monkeypatch):
     assert disabled.status_code == 200
     assert disabled.json()["ok"] is True
     assert os.environ["ENABLE_REAL_ORDER"] == "false"
+
+
+def test_runtime_env_preset_enables_paper_kis_gates_without_live_order(client, monkeypatch):
+    for name in (
+        "EXECUTION_MODE",
+        "BROKER_MODE",
+        "KIS_ENV",
+        "ENABLE_REAL_ORDER",
+        "PAPER_TRADING_ENABLED",
+        "PAPER_TRADING_CAN_CREATE",
+        "PAPER_TRADING_NETWORK_ENABLED",
+        "PAPER_TRADING_KILL_SWITCH",
+        "PAPER_ORDER_SUBMIT_ENABLED",
+        "PAPER_BOT_CONFIRM",
+        "PAPER_BOT_ENABLED",
+        "PAPER_BOT_AUTO_SUBMIT",
+        "PAPER_BOT_SCHEDULER_ENABLED",
+        "PAPER_BOT_KILL_SWITCH",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    status = client.get("/api/settings/runtime-env")
+    assert status.status_code == 200
+    presets = {item["name"]: item for item in status.json()["presets"]}
+    assert "paper_kis_ready" in presets
+    assert "자동매매 ON" == presets["paper_bot_auto_on"]["label"]
+
+    blocked = client.post(
+        "/api/settings/runtime-env/preset",
+        json={"name": "paper_bot_auto_on", "confirm": False},
+    )
+    assert blocked.status_code == 200
+    assert blocked.json()["ok"] is False
+    assert "ENV_PRESET_CONFIRM_REQUIRED" in blocked.json()["reason_codes"]
+
+    applied = client.post(
+        "/api/settings/runtime-env/preset",
+        json={"name": "paper_bot_auto_on", "confirm": True},
+    )
+    payload = applied.json()
+
+    assert applied.status_code == 200
+    assert payload["ok"] is True
+    assert payload["network_call_performed"] is False
+    assert payload["live_order_created"] is False
+    assert os.environ["EXECUTION_MODE"] == "paper_kis"
+    assert os.environ["BROKER_MODE"] == "paper_kis"
+    assert os.environ["KIS_ENV"] == "paper"
+    assert os.environ["ENABLE_REAL_ORDER"] == "false"
+    assert os.environ["PAPER_TRADING_ENABLED"] == "true"
+    assert os.environ["PAPER_TRADING_CAN_CREATE"] == "true"
+    assert os.environ["PAPER_TRADING_NETWORK_ENABLED"] == "true"
+    assert os.environ["PAPER_TRADING_KILL_SWITCH"] == "false"
+    assert os.environ["PAPER_ORDER_SUBMIT_ENABLED"] == "true"
+    assert os.environ["PAPER_BOT_CONFIRM"] == "true"
+    assert os.environ["PAPER_BOT_ENABLED"] == "true"
+    assert os.environ["PAPER_BOT_AUTO_SUBMIT"] == "true"
+    assert os.environ["PAPER_BOT_SCHEDULER_ENABLED"] == "true"
+    assert os.environ["PAPER_BOT_KILL_SWITCH"] == "false"

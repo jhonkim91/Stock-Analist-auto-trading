@@ -1,5 +1,25 @@
 # Validation
 
+## 2026-05-30 Settings One-Click Runtime Presets
+
+Settings 화면에서 개별 env gate만 토글하던 구조를 보강해 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 추가했다. 모든 preset은 현재 backend 프로세스에만 적용되고 `.env` 파일을 수정하지 않으며, live 실계좌 주문 gate인 `ENABLE_REAL_ORDER`는 항상 `false`로 강제된다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Backend preset API | 통과 | `GET /api/settings/runtime-env`가 `presets` 목록을 반환하고 `POST /api/settings/runtime-env/preset`이 allowlist 값만 process env에 반영 |
+| Paper bot auto preset | 통과 | `paper_bot_auto_on` 적용 시 `EXECUTION_MODE=paper_kis`, `BROKER_MODE=paper_kis`, `KIS_ENV=paper`, paper/bot gate true, kill switch false, `ENABLE_REAL_ORDER=false` 확인 |
+| Frontend Settings UI | 통과 | `/settings` Runtime env 패널에 preset 버튼 추가. 버튼 hover/focus tooltip은 한국어 설명과 적용 env 목록을 표시 |
+| Focused backend tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` -> `5 passed` |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_full_backend` -> `521 passed in 823.78s` |
+| Frontend lint | 통과 | `cd frontend; npm.cmd run lint` -> exit 0 |
+| Frontend typecheck | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit` -> exit 0 |
+| Frontend build | 통과 | `cd frontend; npm.cmd run build` -> Next.js build 성공, 14 static pages 생성 |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Runtime API smoke | 통과 | launcher 재기동 후 `GET /api/settings/runtime-env` -> 30 toggles, 4 presets, live lock true. `POST /api/settings/runtime-env/preset` with `paper_kis_ready` -> `ok=true`, applied 11, live/network side effect false |
+| Settings render smoke | 통과 | `npx.cmd playwright screenshot --full-page --wait-for-selector ".presetButton" --wait-for-timeout 1000 http://127.0.0.1:3000/settings $env:TEMP\stock-settings-preset-loaded.png` -> preset buttons rendered |
+
+주의: 처음 실행한 `test_phase2_api.py + test_frontend_api_contracts.py` 묶음은 4분 제한에서 타임아웃된 pytest 잔여 프로세스가 `backend/data/test_app.db`를 잠가 후속 테스트가 실패했다. 잔여 pytest 프로세스만 종료한 뒤 동일 대상 focused suite를 재실행해 통과했다.
+
 ## 2026-05-30 Telegram Polling Runner
 
 Telegram `getUpdates` polling runner를 기본 OFF/confirm-gated 구조로 추가했다. Token은 env에서만 읽고 응답/trace에는 bot token path와 chat id를 남기지 않는다. 실제 실계좌 주문이나 KIS live 호출은 수행하지 않았다.
@@ -46,7 +66,7 @@ Telegram command dispatcher를 webhook/report scheduler 구조로 확장하고, 
 | reset + Phase 2 결합 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_phase2_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_combo_after_reboot` -> `14 passed` |
 | stale contract patch 대상 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_balance.py::test_paper_portfolio_default_paper_mode_uses_local_snapshot_without_credentials backend/tests/test_market_session_service.py::test_preview_responses_include_session_metadata_and_keep_live_submit_disabled backend/tests/test_notification_api.py::test_notification_status_endpoint_redacts_env_values backend/tests/test_notification_api.py::test_notification_test_endpoint_supports_disabled_dry_run backend/tests/test_paper_portfolio_api.py::test_paper_sync_endpoint_is_fail_closed_idempotent_and_no_network backend/tests/test_paper_sync.py::test_paper_sync_is_idempotent_disabled_noop_and_does_not_touch_synthetic_positions backend/tests/test_report_notify.py::test_report_notify_endpoint_logs_dry_run_delivery_without_secret_leak -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_stale_contracts` -> `7 passed` |
 | bot 기본 OFF 회귀 | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_default_off` -> `5 passed` |
-| Settings runtime env buttons | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_buttons` -> `4 passed` |
+| Settings runtime env buttons | 통과 | 개별 toggle은 기존 `4 passed`, one-click preset 추가 후 focused suite `5 passed`로 재검증 |
 | 전체 backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_full_backend` -> `510 passed in 380.94s` |
 | Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Frontend lint | 통과 | `cd frontend; npm.cmd run lint` -> exit 0 |
@@ -218,7 +238,7 @@ Settings 화면에 현재 backend 프로세스 환경변수 gate를 켜고 끄�
 | Runtime override wiring | 완료 | `PAPER_BOT_ENABLED`, `PAPER_BOT_AUTO_SUBMIT`, `PAPER_BOT_KILL_SWITCH`, notification enabled/dry-run, report/paper 관련 기존 env gate가 현재 프로세스 값으로 상태 API에 반영됨 |
 | Frontend Settings UI | 완료 | `/settings` 상단 `Runtime env` 패널에 category별 ON/OFF 버튼 추가. 버튼은 현재 backend 프로세스에만 반영되고, high-impact gate/locked badge를 표시 |
 | API toggle smoke | 통과 | `REPORT_AUTOMATION_DRY_RUN`을 `/api/settings/runtime-env/toggle`로 false -> true -> false 왕복. file write/network/live order 모두 false |
-| Runtime HTTP smoke | 통과 | `py launcher.py check`; `http://127.0.0.1:3000/settings` -> 200, Runtime/env/settings text 확인; `GET /api/settings/runtime-env` -> 19 toggles, `ENABLE_REAL_ORDER false_locked=true` |
+| Runtime HTTP smoke | 통과 | `py launcher.py check`; `http://127.0.0.1:3000/settings` -> 200, Runtime/env/settings text 확인; `GET /api/settings/runtime-env` -> allowlist toggles, `ENABLE_REAL_ORDER false_locked=true` |
 | Browser/Playwright UI check | 제한 | Browser plugin은 `iab` unavailable. Playwright CLI screenshot도 로컬 환경에서 timeout되어 중단. 대체로 HTTP 렌더링과 API POST 왕복을 사용 |
 | Backend targeted tests | 통과 | `test_phase2_api.py` -> `10 passed in 268.76s`; `test_secret_redaction.py` -> `4 passed in 3.23s`; `test_frontend_api_contracts.py` -> `2 passed in 1.49s` |
 | Ops/no-live regression | 통과 | `test_notifications.py`, `test_paper_bot_scheduler.py`, `test_report_automation.py`, `test_no_live_trading_regression.py` -> `22 passed in 53.33s` |

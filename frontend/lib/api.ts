@@ -1026,12 +1026,28 @@ export type RuntimeEnvToggle = {
   reason_codes: string[];
 };
 
+export type RuntimeEnvPresetChange = {
+  name: string;
+  value: string;
+};
+
+export type RuntimeEnvPreset = {
+  name: string;
+  label: string;
+  category: string;
+  description: string;
+  high_impact: boolean;
+  scope: string;
+  changes: RuntimeEnvPresetChange[];
+};
+
 export type RuntimeEnvStatus = {
   scope: string;
   persistence: string;
   file_write_performed: boolean;
   secrets_redacted: boolean;
   toggles: RuntimeEnvToggle[];
+  presets: RuntimeEnvPreset[];
 };
 
 export type RuntimeEnvToggleRequest = {
@@ -1053,6 +1069,26 @@ export type RuntimeEnvToggleResponse = {
   secrets_redacted: boolean;
   reason_codes: string[];
   toggle?: RuntimeEnvToggle;
+};
+
+export type RuntimeEnvPresetRequest = {
+  name: string;
+  confirm: boolean;
+};
+
+export type RuntimeEnvPresetResponse = {
+  ok: boolean;
+  status: string;
+  preset: string;
+  applied: RuntimeEnvPresetChange[];
+  scope: string;
+  persistence: string;
+  file_write_performed: boolean;
+  network_call_performed: boolean;
+  live_order_created: boolean;
+  secrets_redacted: boolean;
+  reason_codes: string[];
+  definition?: RuntimeEnvPreset;
 };
 
 export type ActionResponse = Record<string, unknown>;

@@ -360,6 +360,13 @@ class RuntimeEnvToggleRequest(BaseModel):
     confirm: bool = False
 
 
+class RuntimeEnvPresetRequest(BaseModel):
+    """현재 backend 프로세스에만 반영되는 paper-only env preset 요청이다."""
+
+    name: str = Field(min_length=1, max_length=80)
+    confirm: bool = False
+
+
 class ImportConfirmRequest(BaseModel):
     run_id: str
 

@@ -9,6 +9,8 @@ import {
   type NotificationTestResponse,
   type PaperBotStatus,
   type PaperStatus,
+  type RuntimeEnvPreset,
+  type RuntimeEnvPresetResponse,
   type RuntimeEnvStatus,
   type RuntimeEnvToggle,
   type RuntimeEnvToggleResponse,
@@ -18,7 +20,7 @@ import { getNotificationStatus, sendNotificationTest } from "../../lib/notificat
 import { getBotStatus, getPaperStatus } from "../../lib/paperApi";
 
 const sections = ["strategies", "risk", "backtest", "app"] as const;
-const envCategoryOrder = ["paper", "bot", "broker", "kis", "reports", "notifications", "locked"] as const;
+const envCategoryOrder = ["paper", "bot", "broker", "kis", "telegram", "reports", "notifications", "locked"] as const;
 
 function categoryTitle(category: string) {
   const labels: Record<string, string> = {
@@ -26,6 +28,7 @@ function categoryTitle(category: string) {
     bot: "Bot",
     broker: "Broker",
     kis: "KIS",
+    telegram: "Telegram",
     reports: "Reports",
     notifications: "Notifications",
     locked: "Locked"
@@ -74,6 +77,22 @@ function runtimeToggleTooltip(toggle: RuntimeEnvToggle, nextEnabled: boolean) {
   return `${toggle.description} 클릭하면 ${toggle.name} 값이 ${nextLabel} 상태로 바뀝니다. ${impact} 서버를 재시작하면 초기 설정으로 돌아갈 수 있습니다.`;
 }
 
+function runtimePresetTooltip(preset: RuntimeEnvPreset) {
+  const changes = preset.changes.map((change) => `${change.name}=${change.value}`).join(", ");
+  return `${preset.description} 클릭하면 현재 backend 프로세스에 즉시 반영됩니다. 적용값: ${changes}. 서버를 재시작하면 .env 또는 실행 환경 값으로 돌아갈 수 있습니다.`;
+}
+
+function settledValue<T>(result: PromiseSettledResult<T>): T | null {
+  return result.status === "fulfilled" ? result.value : null;
+}
+
+function rejectedMessage(result: PromiseSettledResult<unknown>) {
+  if (result.status !== "rejected") {
+    return null;
+  }
+  return result.reason instanceof Error ? result.reason.message : "조회 실패";
+}
+
 export default function SettingsPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
   const [message, setMessage] = useState("조회 중");
@@ -85,6 +104,7 @@ export default function SettingsPage() {
   const [notificationTest, setNotificationTest] = useState<NotificationTestResponse | null>(null);
   const [notificationTestStatus, setNotificationTestStatus] = useState<ApiStatus>("idle");
   const [envUpdating, setEnvUpdating] = useState<string | null>(null);
+  const [presetUpdating, setPresetUpdating] = useState<string | null>(null);
   const [envMessage, setEnvMessage] = useState("process env");
 
   const loadSettings = useCallback(async (showLoading = true) => {
@@ -93,20 +113,24 @@ export default function SettingsPage() {
       setMessage("조회 중");
     }
     try {
-      const [data, notificationStatus, paperRuntimeStatus, botRuntimeStatus, runtimeEnvStatus] = await Promise.all([
+      const [dataResult, notificationResult, paperResult, botResult, runtimeEnvResult] = await Promise.allSettled([
         callApi<SettingsPayload>("/api/settings"),
         getNotificationStatus(),
         getPaperStatus(),
         getBotStatus(),
         callApi<RuntimeEnvStatus>("/api/settings/runtime-env")
       ]);
-      setSettings(data);
-      setNotifications(notificationStatus);
-      setPaperStatus(paperRuntimeStatus);
-      setBotStatus(botRuntimeStatus);
-      setRuntimeEnv(runtimeEnvStatus);
-      setStatus("ok");
-      setMessage("조회 완료");
+
+      const failures = [dataResult, notificationResult, paperResult, botResult, runtimeEnvResult]
+        .map(rejectedMessage)
+        .filter(Boolean);
+      setSettings(settledValue(dataResult));
+      setNotifications(settledValue(notificationResult));
+      setPaperStatus(settledValue(paperResult));
+      setBotStatus(settledValue(botResult));
+      setRuntimeEnv(settledValue(runtimeEnvResult));
+      setStatus(dataResult.status === "fulfilled" || runtimeEnvResult.status === "fulfilled" ? "ok" : "error");
+      setMessage(failures.length > 0 ? `일부 조회 실패 ${failures.length}건` : "조회 완료");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "조회 실패");
@@ -174,12 +198,38 @@ export default function SettingsPage() {
     }
   }
 
+  async function applyRuntimePreset(preset: RuntimeEnvPreset) {
+    setPresetUpdating(preset.name);
+    setEnvMessage(`${preset.label} 적용 중`);
+    try {
+      const result = await callApi<RuntimeEnvPresetResponse>("/api/settings/runtime-env/preset", {
+        method: "POST",
+        body: JSON.stringify({
+          name: preset.name,
+          confirm: true
+        })
+      });
+      if (!result.ok) {
+        setEnvMessage(`${preset.label}: ${result.reason_codes.join(", ") || "blocked"}`);
+        return;
+      }
+      setEnvMessage(`${preset.label} 적용 완료 (${result.applied.length}개 값)`);
+      await loadSettings(false);
+    } catch (error) {
+      setEnvMessage(error instanceof Error ? error.message : "preset apply failed");
+    } finally {
+      setPresetUpdating(null);
+    }
+  }
+
   const groupedEnv = envCategoryOrder
     .map((category) => ({
       category,
       toggles: runtimeEnv?.toggles.filter((toggle) => toggle.category === category) ?? []
     }))
     .filter((group) => group.toggles.length > 0);
+
+  const envPresets = runtimeEnv?.presets ?? [];
 
   return (
     <main className="shell">
@@ -205,6 +255,24 @@ export default function SettingsPage() {
             <span className="status ok" title={envMessage}>
               {runtimeEnv?.persistence ?? "process_only"}
             </span>
+          </div>
+          <div className="envPresetBar">
+            {envPresets.map((preset) => {
+              const tooltip = runtimePresetTooltip(preset);
+              return (
+                <button
+                  className="presetButton"
+                  data-tooltip={tooltip}
+                  disabled={presetUpdating === preset.name}
+                  key={preset.name}
+                  onClick={() => void applyRuntimePreset(preset)}
+                  title={tooltip}
+                  type="button"
+                >
+                  {presetUpdating === preset.name ? "적용 중" : preset.label}
+                </button>
+              );
+            })}
           </div>
           <div className="envGrid">
             {groupedEnv.map((group) => (

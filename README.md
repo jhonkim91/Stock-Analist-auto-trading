@@ -15,7 +15,7 @@
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석 엔진 + Telegram command/webhook/polling/report scheduler + KIS paper bot 전환 진행 |
 | Trading state | `analysis_only`, `telegram_report`, `paper_kis`, `live_disabled` 실행 모드 분리 |
-| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_full_backend` -> `520 passed in 1009.90s` |
+| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_full_backend` -> `521 passed in 823.78s` |
 | Latest secret scan | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
 | Next recommended phase | KIS paper TR ID/payload 공식 재확인 후 자동매매 제어면 보강 |
@@ -42,7 +42,7 @@
 - Paper risk gate: `kill_switch`, `max_order_notional`, `max_order_qty`, `max_open_positions`, `blacklist`, `cooldown_seconds`, `idempotency_key`.
 - Paper bot 자동매매: 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false). Telegram 또는 설정에서 명시적으로 켜야 동작.
 - Telegram `/bot status|enable|disable|auto|run|stop`: paper bot을 process env 기준으로 명시 제어한다. `enable`, `disable`, `auto`, `run`은 `confirm`이 필요하다.
-- Settings runtime env 버튼: 현재 backend 프로세스에 즉시 반영하고 hover/focus 시 한국어 설명을 표시한다. `ENABLE_REAL_ORDER`는 클릭해도 `false`로 강제 적용한다.
+- Settings runtime env 버튼: 개별 gate ON/OFF와 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 현재 backend 프로세스에 즉시 반영한다. 모든 버튼은 hover/focus 시 한국어 설명을 표시하고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로 강제 적용한다.
 
 ## Implemented Scope
 
@@ -305,6 +305,9 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `GET` | `/api/telegram/scheduler/status` | Telegram report scheduler 상태, 기본 OFF/auto-start false |
 | `POST` | `/api/telegram/scheduler/run-once` | confirm 뒤 daily/weekly report 생성 및 Telegram summary dry-run/send |
 | `POST` | `/api/telegram/webhook` | Telegram webhook update를 command dispatcher로 연결 |
+| `GET` | `/api/settings/runtime-env` | process-only runtime gate와 Settings preset 목록, secret redacted |
+| `POST` | `/api/settings/runtime-env/toggle` | allowlist boolean env gate 1개를 현재 backend 프로세스에 반영 |
+| `POST` | `/api/settings/runtime-env/preset` | paper_kis/Telegram/paper bot gate 묶음을 현재 backend 프로세스에 일괄 반영, live lock은 false 유지 |
 | `POST` | `/api/screener/run` | rule-based screener run |
 | `GET` | `/api/screener/strategies` | frontend strategy selector metadata |
 | `GET` | `/api/screener/results` | screener result list with explanation contract |
