@@ -249,6 +249,23 @@ class PaperOrderService:
                 idempotency_key=idempotency_key,
             )
         config, config_reasons = self.config_service.load()
+        order = self.db.scalar(select(PaperOrder).where(PaperOrder.paper_order_id == paper_order_id))
+        if order is None:
+            return self._cancel_disabled_response(
+                status="cancel_blocked",
+                reason_codes=["PAPER_ORDER_NOT_FOUND"],
+                paper_order_id=paper_order_id,
+                request_hash=request_hash,
+                idempotency_key=idempotency_key.strip(),
+            )
+        if not bool(order.broker_order_created) and not order.broker_order_id:
+            return self._cancel_local_order(
+                order=order,
+                config=config,
+                config_reasons=config_reasons,
+                request_hash=request_hash,
+                idempotency_key=idempotency_key.strip(),
+            )
         if not bool(config.get("network_enabled")):
             return self._cancel_disabled_response(
                 status="cancel_disabled",
@@ -262,15 +279,6 @@ class PaperOrderService:
             return self._cancel_disabled_response(
                 status="cancel_blocked",
                 reason_codes=reason_codes,
-                paper_order_id=paper_order_id,
-                request_hash=request_hash,
-                idempotency_key=idempotency_key.strip(),
-            )
-        order = self.db.scalar(select(PaperOrder).where(PaperOrder.paper_order_id == paper_order_id))
-        if order is None:
-            return self._cancel_disabled_response(
-                status="cancel_blocked",
-                reason_codes=["PAPER_ORDER_NOT_FOUND"],
                 paper_order_id=paper_order_id,
                 request_hash=request_hash,
                 idempotency_key=idempotency_key.strip(),
@@ -372,6 +380,25 @@ class PaperOrderService:
         return {
             "ok": True,
             "orders": [self._order_payload(order) for order in orders],
+            "counts": self._counts(),
+            "live_order_created": False,
+            "broker_order_created": False,
+            "network_call_performed": False,
+        }
+
+    def list_open_orders(self) -> dict[str, Any]:
+        """미체결 local paper order 목록을 secret 없이 반환한다."""
+        statement = (
+            select(PaperOrder)
+            .where(PaperOrder.status.in_(OPEN_ORDER_STATUSES))
+            .order_by(PaperOrder.created_ts.desc())
+        )
+        orders = list(self.db.scalars(statement).all())
+        return {
+            "ok": True,
+            "status": "ok",
+            "orders": [self._order_payload(order) for order in orders],
+            "open_statuses": sorted(OPEN_ORDER_STATUSES),
             "counts": self._counts(),
             "live_order_created": False,
             "broker_order_created": False,
@@ -484,6 +511,31 @@ class PaperOrderService:
             reasons.append("KIS_LIVE_PATH_BLOCKED")
         if str(config.get("broker_mode") or "").strip().lower() != "paper_kis":
             reasons.append(BROKER_MODE_REQUIRED_REASON)
+        if os.getenv("ENABLE_REAL_ORDER", "").strip().lower() in {"1", "true", "yes", "on"}:
+            reasons.append(ENABLE_REAL_ORDER_BLOCK_REASON)
+        return reasons
+
+    @staticmethod
+    def _local_cancel_config_reasons(config: dict[str, object]) -> list[str]:
+        reasons: list[str] = []
+        if str(config.get("mode")) not in {"paper", "safety_scaffold"}:
+            reasons.append("KIS_PAPER_MODE_REQUIRED")
+        if str(config.get("kis_env") or "").strip().lower() != "paper":
+            reasons.append(KIS_ENV_PAPER_REQUIRED_REASON)
+        if not bool(config.get("enabled")):
+            reasons.append("PAPER_TRADING_DISABLED")
+        if not bool(config.get("configured_can_create")):
+            reasons.append("PAPER_CREATE_DISABLED")
+        if bool(config.get("preview_only", True)):
+            reasons.append("PAPER_PREVIEW_ONLY")
+        if bool(config.get("kill_switch_enabled")):
+            reasons.append("KILL_SWITCH_ACTIVE")
+        if not bool(config.get("paper_bot_confirm_enabled")):
+            reasons.append(PAPER_BOT_CONFIRM_REQUIRED_REASON)
+        if bool(config.get("live_order_enabled")) or bool(config.get("live_fallback_enabled")):
+            reasons.append("KIS_LIVE_PATH_BLOCKED")
+        if bool(config.get("broker_order_enabled")):
+            reasons.append("BROKER_ORDER_UNSUPPORTED")
         if os.getenv("ENABLE_REAL_ORDER", "").strip().lower() in {"1", "true", "yes", "on"}:
             reasons.append(ENABLE_REAL_ORDER_BLOCK_REASON)
         return reasons
@@ -692,6 +744,73 @@ class PaperOrderService:
             "request_hash": request_hash,
             "idempotency_key": idempotency_key,
             "broker_trace": broker_trace,
+            "counts": self._counts(),
+        }
+
+    def _cancel_local_order(
+        self,
+        *,
+        order: PaperOrder,
+        config: dict[str, object],
+        config_reasons: list[str],
+        request_hash: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        reason_codes = self._merge_reason_codes(config_reasons, self._local_cancel_config_reasons(config))
+        if reason_codes:
+            return self._cancel_disabled_response(
+                status="cancel_blocked",
+                reason_codes=reason_codes,
+                paper_order_id=order.paper_order_id,
+                request_hash=request_hash,
+                idempotency_key=idempotency_key,
+            )
+        if order.status not in OPEN_ORDER_STATUSES:
+            return self._cancel_disabled_response(
+                status="cancel_blocked",
+                reason_codes=["PAPER_ORDER_NOT_OPEN"],
+                paper_order_id=order.paper_order_id,
+                request_hash=request_hash,
+                idempotency_key=idempotency_key,
+            )
+        now = utc_now()
+        order.status = "cancelled"
+        order.updated_ts = now
+        order.canceled_at = now
+        self.db.add(
+            PaperAuditEvent(
+                event_type="paper_order_cancel",
+                paper_order_id=order.paper_order_id,
+                decision="allow",
+                reason_codes_json="[]",
+                payload_json=json.dumps(
+                    {
+                        "request_hash": request_hash,
+                        "paper_order_id": order.paper_order_id,
+                        "cancel_mode": "local_paper",
+                        "idempotency_key_hash": hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:16],
+                    },
+                    sort_keys=True,
+                ),
+            )
+        )
+        self.db.commit()
+        self.db.refresh(order)
+        return {
+            "ok": True,
+            "status": "cancelled",
+            "cancel_supported": True,
+            "order_cancelled": True,
+            "paper_order_id": order.paper_order_id,
+            "paper_order_created": False,
+            "live_order_created": False,
+            "broker_order_created": False,
+            "network_call_performed": False,
+            "reason": "PAPER_ORDER_LOCAL_CANCELLED",
+            "reason_codes": [],
+            "request_hash": request_hash,
+            "idempotency_key": idempotency_key,
+            "order": self._order_payload(order),
             "counts": self._counts(),
         }
 

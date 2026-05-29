@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
@@ -19,6 +20,31 @@ from backend.app.services.kis_paper_websocket_service import KisPaperWebSocketSe
 from backend.app.services.paper_trading_service import PaperTradingService
 
 router = APIRouter(prefix="/api/paper", tags=["paper"])
+
+
+class PaperFillSimulationRequest(BaseModel):
+    """local paper fill simulator 요청 DTO다."""
+
+    paper_order_id: str
+    fill_price: float
+    qty: int | None = Field(default=None, ge=1)
+    confirm: bool = False
+    idempotency_key: str | None = None
+    commission: float = 0.0
+    slippage_bps: float = 0.0
+
+
+class PaperRiskExitCheckRequest(BaseModel):
+    """paper 스탑로스/트레일링 스탑 실행 요청 DTO다."""
+
+    symbol: str
+    current_price: float
+    stop_price: float | None = None
+    trailing_high_price: float | None = None
+    trailing_stop_pct: float | None = None
+    strategy_tag: str | None = None
+    confirm: bool = False
+    idempotency_key: str | None = None
 
 
 @router.get("/status")
@@ -103,9 +129,27 @@ def list_paper_orders(status: str | None = None, db: Session = Depends(get_db)) 
     return PaperTradingService(db).list_orders(status=status)
 
 
+@router.get("/orders/open")
+def list_open_paper_orders(db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).list_open_orders()
+
+
 @router.get("/orders/{paper_order_id}")
 def get_paper_order(paper_order_id: str, db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).get_order(paper_order_id=paper_order_id)
+
+
+@router.post("/fill-simulator/run")
+def run_paper_fill_simulator(payload: PaperFillSimulationRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).simulate_fill(
+        paper_order_id=payload.paper_order_id,
+        fill_price=payload.fill_price,
+        qty=payload.qty,
+        confirm=payload.confirm,
+        idempotency_key=payload.idempotency_key,
+        commission=payload.commission,
+        slippage_bps=payload.slippage_bps,
+    )
 
 
 @router.get("/fills")
@@ -136,6 +180,20 @@ def sync_paper(payload: PaperSyncRequest, db: Session = Depends(get_db)) -> dict
 @router.get("/realtime/status")
 def paper_realtime_status(db: Session = Depends(get_db)) -> dict[str, object]:
     return PaperTradingService(db).realtime_status()
+
+
+@router.post("/risk/exit-check")
+def check_paper_risk_exit(payload: PaperRiskExitCheckRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    return PaperTradingService(db).check_risk_exit(
+        symbol=payload.symbol,
+        current_price=payload.current_price,
+        stop_price=payload.stop_price,
+        trailing_high_price=payload.trailing_high_price,
+        trailing_stop_pct=payload.trailing_stop_pct,
+        strategy_tag=payload.strategy_tag,
+        confirm=payload.confirm,
+        idempotency_key=payload.idempotency_key,
+    )
 
 
 @router.get("/realtime/websocket/status")

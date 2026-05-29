@@ -30,32 +30,24 @@
 
 ## 최근 변경 요약
 
-- Goal Read/Report Phase 1 완료: local DB 기반 `backend/app/api/market_realtime.py`, `account.py`, `trade_journal.py`와 service 3개를 추가했다.
-- `/api/market-realtime/search`, `/symbols/{symbol}`, `/symbols/{symbol}/chart`, `/rankings`가 종목 검색, 상세 quote/indicator/screener/fundamentals, 차트 series, 랭킹을 반환한다.
-- `/api/account/summary`, `/holdings`, `/report`가 `paper_account_snapshots`/`paper_positions` 기반 계좌/보유/포트폴리오 리포트를 반환한다.
-- `/api/trade-journal/entries`, `/csv`가 `backtest_trade_ledger`, `paper_fills`, `paper_orders`를 CSV 매매일지 형태로 정규화한다.
-- frontend `/market` route와 sidebar `Market` nav를 추가했다. 화면은 검색, KPI, 종목 상세, SVG line/volume chart, 랭킹, strategy signals를 표시한다.
-- `backend/tests/test_phase1_read_report_api.py`를 추가했다.
-- 현재 repo 설정은 paper/manual 기능이 활성화된 상태이므로 `test_api_smoke.py`의 broker/paper smoke 기대값을 disabled-only에서 paper-enabled fail-closed 기준으로 갱신했다.
-- `README.md`, `docs/VALIDATION.md`, `goal.md`, `Memory.md`를 1단계 조회/보고 상태로 갱신했다.
+- Goal Read/Report Phase 1 완료 후 커밋 `ff1408d`로 `origin/feature/kis-paper-goal-phases`에 푸시했다.
+- 모의투자 주문 엔진 2단계 완료: local paper cancel, `GET /api/paper/orders/open`, `POST /api/paper/fill-simulator/run`, `POST /api/paper/risk/exit-check`를 추가했다.
+- `PaperFillSimulatorService`가 confirm/idempotency/simulator/no-live gate 통과 시 `paper_fills` 생성, `paper_positions` 갱신, stop-loss/trailing-stop local exit fill을 처리한다.
+- `PaperOrderService.cancel_order`는 broker order가 아닌 local paper order를 network call 없이 `cancelled`로 전환하고, broker order cancel은 기존 KIS paper network gate를 유지한다.
+- `PaperTradingService.sync()`가 test/runtime patch config_dir를 `PaperSyncService`에 전달하도록 수정했다.
+- `README.md`, `docs/VALIDATION.md`, `goal.md`, `Memory.md`를 2단계 모의투자 주문 엔진 상태로 갱신했다.
 
 ## 최신 검증 결과
 
-- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase1_read_report_api.py -q` -> `3 passed`.
-- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q` -> `4 passed`.
-- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py -q` -> `7 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_phase2_engine.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py backend/tests/test_paper_submit_cancel_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase2_engine_tests` -> `13 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync_service.py backend/tests/test_paper_dashboard_report_phase6.py backend/tests/test_e2e_paper_mock_flow.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase2_paper_sync_tests` -> `8 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase2_safety_tests` -> `11 passed`.
 - [x] `cd frontend; npm.cmd run lint` -> 통과.
-- [x] `cd frontend; npm.cmd exec tsc -- --noEmit` -> 통과.
-- [x] `cd frontend; npm.cmd run build` -> 통과. 첫 시도는 기존 launcher 프로세스가 `.next\launcher-backend.err.log`를 잠가 `EBUSY`였고, repo 소유 프로세스 정리 후 성공.
-- [x] `py launcher.py run --no-browser`, `py launcher.py check` -> backend 8000/frontend 3000 launcher-owned.
-- [x] `Invoke-WebRequest http://127.0.0.1:3000/market -UseBasicParsing` -> 200.
-- [x] `Invoke-RestMethod 'http://127.0.0.1:8000/api/market-realtime/rankings?metric=total_score&limit=3'` -> `network_call_performed=false`.
-- [x] `npx.cmd playwright screenshot http://127.0.0.1:3000/market %TEMP%\stock-market-phase1.png --wait-for-timeout=3000` -> screenshot 생성.
-- [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
-- [x] `git diff --check` -> exit 0, CRLF warning only.
+- [x] `cd frontend; npm.cmd run build`; `npm.cmd exec tsc -- --noEmit` -> 통과.
+- [x] pytest 병렬 실행은 `backend/data/test_app.db` 잠금으로 실패할 수 있어 순차 실행과 workspace-external basetemp를 사용한다.
 
 ## 남은 작업
 
-- [ ] 2단계 paper order/fill/position/cancel/stop 기능 확장은 별도 승인과 paper gate 확인 후 진행한다.
-- [ ] 실계좌 주문 연동은 kill switch, rate limiter, idempotency, audit log, max notional, blacklist, cooldown 설계/검증 전까지 구현하지 않는다.
-- [ ] 추가 실제 KIS paper 주문은 정규장, fresh quote, process-only credential/token/account/product code, 별도 network 승인 조건에서만 수행한다.
+- [ ] 2단계 커밋/푸시는 secret scan, diff check, scoped staging 확인 후 진행한다.
+- [ ] 3단계 실계좌 주문 연동은 kill switch, rate limiter, idempotency, audit log, max notional, blacklist, cooldown, token refresh proof가 모두 구현/검증되기 전까지 완료로 보지 않는다.
+- [ ] 3단계 live 주문 실행/취소는 별도 live canary 조건과 사용자 승인, 정규장/소액/단일 주문/즉시 중단 절차 없이는 수행하지 않는다.

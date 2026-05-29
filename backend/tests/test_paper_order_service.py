@@ -5,7 +5,7 @@ from textwrap import dedent
 from sqlalchemy import func, select
 
 from backend.app.models.tables import Order, PaperAuditEvent, PaperOrder
-from backend.app.services.paper_order_service import CANCEL_DISABLED_REASON, PaperOrderService
+from backend.app.services.paper_order_service import PaperOrderService
 
 
 def _write_paper_config(
@@ -292,7 +292,7 @@ def test_network_submit_failure_preserves_network_trace_flag(db_session, tmp_pat
     assert _count(db_session, Order) == 0
 
 
-def test_cancel_stays_disabled_until_official_payload_is_confirmed(db_session, tmp_path, monkeypatch):
+def test_local_cancel_closes_non_broker_paper_order_without_network(db_session, tmp_path, monkeypatch):
     _enable_manual_paper_runtime(monkeypatch)
     _write_paper_config(tmp_path)
     service = PaperOrderService(db_session, config_dir=tmp_path)
@@ -315,7 +315,7 @@ def test_cancel_stays_disabled_until_official_payload_is_confirmed(db_session, t
         confirm=True,
         idempotency_key=None,
     )
-    disabled = service.cancel_order(
+    cancelled = service.cancel_order(
         paper_order_id=created["order"]["paper_order_id"],
         confirm=True,
         idempotency_key="phase4-cancel-1",
@@ -326,11 +326,13 @@ def test_cancel_stays_disabled_until_official_payload_is_confirmed(db_session, t
     assert no_confirm["order_cancelled"] is False
     assert no_key["status"] == "idempotency_required"
     assert no_key["order_cancelled"] is False
-    assert disabled["status"] == "cancel_disabled"
-    assert disabled["reason"] == CANCEL_DISABLED_REASON
-    assert disabled["order_cancelled"] is False
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["reason"] == "PAPER_ORDER_LOCAL_CANCELLED"
+    assert cancelled["order_cancelled"] is True
+    assert cancelled["network_call_performed"] is False
+    assert cancelled["live_order_created"] is False
     assert order is not None
-    assert order.status == "submitted"
-    assert order.canceled_at is None
+    assert order.status == "cancelled"
+    assert order.canceled_at is not None
     assert _count(db_session, PaperOrder) == 1
     assert _count(db_session, Order) == 0

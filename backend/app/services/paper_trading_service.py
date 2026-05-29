@@ -26,6 +26,8 @@ PAPER_REALTIME_ENABLED_ENV = "PAPER_REALTIME_ENABLED"
 PAPER_REALTIME_REQUIRE_FRESH_QUOTES_ENV = "PAPER_REALTIME_REQUIRE_FRESH_QUOTES"
 PAPER_REALTIME_STALE_QUOTE_THRESHOLD_SECONDS_ENV = "PAPER_REALTIME_STALE_QUOTE_THRESHOLD_SECONDS"
 PAPER_TRADING_MARKET_ENV = "PAPER_TRADING_MARKET"
+PAPER_TRADING_CAN_SIMULATE_FILLS_ENV = "PAPER_TRADING_CAN_SIMULATE_FILLS"
+PAPER_FILL_SIMULATOR_ENABLED_ENV = "PAPER_FILL_SIMULATOR_ENABLED"
 KIS_OVERSEAS_EXCHANGE_CODE_ENV = "KIS_OVERSEAS_EXCHANGE_CODE"
 KIS_OVERSEAS_CURRENCY_ENV = "KIS_OVERSEAS_CURRENCY"
 KIS_OVERSEAS_ORDER_SESSION_ENV = "KIS_OVERSEAS_ORDER_SESSION"
@@ -76,12 +78,16 @@ class PaperConfigService:
         try:
             config_enabled = bool(paper.get("enabled", False))
             config_can_create = bool(paper.get("can_create", False))
+            config_can_simulate = bool(paper.get("can_simulate_fills", False))
             config_network_enabled = bool(paper.get("network_enabled", False))
             config_kill_switch_enabled = bool(paper.get("kill_switch_enabled", True))
+            config_simulator_enabled = bool(simulator.get("enabled", False))
             runtime_enabled = self._env_bool("PAPER_TRADING_ENABLED", config_enabled)
             runtime_can_create = self._env_bool("PAPER_TRADING_CAN_CREATE", config_can_create)
+            runtime_can_simulate = self._env_bool(PAPER_TRADING_CAN_SIMULATE_FILLS_ENV, config_can_simulate)
             runtime_network_enabled = self._env_bool("PAPER_TRADING_NETWORK_ENABLED", config_network_enabled)
             runtime_kill_switch_enabled = self._env_bool("PAPER_TRADING_KILL_SWITCH", config_kill_switch_enabled)
+            runtime_simulator_enabled = self._env_bool(PAPER_FILL_SIMULATOR_ENABLED_ENV, config_simulator_enabled)
             runtime_broker_mode = os.getenv(
                 BROKER_MODE_ENV,
                 str(paper.get("broker_mode") or ""),
@@ -131,7 +137,7 @@ class PaperConfigService:
                     "configured_can_create": config_can_create and runtime_can_create,
                     "paper_order_submit_enabled": runtime_order_submit_enabled,
                     "paper_bot_confirm_enabled": runtime_bot_confirm,
-                    "configured_can_simulate_fills": bool(paper.get("can_simulate_fills", False)),
+                    "configured_can_simulate_fills": config_can_simulate and runtime_can_simulate,
                     "preview_only": bool(paper.get("preview_only", True)),
                     "kill_switch_enabled": runtime_kill_switch_enabled,
                     "network_enabled": config_network_enabled and runtime_network_enabled,
@@ -154,7 +160,7 @@ class PaperConfigService:
                     "max_order_notional": float(risk_gate.get("max_order_notional") or 0),
                     "audit_persistence_enabled": bool(audit.get("persistence_enabled", False)),
                     "audit_sanitize_enabled": bool(audit.get("sanitize_enabled", True)),
-                    "simulator_enabled": bool(simulator.get("enabled", False)),
+                    "simulator_enabled": config_simulator_enabled and runtime_simulator_enabled,
                     "auto_fill_on_create": bool(simulator.get("auto_fill_on_create", False)),
                     "realtime_enabled": realtime_enabled,
                     "realtime_mode": str(realtime.get("mode") or "polling"),
@@ -541,6 +547,21 @@ class PaperTradingService:
 
         return PaperOrderService(self.db, config_dir=self.config_service.config_dir).list_orders(status=status)
 
+    def list_open_orders(self) -> dict[str, object]:
+        """미체결 local paper order 목록을 반환한다."""
+        if self.db is None:
+            return {
+                "ok": True,
+                "orders": [],
+                "counts": self._counts(),
+                "live_order_created": False,
+                "broker_order_created": False,
+                "network_call_performed": False,
+            }
+        from backend.app.services.paper_order_service import PaperOrderService
+
+        return PaperOrderService(self.db, config_dir=self.config_service.config_dir).list_open_orders()
+
     def get_order(self, *, paper_order_id: str) -> dict[str, object]:
         """단일 paper order를 반환한다."""
         if self.db is None:
@@ -558,6 +579,60 @@ class PaperTradingService:
         from backend.app.services.paper_sync_service import PaperSyncService
 
         return PaperSyncService(self.db).list_fills(symbol=symbol)
+
+    def simulate_fill(
+        self,
+        *,
+        paper_order_id: str,
+        fill_price: float,
+        confirm: bool,
+        idempotency_key: str | None,
+        qty: int | None = None,
+        commission: float = 0.0,
+        slippage_bps: float = 0.0,
+    ) -> dict[str, object]:
+        """명시적 gate 통과 시 local paper fill과 position을 갱신한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("fill_simulator")
+        from backend.app.services.paper_fill_simulator_service import PaperFillSimulatorService
+
+        return PaperFillSimulatorService(self.db, config_dir=self.config_service.config_dir).simulate_fill(
+            paper_order_id=paper_order_id,
+            fill_price=fill_price,
+            qty=qty,
+            confirm=confirm,
+            idempotency_key=idempotency_key,
+            commission=commission,
+            slippage_bps=slippage_bps,
+        )
+
+    def check_risk_exit(
+        self,
+        *,
+        symbol: str,
+        current_price: float,
+        confirm: bool,
+        idempotency_key: str | None,
+        stop_price: float | None = None,
+        trailing_high_price: float | None = None,
+        trailing_stop_pct: float | None = None,
+        strategy_tag: str | None = None,
+    ) -> dict[str, object]:
+        """스탑로스/트레일링 스탑 조건을 평가하고 trigger 시 local exit fill을 생성한다."""
+        if self.db is None:
+            return self._paper_sync_unavailable_payload("risk_exit")
+        from backend.app.services.paper_fill_simulator_service import PaperFillSimulatorService
+
+        return PaperFillSimulatorService(self.db, config_dir=self.config_service.config_dir).check_risk_exit(
+            symbol=symbol,
+            current_price=current_price,
+            stop_price=stop_price,
+            trailing_high_price=trailing_high_price,
+            trailing_stop_pct=trailing_stop_pct,
+            strategy_tag=strategy_tag,
+            confirm=confirm,
+            idempotency_key=idempotency_key,
+        )
 
     def list_positions(self, *, symbol: str | None = None) -> dict[str, object]:
         """저장된 paper position 목록을 반환한다."""
@@ -597,7 +672,7 @@ class PaperTradingService:
             return self._paper_sync_unavailable_payload(scope)
         from backend.app.services.paper_sync_service import PaperSyncService
 
-        return PaperSyncService(self.db).sync(scope=scope)
+        return PaperSyncService(self.db, config_dir=self.config_service.config_dir).sync(scope=scope)
 
     def bot_status(self) -> dict[str, object]:
         """paper bot scheduler 상태를 반환한다."""

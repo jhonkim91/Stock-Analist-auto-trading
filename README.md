@@ -261,8 +261,10 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `GET` | `/api/paper/status` | paper disabled safety status |
 | `POST` | `/api/paper/orders/preview` | venue/session metadata 포함 paper deny preview only |
 | `POST` | `/api/paper/orders/submit`, `/api/paper/orders` | local/KIS paper submit alias, `KIS_ENV=paper`, `PAPER_TRADING_ENABLED=true`, `PAPER_BOT_CONFIRM=true`, `confirm=true`, idempotency, kill-switch off 필요 |
-| `POST` | `/api/paper/orders/cancel`, `/api/paper/orders/{order_id}/cancel` | KIS cancel payload 공식 확인 전 기본 disabled |
-| `GET` | `/api/paper/orders`, `/api/paper/orders/{order_id}`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio`, `/api/paper/account` | paper_* table 전용 조회, `/api/paper/portfolio`는 KIS paper balance 조건부 read-only 호출 후 local fallback |
+| `POST` | `/api/paper/orders/cancel`, `/api/paper/orders/{order_id}/cancel` | local paper order는 confirm/idempotency gate 뒤 취소, KIS broker order cancel은 KIS paper network gate 필요 |
+| `GET` | `/api/paper/orders`, `/api/paper/orders/open`, `/api/paper/orders/{order_id}`, `/api/paper/fills`, `/api/paper/positions`, `/api/paper/portfolio`, `/api/paper/account` | paper_* table 전용 조회, `/api/paper/portfolio`는 KIS paper balance 조건부 read-only 호출 후 local fallback |
+| `POST` | `/api/paper/fill-simulator/run` | simulator gate와 confirm/idempotency 통과 시 local paper fill 생성 및 `paper_positions` 갱신 |
+| `POST` | `/api/paper/risk/exit-check` | stop-loss/trailing-stop trigger 시 local sell order/fill 생성 및 position 감소 |
 | `POST` | `/api/paper/sync` | 공식 KIS sync contract 확인 전 fail-closed no-op |
 | `GET` | `/api/paper/realtime/status` | polling quote cache/heartbeat/stale quote gate 상태 |
 | `GET` | `/api/paper/dashboard` | account, positions, open orders, fills, PnL, risk, worker status, metrics |
@@ -309,7 +311,7 @@ py launcher.py stop
 - launcher는 기본 포트 `8000`과 `3000`만 사용한다.
 - 해당 포트가 launcher가 띄운 프로세스가 아닌 다른 프로세스에 의해 점유되어 있으면 stale server 위험 때문에 실행을 중단한다.
 - `setup`은 `.env.local`을 수정하지 않고 `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000` 환경 변수로 Next.js production build를 수행한다.
-- 실주문, 체결, paper fill/position mutation, KIS broker/order route는 추가하지 않는다.
+- 실주문, 실계좌 체결, live broker/order route는 추가하지 않는다. local paper fill/position mutation은 simulator gate와 confirm/idempotency 조건에서만 허용한다.
 
 ## Run Locally
 
@@ -395,20 +397,21 @@ npm.cmd run build
 ## Safety Invariants
 
 - `orders_count == 0` 유지.
-- 기본 config에서는 `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` row count 0 유지. `paper_orders`는 local-only submit gate를 통과한 경우에만 증가한다.
+- 기본 config에서는 `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events` row count 0 유지. `paper_orders`는 local-only submit gate를 통과한 경우, `paper_fills`/`paper_positions`는 simulator/sync gate를 통과한 경우에만 증가한다.
 - `/api/broker/status`는 `can_submit=false`, `preview_only=true`, `token_issued=false`, `network_call_performed=false`를 반환.
 - `/api/broker/orders/preview`는 실제 주문, token 발급, network call, adapter order call 없이 deny preview만 반환하며, `session_metadata`는 additive metadata다.
-- `/api/paper/status`는 `enabled=false`, `can_create=false`, `can_simulate_fills=false`, `preview_only=true`를 반환.
-- `/api/paper/orders/preview`는 paper order/fill/position/audit mutation 없이 deny preview만 반환한다. `/api/paper/orders/submit`은 backend confirm/idempotency/kill-switch gate 없이는 생성하지 않는다.
+- `/api/paper/status`는 runtime/config gate를 반영하되 live submit과 live fallback은 계속 false로 유지한다.
+- `/api/paper/orders/preview`는 paper order/fill/position/audit mutation 없이 preview만 반환한다. `/api/paper/orders/submit`은 backend confirm/idempotency/kill-switch gate 없이는 생성하지 않는다.
+- `/api/paper/fill-simulator/run`과 `/api/paper/risk/exit-check`는 `can_simulate_fills`, simulator enabled, confirm, idempotency, kill-switch, no-live gate 없이는 fill/position을 생성하지 않는다.
 - KRX/NXT session window 판정은 로컬 정적 metadata이며 실제 거래소, KIS token, 호출량 API와 통신하지 않는다.
-- `POST /api/paper/fill-simulator/run`, `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*` route는 미등록 404 상태를 유지.
+- `/api/kis/orders/*`, `/api/kis/broker/*`, `/api/kis/websocket/*` route는 미등록 404 상태를 유지.
 - `.cache/kis/token.json`은 생성하지 않음.
 - API key, secret, token, password, account/header/raw credential 값을 저장하거나 출력하지 않음.
 
 ## Not Implemented
 
 - 실제 주문, 주문 취소, 체결, 계좌 자금 이동, websocket, live broker.
-- KIS/broker paper order create, paper fill simulator, paper position mutation.
+- live broker order create, live fill, live position mutation.
 - KIS credential/token 저장, KIS token 발급/refresh/cache, KIS 주문/실전 API 호출.
 - KRX/yfinance 실제 network fetch.
 - 자동매매 scheduler, live broker adapter, AI prediction model.

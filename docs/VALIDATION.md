@@ -1,5 +1,24 @@
 # Validation
 
+## 2026-05-29 Paper Order Engine Phase 2
+
+모의투자 주문 엔진 2단계를 local paper-only 범위로 보강했다. 신규 mutation은 `paper_orders`, `paper_fills`, `paper_positions`, `paper_audit_events`에 한정되며 legacy `orders` table, live broker, KIS live route, raw secret 저장은 사용하지 않는다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| paper order 생성 | 완료 | 기존 `POST /api/paper/orders/submit`, `/api/paper/orders` 경로 유지. confirm/idempotency/kill-switch/risk gate를 통과한 경우만 local paper order 생성 |
+| paper fill 생성 | 완료 | `POST /api/paper/fill-simulator/run` 추가. `can_simulate_fills`, simulator enabled, confirm, idempotency, no-live gate 통과 시 local fill 생성 |
+| paper position 갱신 | 완료 | fill simulator가 buy/sell fill을 `paper_positions`에 반영. buy는 weighted average, sell은 realized/unrealized PnL과 qty 감소 |
+| paper 미체결 조회 | 완료 | `GET /api/paper/orders/open` 추가. `pending_submitted`, `submitted`, `pending`, `open`, `partially_filled` 상태만 반환 |
+| paper 주문 취소 | 완료 | local non-broker paper order는 confirm/idempotency gate 뒤 network call 없이 `cancelled`로 전환. broker order cancel은 기존 KIS paper network gate 유지 |
+| stop-loss/trailing stop | 완료 | `POST /api/paper/risk/exit-check` 추가. stop/trailing trigger 시 local sell order/fill을 만들고 position을 감소 |
+| Phase 2 targeted tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_phase2_engine.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py backend/tests/test_paper_submit_cancel_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase2_engine_tests` -> `13 passed` |
+| Paper sync/dashboard/e2e | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_sync_service.py backend/tests/test_paper_dashboard_report_phase6.py backend/tests/test_e2e_paper_mock_flow.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase2_paper_sync_tests` -> `8 passed` |
+| No-live/API contracts | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase2_safety_tests` -> `11 passed` |
+| Frontend validation | 통과 | `npm.cmd run lint`; `npm.cmd run build`; `npm.cmd exec tsc -- --noEmit` |
+
+주의: pytest는 동일한 `backend/data/test_app.db`를 재생성하므로 병렬 실행 시 Windows 파일 잠금이 발생한다. 해당 묶음은 순차 실행으로 재검증했다. frontend build는 실행 중인 launcher가 `.next\launcher-backend.err.log`를 잡고 있으면 `EBUSY`가 발생하므로 repo 소유 backend/frontend 프로세스를 종료한 뒤 재실행했다.
+
 ## 2026-05-29 Goal Read/Report Phase 1
 
 실제 주문 없이 동작하는 조회/보고 1단계 surface를 추가했다. 신규 기능은 local DB 조회 전용이며 KIS network, broker submit, live order, paper fill/position mutation을 수행하지 않는다.
