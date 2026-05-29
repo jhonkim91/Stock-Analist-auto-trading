@@ -41,6 +41,10 @@ def test_kis_paper_api_matrix_matches_current_adapter_constants() -> None:
 
     assert "33e0e1e65cd1c8c8b639531483ec0b327087bab1" in combined
     assert "KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED" in combined
+    assert "TTTC0084R" in combined
+    assert "TTTC8408R" in combined
+    assert "paper TR 미확인" in combined
+    assert "추정 `VT*` 변환 금지" in combined
     assert "live fallback" in combined
     assert "실계좌 주문/취소/체결 금지" in combined
     assert "현재 token service는 disabled/status-only" not in combined

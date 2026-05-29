@@ -1,5 +1,16 @@
 # Validation
 
+## 2026-05-30 Domestic KIS Paper 조회 TR ID 재확인
+
+남은 국내 조회 후보인 정정취소가능주문조회와 매도가능수량조회는 공식 샘플에 endpoint와 real TR ID만 존재하고, paper `env_dv` 또는 `VT*` TR ID는 확인되지 않았다. 따라서 추정 변환으로 구현하지 않고 fail-closed 보류 상태를 유지한다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 정정취소가능주문조회 | paper 미확인 | `examples_llm/domestic_stock/inquire_psbl_rvsecncl/inquire_psbl_rvsecncl.py` -> `/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl`, real `TTTC0084R` only |
+| 매도가능수량조회 | paper 미확인 | `examples_llm/domestic_stock/inquire_psbl_sell/inquire_psbl_sell.py` -> `/uapi/domestic-stock/v1/trading/inquire-psbl-sell`, real `TTTC8408R` only |
+| 정책 | 유지 | paper TR 확인 전 `VT*` 추정 변환 금지, cancel/oversell 보강 구현 보류 |
+| Matrix sync test | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_api_matrix_docs.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_docs_domestic_remaining` -> `1 passed` |
+
 ## 2026-05-30 Paper Bot Bounded Runner
 
 Paper bot loop를 unattended 장시간 실행 대신 bounded runner로 제한했다. 기본 auto-start는 없고, loop 실행 시 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준으로 반복 수와 중지 조건을 강제한다. 실제 KIS network call, live 주문, broker 주문 생성은 수행하지 않았다.

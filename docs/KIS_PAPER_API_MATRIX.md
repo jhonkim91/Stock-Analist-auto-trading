@@ -17,6 +17,8 @@
 | 국내 일별 주문체결 | `examples_llm/domestic_stock/inquire_daily_ccld/inquire_daily_ccld.py` | `/uapi/domestic-stock/v1/trading/inquire-daily-ccld`, paper inner `VTTC0081R`, before `VTSC9215R` |
 | 국내 잔고 | `examples_llm/domestic_stock/inquire_balance/inquire_balance.py` | `/uapi/domestic-stock/v1/trading/inquire-balance`, paper `VTTC8434R` |
 | 국내 매수가능 | `examples_llm/domestic_stock/inquire_psbl_order/inquire_psbl_order.py` | `/uapi/domestic-stock/v1/trading/inquire-psbl-order`, paper `VTTC8908R` |
+| 국내 정정취소가능주문조회 | `examples_llm/domestic_stock/inquire_psbl_rvsecncl/inquire_psbl_rvsecncl.py` | `/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl`, 공식 샘플은 real `TTTC0084R`만 노출 |
+| 국내 매도가능수량조회 | `examples_llm/domestic_stock/inquire_psbl_sell/inquire_psbl_sell.py` | `/uapi/domestic-stock/v1/trading/inquire-psbl-sell`, 공식 샘플은 real `TTTC8408R`만 노출 |
 | 해외 regular 주문 | `examples_llm/overseas_stock/order/order.py` | `/uapi/overseas-stock/v1/trading/order`, US paper buy/sell `VTTT1002U`/`VTTT1006U`, paper는 `ORD_DVSN=00` 중심 |
 | 해외 정정/취소 | `examples_llm/overseas_stock/order_rvsecncl/order_rvsecncl.py` | `/uapi/overseas-stock/v1/trading/order-rvsecncl`, paper `VTTT1004U` |
 | 해외 주문체결 | `examples_llm/overseas_stock/inquire_ccnl/inquire_ccnl.py` | `/uapi/overseas-stock/v1/trading/inquire-ccnl`, paper `VTTS3035R` |
@@ -36,8 +38,8 @@
 | 국내 일별 주문체결 | `/uapi/domestic-stock/v1/trading/inquire-daily-ccld` | `VTTC0081R` | 구현 | sync/fill mirror 전용. before 3개월 이전 `VTSC9215R`은 현재 미사용 |
 | 국내 잔고/포지션 | `/uapi/domestic-stock/v1/trading/inquire-balance` | `VTTC8434R` | 구현 | read-only 조회 후 local snapshot/position mirror |
 | 국내 매수가능조회 | `/uapi/domestic-stock/v1/trading/inquire-psbl-order` | `VTTC8908R` | 확인됨, 미구현 | sizing/risk guard 후보. submit 권한으로 해석하지 않음 |
-| 국내 정정취소가능주문조회 | `/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl` | 확인 필요 | 미구현 | 현재 cancel은 저장된 paper order와 KIS cancel 응답 기준 |
-| 국내 매도가능수량조회 | `/uapi/domestic-stock/v1/trading/inquire-psbl-sell` | 확인 필요 | 미구현 | oversell guard 후보. paper TR 확인 전 fail-closed |
+| 국내 정정취소가능주문조회 | `/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl` | 공식 샘플 real `TTTC0084R` only, paper TR 미확인 | 미구현 | 현재 cancel은 저장된 paper order와 KIS cancel 응답 기준. 추정 `VT*` 변환 금지 |
+| 국내 매도가능수량조회 | `/uapi/domestic-stock/v1/trading/inquire-psbl-sell` | 공식 샘플 real `TTTC8408R` only, paper TR 미확인 | 미구현 | oversell guard 후보. paper TR 확인 전 fail-closed |
 | 해외 US regular 매수 | `/uapi/overseas-stock/v1/trading/order` | `VTTT1002U` | 구현 | `market=US`, regular session, NASD/NYSE/AMEX, paper-only gate 필요 |
 | 해외 US regular 매도 | `/uapi/overseas-stock/v1/trading/order` | `VTTT1006U` | 구현 | paper 샘플은 지정가 `ORD_DVSN=00` 중심. live fallback 금지 |
 | 해외 정정/취소 | `/uapi/overseas-stock/v1/trading/order-rvsecncl` | `VTTT1004U` | 구현 | KIS가 취소 불가 응답을 주면 재시도 없이 audit |
@@ -74,7 +76,7 @@
 
 ## 남은 확인 필요 항목
 
-- 국내 정정취소가능주문조회 paper TR ID와 field.
-- 국내 매도가능수량조회 paper TR ID와 field.
+- 국내 정정취소가능주문조회 paper TR ID는 공식 샘플에서 미확인. 현재 확인된 값은 real `TTTC0084R`뿐이므로 KIS 포털/운영 문서 또는 paper host로 별도 확인 필요.
+- 국내 매도가능수량조회 paper TR ID는 공식 샘플에서 미확인. 현재 확인된 값은 real `TTTC8408R`뿐이므로 KIS 포털/운영 문서 또는 paper host로 별도 확인 필요.
 - 국내 3개월 이전 체결조회 `VTSC9215R` 적용 여부와 현재 adapter 사용 범위.
 - KIS error code별 재시도 가능성. 현재 주문/취소 실패는 재시도하지 않고 audit만 기록한다.

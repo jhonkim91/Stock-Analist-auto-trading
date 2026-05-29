@@ -24,6 +24,8 @@
 | `examples_llm/domestic_stock/inquire_daily_ccld/inquire_daily_ccld.py` | 국내 일별주문체결 endpoint, paper TR ID |
 | `examples_llm/domestic_stock/inquire_balance/inquire_balance.py` | 국내 잔고조회 endpoint, paper TR ID |
 | `examples_llm/domestic_stock/inquire_psbl_order/inquire_psbl_order.py` | 국내 매수가능조회 endpoint, paper TR ID |
+| `examples_llm/domestic_stock/inquire_psbl_rvsecncl/inquire_psbl_rvsecncl.py` | 국내 정정취소가능주문조회 endpoint, real-only TR ID |
+| `examples_llm/domestic_stock/inquire_psbl_sell/inquire_psbl_sell.py` | 국내 매도가능수량조회 endpoint, real-only TR ID |
 | `examples_llm/overseas_stock/order/order.py` | 해외 regular 주문 endpoint, US paper TR ID |
 | `examples_llm/overseas_stock/order_rvsecncl/order_rvsecncl.py` | 해외 정정/취소 endpoint, paper TR ID |
 | `examples_llm/overseas_stock/inquire_ccnl/inquire_ccnl.py` | 해외 주문체결조회 endpoint, paper TR ID |
@@ -41,8 +43,8 @@
 | 일별 주문체결조회 | GET | `/uapi/domestic-stock/v1/trading/inquire-daily-ccld` | `VTTC0081R` | 샘플 기준 query field 확인 | order/fill sync mirror 전용 |
 | 잔고/포지션 조회 | GET | `/uapi/domestic-stock/v1/trading/inquire-balance` | `VTTC8434R` | 샘플 기준 query field 확인 | read-only만 허용. raw 계좌번호 응답 금지 |
 | 매수가능조회 | GET | `/uapi/domestic-stock/v1/trading/inquire-psbl-order` | `VTTC8908R` | 샘플 기준 query field 확인 | sizing/risk guard 후보. submit 권한 의미 없음 |
-| 정정취소가능주문조회 | GET | `/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl` | 확인 필요 | 샘플 path 존재 여부는 별도 재확인 필요 | cancel 구현 보강 후보 |
-| 매도가능수량조회 | GET | `/uapi/domestic-stock/v1/trading/inquire-psbl-sell` | 확인 필요 | paper TR 직접값 별도 확인 필요 | oversell guard 후보 |
+| 정정취소가능주문조회 | GET | `/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl` | 공식 샘플 real `TTTC0084R` only, paper 미확인 | 샘플은 `env_dv` 없이 real TR만 사용 | cancel 구현 보강 후보. 추정 `VT*` 변환 금지 |
+| 매도가능수량조회 | GET | `/uapi/domestic-stock/v1/trading/inquire-psbl-sell` | 공식 샘플 real `TTTC8408R` only, paper 미확인 | 샘플은 `env_dv` 없이 real TR만 사용 | oversell guard 후보. paper 확인 전 fail-closed |
 | 3개월 이전 체결조회 | GET | `/uapi/domestic-stock/v1/trading/inquire-daily-ccld` | `VTSC9215R` | 샘플상 `pd_dv=before`에서 확인 | 현재 adapter는 `VTTC0081R` inner 조회만 사용 |
 
 ## 해외주식 주문/계좌 Capability Matrix
@@ -79,8 +81,8 @@
 
 | 항목 | 처리 |
 |---|---|
-| 국내 정정취소가능주문조회 paper TR ID | 공식 샘플/포털 재확인 전 구현 보류 |
-| 국내 매도가능수량조회 paper TR ID | oversell guard 후보. paper TR 확인 전 fail-closed |
+| 국내 정정취소가능주문조회 paper TR ID | 공식 샘플에서는 real `TTTC0084R`만 확인. KIS 포털/운영 문서 또는 paper host 확인 전 구현 보류 |
+| 국내 매도가능수량조회 paper TR ID | 공식 샘플에서는 real `TTTC8408R`만 확인. paper TR 확인 전 fail-closed |
 | rate limit 및 retry contract | retry는 보수적으로 disabled 또는 bounded |
 | error code별 재시도 가능성 | 주문 상태 변경 전 audit-only |
 | 실전/모의 fallback | 금지. paper failure가 live call로 이어지면 안 됨 |

@@ -37,6 +37,7 @@
 - paper bot 자동매매 기본값을 OFF로 정렬했다: `backend/config/bot.yaml`의 `enabled=false`, `auto_submit=false`, scheduler false.
 - Settings runtime env 버튼은 클릭 시 process env에 반영되며 hover/focus에서 한국어 tooltip을 표시한다. `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset은 여러 gate를 한 번에 맞추고 `ENABLE_REAL_ORDER`는 항상 `false`로 강제 적용한다.
 - 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수 일치를 재확인했다.
+- 국내 정정취소가능주문조회/매도가능수량조회는 공식 샘플에서 real `TTTC0084R`/`TTTC8408R` only로 확인되어 paper TR 확인 전 구현 보류로 유지한다.
 - paper bot loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 실행되도록 보강했다.
 - Windows sandbox 프로세스 생성 오류는 재부팅 후 재현되지 않았고 PowerShell 기반 backend 검증이 정상 실행됐다.
 - 오래된 `disabled` 전제 테스트는 새 `paper_kis` 정책에 맞춰 `paper 기능은 켜짐, 실계좌/live와 무자격 네트워크 주문은 차단` 기준으로 갱신했다.
@@ -73,7 +74,7 @@
 
 ## 남은 작업
 
-- [ ] KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID를 추가 확인한다.
+- [ ] KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID를 KIS 포털/운영 문서 또는 paper host 기준으로 추가 확인한다.
 
 ## 주의 사항
 

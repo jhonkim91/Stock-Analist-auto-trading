@@ -38,6 +38,7 @@
 - `backend/config/bot.yaml`과 `.env.example`에서 paper bot 자동매매는 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false)로 정렬.
 - Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. 개별 ON/OFF 외에 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 제공하고 `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
 - 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 KIS paper domestic/overseas regular endpoint/TR ID를 재확인하고 stale Phase 0 matrix 문서를 갱신했다.
+- 국내 정정취소가능주문조회/매도가능수량조회는 공식 샘플에서 real `TTTC0084R`/`TTTC8408R` only로 확인되어, paper TR 확인 전 구현 보류와 fail-closed 정책을 유지한다.
 - `backend.app.jobs.paper_bot_runner` loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 동작한다.
 - `.cache/`를 `.gitignore`에 추가해 local token cache가 공개 저장소에 포함되지 않도록 차단.
 
@@ -91,6 +92,6 @@
 
 ## 남은 작업
 
-- KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID는 추가 확인 필요.
+- KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID는 공식 샘플에는 없으므로 KIS 포털/운영 문서 또는 paper host 기준 추가 확인 필요.
 - Telegram polling `getUpdates` runner는 run-once/CLI 구조까지 추가됨. 장시간 운영 loop는 bounded loop 옵션만 제공하며 auto-start는 false.
 - paper fill/order/account sync worker wrapper는 추가됨. 실제 조회는 기존 `PaperSyncService`의 paper network gate를 통과한 경우에만 수행.

@@ -18,7 +18,7 @@
 | Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_full_backend` -> `521 passed in 823.78s`; bounded bot regression `7 passed` |
 | Latest secret scan | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
-| Next recommended phase | KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID 추가 확인 |
+| Next recommended phase | KIS 포털/운영 문서 또는 paper host 기준 국내 정정취소가능/매도가능수량조회 paper TR ID 확인 |
 
 ## Execution Modes
 
@@ -44,7 +44,7 @@
 - Paper bot runner: 자동 시작은 없고, loop는 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE`로 제한된 bounded runner만 허용한다.
 - Telegram `/bot status|enable|disable|auto|run|stop`: paper bot을 process env 기준으로 명시 제어한다. `enable`, `disable`, `auto`, `run`은 `confirm`이 필요하다.
 - Settings runtime env 버튼: 개별 gate ON/OFF와 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 현재 backend 프로세스에 즉시 반영한다. 모든 버튼은 hover/focus 시 한국어 설명을 표시하고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로 강제 적용한다.
-- KIS paper API matrix: 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수를 재확인했다.
+- KIS paper API matrix: 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수를 재확인했다. 국내 정정취소가능/매도가능수량조회는 샘플상 real `TTTC0084R`/`TTTC8408R` only라 paper 구현은 계속 보류한다.
 
 ## Implemented Scope
 
