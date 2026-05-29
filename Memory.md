@@ -42,6 +42,7 @@
 - `KisLiveTokenRefreshService`는 live token refresh를 별도 gated scaffold로 추가했지만 기본 network disabled이며 real KIS refresh proof는 없다.
 - `KisLiveBrokerAdapter`는 submit/cancel safety boundary를 반환하지만 `enabled=false`, `can_submit=false`, `can_cancel=false`, `network_enabled=false`로 고정한다.
 - `LiveCanaryGovernanceService`는 reviewer/env isolation/rollback runbook proof를 redacted payload로 검사한다.
+- `tools/kis_live_token_refresh_preflight.py`는 live token refresh real-call proof용 CLI이며 기본은 preview-only/no-network다.
 
 ## 최신 검증 결과
 
@@ -61,6 +62,7 @@
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_live_token_refresh_service.py backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_live_adapter_controls` -> `35 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_canary_governance_service.py backend/tests/test_live_canary_preflight.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_governance_unit` -> `5 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_canary_governance_service.py backend/tests/test_kis_live_token_refresh_service.py backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_governance_controls` -> `37 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_live_token_refresh_preflight_tool.py backend/tests/test_live_canary_governance_service.py backend/tests/test_kis_live_token_refresh_service.py backend/tests/test_live_order_safety_service.py backend/tests/test_live_canary_preflight.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_api_smoke.py backend/tests/test_frontend_api_contracts.py backend/tests/test_phase3d_broker_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_phase3_token_proof_cli` -> `39 passed`.
 - [x] pytest 병렬 실행은 `backend/data/test_app.db` 잠금으로 실패할 수 있어 순차 실행과 workspace-external basetemp를 사용한다.
 
 ## 남은 작업

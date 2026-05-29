@@ -52,6 +52,8 @@
 
 `LiveCanaryGovernanceService`는 별도 live canary 실행 전에 reviewer, `prod-live-isolated` 환경, rollback ready, kill switch ready, minimum-size 확인, rollback runbook proof를 검사한다. reviewer 원문은 응답에 남기지 않고 fingerprint만 반환한다.
 
+`tools/kis_live_token_refresh_preflight.py`는 live token refresh real-call proof를 만들기 위한 별도 CLI다. 기본 실행은 preview-only이며 `--execute --confirm CONFIRM_KIS_LIVE_TOKEN_REFRESH`와 모든 refresh gate가 있을 때만 network call을 시도한다.
+
 ## Phase 19 허용 범위
 
 Phase 19는 disabled live adapter scaffold와 no-live regression만 허용한다. live endpoint URL, live order mapper, live route, live network call은 넣지 않는다.
