@@ -1,5 +1,17 @@
 # Validation
 
+## 2026-05-30 Telegram Report Daily/Weekly Command
+
+Telegram `/report` 명령을 최신 리포트 조회 기본값으로 유지하면서 `/report daily`, `/report weekly`, `/report type=daily|weekly` 입력은 해당 Markdown 리포트를 생성한 뒤 Telegram reply-safe 요약 메시지로 반환하도록 보강했다. 이 경로는 Telegram/KIS 네트워크 호출과 live 주문을 수행하지 않는다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Daily report command | 통과 | `/report daily` -> `generated=true`, `report_type=daily`, `[daily]` 요약 메시지 |
+| Weekly report command | 통과 | `/report type=weekly` -> `generated=true`, `report_type=weekly`, `[weekly]` 요약 메시지 |
+| Unsupported type | 통과 | `/report monthly` -> `TELEGRAM_REPORT_TYPE_UNSUPPORTED` |
+| No live/network | 통과 | command 응답 `network_call_performed=false`, `live_order_created=false` |
+| Related Telegram tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_report_command` -> `16 passed` |
+
 ## 2026-05-30 Paper Bot Watchlist Candidates
 
 `/api/paper/bot/preview`와 `/api/paper/bot/run` 요청에 `watchlist_symbols`를 추가했다. 값이 있으면 저장된 passed screener 결과 중 watchlist에 포함된 종목만 후보로 사용하고, 요청/결과 payload에 정규화된 watchlist와 `candidate_source=watchlist_screen_results`를 남긴다.

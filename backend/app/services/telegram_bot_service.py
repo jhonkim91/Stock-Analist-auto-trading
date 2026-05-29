@@ -125,7 +125,7 @@ class TelegramBotService:
 
     def _handle_help(self, command: TelegramCommand) -> dict[str, Any]:
         message = (
-            "명령: /status, /search 종목코드, /report, /portfolio, /rank, "
+            "명령: /status, /search 종목코드, /report [daily|weekly], /portfolio, /rank, "
             "/bot status|enable|disable|auto|run|stop, "
             "/buy 종목 qty|amount=금액 [price] confirm, /sell 종목 qty|all [price] confirm, /orders, /stop"
         )
@@ -171,8 +171,25 @@ class TelegramBotService:
         return self._response(command, status="ok", message=message, payload=detail)
 
     def _handle_report(self, command: TelegramCommand) -> dict[str, Any]:
+        report_mode = self._parse_report_mode(command)
+        if report_mode is None:
+            return self._response(
+                command,
+                status="bad_request",
+                message="사용법: /report, /report daily, /report weekly",
+                reason_codes=["TELEGRAM_REPORT_TYPE_UNSUPPORTED"],
+            )
+        report_service = ReportService(self.db)
         try:
-            report = ReportService(self.db).latest_markdown()
+            if report_mode == "daily":
+                generated = report_service.generate_daily_report()
+                report = report_service.get_report(str(generated["report_id"]), include_markdown=True)
+            elif report_mode == "weekly":
+                generated = report_service.generate_weekly_report()
+                report = report_service.get_report(str(generated["report_id"]), include_markdown=True)
+            else:
+                report = report_service.latest_markdown()
+                generated = None
         except ValueError:
             return self._response(
                 command,
@@ -180,9 +197,17 @@ class TelegramBotService:
                 message="생성된 리포트가 없습니다.",
                 reason_codes=["TELEGRAM_REPORT_NOT_FOUND"],
             )
-        markdown = str(report.get("markdown") or "")
-        summary = "\n".join(line.strip() for line in markdown.splitlines() if line.strip())[:1200]
-        return self._response(command, status="ok", message=summary or str(report["report_id"]), payload=report)
+        summary = self._report_summary(report)
+        payload = {
+            "report_mode": report_mode,
+            "generated": generated is not None,
+            "generated_report": generated or {},
+            "report": report,
+            "report_id": report.get("report_id"),
+            "report_type": report.get("report_type"),
+            "network_call_performed": False,
+        }
+        return self._response(command, status="ok", message=summary or str(report["report_id"]), payload=payload)
 
     def _handle_portfolio(self, command: TelegramCommand) -> dict[str, Any]:
         report = AccountService(self.db).report()
@@ -386,6 +411,39 @@ class TelegramBotService:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _parse_report_mode(command: TelegramCommand) -> str | None:
+        values = _key_values(command.args)
+        requested = str(values.get("type") or values.get("report_type") or "").strip().lower()
+        if not requested:
+            positional = [arg for arg in command.args if "=" not in arg]
+            requested = str(positional[0] if positional else "latest").strip().lower()
+        aliases = {
+            "": "latest",
+            "latest": "latest",
+            "recent": "latest",
+            "last": "latest",
+            "최근": "latest",
+            "daily": "daily",
+            "day": "daily",
+            "일간": "daily",
+            "일일": "daily",
+            "weekly": "weekly",
+            "week": "weekly",
+            "주간": "weekly",
+            "주간리뷰": "weekly",
+        }
+        return aliases.get(requested)
+
+    @staticmethod
+    def _report_summary(report: dict[str, Any]) -> str:
+        markdown = str(report.get("markdown") or "")
+        summary = "\n".join(line.strip() for line in markdown.splitlines() if line.strip())[:1200]
+        report_type = str(report.get("report_type") or "report")
+        report_id = str(report.get("report_id") or "")
+        prefix = f"[{report_type}] {report_id}".strip()
+        return f"{prefix}\n{summary}".strip() if summary else prefix
 
     @staticmethod
     def _idempotency_key(raw_text: str, *, chat_id: str | None) -> str:

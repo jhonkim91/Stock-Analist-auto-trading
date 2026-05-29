@@ -19,7 +19,7 @@
 | Phase 3 | `paper_orders`, `paper_fills`, `paper_positions`, `paper_account_snapshots`, `paper_audit_events`, idempotency, paper API alias | 기존 API key 제거, legacy `orders` 생성 |
 | Phase 4 | realtime worker skeleton, polling quote cache, heartbeat/stale 상태, `/api/paper/realtime/status`, stale quote 신규 주문 차단 | 실전 WebSocket 운영, live 체결 통보 |
 | Phase 5 | bot executor, 후보 선정, sizing, 주문 전 risk gate, dry-run/run 분리, run/decision 저장 | 실전 주문, 임의 후보 생성 |
-| Phase 6 | paper dashboard, paper trading report section, 운영 metrics, runbook/README/status/validation 갱신 | 운영 알림 자동 발송, live monitoring |
+| Phase 6 | paper dashboard, paper trading report section, Telegram `/report daily|weekly` 요약, 운영 metrics, runbook/README/status/validation 갱신 | 운영 알림 자동 발송, live monitoring |
 
 ## 안전 조건
 
@@ -79,6 +79,7 @@
 
 - `GET /api/paper/dashboard`는 account, positions, open orders, fills, realized/unrealized PnL, risk, worker status, metrics를 반환한다.
 - daily/weekly report에는 `## Paper Trading` section을 추가해 주문 수, 체결 수, reject reason, realized/unrealized PnL, stale data event, risk gate 차단 내역을 표시한다.
+- Telegram `/report daily|weekly`는 해당 Markdown report를 생성하고 reply-safe 요약 메시지로 반환한다.
 - 운영 metrics는 token refresh, websocket reconnect, order submit latency, reject count, sync lag를 secret 없이 집계한다.
 - `docs/RUNBOOK_PAPER_TRADING.md`, `README.md`, `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `Memory.md`를 Phase 5/6 기준으로 갱신한다.
 

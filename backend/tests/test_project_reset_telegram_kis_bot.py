@@ -143,6 +143,33 @@ def test_telegram_command_parsing_and_search_fallback(full_flow_client, monkeypa
     assert buy_preview.json()["payload"]["paper_order_created"] is False
 
 
+def test_telegram_report_command_generates_daily_and_weekly_summary(full_flow_client) -> None:
+    daily = full_flow_client.post("/api/telegram/command", json={"text": "/report daily"})
+    weekly = full_flow_client.post("/api/telegram/command", json={"text": "/report type=weekly"})
+    unsupported = full_flow_client.post("/api/telegram/command", json={"text": "/report monthly"})
+
+    assert daily.status_code == 200
+    daily_payload = daily.json()
+    assert daily_payload["ok"] is True
+    assert daily_payload["status"] == "ok"
+    assert daily_payload["payload"]["generated"] is True
+    assert daily_payload["payload"]["report_type"] == "daily"
+    assert daily_payload["network_call_performed"] is False
+    assert "[daily]" in daily_payload["message"]
+
+    assert weekly.status_code == 200
+    weekly_payload = weekly.json()
+    assert weekly_payload["ok"] is True
+    assert weekly_payload["payload"]["generated"] is True
+    assert weekly_payload["payload"]["report_type"] == "weekly"
+    assert weekly_payload["network_call_performed"] is False
+    assert "[weekly]" in weekly_payload["message"]
+
+    assert unsupported.status_code == 200
+    assert unsupported.json()["status"] == "bad_request"
+    assert "TELEGRAM_REPORT_TYPE_UNSUPPORTED" in unsupported.json()["reason_codes"]
+
+
 def test_telegram_sell_all_uses_current_paper_position_qty(db_session) -> None:
     db_session.add(
         PaperPosition(
