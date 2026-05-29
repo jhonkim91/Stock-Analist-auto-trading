@@ -54,11 +54,49 @@
   "canary_execution_allowed": false,
   "canary_status": "blocked",
   "complete": false,
+  "env_file_load": {
+    "ignored_count": 23,
+    "ignored_keys": [
+      "APP_ENV",
+      "BROKER_MODE",
+      "KIS_ENV",
+      "KIS_PAPER_BASE_URL",
+      "KIS_PRODUCT_CODE",
+      "NEXT_PUBLIC_API_BASE_URL",
+      "PAPER_BOT_AUTO_SUBMIT",
+      "PAPER_BOT_CONFIRM",
+      "PAPER_BOT_ENABLED",
+      "PAPER_BOT_KILL_SWITCH",
+      "PAPER_BOT_SCHEDULER_ENABLED",
+      "PAPER_ORDER_SUBMIT_ENABLED",
+      "PAPER_TRADING_CAN_CREATE",
+      "PAPER_TRADING_ENABLED",
+      "PAPER_TRADING_KILL_SWITCH",
+      "PAPER_TRADING_NETWORK_ENABLED"
+    ],
+    "ignored_secret_like_key_count": 7,
+    "loaded_count": 1,
+    "loaded_keys": [
+      "ENABLE_REAL_ORDER"
+    ],
+    "loaded_secret_like_key_count": 0,
+    "network_call_performed": false,
+    "ok": true,
+    "override": false,
+    "path": ".env.local",
+    "raw_secret_printed": false,
+    "secret_like_key_names_redacted": true,
+    "secrets_redacted": true,
+    "skipped_existing_count": 2,
+    "skipped_existing_keys": [],
+    "skipped_secret_like_key_count": 2,
+    "status": "env_file_loaded"
+  },
   "env_scope_status": {
     "ENABLE_REAL_ORDER": {
-      "any_scope_configured": false,
+      "any_scope_configured": true,
       "machine_configured": false,
-      "process_configured": false,
+      "process_configured": true,
       "user_configured": false,
       "values_redacted": true
     },
@@ -231,11 +269,10 @@
       "values_redacted": true
     }
   },
-  "generated_at": "2026-05-29T10:19:46.609813+00:00",
+  "generated_at": "2026-05-29T10:45:53.703689+00:00",
   "live_order_created": false,
   "missing_all_scopes_env_names": [
     "KIS_LIVE_BASE_URL",
-    "ENABLE_REAL_ORDER",
     "LIVE_TOKEN_REFRESH_ENABLED",
     "LIVE_TOKEN_REFRESH_PROCESS_ONLY",
     "LIVE_TOKEN_REFRESH_NETWORK_ENABLED",
@@ -260,7 +297,6 @@
   ],
   "missing_process_env_names": [
     "KIS_LIVE_BASE_URL",
-    "ENABLE_REAL_ORDER",
     "LIVE_TOKEN_REFRESH_ENABLED",
     "LIVE_TOKEN_REFRESH_PROCESS_ONLY",
     "LIVE_TOKEN_REFRESH_NETWORK_ENABLED",

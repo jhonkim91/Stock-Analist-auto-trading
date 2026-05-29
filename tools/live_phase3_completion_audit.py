@@ -13,6 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from tools.env_file_loader import load_env_file  # noqa: E402
 from tools import kis_live_token_refresh_preflight, live_canary_preflight  # noqa: E402
 
 DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-completion-audit.json"
@@ -78,6 +79,7 @@ def build_completion_audit(
     *,
     token_refresh_record: Mapping[str, Any] | None = None,
     canary_record: Mapping[str, Any] | None = None,
+    env_file_load_result: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """실계좌 주문 연동 3단계 완료 여부를 네트워크 없이 항목별로 판정한다."""
     current_env = os.environ if env is None else env
@@ -124,7 +126,7 @@ def build_completion_audit(
         ),
     }
     env_scope_status = _env_scope_status(REQUIRED_ENV_NAMES, current_env)
-    return {
+    record = {
         "phase": "3단계 실계좌 주문 연동",
         "generated_at": datetime.now(UTC).isoformat(),
         "complete": not missing_requirements,
@@ -146,6 +148,9 @@ def build_completion_audit(
         "secrets_redacted": bool(requirements["secrets_redacted"]),
         "next_required_action": _next_required_action(missing_requirements),
     }
+    if env_file_load_result is not None:
+        record["env_file_load"] = dict(env_file_load_result)
+    return record
 
 
 def write_completion_audit(record: Mapping[str, Any], path: Path = DEFAULT_RECORD_PATH) -> Path:
@@ -193,6 +198,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="No-network live Phase 3 completion audit")
     parser.add_argument("--write-record", action="store_true", help="write redacted audit under docs/research")
     parser.add_argument("--record-path", default=str(DEFAULT_RECORD_PATH), help="optional output path")
+    parser.add_argument(
+        "--load-env-local",
+        action="store_true",
+        help="load allowlisted keys from .env.local into this audit process only",
+    )
+    parser.add_argument("--env-file", default=".env.local", help="env file path used with --load-env-local")
+    parser.add_argument("--env-file-override", action="store_true", help="override existing process env values")
     parser.add_argument("--print-powershell-template", action="store_true", help="print a placeholder env template")
     parser.add_argument("--write-powershell-template", action="store_true", help="write a placeholder env template")
     parser.add_argument("--template-path", default=str(DEFAULT_TEMPLATE_PATH), help="optional template output path")
@@ -204,7 +216,17 @@ def main(argv: list[str] | None = None) -> int:
     """3단계 완료 여부를 판정하고 raw secret 없이 JSON으로 출력한다."""
     parser = build_parser()
     args = parser.parse_args(argv)
-    record = build_completion_audit()
+    env_file_load_result = (
+        load_env_file(
+            Path(args.env_file),
+            allowed_keys=REQUIRED_ENV_NAMES,
+            override=bool(args.env_file_override),
+            project_root=PROJECT_ROOT,
+        )
+        if args.load_env_local
+        else None
+    )
+    record = build_completion_audit(env_file_load_result=env_file_load_result)
     if args.write_record:
         write_completion_audit(record, Path(args.record_path))
     if args.write_powershell_template:

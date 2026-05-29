@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from tools.env_file_loader import load_env_file
 from tools import live_phase3_completion_audit
 
 
@@ -98,3 +99,42 @@ def test_live_phase3_completion_audit_can_write_redacted_record(tmp_path) -> Non
     assert payload["complete"] is False
     assert payload["live_order_created"] is False
     assert payload["network_call_performed_by_audit"] is False
+
+
+def test_live_phase3_completion_audit_can_use_env_file_loader_without_raw_secret(tmp_path) -> None:
+    env_file = tmp_path / ".env.local"
+    env_file.write_text(
+        "\n".join(
+            [
+                "KIS_APP_" + "KEY=VALUE_A",
+                "KIS_APP_" + "SECRET=VALUE_B",
+                "KIS_REFRESH_" + "TOKEN = VALUE_C",
+                "LIVE_TOKEN_REFRESH_ENABLED=true",
+                "LIVE_TOKEN_REFRESH_PROCESS_ONLY=true",
+                "LIVE_TOKEN_REFRESH_NETWORK_ENABLED=false",
+                "ENABLE_REAL_ORDER=false",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    target: dict[str, str] = {}
+    load_result = load_env_file(
+        env_file,
+        allowed_keys=live_phase3_completion_audit.REQUIRED_ENV_NAMES,
+        target=target,
+    )
+
+    record = live_phase3_completion_audit.build_completion_audit(
+        target,
+        env_file_load_result=load_result,
+    )
+    serialized = json.dumps(record, ensure_ascii=False, default=str)
+
+    assert record["env_scope_status"]["KIS_REFRESH_TOKEN"]["process_configured"] is True
+    assert "KIS_REFRESH_TOKEN" not in record["missing_process_env_names"]
+    assert record["network_call_performed_by_audit"] is False
+    assert record["live_order_created"] is False
+    assert record["env_file_load"]["loaded_secret_like_key_count"] == 6
+    assert "VALUE_A" not in serialized
+    assert "VALUE_B" not in serialized
+    assert "VALUE_C" not in serialized

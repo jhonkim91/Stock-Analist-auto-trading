@@ -1,5 +1,23 @@
 # Validation
 
+## 2026-05-29 Live Phase 3 `.env.local` Loader Recheck
+
+사용자가 `KIS_REFRESH_TOKEN` 등록을 재요청해 Process/User/Machine scope와 프로젝트 루트 `.env.local`을 raw value 없이 다시 확인했다. 현재 기준 `KIS_REFRESH_TOKEN`은 모든 scope와 `.env.local`에서 미탐지이며, 실제 KIS network call이나 live order/cancel은 실행하지 않았다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Process/User/Machine 확인 | 미등록 | `KIS_REFRESH_TOKEN=false`, live token/canary gate도 미설정. `KIS_APP_KEY`, `KIS_APP_SECRET`만 Process/User scope에 존재 |
+| `.env.local` 확인 | 미등록 | redacted key scan 결과 `KIS_REFRESH_TOKEN=` 라인이 없음. `KIS_APP_KEY`, `KIS_APP_SECRET`, `ENABLE_REAL_ORDER`만 관련 key로 탐지 |
+| Process-only env loader | 추가 | `tools/env_file_loader.py` 추가. allowlist key만 현재 helper process에 로드하고 raw value와 secret-like key name은 record에서 redaction |
+| Live token preflight loader | 추가 | `tools/kis_live_token_refresh_preflight.py --load-env-local --env-file .env.local` 지원. 기본은 preview-only이며 no-network 유지 |
+| Completion audit loader | 추가 | `tools/live_phase3_completion_audit.py --load-env-local --write-record` 지원. record에 `env_file_load` redacted summary를 포함 |
+| Current no-network preflight | blocked | `.\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py --load-env-local` -> `refresh_token_configured=false`, `network_call_performed=false`, `live_order_created=false` |
+| Current completion audit | incomplete | `.\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --load-env-local --write-record` -> `complete=false`, `network_call_performed_by_audit=false`, `live_order_created=false` |
+| Targeted pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_env_file_loader.py backend/tests/test_kis_live_token_refresh_preflight_tool.py backend/tests/test_live_phase3_completion_audit.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_env_local_loader_tests` -> `10 passed` |
+| Secret/diff check | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning only |
+
+결론: 3단계는 아직 완료가 아니다. 현재 선택된 긴 JWT는 `KIS_ACCESS_TOKEN`일 가능성이 높고, `KIS_REFRESH_TOKEN=<refresh token>` 라인이나 process/User env 등록은 확인되지 않았다.
+
 ## 2026-05-29 Live Phase 3 Completion Audit
 
 3단계 완료를 선언하기 전 항목별 증거를 강제하기 위해 `tools/live_phase3_completion_audit.py`를 추가했다. 이 도구는 live canary preflight와 live token refresh preview를 결합해 완료 조건을 판정하지만, 자체적으로는 network call이나 live order를 만들지 않는다.

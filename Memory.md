@@ -46,9 +46,14 @@
 - 사용자 승인 범위에 따라 `/api/live/status`, `/api/kis/orders`, `/api/kis/orders/status`, `/api/kis/orders/preview`, `/api/kis/orders/submit`, `/api/kis/orders/cancel` disabled scaffold를 추가했다. 모든 응답은 `live_order_created=false`, `network_call_performed=false`, `endpoint_called=false`를 유지한다.
 - `/api/kis/broker/*`, `/api/kis/websocket/*`는 계속 미등록 404다.
 - `tools/live_phase3_completion_audit.py`는 3단계 완료 조건과 live env Process/User/Machine 설정 여부를 항목별로 판정한다. 현재 record는 `complete=false`, `network_call_performed_by_audit=false`, `live_order_created=false`이며 required live env, token refresh proof, live submit/cancel authority가 미충족이다. `docs/research/live-phase3-process-env-template.ps1`는 placeholder-only process env 템플릿이다.
+- `tools/env_file_loader.py`와 `--load-env-local` 옵션을 live token preflight/completion audit에 추가했다. `.env.local`을 수정하지 않고 현재 helper process에만 allowlist key를 로드하며 raw value와 secret-like key name은 record에서 redaction한다.
+- 최신 재확인 기준 `KIS_REFRESH_TOKEN`은 Process/User/Machine scope와 프로젝트 루트 `.env.local` 모두에서 미탐지다. `.env.local`에 선택된 긴 JWT는 `KIS_ACCESS_TOKEN`일 가능성이 높으며 refresh token proof는 아직 없다.
 
 ## 최신 검증 결과
 
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_env_file_loader.py backend/tests/test_kis_live_token_refresh_preflight_tool.py backend/tests/test_live_phase3_completion_audit.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_env_local_loader_tests` -> `10 passed`.
+- [x] `.\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py --load-env-local` -> `.env.local` no-network 로드, `refresh_token_configured=false`, `network_call_performed=false`, `live_order_created=false`.
+- [x] `.\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py --load-env-local --write-record` -> `complete=false`, `KIS_REFRESH_TOKEN` 미탐지, token refresh proof/live submit authority 미충족.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py backend/tests/test_final_safety_hardening.py backend/tests/test_phase3d_broker_safety.py backend/tests/test_phase3e_paper_safety.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_route_canary_contracts` -> `30 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase3f_readonly_provider_contract.py::test_read_only_provider_contract_does_not_mutate_execution_tables_or_routes -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_public_route_phase3f_route` -> `1 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_live_phase3_completion_audit.py backend/tests/test_live_canary_preflight.py backend/tests/test_live_public_route_scaffold.py backend/tests/test_no_live_adapter.py backend/tests/test_no_live_trading_regression.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_live_phase3_completion_audit` -> `20 passed`.
