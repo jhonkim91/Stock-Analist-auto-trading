@@ -40,7 +40,7 @@
 - `/api/paper/bot/preview`, `/api/paper/bot/run`은 기본 screener 결과 후보 외에 요청의 `watchlist_symbols`로 후보 universe를 제한할 수 있다.
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가.
 - `backend/config/bot.yaml`과 `.env.example`에서 paper bot 자동매매는 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false)로 정렬.
-- Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. 개별 ON/OFF 외에 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 제공하고 `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
+- Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. 개별 ON/OFF 외에 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 제공한다. `모의 주문 준비`와 `자동매매 ON`은 paper sync worker bounded loop gate도 함께 맞추고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
 - 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 KIS paper domestic/overseas regular endpoint/TR ID를 재확인하고 stale Phase 0 matrix 문서를 갱신했다.
 - 국내 정정취소가능주문조회/매도가능수량조회는 공식 샘플에서 real `TTTC0084R`/`TTTC8408R` only로 확인되어, paper TR 확인 전 구현 보류와 fail-closed 정책을 유지한다.
 - `backend.app.jobs.paper_bot_runner` loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 동작한다.
@@ -94,8 +94,9 @@
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_report_command` | `16 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_cancel_related` | `17 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py backend/tests/test_paper_sync.py backend/tests/test_paper_sync_service.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_sync_worker_loop_api` | `19 passed` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_telegram_scheduler_and_sync_worker.py::test_paper_sync_worker_loop_api_is_confirm_gated_and_bounded -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_sync_worker_preset` | `2 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` | `18 passed` |
-| `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_sync_loop` | `531 passed in 775.81s` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_settings_sync_preset` | `531 passed in 669.95s` |
 | `.\.venv\Scripts\python.exe tools\secret_scan.py` | `NO_SECRET_FINDINGS` |
 | `cd frontend; npm.cmd run lint` | exit 0 |
 | `cd frontend; npm.cmd exec tsc -- --noEmit` | exit 0 |

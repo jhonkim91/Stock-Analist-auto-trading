@@ -442,6 +442,9 @@ def test_runtime_env_preset_enables_paper_kis_gates_without_live_order(client, m
         "PAPER_TRADING_NETWORK_ENABLED",
         "PAPER_TRADING_KILL_SWITCH",
         "PAPER_ORDER_SUBMIT_ENABLED",
+        "PAPER_SYNC_WORKER_ENABLED",
+        "PAPER_SYNC_WORKER_MAX_ITERATIONS",
+        "PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP",
         "PAPER_BOT_CONFIRM",
         "PAPER_BOT_ENABLED",
         "PAPER_BOT_AUTO_SUBMIT",
@@ -483,6 +486,9 @@ def test_runtime_env_preset_enables_paper_kis_gates_without_live_order(client, m
     assert os.environ["PAPER_TRADING_NETWORK_ENABLED"] == "true"
     assert os.environ["PAPER_TRADING_KILL_SWITCH"] == "false"
     assert os.environ["PAPER_ORDER_SUBMIT_ENABLED"] == "true"
+    assert os.environ["PAPER_SYNC_WORKER_ENABLED"] == "true"
+    assert os.environ["PAPER_SYNC_WORKER_MAX_ITERATIONS"] == "1"
+    assert os.environ["PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP"] == "10"
     assert os.environ["PAPER_BOT_CONFIRM"] == "true"
     assert os.environ["PAPER_BOT_ENABLED"] == "true"
     assert os.environ["PAPER_BOT_AUTO_SUBMIT"] == "true"
