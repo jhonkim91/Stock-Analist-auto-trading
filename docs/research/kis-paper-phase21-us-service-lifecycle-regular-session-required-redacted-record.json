@@ -1,0 +1,157 @@
+{
+  "currency": "USD",
+  "exchange": "NASD",
+  "generated_at": "2026-05-28T11:34:37.425191+00:00",
+  "live_order_created": false,
+  "market": "US",
+  "network_call_performed": false,
+  "paper_only": true,
+  "phase": "21-US",
+  "qty": 1,
+  "raw_secret_printed": false,
+  "reason_codes": [
+    "US_REGULAR_SESSION_REQUIRED"
+  ],
+  "status": "service_lifecycle_incomplete",
+  "steps": [
+    {
+      "name": "load_env_file",
+      "result": {
+        "ignored_count": 10,
+        "ignored_keys": [
+          "APP_ENV",
+          "NEXT_PUBLIC_API_BASE_URL",
+          "PAPER_BOT_ENABLED",
+          "PAPER_BOT_KILL_SWITCH",
+          "PAPER_BOT_SCHEDULER_ENABLED"
+        ],
+        "ignored_secret_like_key_count": 5,
+        "loaded_count": 14,
+        "loaded_keys": [
+          "BROKER_MODE",
+          "ENABLE_REAL_ORDER",
+          "KIS_ENV",
+          "KIS_PAPER_BASE_URL",
+          "KIS_PRODUCT_CODE",
+          "PAPER_BOT_AUTO_SUBMIT",
+          "PAPER_BOT_CONFIRM",
+          "PAPER_ORDER_SUBMIT_ENABLED",
+          "PAPER_TRADING_CAN_CREATE",
+          "PAPER_TRADING_ENABLED",
+          "PAPER_TRADING_KILL_SWITCH",
+          "PAPER_TRADING_NETWORK_ENABLED"
+        ],
+        "loaded_secret_like_key_count": 2,
+        "network_call_performed": false,
+        "ok": true,
+        "override": false,
+        "path": ".env.local",
+        "raw_secret_printed": false,
+        "secret_like_key_names_redacted": true,
+        "secrets_redacted": true,
+        "skipped_existing_count": 2,
+        "skipped_existing_keys": [],
+        "skipped_secret_like_key_count": 2,
+        "status": "env_file_loaded"
+      }
+    },
+    {
+      "name": "websocket_us_subscription_preview",
+      "result": {
+        "exchange": "NASD",
+        "live_order_created": false,
+        "market": "US",
+        "network_call_performed": false,
+        "ok": true,
+        "paper_only": true,
+        "reason": null,
+        "reason_codes": [],
+        "secrets_redacted": true,
+        "status": "subscription_preview",
+        "subscription": {
+          "body": {
+            "input": {
+              "tr_id": "HDFSCNT0",
+              "tr_key": "DNASAAPL"
+            }
+          },
+          "header": {
+            "approval_key": "***REDACTED***",
+            "content-type": "utf-8",
+            "custtype": "P",
+            "tr_type": "1"
+          }
+        },
+        "tr_id": "HDFSCNT0",
+        "tr_key_fingerprint": "15e54f8c6f02"
+      }
+    },
+    {
+      "name": "derive_limit_from_price_skipped",
+      "result": {
+        "network_call_performed": false,
+        "ok": false,
+        "reason_codes": [
+          "US_REGULAR_SESSION_REQUIRED"
+        ],
+        "status": "trading_window_closed",
+        "trading_window": {
+          "calendar_quality": "static_weekday_regular_session_guard",
+          "local_time": "2026-05-28T07:34:37.430297-04:00",
+          "market": "US",
+          "next_regular_session_start": "2026-05-28T09:30:00-04:00",
+          "ok": false,
+          "premarket_session_end": "09:30",
+          "premarket_session_start": "04:00",
+          "reason_codes": [
+            "US_REGULAR_SESSION_REQUIRED"
+          ],
+          "regular_session_end": "16:00",
+          "regular_session_start": "09:30",
+          "session": "premarket",
+          "timezone": "America/New_York",
+          "weekday": "Thursday"
+        }
+      }
+    },
+    {
+      "name": "service_us_submit_sync_cancel",
+      "result": {
+        "currency": "USD",
+        "exchange": "NASD",
+        "generated_at": "2026-05-28T11:34:37.430443+00:00",
+        "live_order_created": false,
+        "market": "US",
+        "network_call_performed": false,
+        "paper_only": true,
+        "phase": "21-service-lifecycle",
+        "qty": 1,
+        "raw_secret_printed": false,
+        "reason_codes": [
+          "US_REGULAR_SESSION_REQUIRED"
+        ],
+        "status": "trading_window_closed",
+        "steps": [],
+        "symbol": "AAPL",
+        "trading_window": {
+          "calendar_quality": "static_weekday_regular_session_guard",
+          "local_time": "2026-05-28T07:34:37.430460-04:00",
+          "market": "US",
+          "next_regular_session_start": "2026-05-28T09:30:00-04:00",
+          "ok": false,
+          "premarket_session_end": "09:30",
+          "premarket_session_start": "04:00",
+          "reason_codes": [
+            "US_REGULAR_SESSION_REQUIRED"
+          ],
+          "regular_session_end": "16:00",
+          "regular_session_start": "09:30",
+          "session": "premarket",
+          "timezone": "America/New_York",
+          "weekday": "Thursday"
+        }
+      }
+    }
+  ],
+  "symbol": "AAPL"
+}

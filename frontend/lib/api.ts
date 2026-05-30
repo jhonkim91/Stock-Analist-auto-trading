@@ -1,4 +1,10 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { clearSession, getToken, notifyUnauthorized } from "./auth";
+
+// 단일 프로세스 배포에서는 FastAPI가 UI와 API를 같은 오리진에서 서빙하므로
+// API_BASE를 비워 상대 경로(`/api/...`)로 호출한다. next dev(개발)에서는 8000 백엔드로 향한다.
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "");
 
 export type ApiStatus = "idle" | "loading" | "ok" | "error";
 
@@ -38,6 +44,48 @@ export type MarketRegime = {
   weekly_close: number | null;
   weekly_sma30: number | null;
   weekly_sma30_slope: number | null;
+  breadth_regime?: string;
+  breadth_score?: number | null;
+  breadth_score_available?: boolean;
+  breadth_advance_decline_ratio?: number | null;
+  breadth_advance_decline_available?: boolean;
+  breadth_52w_high_low_ratio?: number | null;
+  breadth_52w_high_low_available?: boolean;
+  breadth_ma50_participation?: number | null;
+  breadth_ma50_participation_available?: boolean;
+};
+
+export type MarketSessionWindow = {
+  venue: string;
+  name: string;
+  session_kind?: string;
+  order_acceptance_start?: string | null;
+  trading_start?: string | null;
+  trading_end?: string | null;
+  order_acceptance_end?: string | null;
+  current_session_allows_preview?: boolean;
+  [key: string]: JsonValue | undefined;
+};
+
+export type MarketSession = {
+  venue: string;
+  session: string;
+  session_kind: string;
+  is_trading_day: boolean;
+  is_trading_session: boolean;
+  current_session_allows_preview: boolean;
+  current_session: MarketSessionWindow | null;
+  next_session: MarketSessionWindow | null;
+  allowed_preview_sessions?: Record<string, boolean>;
+  operational_layer?: JsonRecord;
+  reason_codes: string[];
+  trade_date?: string | null;
+  as_of?: string | null;
+};
+
+export type MarketSessionWindows = {
+  venue: string;
+  session_windows: MarketSessionWindow[];
 };
 
 export type ScreenerResult = {
@@ -177,6 +225,62 @@ export type StrategyValidationRow = {
   };
   backtest: StrategyValidationMetricSummary;
   delta: StrategyValidationDelta;
+  validation?: {
+    walk_forward?: JsonRecord;
+    overfitting?: {
+      pbo?: JsonRecord;
+      deflated_sharpe_ratio?: JsonRecord;
+    };
+    attribution?: JsonRecord;
+  };
+};
+
+export type WalkForwardStrategySummary = {
+  strategy_name: string;
+  calculated: boolean;
+  status: string;
+  reason: string | null;
+  summary?: {
+    oos_window_count?: number | null;
+    oos_total_return?: number | null;
+    oos_avg_return?: number | null;
+    [key: string]: JsonValue | undefined;
+  } | null;
+};
+
+export type WalkForwardFrameworkSummary = {
+  status: string;
+  metric: string;
+  calculated: boolean;
+  reason: string | null;
+  train_window_trading_days: number;
+  test_window_trading_days: number;
+  step_trading_days: number;
+  rebalance_frequency?: string | null;
+  strategy_count: number;
+  calculated_strategy_count: number;
+  unavailable_strategy_count: number;
+  strategy_summaries: WalkForwardStrategySummary[];
+};
+
+export type OverfittingValidationMetric = {
+  calculated: boolean;
+  value: number | string;
+  reason?: string | null;
+  method?: string;
+  probability_of_backtest_overfitting?: number | string;
+  deflated_sharpe_ratio?: number | string;
+  input_shape?: JsonRecord;
+};
+
+export type StrategyValidationFramework = {
+  walk_forward: WalkForwardFrameworkSummary;
+  overfitting: {
+    pbo: OverfittingValidationMetric;
+    deflated_sharpe_ratio: OverfittingValidationMetric;
+  };
+  attribution?: JsonRecord;
+  trade_ledger_schema?: JsonRecord;
 };
 
 export type StrategyValidationSummary = {
@@ -206,8 +310,10 @@ export type StrategyValidationSummary = {
     path: string;
     filename: string;
     bytes?: number;
+    kind?: string;
   };
   validation_documentation_format: JsonRecord;
+  validation_framework: StrategyValidationFramework;
   strategies: StrategyValidationRow[];
 };
 
@@ -244,6 +350,10 @@ export type PaperCounts = {
   paper_fills_count: number;
   paper_positions_count: number;
   paper_audit_events_count: number;
+  paper_portfolio_snapshots_count?: number;
+  synthetic_positions_count?: number;
+  paper_bot_runs_count?: number;
+  paper_bot_decisions_count?: number;
   orders_count: number;
 };
 
@@ -282,6 +392,8 @@ export type PaperPreviewRequest = {
   limit_price?: number | null;
   stop_price?: number | null;
   strategy_tag?: string | null;
+  venue?: string | null;
+  as_of?: string | null;
 };
 
 export type PaperPreviewResponse = PaperStatus & {
@@ -292,6 +404,314 @@ export type PaperPreviewResponse = PaperStatus & {
   limit_price: number | null;
   stop_price: number | null;
   strategy_tag: string | null;
+};
+
+export type PaperSubmitRequest = PaperPreviewRequest & {
+  confirm: boolean;
+  idempotency_key?: string | null;
+};
+
+export type PaperOrder = {
+  paper_order_id: string;
+  created_ts: string | null;
+  updated_ts: string | null;
+  symbol: string;
+  side: string;
+  qty: number;
+  filled_qty: number;
+  remaining_qty: number;
+  order_type: string;
+  limit_price: number | null;
+  stop_price: number | null;
+  status: string;
+  idempotency_key: string | null;
+  request_hash: string | null;
+  strategy_tag: string | null;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  broker_order_id: string | null;
+  broker_order_status: string | null;
+  submitted_at: string | null;
+  canceled_at: string | null;
+};
+
+export type PaperOrderListResponse = {
+  ok: boolean;
+  orders: PaperOrder[];
+  counts: PaperCounts;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+};
+
+export type PaperSubmitResponse = {
+  ok: boolean;
+  status: string;
+  paper_order_created: boolean;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  reason: string;
+  reason_codes: string[];
+  risk_gate: PaperRiskGate;
+  request_hash: string;
+  idempotency_key: string | null;
+  order?: PaperOrder;
+  counts: PaperCounts;
+};
+
+export type PaperCancelRequest = {
+  paper_order_id: string;
+  confirm: boolean;
+  idempotency_key?: string | null;
+};
+
+export type PaperCancelResponse = {
+  ok: boolean;
+  status: string;
+  cancel_supported: boolean;
+  order_cancelled: boolean;
+  paper_order_id: string;
+  paper_order_created: boolean;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  reason: string;
+  reason_codes: string[];
+  request_hash: string;
+  idempotency_key: string | null;
+  counts: PaperCounts;
+};
+
+export type PaperFill = {
+  paper_fill_id: string;
+  paper_order_id: string | null;
+  symbol: string;
+  side: string;
+  qty: number;
+  price: number;
+  fill_ts: string | null;
+  fill_source: string;
+  commission: number;
+  slippage_bps: number;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  broker_fill_id: string | null;
+  broker_order_id: string | null;
+  broker_fill_ts: string | null;
+};
+
+export type PaperFillsResponse = {
+  ok: boolean;
+  fills: PaperFill[];
+  counts: PaperCounts;
+  source: string;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+};
+
+export type PaperPosition = {
+  id: number;
+  symbol: string;
+  strategy_tag: string | null;
+  qty: number;
+  avg_price: number;
+  realized_pnl: number;
+  last_price: number | null;
+  market_value: number | null;
+  unrealized_pnl: number | null;
+  updated_at: string | null;
+  broker_position_key: string | null;
+  account_alias: string | null;
+  broker_synced_at: string | null;
+};
+
+export type PaperPositionsResponse = {
+  ok: boolean;
+  positions: PaperPosition[];
+  counts: PaperCounts;
+  source: string;
+  synthetic_positions_included: boolean;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+};
+
+export type PaperPortfolioSnapshot = {
+  snapshot_id: string;
+  snapshot_ts: string | null;
+  account_alias: string | null;
+  cash_balance: number;
+  buying_power: number;
+  market_value: number;
+  total_equity: number;
+  unrealized_pnl: number;
+  realized_pnl: number;
+  source: string;
+  status: string;
+  created_at: string | null;
+};
+
+export type PaperPositionsSummary = {
+  source: string;
+  count: number;
+  total_qty: number;
+  market_value: number;
+  unrealized_pnl: number;
+};
+
+export type PaperHolding = {
+  symbol: string;
+  name: string;
+  quantity: number;
+  orderable_quantity: number;
+  average_price: number | null;
+  purchase_amount: number | null;
+  current_price: number | null;
+  evaluation_amount: number | null;
+  profit_loss_amount: number | null;
+  profit_loss_rate: number | null;
+};
+
+export type PaperAccountSummary = {
+  cash_total: number | null;
+  securities_evaluation_amount: number | null;
+  total_evaluation_amount: number | null;
+  net_asset_amount: number | null;
+  total_purchase_amount: number | null;
+  total_stock_evaluation_amount: number | null;
+  total_profit_loss_amount: number | null;
+  previous_total_asset_amount: number | null;
+  asset_change_amount: number | null;
+  asset_change_rate: number | null;
+};
+
+export type PaperPortfolioResponse = {
+  ok: boolean;
+  source: string;
+  snapshot: PaperPortfolioSnapshot | null;
+  positions_summary: PaperPositionsSummary;
+  holdings?: PaperHolding[];
+  account_summary?: PaperAccountSummary;
+  kis_balance?: JsonRecord;
+  counts: PaperCounts;
+  separation_contract: JsonRecord;
+  reason: string | null;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+};
+
+export type PaperSyncScope = "orders" | "fills" | "positions" | "portfolio" | "all";
+
+export type PaperSyncResponse = {
+  ok: boolean;
+  status: string;
+  scope: PaperSyncScope | string;
+  supported_scopes: string[];
+  sync_performed: boolean;
+  synced_scopes?: string[];
+  reason: string;
+  reason_codes: string[];
+  counts: PaperCounts;
+  dedupe: JsonRecord;
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  synthetic_positions_touched: boolean;
+};
+
+export type PaperBotSessionStatus = {
+  session_checked: boolean;
+  session_check_passed: boolean;
+  session_state?: string | null;
+  session?: string | null;
+  trade_date?: string | null;
+  reason_codes: string[];
+};
+
+export type PaperBotStep = {
+  name: string;
+  status: string;
+  reason: string;
+};
+
+export type PaperBotDecision = {
+  symbol: string;
+  strategy_tag: string;
+  action: string;
+  total_score: number | null;
+  qty: number;
+  limit_price: number | null;
+  stop_price: number | null;
+  target_price: number | null;
+  risk_passed: boolean;
+  reason_codes: string[];
+  paper_order_id: string | null;
+};
+
+export type PaperBotStatus = {
+  enabled: boolean;
+  scheduler_enabled: boolean;
+  auto_submit: boolean;
+  kill_switch_enabled: boolean;
+  mode: string;
+  supported_modes: string[];
+  loop_allowed: boolean;
+  auto_submit_allowed: boolean;
+  session: PaperBotSessionStatus;
+  session_check_passed: boolean;
+  loop_interval_seconds: number;
+  max_candidates: number;
+  default_strategy: string;
+  sync_enabled: boolean;
+  notification_enabled: boolean;
+  report_generation_enabled: boolean;
+  reason_codes: string[];
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  counts: PaperCounts;
+};
+
+export type PaperBotRunRequest = {
+  auto_submit?: boolean | null;
+};
+
+export type PaperBotRunResponse = {
+  ok: boolean;
+  status: string;
+  run_id?: string;
+  run_once: boolean;
+  mode: string;
+  auto_submit_requested: boolean;
+  auto_submit_allowed: boolean;
+  paper_order_submitted: boolean;
+  submitted_count: number;
+  decision_count: number;
+  decisions: PaperBotDecision[];
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
+  steps: PaperBotStep[];
+  reason_codes: string[];
+  session: PaperBotSessionStatus;
+  counts: PaperCounts;
+};
+
+export type PaperBotStopResponse = {
+  ok: boolean;
+  status: string;
+  mode: string;
+  scheduler_enabled: boolean;
+  loop_allowed: boolean;
+  reason_codes: string[];
+  live_order_created: boolean;
+  broker_order_created: boolean;
+  network_call_performed: boolean;
 };
 
 export type PortfolioRisk = {
@@ -524,7 +944,158 @@ export type KisStatus = {
   disabled_reason: string;
 };
 
+export type NotificationChannelStatus = {
+  alias: string;
+  type: string;
+  enabled: boolean;
+  mode: string;
+  dry_run: boolean;
+  configured: boolean;
+  credential_fields: Record<string, boolean>;
+  can_dispatch: boolean;
+  reason_codes: string[];
+  secrets_redacted: boolean;
+};
+
+export type NotificationStatus = {
+  enabled: boolean;
+  default_dry_run: boolean;
+  config_status: string;
+  reason_codes: string[];
+  network_delivery_allowed: boolean;
+  secrets_redacted: boolean;
+  supported_events: string[];
+  channels: NotificationChannelStatus[];
+};
+
+export type NotificationTestRequest = {
+  channel_alias?: string | null;
+  message: string;
+  dry_run: boolean;
+};
+
+export type NotificationTestResponse = {
+  ok: boolean;
+  status: string;
+  attempted: boolean;
+  delivered: boolean;
+  dry_run: boolean;
+  message_length?: number;
+  payload_shape?: JsonRecord;
+  channel?: NotificationChannelStatus;
+  reason_codes: string[];
+  secrets_redacted?: boolean;
+};
+
+export type ReportNotifyRequest = {
+  mode: "summary" | "summary_and_file";
+  channel_alias?: string | null;
+  dry_run?: boolean | null;
+};
+
+export type ReportNotifyResponse = {
+  ok: boolean;
+  status: string;
+  delivered: boolean;
+  report_id: string;
+  mode: string;
+  channel_alias: string | null;
+  dry_run: boolean;
+  message_count: number;
+  message_lengths: number[];
+  max_message_length: number;
+  reason_codes: string[];
+  secrets_redacted: boolean;
+  report_preserved: boolean;
+  attachment?: JsonRecord;
+  payload_shape?: JsonRecord;
+  portfolio_snapshot?: JsonRecord;
+  notification_event_id?: string;
+  attempted?: boolean;
+  channel_limits?: JsonRecord;
+};
+
 export type SettingsPayload = Record<string, unknown>;
+
+export type RuntimeEnvToggle = {
+  name: string;
+  label: string;
+  category: string;
+  description: string;
+  enabled: boolean;
+  configured: boolean;
+  value: "true" | "false" | string;
+  can_toggle: boolean;
+  false_locked: boolean;
+  high_impact: boolean;
+  scope: string;
+  reason_codes: string[];
+};
+
+export type RuntimeEnvPresetChange = {
+  name: string;
+  value: string;
+};
+
+export type RuntimeEnvPreset = {
+  name: string;
+  label: string;
+  category: string;
+  description: string;
+  high_impact: boolean;
+  scope: string;
+  changes: RuntimeEnvPresetChange[];
+};
+
+export type RuntimeEnvStatus = {
+  scope: string;
+  persistence: string;
+  file_write_performed: boolean;
+  secrets_redacted: boolean;
+  toggles: RuntimeEnvToggle[];
+  presets: RuntimeEnvPreset[];
+};
+
+export type RuntimeEnvToggleRequest = {
+  name: string;
+  enabled: boolean;
+  confirm: boolean;
+};
+
+export type RuntimeEnvToggleResponse = {
+  ok: boolean;
+  status: string;
+  name: string;
+  enabled: boolean;
+  scope: string;
+  persistence: string;
+  file_write_performed: boolean;
+  network_call_performed: boolean;
+  live_order_created: boolean;
+  secrets_redacted: boolean;
+  reason_codes: string[];
+  toggle?: RuntimeEnvToggle;
+};
+
+export type RuntimeEnvPresetRequest = {
+  name: string;
+  confirm: boolean;
+};
+
+export type RuntimeEnvPresetResponse = {
+  ok: boolean;
+  status: string;
+  preset: string;
+  applied: RuntimeEnvPresetChange[];
+  scope: string;
+  persistence: string;
+  file_write_performed: boolean;
+  network_call_performed: boolean;
+  live_order_created: boolean;
+  secrets_redacted: boolean;
+  reason_codes: string[];
+  definition?: RuntimeEnvPreset;
+};
 
 export type ActionResponse = Record<string, unknown>;
 
@@ -534,10 +1105,21 @@ export async function callApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (!isFormData && init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  // 로그인 토큰을 자동으로 첨부한다(설정된 경우).
+  const token = getToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers
   });
+  // 인증 만료/누락: 세션을 비우고 로그인 화면으로 전환을 알린다.
+  if (response.status === 401) {
+    clearSession();
+    notifyUnauthorized();
+    throw new Error("인증이 필요합니다. 다시 로그인하세요.");
+  }
   const contentType = response.headers.get("content-type") ?? "";
   const data = contentType.includes("application/json") ? ((await response.json()) as T & { detail?: string }) : undefined;
   if (!response.ok) {

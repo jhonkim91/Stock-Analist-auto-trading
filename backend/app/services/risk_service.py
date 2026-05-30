@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.app.core.config import get_config
-from backend.app.models.tables import IndicatorSnapshot
+from backend.app.models.tables import IndicatorSnapshot, ScreenResult
 
 
 @dataclass
@@ -57,6 +57,32 @@ class RiskService:
             rr_score=round(rr_score, 4),
             risk_basis=risk_basis,
         )
+
+    def bot_candidate_gate(self, screen_result: ScreenResult) -> dict[str, Any]:
+        """저장된 screen result를 bot preview decision에 사용할 수 있는지 fail-closed로 평가한다."""
+        reasons: list[str] = []
+        if not bool(screen_result.passed):
+            reasons.append("SCREEN_RESULT_NOT_PASSED")
+        if int(screen_result.position_size or 0) <= 0:
+            reasons.append("POSITION_SIZE_UNAVAILABLE")
+        if self._as_float(screen_result.entry_price) is None:
+            reasons.append("ENTRY_PRICE_UNAVAILABLE")
+        if self._as_float(screen_result.stop_price) is None:
+            reasons.append("STOP_PRICE_UNAVAILABLE")
+        if self._as_float(screen_result.target_price) is None:
+            reasons.append("TARGET_PRICE_UNAVAILABLE")
+        if self._as_float(screen_result.reward_risk_ratio) is None:
+            reasons.append("REWARD_RISK_RATIO_UNAVAILABLE")
+        max_notional = float(self.config["portfolio"]["equity"]) * float(self.config["portfolio"]["max_position_fraction"])
+        if float(screen_result.position_notional or 0.0) > max_notional:
+            reasons.append("POSITION_NOTIONAL_LIMIT_EXCEEDED")
+        return {
+            "passed": not reasons,
+            "reason_codes": reasons,
+            "position_size": int(screen_result.position_size or 0),
+            "position_notional": float(screen_result.position_notional or 0.0),
+            "reward_risk_ratio": self._as_float(screen_result.reward_risk_ratio),
+        }
 
     def _select_stop_price(
         self,

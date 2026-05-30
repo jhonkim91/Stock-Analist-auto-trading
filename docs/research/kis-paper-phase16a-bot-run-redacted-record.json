@@ -1,0 +1,176 @@
+{
+  "phase": "Phase 16A Controlled KIS Paper Bot Run Validation",
+  "generated_at": "2026-05-28T15:33:17.7987604+09:00",
+  "execution_method": "FastAPI TestClient API route calls; no scheduler, no unattended loop",
+  "scope": {
+    "live_order_allowed": false,
+    "live_cancel_allowed": false,
+    "live_fallback_allowed": false,
+    "env_file_modified": false,
+    "raw_secret_output": false,
+    "kis_paper_network_call_approved": false
+  },
+  "dry_run_preview": {
+    "endpoint": "POST /api/paper/bot/preview",
+    "request": {
+      "strategies": [
+        "trend_breakout"
+      ],
+      "max_candidates": 1,
+      "dry_run": true
+    },
+    "status_code": 200,
+    "run_id": "paper-bot-0439a452f5b84f40",
+    "status": "disabled",
+    "decision_count": 0,
+    "submitted_count": 0,
+    "paper_order_submitted": false,
+    "live_order_created": false,
+    "network_call_performed": false,
+    "reason_codes": [
+      "KIS_ENV_PAPER_REQUIRED",
+      "PAPER_BOT_DISABLED",
+      "PAPER_BOT_KILL_SWITCH_ACTIVE",
+      "KILL_SWITCH_ACTIVE"
+    ]
+  },
+  "status_before_paper_gate": {
+    "kis_config_validate": {
+      "status_code": 200,
+      "app_key_configured": true,
+      "app_secret_configured": true,
+      "account_configured": false,
+      "product_code_configured": false,
+      "kis_env_paper": false,
+      "network_call_performed": false,
+      "token_issued": false
+    },
+    "paper_status": {
+      "status_code": 200,
+      "configured_enabled": false,
+      "paper_bot_confirm_enabled": false,
+      "kis_env_paper": false,
+      "kill_switch_blocking": true,
+      "network_call_performed": false,
+      "orders_count": 0,
+      "paper_orders_count": 0
+    },
+    "paper_dashboard": {
+      "status_code": 200,
+      "open_order_count": 0,
+      "position_count": 0,
+      "fill_count": 0,
+      "network_call_performed": false,
+      "live_order_created": false
+    }
+  },
+  "process_env_gate_for_paper_run": {
+    "KIS_ENV": "paper",
+    "ENABLE_REAL_ORDER": "false",
+    "PAPER_TRADING_ENABLED": "true",
+    "PAPER_TRADING_CAN_CREATE": "true",
+    "PAPER_BOT_CONFIRM": "true",
+    "PAPER_TRADING_KILL_SWITCH": "false",
+    "PAPER_TRADING_NETWORK_ENABLED_configured": false,
+    "BROKER_MODE_configured": false,
+    "PAPER_ORDER_SUBMIT_ENABLED_configured": false
+  },
+  "paper_run": {
+    "endpoint": "POST /api/paper/bot/run",
+    "request": {
+      "strategies": [
+        "trend_breakout"
+      ],
+      "max_candidates": 1,
+      "dry_run": false
+    },
+    "status_code": 200,
+    "run_id": "paper-bot-7a43c3c83f3244f7",
+    "status": "disabled",
+    "auto_submit_requested": true,
+    "auto_submit_allowed": false,
+    "decision_count": 0,
+    "submitted_count": 0,
+    "paper_order_created": false,
+    "paper_order_submitted": false,
+    "broker_order_created": false,
+    "live_order_created": false,
+    "network_call_performed": false,
+    "reason_codes": [
+      "PAPER_BOT_DISABLED",
+      "PAPER_BOT_KILL_SWITCH_ACTIVE",
+      "KILL_SWITCH_ACTIVE"
+    ]
+  },
+  "status_after_paper_gate": {
+    "kis_config_validate": {
+      "status_code": 200,
+      "configured": true,
+      "app_key_configured": true,
+      "app_secret_configured": true,
+      "account_configured": false,
+      "product_code_configured": false,
+      "kis_env_paper": true,
+      "network_call_performed": false,
+      "token_issued": false
+    },
+    "paper_status": {
+      "status_code": 200,
+      "configured_enabled": false,
+      "paper_bot_confirm_enabled": true,
+      "kis_env_paper": true,
+      "kill_switch_blocking": true,
+      "network_call_performed": false,
+      "orders_count": 0,
+      "paper_orders_count": 0
+    },
+    "paper_realtime_status": {
+      "status_code": 200,
+      "enabled": false,
+      "reason_codes": [
+        "PAPER_REALTIME_DISABLED",
+        "PAPER_REALTIME_HEARTBEAT_STALE"
+      ],
+      "network_call_performed": false
+    },
+    "paper_dashboard": {
+      "status_code": 200,
+      "open_order_count": 0,
+      "position_count": 0,
+      "fill_count": 0,
+      "network_call_performed": false,
+      "live_order_created": false
+    },
+    "paper_bot_status": {
+      "status_code": 200,
+      "enabled": false,
+      "scheduler_enabled": false,
+      "auto_submit_allowed": false,
+      "kill_switch_enabled": true,
+      "reason_codes": [
+        "PAPER_BOT_DISABLED",
+        "PAPER_BOT_SCHEDULER_DISABLED",
+        "PAPER_BOT_AUTO_SUBMIT_DISABLED",
+        "PAPER_BOT_KILL_SWITCH_ACTIVE"
+      ]
+    }
+  },
+  "final_counts": {
+    "orders_count": 0,
+    "paper_orders_count": 0,
+    "paper_fills_count": 0,
+    "paper_positions_count": 0,
+    "paper_bot_runs_count": 5,
+    "paper_bot_decisions_count": 0
+  },
+  "outcome": {
+    "phase_status": "blocked",
+    "blocked_by": [
+      "PAPER_BOT_DISABLED",
+      "PAPER_BOT_KILL_SWITCH_ACTIVE",
+      "KILL_SWITCH_ACTIVE"
+    ],
+    "retry_performed": false,
+    "notes": "KIS paper network gate was intentionally not opened because no separate approval was provided."
+  }
+}

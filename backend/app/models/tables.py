@@ -423,6 +423,12 @@ class PaperOrder(Base):
     live_order_created: Mapped[bool] = mapped_column(Boolean, default=False)
     broker_order_created: Mapped[bool] = mapped_column(Boolean, default=False)
     network_call_performed: Mapped[bool] = mapped_column(Boolean, default=False)
+    broker_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    broker_order_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    account_alias: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    broker_status_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class PaperFill(Base):
@@ -442,6 +448,10 @@ class PaperFill(Base):
     live_order_created: Mapped[bool] = mapped_column(Boolean, default=False)
     broker_order_created: Mapped[bool] = mapped_column(Boolean, default=False)
     network_call_performed: Mapped[bool] = mapped_column(Boolean, default=False)
+    broker_fill_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    broker_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    broker_fill_ts: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    broker_status_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class PaperPosition(Base):
@@ -455,6 +465,12 @@ class PaperPosition(Base):
     realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
     last_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    broker_position_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    account_alias: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    market_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unrealized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    broker_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    broker_status_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class PaperAuditEvent(Base):
@@ -466,4 +482,138 @@ class PaperAuditEvent(Base):
     decision: Mapped[str] = mapped_column(String(16), default="deny")
     reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
     payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PaperPortfolioSnapshot(Base):
+    __tablename__ = "paper_portfolio_snapshots"
+
+    snapshot_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    snapshot_ts: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    account_alias: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cash_balance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    buying_power: Mapped[float | None] = mapped_column(Float, nullable=True)
+    market_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_equity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unrealized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    realized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String(32), default="kis_paper")
+    status: Mapped[str] = mapped_column(String(32), default="snapshot")
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PaperAccountSnapshot(Base):
+    __tablename__ = "paper_account_snapshots"
+
+    snapshot_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    snapshot_ts: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    account_alias: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cash_balance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    buying_power: Mapped[float | None] = mapped_column(Float, nullable=True)
+    market_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_equity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unrealized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    realized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String(32), default="kis_paper")
+    status: Mapped[str] = mapped_column(String(32), default="snapshot")
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class BrokerAuditEvent(Base):
+    __tablename__ = "broker_audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(64))
+    broker_name: Mapped[str] = mapped_column(String(64), default="kis_paper")
+    broker_mode: Mapped[str] = mapped_column(String(32), default="paper")
+    account_alias: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    paper_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    broker_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    decision: Mapped[str] = mapped_column(String(32), default="deny")
+    reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    sanitized_payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class NotificationEvent(Base):
+    __tablename__ = "notification_events"
+
+    event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(64))
+    channel_alias: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payload_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class NotificationDeliveryLog(Base):
+    __tablename__ = "notification_delivery_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64))
+    channel_alias: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class KisTokenStatusMetadata(Base):
+    __tablename__ = "kis_token_status_metadata"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    state: Mapped[str] = mapped_column(String(32), default="UNCONFIGURED")
+    app_key_configured: Mapped[bool] = mapped_column(Boolean, default=False)
+    app_secret_configured: Mapped[bool] = mapped_column(Boolean, default=False)
+    token_issued: Mapped[bool] = mapped_column(Boolean, default=False)
+    token_cache_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    token_file_persistence_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    token_db_persistence_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PaperBotRun(Base):
+    __tablename__ = "paper_bot_runs"
+
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(32), default="manual")
+    status: Mapped[str] = mapped_column(String(32), default="created")
+    trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_submit_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_submit_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
+    decision_count: Mapped[int] = mapped_column(Integer, default=0)
+    preview_count: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0)
+    rejected_count: Mapped[int] = mapped_column(Integer, default=0)
+    submitted_count: Mapped[int] = mapped_column(Integer, default=0)
+    reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    request_json: Mapped[str] = mapped_column(Text, default="{}")
+    result_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class PaperBotDecision(Base):
+    __tablename__ = "paper_bot_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(64), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    strategy_tag: Mapped[str] = mapped_column(String(64), index=True)
+    action: Mapped[str] = mapped_column(String(32), default="preview")
+    total_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    qty: Mapped[int] = mapped_column(Integer, default=0)
+    limit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stop_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    risk_passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    paper_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

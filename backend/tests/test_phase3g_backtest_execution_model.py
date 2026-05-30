@@ -161,17 +161,31 @@ def test_phase3g_backtest_keeps_execution_safety_invariants(seeded_client):
     }
 
     route_paths = {getattr(route, "path", "") for route in app.routes}
-    assert not any(path.startswith("/api/kis/orders") for path in route_paths)
+    assert "/api/kis/orders/status" in route_paths
+    assert "/api/kis/orders/preview" in route_paths
+    assert "/api/kis/orders/submit" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    assert "/api/paper/orders" not in route_paths
-    assert not any(path.startswith("/api/paper/fill-simulator") for path in route_paths)
-    assert client.get("/api/kis/orders").status_code == 404
-    assert client.post("/api/kis/orders/preview", json={"symbol": "005930"}).status_code == 404
+    assert "/api/paper/orders" in route_paths
+    assert "/api/paper/fill-simulator/run" in route_paths
+    live_status = client.get("/api/kis/orders/status")
+    preview = client.post("/api/kis/orders/preview", json={"symbol": "005930"})
+    live_submit = client.post("/api/kis/orders/submit", json={"symbol": "005930"})
+    assert live_status.status_code == 200
+    assert preview.status_code == 200
+    assert live_submit.status_code == 200
+    assert live_status.json()["can_submit"] is False
+    assert preview.json()["network_call_performed"] is False
+    assert preview.json()["live_order_created"] is False
+    assert live_submit.json()["network_call_performed"] is False
+    assert live_submit.json()["live_order_created"] is False
     assert client.get("/api/kis/broker/status").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
-    assert client.post("/api/paper/orders", json={"symbol": "005930", "side": "buy", "qty": 1}).status_code == 404
-    assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 404
+    submit = client.post("/api/paper/orders", json={"symbol": "005930", "side": "buy", "qty": 1})
+    assert submit.status_code == 200
+    assert submit.json()["paper_order_created"] is False
+    assert submit.json()["network_call_performed"] is False
+    assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 422
 
     providers_response = client.get("/api/data/read-only/providers")
     assert providers_response.status_code == 200

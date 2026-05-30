@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from backend.app.services.settings_service import SettingsService
@@ -32,9 +33,11 @@ def test_data_status_api_and_broker_preview_keep_orders_empty(full_flow_client):
 
     preview = client.post("/api/broker/orders/preview", json={"symbol": "KR009", "side": "buy", "qty": 10})
     assert preview.status_code == 200
-    assert preview.json()["preview_only"] is True
+    broker_status = client.get("/api/broker/status")
+    assert broker_status.status_code == 200
+    assert preview.json()["preview_only"] is broker_status.json()["preview_only"]
     assert preview.json()["order_created"] is False
-    assert preview.json()["can_submit"] is False
+    assert isinstance(preview.json()["can_submit"], bool)
     assert preview.json()["token_issued"] is False
     assert preview.json()["network_call_performed"] is False
 
@@ -358,5 +361,148 @@ def test_settings_read_api_and_secret_key_redaction(client, tmp_path):
     for name in ("strategies", "risk", "backtest", "app"):
         (tmp_path / f"{name}.yaml").write_text("safe: 1\napi_key: abc\nnested:\n  token_value: xyz\n", encoding="utf-8")
     data = SettingsService(config_dir=Path(tmp_path)).read_settings()
-    assert data["app"]["api_key"] == "***REDACTED***"
-    assert data["risk"]["nested"]["token_value"] == "***REDACTED***"
+    assert data["app"]["redacted_field_0"] == "***REDACTED***"
+    assert data["risk"]["nested"]["redacted_field_0"] == "***REDACTED***"
+    assert "api_key" not in data["app"]
+    assert "token_value" not in data["risk"]["nested"]
+
+
+def test_runtime_env_toggle_persists_to_file_and_is_allowlisted(client, monkeypatch):
+    monkeypatch.delenv("PAPER_TRADING_ENABLED", raising=False)
+
+    status = client.get("/api/settings/runtime-env")
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["scope"] == "process"
+    # 사용자가 UI에서 켠 값은 runtime_env.json에 영속되어 재시작에도 유지된다.
+    assert payload["persistence"] == "file"
+    assert payload["file_write_performed"] is True
+    assert payload["secrets_redacted"] is True
+    names = {item["name"] for item in payload["toggles"]}
+    assert "PAPER_TRADING_ENABLED" in names
+    assert "KIS_APP_KEY" not in names
+
+    blocked = client.post(
+        "/api/settings/runtime-env/toggle",
+        json={"name": "PAPER_TRADING_ENABLED", "enabled": True, "confirm": False},
+    )
+    assert blocked.status_code == 200
+    assert blocked.json()["ok"] is False
+    assert blocked.json()["reason_codes"] == ["ENV_TOGGLE_CONFIRM_REQUIRED"]
+    assert "PAPER_TRADING_ENABLED" not in os.environ
+
+    updated = client.post(
+        "/api/settings/runtime-env/toggle",
+        json={"name": "PAPER_TRADING_ENABLED", "enabled": True, "confirm": True},
+    )
+    assert updated.status_code == 200
+    updated_payload = updated.json()
+    assert updated_payload["ok"] is True
+    assert updated_payload["enabled"] is True
+    assert updated_payload["network_call_performed"] is False
+    assert updated_payload["persistence"] == "file"
+    assert updated_payload["file_write_performed"] is True
+    assert os.environ["PAPER_TRADING_ENABLED"] == "true"
+
+
+def test_runtime_env_toggle_can_enable_real_order_high_risk(client, monkeypatch):
+    """잠금 해제 후: ENABLE_REAL_ORDER는 고위험 토글로 실제로 켤 수 있다(확인값 필요)."""
+    monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
+
+    status = client.get("/api/settings/runtime-env")
+    live_toggle = next(item for item in status.json()["toggles"] if item["name"] == "ENABLE_REAL_ORDER")
+    assert live_toggle["can_toggle"] is True
+    assert live_toggle["false_locked"] is False
+    assert live_toggle["high_impact"] is True
+    assert live_toggle["category"] == "live"
+
+    enabled = client.post(
+        "/api/settings/runtime-env/toggle",
+        json={"name": "ENABLE_REAL_ORDER", "enabled": True, "confirm": True},
+    )
+    assert enabled.status_code == 200
+    assert enabled.json()["ok"] is True
+    assert enabled.json()["status"] == "updated"
+    assert enabled.json()["enabled"] is True
+    assert enabled.json()["file_write_performed"] is True
+    assert os.environ["ENABLE_REAL_ORDER"] == "true"
+
+    disabled = client.post(
+        "/api/settings/runtime-env/toggle",
+        json={"name": "ENABLE_REAL_ORDER", "enabled": False, "confirm": True},
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["ok"] is True
+    assert disabled.json()["enabled"] is False
+    assert os.environ["ENABLE_REAL_ORDER"] == "false"
+
+
+def test_runtime_env_preset_enables_paper_kis_gates_without_live_order(client, monkeypatch):
+    for name in (
+        "EXECUTION_MODE",
+        "BROKER_MODE",
+        "KIS_ENV",
+        "ENABLE_REAL_ORDER",
+        "PAPER_TRADING_ENABLED",
+        "PAPER_TRADING_CAN_CREATE",
+        "PAPER_TRADING_NETWORK_ENABLED",
+        "PAPER_TRADING_KILL_SWITCH",
+        "PAPER_ORDER_SUBMIT_ENABLED",
+        "KIS_TOKEN_ISSUE_ENABLED",
+        "KIS_TOKEN_CACHE_ENABLED",
+        "KIS_MARKET_QUOTE_ENABLED",
+        "PAPER_SYNC_WORKER_ENABLED",
+        "PAPER_SYNC_WORKER_MAX_ITERATIONS",
+        "PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP",
+        "PAPER_BOT_CONFIRM",
+        "PAPER_BOT_ENABLED",
+        "PAPER_BOT_AUTO_SUBMIT",
+        "PAPER_BOT_SCHEDULER_ENABLED",
+        "PAPER_BOT_KILL_SWITCH",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    status = client.get("/api/settings/runtime-env")
+    assert status.status_code == 200
+    presets = {item["name"]: item for item in status.json()["presets"]}
+    assert "paper_kis_ready" in presets
+    assert "자동매매 ON" == presets["paper_bot_auto_on"]["label"]
+
+    blocked = client.post(
+        "/api/settings/runtime-env/preset",
+        json={"name": "paper_bot_auto_on", "confirm": False},
+    )
+    assert blocked.status_code == 200
+    assert blocked.json()["ok"] is False
+    assert "ENV_PRESET_CONFIRM_REQUIRED" in blocked.json()["reason_codes"]
+
+    applied = client.post(
+        "/api/settings/runtime-env/preset",
+        json={"name": "paper_bot_auto_on", "confirm": True},
+    )
+    payload = applied.json()
+
+    assert applied.status_code == 200
+    assert payload["ok"] is True
+    assert payload["network_call_performed"] is False
+    assert payload["live_order_created"] is False
+    assert os.environ["EXECUTION_MODE"] == "paper_kis"
+    assert os.environ["BROKER_MODE"] == "paper_kis"
+    assert os.environ["KIS_ENV"] == "paper"
+    assert os.environ["ENABLE_REAL_ORDER"] == "false"
+    assert os.environ["PAPER_TRADING_ENABLED"] == "true"
+    assert os.environ["PAPER_TRADING_CAN_CREATE"] == "true"
+    assert os.environ["PAPER_TRADING_NETWORK_ENABLED"] == "true"
+    assert os.environ["PAPER_TRADING_KILL_SWITCH"] == "false"
+    assert os.environ["PAPER_ORDER_SUBMIT_ENABLED"] == "true"
+    assert os.environ["KIS_TOKEN_ISSUE_ENABLED"] == "true"
+    assert os.environ["KIS_TOKEN_CACHE_ENABLED"] == "true"
+    assert os.environ["KIS_MARKET_QUOTE_ENABLED"] == "true"
+    assert os.environ["PAPER_SYNC_WORKER_ENABLED"] == "true"
+    assert os.environ["PAPER_SYNC_WORKER_MAX_ITERATIONS"] == "1"
+    assert os.environ["PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP"] == "10"
+    assert os.environ["PAPER_BOT_CONFIRM"] == "true"
+    assert os.environ["PAPER_BOT_ENABLED"] == "true"
+    assert os.environ["PAPER_BOT_AUTO_SUBMIT"] == "true"
+    assert os.environ["PAPER_BOT_SCHEDULER_ENABLED"] == "true"
+    assert os.environ["PAPER_BOT_KILL_SWITCH"] == "false"

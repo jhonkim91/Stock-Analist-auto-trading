@@ -1,0 +1,331 @@
+{
+  "env_loaded_key_presence": {
+    "ENABLE_REAL_ORDER": true,
+    "KIS_ACCESS_TOKEN": true,
+    "KIS_ACCOUNT_NO": true,
+    "KIS_APP_KEY": true,
+    "KIS_APP_SECRET": true,
+    "KIS_ENV": true,
+    "KIS_PAPER_BASE_URL": true,
+    "KIS_PRODUCT_CODE": true
+  },
+  "live_order_created": false,
+  "paper_only": true,
+  "phase": "21-paper-activation",
+  "process_only_gates": {
+    "BROKER_MODE": "paper_kis",
+    "ENABLE_REAL_ORDER": false,
+    "KIS_TOKEN_ISSUE_ENABLED": true,
+    "KIS_WEBSOCKET_APPROVAL_ENABLED": true,
+    "PAPER_TRADING_NETWORK_ENABLED": true,
+    "PAPER_WEBSOCKET_CONNECT_ENABLED": false,
+    "PAPER_WEBSOCKET_ENABLED": true
+  },
+  "raw_secret_printed": false,
+  "reason_codes": [
+    "KIS_PAPER_RESPONSE_ERROR"
+  ],
+  "status": "submit_failed",
+  "steps": [
+    {
+      "name": "issue_token",
+      "result": {
+        "metadata": {
+          "access_token": "***REDACTED***",
+          "access_token_fingerprint": "df3bbf16750a",
+          "account_configured": true,
+          "app_key_configured": true,
+          "app_secret_configured": true,
+          "expired": false,
+          "expires_at": "2026-05-29T17:01:28+00:00",
+          "kis_env": "paper",
+          "kis_env_paper": true,
+          "process_access_token_configured": true,
+          "product_code_configured": true,
+          "refresh_token": null,
+          "refresh_token_fingerprint": null,
+          "refresh_token_present": false,
+          "state": "METADATA_ONLY",
+          "token_cache_enabled": false,
+          "token_db_persistence_enabled": false,
+          "token_file_persistence_enabled": false,
+          "token_issued": true,
+          "token_raw_value_persisted": false
+        },
+        "network_call_performed": true,
+        "ok": true,
+        "process_env_access_token_installed": true,
+        "reason": null,
+        "reason_codes": [],
+        "status": "token_issued",
+        "token_issued": true,
+        "token_raw_value_persisted": false,
+        "trace": {
+          "correlation_id": "kis-http-ee899283ab684e16",
+          "elapsed_ms": 245.075,
+          "endpoint_path": "/oauth2/tokenP",
+          "host": "openapivts.koreainvestment.com",
+          "method": "POST",
+          "network_call_performed": true,
+          "operation": "kis_token_issue",
+          "path": "/oauth2/tokenP",
+          "retry_count": 0,
+          "secrets_redacted": "***REDACTED***",
+          "status_code": 200,
+          "tr_id": null
+        }
+      }
+    },
+    {
+      "name": "issue_websocket_approval",
+      "result": {
+        "approval_key_issued": true,
+        "approval_key_process_env_installed": true,
+        "approval_key_raw_value_persisted": false,
+        "live_order_created": false,
+        "metadata": {
+          "approval_endpoint_path": "/oauth2/Approval",
+          "approval_key_configured": true,
+          "approval_key_fingerprint": "e982e6d898e8",
+          "approval_key_issued": true,
+          "approval_key_process_env_installed": true,
+          "approval_key_raw_value_persisted": false,
+          "connect_enabled": false,
+          "enabled": true,
+          "live_order_created": false,
+          "network_call_performed": false,
+          "ok": true,
+          "paper_only": true,
+          "reason": null,
+          "reason_codes": [],
+          "secrets_redacted": true,
+          "supported_tr_ids": {
+            "ask": "H0STASP0",
+            "paper_notice": "H0STCNI9",
+            "quote": "H0STCNT0"
+          },
+          "websocket_enabled": true,
+          "websocket_url": {
+            "host": "ops.koreainvestment.com",
+            "live_endpoint": false,
+            "paper_endpoint": true,
+            "port": 31000,
+            "scheme": "ws"
+          }
+        },
+        "network_call_performed": true,
+        "ok": true,
+        "paper_only": true,
+        "reason": null,
+        "reason_codes": [],
+        "status": "websocket_approval_issued",
+        "trace": {
+          "correlation_id": "kis-ws-approval-33ada8413e5e4aa9",
+          "elapsed_ms": 71.516,
+          "endpoint_path": "/oauth2/Approval",
+          "host": "openapivts.koreainvestment.com",
+          "method": "POST",
+          "network_call_performed": true,
+          "operation": "kis_websocket_approval",
+          "path": "/oauth2/Approval",
+          "retry_count": 0,
+          "secrets_redacted": "***REDACTED***",
+          "status_code": 200,
+          "tr_id": null
+        }
+      }
+    },
+    {
+      "name": "websocket_subscription_preview",
+      "result": {
+        "live_order_created": false,
+        "network_call_performed": false,
+        "ok": true,
+        "paper_only": true,
+        "reason": null,
+        "reason_codes": [],
+        "secrets_redacted": true,
+        "status": "subscription_preview",
+        "subscription": {
+          "body": {
+            "input": {
+              "tr_id": "H0STCNT0",
+              "tr_key": "005930"
+            }
+          },
+          "header": {
+            "approval_key": "***REDACTED***",
+            "content-type": "utf-8",
+            "custtype": "P",
+            "tr_type": "1"
+          }
+        },
+        "tr_id": "H0STCNT0",
+        "tr_key_fingerprint": "ad435572125b"
+      }
+    },
+    {
+      "name": "minimum_order_query_sync_cancel",
+      "result": {
+        "execute_requested": true,
+        "generated_at": "2026-05-28T08:01:28.521139+00:00",
+        "live_order_created": false,
+        "network_call_performed": true,
+        "paper_only": true,
+        "phase": "12C",
+        "preflight": {
+          "blockers": [],
+          "config_gates": {
+            "broker_adapter_enabled": {
+              "enabled": true
+            },
+            "configured_can_create": {
+              "enabled": true
+            },
+            "enabled": {
+              "enabled": true
+            },
+            "kill_switch_enabled": false,
+            "live_fallback_enabled": false,
+            "live_order_enabled": false,
+            "mode": "paper",
+            "network_enabled": {
+              "enabled": true
+            },
+            "official_endpoint_confirmed": {
+              "enabled": true
+            },
+            "paper_bot_confirm_enabled": {
+              "enabled": true
+            }
+          },
+          "credential_fields": {
+            "KIS_ACCESS_TOKEN": {
+              "configured": true
+            },
+            "KIS_ACCOUNT_NO": {
+              "configured": true
+            },
+            "KIS_APP_KEY": {
+              "configured": true
+            },
+            "KIS_APP_SECRET": {
+              "configured": true
+            },
+            "KIS_PRODUCT_CODE": {
+              "configured": true
+            }
+          },
+          "ok": true,
+          "runtime_gates": {
+            "BROKER_MODE": {
+              "paper_kis": true
+            },
+            "KIS_ENV": {
+              "enabled": true
+            },
+            "PAPER_BOT_CONFIRM": {
+              "enabled": true
+            },
+            "PAPER_ORDER_SUBMIT_ENABLED": {
+              "enabled": true
+            },
+            "PAPER_TRADING_CAN_CREATE": {
+              "enabled": true
+            },
+            "PAPER_TRADING_ENABLED": {
+              "enabled": true
+            },
+            "PAPER_TRADING_KILL_SWITCH": {
+              "explicit_false": true
+            },
+            "PAPER_TRADING_NETWORK_ENABLED": {
+              "enabled": true
+            }
+          },
+          "safety_gates": {
+            "ENABLE_REAL_ORDER": {
+              "enabled": false
+            },
+            "KIS_PAPER_BASE_URL": {
+              "configured": true,
+              "live_host": false
+            },
+            "PAPER_BOT_AUTO_SUBMIT": {
+              "enabled": false
+            }
+          }
+        },
+        "reason_codes": [
+          "KIS_PAPER_RESPONSE_ERROR"
+        ],
+        "status": "submit_failed",
+        "steps": [
+          {
+            "name": "kill_switch_block",
+            "result": {
+              "broker_order_created": false,
+              "broker_trace": {
+                "adapter": "kis_paper",
+                "network_call_performed": false,
+                "operation": "submit",
+                "paper_only": true,
+                "reason_codes": [
+                  "KILL_SWITCH_ACTIVE"
+                ],
+                "secrets_redacted": "***REDACTED***"
+              },
+              "live_order_created": false,
+              "network_call_performed": false,
+              "ok": false,
+              "order_cancelled": false,
+              "paper_only": true,
+              "reason": "KILL_SWITCH_ACTIVE",
+              "reason_codes": [
+                "KILL_SWITCH_ACTIVE"
+              ],
+              "status": "submit_blocked",
+              "sync_performed": false
+            }
+          },
+          {
+            "name": "submit",
+            "result": {
+              "broker_message": "\ubaa8\uc758\ud22c\uc790 \uc7a5\uc885\ub8cc \uc785\ub2c8\ub2e4.",
+              "broker_message_code": "40580000",
+              "broker_order_created": false,
+              "broker_trace": {
+                "broker_message": "\ubaa8\uc758\ud22c\uc790 \uc7a5\uc885\ub8cc \uc785\ub2c8\ub2e4.",
+                "broker_message_code": "40580000",
+                "correlation_id": "kis-paper-7df16e0c1a58450c",
+                "elapsed_ms": 105.631,
+                "endpoint_path": "/uapi/domestic-stock/v1/trading/order-cash",
+                "host": "openapivts.koreainvestment.com",
+                "method": "POST",
+                "network_call_performed": true,
+                "operation": "POST",
+                "path": "/uapi/domestic-stock/v1/trading/order-cash",
+                "retry_count": 0,
+                "secrets_redacted": "***REDACTED***",
+                "status_code": 200,
+                "tr_id": "VTTC0012U"
+              },
+              "live_order_created": false,
+              "network_call_performed": true,
+              "ok": false,
+              "order_cancelled": false,
+              "paper_only": true,
+              "reason": "KIS_PAPER_RESPONSE_ERROR",
+              "reason_codes": [
+                "KIS_PAPER_RESPONSE_ERROR"
+              ],
+              "status": "submit_failed",
+              "sync_performed": false
+            }
+          }
+        ],
+        "temporary_config_used": true
+      }
+    }
+  ]
+}

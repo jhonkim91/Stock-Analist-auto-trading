@@ -1,0 +1,65 @@
+notifications:
+  enabled: true
+  default_dry_run: true
+  channels:
+    discord_ops:
+      type: discord
+      enabled: true
+      mode: mock
+      webhook_env: DISCORD_OPS_WEBHOOK_URL
+      dry_run: false
+      allowed_mentions:
+        parse: []
+    telegram_main:
+      type: telegram
+      enabled: true
+      mode: live
+      bot_token_env: TELEGRAM_BOT_TOKEN
+      chat_id_env: TELEGRAM_CHAT_ID
+      dry_run: true
+      parse_mode: null
+  templates:
+    default: |
+      [Stock Analyst]
+      event: {event_type}
+      subject: {subject}
+      summary: {summary}
+    paper_order_submitted: |
+      [Paper Order Submitted]
+      symbol: {symbol}
+      side: {side}
+      qty: {qty}
+      status: {status}
+    portfolio_snapshot: |
+      [Portfolio Snapshot]
+      total_equity: {total_equity}
+      positions_count: {positions_count}
+    daily_report_generated: |
+      [Daily Report]
+      report_id: {report_id}
+      status: {status}
+    weekly_report_generated: |
+      [Weekly Report]
+      report_id: {report_id}
+      status: {status}
+    daily_report_automation_completed: |
+      [Daily Report Automation]
+      report_id: {report_id}
+      status: {status}
+    weekly_report_automation_completed: |
+      [Weekly Report Automation]
+      report_id: {report_id}
+      status: {status}
+    report_automation_failed: |
+      [Report Automation Failed]
+      subject: {subject}
+      report_type: {report_type}
+      reason: {reason}
+    risk_limit_warning: |
+      [Risk Warning]
+      subject: {subject}
+      reason: {reason}
+    kill_switch_triggered: |
+      [Kill Switch]
+      subject: {subject}
+      reason: {reason}

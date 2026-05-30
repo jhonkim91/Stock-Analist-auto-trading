@@ -13,7 +13,6 @@ import {
   type BrokerStatus,
   type DataStatus,
   type MarketRegime,
-  type ReportItem,
   type ScreenerResult,
   type StrategyMetadata,
   summarizeResults
@@ -26,9 +25,7 @@ const actionLabels = {
   seed: "Seed Sample Data",
   indicators: "Recompute Indicators",
   screener: "Run Screener",
-  report: "Generate Daily Report",
-  backtest: "Run Backtest",
-  preview: "Preview Mock Order"
+  report: "Generate Daily Report"
 } as const;
 
 type ActionKey = keyof typeof actionLabels;
@@ -40,29 +37,47 @@ function stateFromSettled<T>(result: PromiseSettledResult<T>, emptyMessage: stri
   return { status: "error", message: result.reason instanceof Error ? result.reason.message : emptyMessage };
 }
 
-function StatusPill({ status, text }: { status: string; text: string }) {
-  return <span className={`status ${status}`}>{text}</span>;
+function formatMaybeNumber(value: number | null | undefined, digits = 2) {
+  return typeof value === "number" && Number.isFinite(value) ? formatNumber(value, digits) : "-";
 }
 
-function Metric({ label, value }: { label: string; value: string | number | null | undefined }) {
+function formatMaybePercent(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? formatPercent(value) : "-";
+}
+
+function KpiCard({ label, sub, tone, value }: { label: string; sub?: string; tone?: "pos" | "neg" | "muted"; value: React.ReactNode }) {
   return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value ?? "-"}</strong>
+    <article className="dashboardMetricCard">
+      <div className="metric-label">{label}</div>
+      <div className={`metric-value ${tone ?? ""}`}>{value}</div>
+      {sub ? <div className={`metric-sub ${tone ?? "muted"}`}>{sub}</div> : null}
+    </article>
+  );
+}
+
+function StatRow({ label, tone, value }: { label: string; tone?: "pos" | "neg" | "muted"; value: React.ReactNode }) {
+  return (
+    <div className="stat-row">
+      <span className="stat-k">{label}</span>
+      <span className={tone ?? ""}>{value}</span>
     </div>
   );
 }
 
-function JsonBlock({ data }: { data: unknown }) {
-  return <pre className="compactPre">{JSON.stringify(data ?? {}, null, 2)}</pre>;
+function PlayIcon() {
+  return (
+    <svg aria-hidden="true" className="buttonIcon" viewBox="0 0 24 24">
+      <path d="m8 5 11 7-11 7Z" />
+    </svg>
+  );
 }
 
+/** 목업의 Dashboard 첫 화면 구조를 유지하면서 기존 API 상태와 preview-only 안전값을 표시한다. */
 export default function DashboardClient() {
   const [health, setHealth] = useState<AsyncState<ActionResponse>>(loadingState("API 연결 확인 중"));
   const [dataStatus, setDataStatus] = useState<AsyncState<DataStatus>>(loadingState("데이터 상태 조회 중"));
   const [regime, setRegime] = useState<AsyncState<MarketRegime>>(loadingState("시장 국면 조회 중"));
   const [screenerResults, setScreenerResults] = useState<AsyncState<ScreenerResult[]>>(loadingState("스크리너 조회 중"));
-  const [latestReport, setLatestReport] = useState<AsyncState<ReportItem[]>>(loadingState("리포트 조회 중"));
   const [latestBacktest, setLatestBacktest] = useState<AsyncState<BacktestRun[]>>(loadingState("백테스트 조회 중"));
   const [broker, setBroker] = useState<AsyncState<BrokerStatus>>(loadingState("브로커 상태 조회 중"));
   const [strategyCatalog, setStrategyCatalog] = useState<StrategyMetadata[]>([]);
@@ -71,13 +86,12 @@ export default function DashboardClient() {
     seed: idleState("대기"),
     indicators: idleState("대기"),
     screener: idleState("대기"),
-    report: idleState("대기"),
-    backtest: idleState("대기"),
-    preview: idleState("대기")
+    report: idleState("대기")
   });
+
   const screenerSummary = useMemo(() => summarizeResults(screenerResults.data ?? []), [screenerResults.data]);
-  const latestReportItem = latestReport.data?.[0];
   const latestBacktestRun = latestBacktest.data?.[0];
+  const latestActionMessage = Object.values(actionStates).find((state) => state.status === "loading" || state.status === "error")?.message;
 
   const loadOverview = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -85,27 +99,23 @@ export default function DashboardClient() {
       setDataStatus(loadingState("데이터 상태 조회 중"));
       setRegime(loadingState("시장 국면 조회 중"));
       setScreenerResults(loadingState("스크리너 조회 중"));
-      setLatestReport(loadingState("리포트 조회 중"));
       setLatestBacktest(loadingState("백테스트 조회 중"));
       setBroker(loadingState("브로커 상태 조회 중"));
     }
 
-    const [healthResult, dataResult, regimeResult, screenerResult, reportResult, backtestResult, brokerResult] =
-      await Promise.allSettled([
-        callApi<ActionResponse>("/health"),
-        callApi<DataStatus>("/api/data/status"),
-        callApi<MarketRegime>("/api/market/regime"),
-        callApi<ScreenerResult[]>("/api/screener/results?limit=100"),
-        callApi<ReportItem[]>("/api/reports?limit=1"),
-        callApi<BacktestRun[]>("/api/backtest/runs?limit=1"),
-        callApi<BrokerStatus>("/api/broker/status")
-      ]);
+    const [healthResult, dataResult, regimeResult, screenerResult, backtestResult, brokerResult] = await Promise.allSettled([
+      callApi<ActionResponse>("/health"),
+      callApi<DataStatus>("/api/data/status"),
+      callApi<MarketRegime>("/api/market/regime"),
+      callApi<ScreenerResult[]>("/api/screener/results?limit=100"),
+      callApi<BacktestRun[]>("/api/backtest/runs?limit=1"),
+      callApi<BrokerStatus>("/api/broker/status")
+    ]);
 
     setHealth(stateFromSettled(healthResult, "API 연결 실패"));
     setDataStatus(stateFromSettled(dataResult, "데이터 상태 없음"));
     setRegime(stateFromSettled(regimeResult, "시장 국면 없음"));
     setScreenerResults(stateFromSettled(screenerResult, "스크리너 결과 없음"));
-    setLatestReport(stateFromSettled(reportResult, "리포트 없음"));
     setLatestBacktest(stateFromSettled(backtestResult, "백테스트 없음"));
     setBroker(stateFromSettled(brokerResult, "브로커 상태 없음"));
   }, []);
@@ -152,180 +162,128 @@ export default function DashboardClient() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 2</p>
-          <h1>Dashboard</h1>
+          <svg aria-hidden="true" className="pageTitleIcon" viewBox="0 0 24 24">
+            <rect height="6" width="6" x="4" y="4" />
+            <rect height="6" width="6" x="14" y="4" />
+            <rect height="6" width="6" x="4" y="14" />
+            <rect height="6" width="6" x="14" y="14" />
+          </svg>
+          <h1>대시보드</h1>
         </div>
-        <nav className="nav">
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/data">Data</Link>
-          <Link href="/screener">Screener</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/backtest">Backtest</Link>
-          <Link href="/portfolio">Portfolio</Link>
-          <Link href="/paper">Paper</Link>
-          <Link href="/settings">Settings</Link>
-        </nav>
-        <StatusPill status={health.status} text={health.message} />
-      </header>
-
-      <section className="toolbar" aria-label="Backend actions">
-        <label>
-          strategy_name
-          <select value={selectedStrategyName} onChange={(event) => setSelectedStrategyName(event.target.value)}>
+        <div className="topbar-actions">
+          <select value={selectedStrategyName} onChange={(event) => setSelectedStrategyName(event.target.value)} aria-label="strategy_name">
             {strategyCatalog.map((strategy) => (
               <option key={strategy.name} value={strategy.name}>
-                {strategy.display_name}
+                {strategy.name}
               </option>
             ))}
           </select>
-        </label>
-        <button type="button" onClick={() => runAction("seed", "/api/data/seed", {})}>
-          {actionLabels.seed}
-        </button>
-        <button type="button" onClick={() => runAction("indicators", "/api/indicators/recompute", {})}>
-          {actionLabels.indicators}
-        </button>
-        <button type="button" onClick={() => runAction("screener", "/api/screener/run", {})}>
-          {actionLabels.screener}
-        </button>
-        <button type="button" onClick={() => runAction("report", "/api/reports/daily", {})}>
-          {actionLabels.report}
-        </button>
-        <button
-          type="button"
-          onClick={() => runAction("backtest", "/api/backtest/run", { strategy_name: selectedStrategyName })}
-          disabled={!selectedStrategyName}
-        >
-          {actionLabels.backtest}
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() =>
-            runAction("preview", "/api/broker/orders/preview", {
-              symbol: "KR009",
-              side: "buy",
-              qty: 10,
-              strategy_tag: "dashboard_preview"
-            })
-          }
-        >
-          {actionLabels.preview}
-        </button>
-      </section>
-
-      <section className="cardGrid">
-        <article>
-          <h2>Backend Health</h2>
-          <StatusPill status={health.status} text={health.message} />
-          <JsonBlock data={health.data} />
-        </article>
-        <article>
-          <h2>Data Status</h2>
-          <StatusPill status={dataStatus.status} text={dataStatus.message} />
-          <div className="metricGrid">
-            <Metric label="symbols" value={formatNumber(dataStatus.data?.symbol_count)} />
-            <Metric label="daily rows" value={formatNumber(dataStatus.data?.daily_ohlcv_count)} />
-            <Metric label="indicators" value={formatNumber(dataStatus.data?.indicator_snapshot_count)} />
-            <Metric label="orders" value={formatNumber(dataStatus.data?.orders_count)} />
-          </div>
-          <p className="muted">latest trade date: {dataStatus.data?.latest_trade_date ?? "-"}</p>
-        </article>
-        <article>
-          <h2>Latest Market Regime</h2>
-          <StatusPill status={regime.status} text={regime.message} />
-          <div className="metricGrid">
-            <Metric label="regime" value={regime.data?.regime} />
-            <Metric label="market score" value={formatNumber(regime.data?.market_score, 2)} />
-            <Metric label="benchmark" value={regime.data?.benchmark} />
-            <Metric label="date" value={regime.data?.trade_date} />
-          </div>
-        </article>
-        <article>
-          <h2>Latest Screener Summary</h2>
-          <StatusPill status={screenerResults.status} text={screenerResults.message} />
-          <div className="metricGrid">
-            <Metric label="rows" value={formatNumber(screenerSummary.total)} />
-            <Metric label="passed" value={formatNumber(screenerSummary.passed)} />
-            <Metric label="latest date" value={screenerSummary.latestDate} />
-            <Metric label="strategies" value={screenerSummary.strategies.length} />
-          </div>
-          <Link className="textLink" href="/screener">
-            Screener results
-          </Link>
-        </article>
-        <article>
-          <h2>Latest Report</h2>
-          <StatusPill status={latestReport.status} text={latestReport.message} />
-          <p className="strongLine">{latestReportItem?.title ?? "생성된 리포트 없음"}</p>
-          <p className="muted">{latestReportItem?.created_at ?? "-"}</p>
-          <Link className="textLink" href="/reports">
-            Reports
-          </Link>
-        </article>
-        <article>
-          <h2>Latest Backtest Summary</h2>
-          <StatusPill status={latestBacktest.status} text={latestBacktest.message} />
-          <div className="metricGrid">
-            <Metric label="strategy" value={latestBacktestRun?.strategy_name} />
-            <Metric label="return" value={formatPercent(latestBacktestRun?.metrics.total_return)} />
-            <Metric label="drawdown" value={formatPercent(latestBacktestRun?.metrics.max_drawdown)} />
-            <Metric label="trades" value={formatNumber(latestBacktestRun?.metrics.trade_count)} />
-          </div>
-          <Link className="textLink" href="/backtest">
-            Backtest
-          </Link>
-        </article>
-        <article>
-          <h2>Mock Broker Status</h2>
-          <StatusPill status={broker.status} text={broker.message} />
-          <div className="metricGrid">
-            <Metric label="mode" value={broker.data?.mode} />
-            <Metric label="can submit" value={broker.data?.can_submit ? "yes" : "no"} />
-            <Metric label="live" value={broker.data?.live_trading_enabled ? "enabled" : "disabled"} />
-            <Metric label="paper" value={broker.data?.paper_trading_enabled ? "enabled" : "disabled"} />
-          </div>
-        </article>
-      </section>
-
-      <section className="panel">
-        <div className="sectionHeader">
-          <div>
-            <h2>CSV Import / Data Quality</h2>
-            <p className="muted">Phase 3A부터 CSV import는 validation preview와 confirm 단계를 거친다.</p>
-            <p className="muted">validate 단계는 market data를 변경하지 않고 import_runs와 data_quality_checks만 기록한다.</p>
-          </div>
-          <Link className="textLink" href="/data">
-            Data Quality 화면으로 이동
-          </Link>
+          <button type="button" className="primary" onClick={() => runAction("screener", "/api/screener/run", {})}>
+            <PlayIcon />
+            <span>
+              스크리너
+              <br />
+              실행
+            </span>
+          </button>
         </div>
-        <div className="toolbar compactToolbar">
-          <Link className="textLink" href="/data">
-            CSV Validate / Confirm
-          </Link>
-        </div>
-      </section>
+      </header>
 
-      <section className="grid">
-        <article>
-          <h2>Action Results</h2>
-          <div className="actionList">
-            {Object.entries(actionLabels).map(([key, label]) => {
-              const state = actionStates[key as ActionKey];
-              return (
-                <details key={key} open={state.status === "ok" || state.status === "error"}>
-                  <summary>
-                    {label} <StatusPill status={state.status} text={state.message} />
-                  </summary>
-                  <JsonBlock data={state.data} />
-                </details>
-              );
-            })}
+      <section className="dashboardContent" title={latestActionMessage ?? health.message}>
+        <section className="dashboardKpiGrid" aria-label="대시보드 KPI 요약">
+          <KpiCard label="API 상태" value={<span className={`bdg ${health.status === "ok" ? "bdg-ok" : "bdg-warn"}`}>{health.status}</span>} sub={health.status === "ok" ? "정상" : health.message} />
+          <KpiCard label="데이터 건수" value={formatNumber(dataStatus.data?.daily_ohlcv_count)} sub={`${dataStatus.data?.latest_trade_date ?? "-"} 기준`} />
+          <KpiCard label="스크리너 통과" value={`${formatNumber(screenerSummary.passed)} / ${formatNumber(screenerSummary.total)}`} sub="오늘 기준" tone={screenerSummary.passed > 0 ? "pos" : "muted"} />
+          <KpiCard label="주문 건수" value={formatNumber(dataStatus.data?.orders_count)} sub="안전 차단" tone="pos" />
+        </section>
+
+        <section className="dashboardSplit">
+          <article>
+            <div className="sectionHeader">
+              <h2>시장 국면 (regime)</h2>
+              <span className={`bdg ${regime.data?.regime === "bear" ? "bdg-fail" : "bdg-ok"}`}>{regime.data?.regime ?? "조회 중"}</span>
+            </div>
+            <StatRow label="시장 국면" value={regime.data?.regime ?? "-"} tone={regime.data?.regime === "bear" ? "neg" : "pos"} />
+            <StatRow label="시장 점수" value={formatMaybeNumber(regime.data?.market_score)} />
+            <StatRow label="벤치마크" value={regime.data?.benchmark ?? "-"} tone="muted" />
+            <StatRow label="거래일" value={regime.data?.trade_date ?? "-"} tone="muted" />
+            <StatRow label="close_vs_200dma" value={formatMaybePercent(regime.data?.close_vs_200dma)} tone="pos" />
+            <StatRow label="sma50_vs_200dma" value={formatMaybePercent(regime.data?.sma50_vs_200dma)} tone="pos" />
+          </article>
+
+          <article>
+            <div className="sectionHeader">
+              <h2>최신 백테스트</h2>
+              <span className="muted">{latestBacktestRun?.strategy_name ?? "정보 없음"}</span>
+            </div>
+            <StatRow label="총수익률" value={formatMaybePercent(latestBacktestRun?.metrics.total_return)} tone={(latestBacktestRun?.metrics.total_return ?? 0) >= 0 ? "pos" : "neg"} />
+            <StatRow label="연복리수익률(CAGR)" value={formatMaybePercent(latestBacktestRun?.metrics.cagr)} tone={(latestBacktestRun?.metrics.cagr ?? 0) >= 0 ? "pos" : "neg"} />
+            <StatRow label="최대낙폭(MDD)" value={formatMaybePercent(latestBacktestRun?.metrics.max_drawdown)} tone="neg" />
+            <StatRow label="승률" value={formatMaybePercent(latestBacktestRun?.metrics.win_rate)} tone="pos" />
+            <StatRow label="거래수" value={formatNumber(latestBacktestRun?.metrics.trade_count)} />
+            <Link className="textLink mockLink" href="/backtest">
+              백테스트 페이지로 →
+            </Link>
+          </article>
+        </section>
+
+        <section>
+          <div className="sec-lbl">빠른 실행</div>
+          <div className="actionList" aria-label="빠른 백엔드 작업">
+            <button type="button" onClick={() => runAction("seed", "/api/data/seed", {})}>
+              <span className="action-icon seed" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <ellipse cx="12" cy="6" rx="6" ry="2.5" />
+                  <path d="M6 6v8c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V6" />
+                  <path d="M9 12h6" />
+                  <path d="M15 10l2 2-2 2" />
+                </svg>
+              </span>
+              <span className="action-name">샘플 데이터 생성</span>
+              <span className="action-desc">테스트 데이터 삽입</span>
+            </button>
+            <button type="button" onClick={() => runAction("indicators", "/api/indicators/recompute", {})}>
+              <span className="action-icon calc" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <rect height="14" rx="2" width="12" x="6" y="5" />
+                  <path d="M9 9h6" />
+                  <path d="M9 13h.01" />
+                  <path d="M12 13h.01" />
+                  <path d="M15 13h.01" />
+                  <path d="M9 16h.01" />
+                  <path d="M12 16h.01" />
+                  <path d="M15 16h.01" />
+                </svg>
+              </span>
+              <span className="action-name">지표 재계산</span>
+              <span className="action-desc">기술 지표 재계산</span>
+            </button>
+            <button type="button" onClick={() => runAction("report", "/api/reports/daily", {})}>
+              <span className="action-icon report" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M7 4h7l4 4v12H7z" />
+                  <path d="M14 4v5h5" />
+                  <path d="M9 13h6" />
+                  <path d="M9 16h4" />
+                </svg>
+              </span>
+              <span className="action-name">일일 리포트 생성</span>
+              <span className="action-desc">오늘 리포트 생성</span>
+            </button>
           </div>
-        </article>
+        </section>
+
         <article>
-          <h2>Full Data Status</h2>
-          <JsonBlock data={dataStatus.data} />
+          <div className="sectionHeader">
+            <h2>모의 브로커 상태</h2>
+            <span className="bdg bdg-fail">미리보기 전용</span>
+          </div>
+          <div className="brokerGrid">
+            <KpiCard label="모드" value={broker.data?.broker_mode ?? broker.data?.mode ?? "-"} />
+            <KpiCard label="제출 가능" value={broker.data?.can_submit ? "true" : "false"} tone={broker.data?.can_submit ? "neg" : "pos"} />
+            <KpiCard label="실거래" value={broker.data?.live_trading_enabled ? "활성" : "비활성"} tone={broker.data?.live_trading_enabled ? "neg" : "pos"} />
+            <KpiCard label="모의투자" value={broker.data?.paper_trading_enabled ? "활성" : "비활성"} tone={broker.data?.paper_trading_enabled ? "pos" : "muted"} />
+          </div>
         </article>
       </section>
     </main>

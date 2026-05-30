@@ -295,12 +295,23 @@ def test_kis_read_only_provider_contract_safety_and_execution_routes_remain_bloc
     }
 
     route_paths = {getattr(route, "path", "") for route in app.routes}
-    assert not any(path.startswith("/api/kis/orders") for path in route_paths)
+    assert "/api/kis/orders/status" in route_paths
+    assert "/api/kis/orders/preview" in route_paths
+    assert "/api/kis/orders/submit" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    assert client.get("/api/kis/orders").status_code == 404
-    assert client.post("/api/kis/orders/preview", json={"symbol": "KR001"}).status_code == 404
+    live_status = client.get("/api/kis/orders/status")
+    preview = client.post("/api/kis/orders/preview", json={"symbol": "KR001"})
+    live_submit = client.post("/api/kis/orders/submit", json={"symbol": "KR001"})
+    assert live_status.status_code == 200
+    assert preview.status_code == 200
+    assert live_submit.status_code == 200
+    assert live_status.json()["can_submit"] is False
+    assert preview.json()["network_call_performed"] is False
+    assert preview.json()["live_order_created"] is False
+    assert live_submit.json()["network_call_performed"] is False
+    assert live_submit.json()["live_order_created"] is False
     assert client.get("/api/kis/broker/account").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
-    assert client.post("/api/paper/orders", json={"symbol": "KR001"}).status_code == 404
-    assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 404
+    assert client.post("/api/paper/orders", json={"symbol": "KR001"}).status_code == 422
+    assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 422

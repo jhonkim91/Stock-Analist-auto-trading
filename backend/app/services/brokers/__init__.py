@@ -1,0 +1,1 @@
+"""Broker service adapter namespace."""

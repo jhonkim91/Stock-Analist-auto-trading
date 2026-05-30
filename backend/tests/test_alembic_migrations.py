@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from backend.app.core.database import Base
 from backend.app.models import tables  # noqa: F401
 
-ALEMBIC_HEAD = "f7a8b9c0d1e2"
+ALEMBIC_HEAD = "d1e2f3a4b5c6"
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -42,7 +42,66 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "backtest_trade_ledger",
         "strategy_parameter_snapshots",
         "earnings_events",
+        "paper_portfolio_snapshots",
+        "paper_account_snapshots",
+        "broker_audit_events",
+        "notification_events",
+        "notification_delivery_logs",
+        "kis_token_status_metadata",
+        "paper_bot_runs",
+        "paper_bot_decisions",
     }.issubset(table_names)
+    paper_order_columns = {column["name"] for column in inspector.get_columns("paper_orders")}
+    assert {
+        "broker_order_id",
+        "broker_order_status",
+        "account_alias",
+        "submitted_at",
+        "canceled_at",
+        "broker_status_json",
+    }.issubset(paper_order_columns)
+    paper_fill_columns = {column["name"] for column in inspector.get_columns("paper_fills")}
+    assert {"broker_fill_id", "broker_order_id", "broker_fill_ts", "broker_status_json"}.issubset(paper_fill_columns)
+    paper_position_columns = {column["name"] for column in inspector.get_columns("paper_positions")}
+    assert {
+        "broker_position_key",
+        "account_alias",
+        "market_value",
+        "unrealized_pnl",
+        "broker_synced_at",
+        "broker_status_json",
+    }.issubset(paper_position_columns)
+    paper_bot_run_columns = {column["name"] for column in inspector.get_columns("paper_bot_runs")}
+    assert {
+        "run_id",
+        "mode",
+        "status",
+        "auto_submit_requested",
+        "auto_submit_allowed",
+        "decision_count",
+        "preview_count",
+        "skipped_count",
+        "rejected_count",
+        "submitted_count",
+        "trade_date",
+        "dry_run",
+        "reason_codes_json",
+        "request_json",
+        "result_json",
+    }.issubset(paper_bot_run_columns)
+    paper_bot_decision_columns = {column["name"] for column in inspector.get_columns("paper_bot_decisions")}
+    assert {
+        "run_id",
+        "symbol",
+        "strategy_tag",
+        "action",
+        "qty",
+        "limit_price",
+        "stop_price",
+        "target_price",
+        "risk_passed",
+        "paper_order_id",
+    }.issubset(paper_bot_decision_columns)
     strategy_parameter_snapshot_columns = {
         column["name"] for column in inspector.get_columns("strategy_parameter_snapshots")
     }
@@ -103,6 +162,10 @@ def test_alembic_initial_migration_upgrade_and_downgrade(tmp_path: Path, monkeyp
         "breadth_score",
         "breadth_score_available",
     }.issubset(indicator_columns)
+    forbidden_secret_columns = {"app_key", "app_secret", "access_token", "refresh_token", "webhook_url", "chat_id"}
+    for table_name in table_names:
+        column_names = {column["name"].lower() for column in inspector.get_columns(table_name)}
+        assert not forbidden_secret_columns & column_names
     screen_result_columns = {column["name"] for column in inspector.get_columns("screen_results")}
     assert {
         "metadata_json",

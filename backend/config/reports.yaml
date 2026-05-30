@@ -1,0 +1,5 @@
+automation:
+  enabled: true
+  mode: "manual"
+  dry_run: true
+  notify_default: false

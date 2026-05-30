@@ -1,0 +1,593 @@
+{
+  "completion_audit": {
+    "complete": false,
+    "missing_requirements": [
+      "service_lifecycle_completed",
+      "paper_fill_created",
+      "service_completion_audit_passed"
+    ],
+    "requirements": {
+      "broker_order_created": true,
+      "live_order_created_false": true,
+      "network_call_performed": true,
+      "orders_count_unchanged": true,
+      "paper_fill_created": false,
+      "paper_only": true,
+      "paper_order_created": true,
+      "paper_position_changed": true,
+      "raw_secret_printed_false": true,
+      "service_completion_audit_passed": false,
+      "service_lifecycle_completed": false,
+      "token_issued": true,
+      "websocket_approval_issued": true,
+      "websocket_smoke_message_received": true
+    },
+    "scope": "phase21_token_network_websocket_order_fill_position"
+  },
+  "currency": "USD",
+  "exchange": "NASD",
+  "generated_at": "2026-05-28T14:05:13.569377+00:00",
+  "live_order_created": false,
+  "market": "US",
+  "network_call_performed": true,
+  "paper_only": true,
+  "phase": "21-US",
+  "qty": 1,
+  "raw_secret_printed": false,
+  "reason_codes": [
+    "FILL_OR_POSITION_NOT_OBSERVED"
+  ],
+  "status": "service_lifecycle_incomplete",
+  "steps": [
+    {
+      "name": "load_env_file",
+      "result": {
+        "ignored_count": 10,
+        "ignored_keys": [
+          "APP_ENV",
+          "NEXT_PUBLIC_API_BASE_URL",
+          "PAPER_BOT_ENABLED",
+          "PAPER_BOT_KILL_SWITCH",
+          "PAPER_BOT_SCHEDULER_ENABLED"
+        ],
+        "ignored_secret_like_key_count": 5,
+        "loaded_count": 5,
+        "loaded_keys": [
+          "KIS_PAPER_BASE_URL",
+          "KIS_PRODUCT_CODE",
+          "PAPER_BOT_AUTO_SUBMIT"
+        ],
+        "loaded_secret_like_key_count": 2,
+        "network_call_performed": false,
+        "ok": true,
+        "override": false,
+        "path": ".env.local",
+        "raw_secret_printed": false,
+        "secret_like_key_names_redacted": true,
+        "secrets_redacted": true,
+        "skipped_existing_count": 11,
+        "skipped_existing_keys": [
+          "BROKER_MODE",
+          "ENABLE_REAL_ORDER",
+          "KIS_ENV",
+          "PAPER_BOT_CONFIRM",
+          "PAPER_ORDER_SUBMIT_ENABLED",
+          "PAPER_TRADING_CAN_CREATE",
+          "PAPER_TRADING_ENABLED",
+          "PAPER_TRADING_KILL_SWITCH",
+          "PAPER_TRADING_NETWORK_ENABLED"
+        ],
+        "skipped_secret_like_key_count": 2,
+        "status": "env_file_loaded"
+      }
+    },
+    {
+      "name": "issue_token",
+      "result": {
+        "metadata": {
+          "access_token": "***REDACTED***",
+          "access_token_fingerprint": "6cd04d2d7ccf",
+          "account_configured": true,
+          "app_key_configured": true,
+          "app_secret_configured": true,
+          "expired": false,
+          "expires_at": "2026-05-29T23:05:15+00:00",
+          "kis_env": "paper",
+          "kis_env_paper": true,
+          "process_access_token_configured": true,
+          "product_code_configured": true,
+          "refresh_token": "***REDACTED***",
+          "refresh_token_fingerprint": null,
+          "refresh_token_present": false,
+          "state": "METADATA_ONLY",
+          "token_cache_enabled": false,
+          "token_db_persistence_enabled": false,
+          "token_file_persistence_enabled": false,
+          "token_issued": true,
+          "token_raw_value_persisted": false
+        },
+        "network_call_performed": true,
+        "ok": true,
+        "process_env_access_token_installed": true,
+        "reason": null,
+        "reason_codes": [],
+        "status": "token_issued",
+        "token_issued": true,
+        "token_raw_value_persisted": false,
+        "trace": {
+          "correlation_id": "kis-http-1aabc37c041f4c46",
+          "elapsed_ms": 187.948,
+          "endpoint_path": "/oauth2/tokenP",
+          "host": "openapivts.koreainvestment.com",
+          "method": "POST",
+          "network_call_performed": true,
+          "operation": "kis_token_issue",
+          "path": "/oauth2/tokenP",
+          "retry_count": 0,
+          "secrets_redacted": "***REDACTED***",
+          "status_code": 200,
+          "tr_id": null
+        }
+      }
+    },
+    {
+      "name": "issue_websocket_approval",
+      "result": {
+        "approval_key_issued": true,
+        "approval_key_process_env_installed": true,
+        "approval_key_raw_value_persisted": false,
+        "live_order_created": false,
+        "metadata": {
+          "approval_endpoint_path": "/oauth2/Approval",
+          "approval_key_configured": true,
+          "approval_key_fingerprint": "42bd8cf2f650",
+          "approval_key_issued": true,
+          "approval_key_process_env_installed": true,
+          "approval_key_raw_value_persisted": false,
+          "connect_enabled": true,
+          "enabled": true,
+          "live_order_created": false,
+          "network_call_performed": false,
+          "ok": true,
+          "paper_only": true,
+          "reason": null,
+          "reason_codes": [],
+          "secrets_redacted": true,
+          "supported_tr_ids": {
+            "ask": "H0STASP0",
+            "paper_notice": "H0STCNI9",
+            "quote": "H0STCNT0",
+            "us_ask": "HDFSASP0",
+            "us_paper_notice": "H0GSCNI9",
+            "us_quote": "HDFSCNT0"
+          },
+          "websocket_enabled": true,
+          "websocket_url": {
+            "host": "ops.koreainvestment.com",
+            "live_endpoint": false,
+            "paper_endpoint": true,
+            "port": 31000,
+            "scheme": "ws"
+          }
+        },
+        "network_call_performed": true,
+        "ok": true,
+        "paper_only": true,
+        "reason": null,
+        "reason_codes": [],
+        "status": "websocket_approval_issued",
+        "trace": {
+          "correlation_id": "kis-ws-approval-80bad89a7d5540cc",
+          "elapsed_ms": 90.089,
+          "endpoint_path": "/oauth2/Approval",
+          "host": "openapivts.koreainvestment.com",
+          "method": "POST",
+          "network_call_performed": true,
+          "operation": "kis_websocket_approval",
+          "path": "/oauth2/Approval",
+          "retry_count": 0,
+          "secrets_redacted": "***REDACTED***",
+          "status_code": 200,
+          "tr_id": null
+        }
+      }
+    },
+    {
+      "name": "websocket_us_subscription_preview",
+      "result": {
+        "exchange": "NASD",
+        "live_order_created": false,
+        "market": "US",
+        "network_call_performed": false,
+        "ok": true,
+        "paper_only": true,
+        "reason": null,
+        "reason_codes": [],
+        "secrets_redacted": true,
+        "status": "subscription_preview",
+        "subscription": {
+          "body": {
+            "input": {
+              "tr_id": "HDFSCNT0",
+              "tr_key": "DNASAAPL"
+            }
+          },
+          "header": {
+            "approval_key": "***REDACTED***",
+            "content-type": "utf-8",
+            "custtype": "P",
+            "tr_type": "1"
+          }
+        },
+        "tr_id": "HDFSCNT0",
+        "tr_key_fingerprint": "15e54f8c6f02"
+      }
+    },
+    {
+      "name": "websocket_us_bounded_smoke",
+      "result": {
+        "approval_key_raw_value_persisted": "***REDACTED***",
+        "elapsed_ms": 109.155,
+        "exchange": "NASD",
+        "first_message": {
+          "kind": "json",
+          "length": 209,
+          "msg1": "SUBSCRIBE SUCCESS",
+          "raw_message_redacted": "***REDACTED***",
+          "rt_cd": "0",
+          "sha256": "c6370602cfa11f63",
+          "tr_id": "HDFSCNT0",
+          "tr_key_fingerprint": "15e54f8c6f02"
+        },
+        "live_order_created": false,
+        "market": "US",
+        "message_received": true,
+        "network_call_performed": true,
+        "ok": true,
+        "paper_only": true,
+        "reason": null,
+        "reason_codes": [],
+        "secrets_redacted": "***REDACTED***",
+        "status": "websocket_message_received",
+        "tr_id": "HDFSCNT0",
+        "tr_key_fingerprint": "15e54f8c6f02",
+        "websocket_url": {
+          "host": "ops.koreainvestment.com",
+          "live_endpoint": false,
+          "paper_endpoint": true,
+          "port": 31000,
+          "scheme": "ws"
+        }
+      }
+    },
+    {
+      "name": "derive_limit_from_price",
+      "result": {
+        "derived_limit_price": 320.32,
+        "last_price": 310.99,
+        "last_price_available": true,
+        "limit_premium_bps": 300,
+        "network_call_performed": true,
+        "ok": true,
+        "reason": null,
+        "reason_codes": [],
+        "secrets_redacted": true,
+        "status": "price_ok",
+        "status_code": 200,
+        "trace": {
+          "correlation_id": "kis-paper-us-price-9c0ebd7fff1b4841",
+          "elapsed_ms": 72.504,
+          "endpoint_path": "/uapi/overseas-price/v1/quotations/price",
+          "host": "openapivts.koreainvestment.com",
+          "method": "GET",
+          "network_call_performed": true,
+          "operation": "kis_overseas_price",
+          "path": "/uapi/overseas-price/v1/quotations/price",
+          "retry_count": 0,
+          "secrets_redacted": "***REDACTED***",
+          "status_code": 200,
+          "tr_id": "HHDFS00000300"
+        }
+      }
+    },
+    {
+      "name": "service_us_submit_sync_cancel",
+      "result": {
+        "cancel_attempted": true,
+        "completion_audit": {
+          "complete": false,
+          "missing_requirements": [
+            "service_lifecycle_completed",
+            "paper_fill_created"
+          ],
+          "requirements": {
+            "broker_order_created": true,
+            "live_order_created_false": true,
+            "network_call_performed": true,
+            "orders_count_unchanged": true,
+            "paper_fill_created": false,
+            "paper_only": true,
+            "paper_order_created": true,
+            "paper_position_changed": true,
+            "raw_secret_printed_false": true,
+            "service_lifecycle_completed": false
+          },
+          "scope": "phase21_service_lifecycle_order_fill_position"
+        },
+        "counts_after": {
+          "orders_count": 0,
+          "paper_account_snapshots_count": 1,
+          "paper_audit_events_count": 2,
+          "paper_fills_count": 0,
+          "paper_orders_count": 2,
+          "paper_positions_count": 1
+        },
+        "counts_before": {
+          "orders_count": 0,
+          "paper_account_snapshots_count": 0,
+          "paper_audit_events_count": 0,
+          "paper_fills_count": 0,
+          "paper_orders_count": 0,
+          "paper_positions_count": 0
+        },
+        "currency": "USD",
+        "exchange": "NASD",
+        "generated_at": "2026-05-28T14:05:15.333165+00:00",
+        "lifecycle_evidence": {
+          "broker_order_created": true,
+          "filled_position_observed": false,
+          "fills_inserted": 0,
+          "orders_count_delta": 0,
+          "paper_fill_created": false,
+          "paper_fills_delta": 0,
+          "paper_order_created": true,
+          "paper_orders_delta": 2,
+          "paper_position_changed": true,
+          "paper_positions_delta": 1,
+          "positions_upserted": 1
+        },
+        "live_order_created": false,
+        "market": "US",
+        "network_call_performed": true,
+        "paper_only": true,
+        "phase": "21-service-lifecycle",
+        "qty": 1,
+        "raw_secret_printed": false,
+        "reason_codes": [
+          "FILL_OR_POSITION_NOT_OBSERVED"
+        ],
+        "status": "submitted_sync_without_fill_or_position",
+        "steps": [
+          {
+            "name": "service_submit",
+            "result": {
+              "broker_order_created": true,
+              "broker_trace": {
+                "correlation_id": "kis-paper-b2ca9b9aa2f94e82",
+                "elapsed_ms": 113.245,
+                "endpoint_path": "/uapi/overseas-stock/v1/trading/order",
+                "host": "openapivts.koreainvestment.com",
+                "market": "US",
+                "method": "POST",
+                "msg1": "",
+                "msg_cd": "",
+                "network_call_performed": true,
+                "operation": "POST",
+                "order_session": "regular",
+                "path": "/uapi/overseas-stock/v1/trading/order",
+                "retry_count": 0,
+                "rt_cd": "",
+                "secrets_redacted": "***REDACTED***",
+                "status_code": 200,
+                "symbol": "AAPL",
+                "tr_id": "VTTT1002U"
+              },
+              "counts": {
+                "orders_count": 0,
+                "paper_account_snapshots_count": 0,
+                "paper_audit_events_count": 1,
+                "paper_fills_count": 0,
+                "paper_orders_count": 1,
+                "paper_positions_count": 0
+              },
+              "idempotency_key": "sha256:f8a368a86fdd7cb0",
+              "live_order_created": false,
+              "network_call_performed": true,
+              "ok": true,
+              "order": {
+                "broker_order_created": true,
+                "broker_order_id": "sha256:5f547c99b4459903",
+                "broker_order_status": "submitted",
+                "canceled_at": null,
+                "created_ts": "2026-05-28T14:05:15.892263",
+                "filled_qty": 0,
+                "idempotency_key": "sha256:f8a368a86fdd7cb0",
+                "limit_price": 320.32,
+                "live_order_created": false,
+                "network_call_performed": true,
+                "order_type": "limit",
+                "paper_order_id": "sha256:9404a77d21946016",
+                "qty": 1,
+                "remaining_qty": 1,
+                "request_hash": "9db42650d8aa1fad596a6b5caa211f58e1bd751be8f9d2fd49b3ef6a43215702",
+                "side": "buy",
+                "status": "submitted",
+                "stop_price": null,
+                "strategy_tag": "phase21-service",
+                "submitted_at": "2026-05-28T14:05:15.892263",
+                "symbol": "AAPL",
+                "updated_ts": "2026-05-28T14:05:15.892263"
+              },
+              "paper_order_created": true,
+              "reason": "KIS_PAPER_ORDER_SUBMITTED",
+              "reason_codes": [],
+              "request_hash": "9db42650d8aa1fad596a6b5caa211f58e1bd751be8f9d2fd49b3ef6a43215702",
+              "risk_gate": {
+                "decision": "allow",
+                "passed": true,
+                "reason_codes": []
+              },
+              "status": "submitted"
+            }
+          },
+          {
+            "name": "service_sync",
+            "result": {
+              "broker_order_created": false,
+              "broker_trace": {
+                "adapter": "kis_paper",
+                "network_call_performed": true,
+                "operation": "sync",
+                "paper_only": true,
+                "request_count": 2,
+                "scope": "all",
+                "secrets_redacted": "***REDACTED***",
+                "traces": [
+                  {
+                    "correlation_id": "kis-paper-e2a2a9f4bfb8477d",
+                    "elapsed_ms": 124.548,
+                    "endpoint_path": "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+                    "host": "openapivts.koreainvestment.com",
+                    "method": "GET",
+                    "msg1": "",
+                    "msg_cd": "",
+                    "network_call_performed": true,
+                    "operation": "GET",
+                    "path": "/uapi/overseas-stock/v1/trading/inquire-ccnl",
+                    "retry_count": 0,
+                    "rt_cd": "",
+                    "secrets_redacted": "***REDACTED***",
+                    "status_code": 200,
+                    "tr_id": "VTTS3035R"
+                  },
+                  {
+                    "correlation_id": "kis-paper-2508110322b04803",
+                    "elapsed_ms": 147.196,
+                    "endpoint_path": "/uapi/overseas-stock/v1/trading/inquire-balance",
+                    "host": "openapivts.koreainvestment.com",
+                    "method": "GET",
+                    "msg1": "",
+                    "msg_cd": "",
+                    "network_call_performed": true,
+                    "operation": "GET",
+                    "path": "/uapi/overseas-stock/v1/trading/inquire-balance",
+                    "retry_count": 0,
+                    "rt_cd": "",
+                    "secrets_redacted": "***REDACTED***",
+                    "status_code": 200,
+                    "tr_id": "VTTS3012R"
+                  }
+                ]
+              },
+              "counts": {
+                "broker_audit_events_count": 2,
+                "kis_token_status_metadata_count": 0,
+                "orders_count": 0,
+                "paper_account_snapshots_count": 1,
+                "paper_fills_count": 0,
+                "paper_orders_count": 2,
+                "paper_portfolio_snapshots_count": 1,
+                "paper_positions_count": 1,
+                "synthetic_positions_count": 0
+              },
+              "dedupe": {
+                "account_snapshots_inserted": 1,
+                "fills_inserted": 0,
+                "idempotent": true,
+                "orders_inserted": 1,
+                "portfolio_snapshots_inserted": 1,
+                "positions_upserted": 1
+              },
+              "live_order_created": false,
+              "network_call_performed": true,
+              "ok": true,
+              "reason": null,
+              "reason_codes": [],
+              "scope": "all",
+              "status": "sync_ok",
+              "supported_scopes": [
+                "all",
+                "fills",
+                "orders",
+                "portfolio",
+                "positions"
+              ],
+              "sync_performed": true,
+              "synced_scopes": [
+                "orders",
+                "fills",
+                "positions",
+                "portfolio"
+              ],
+              "synthetic_positions_touched": false
+            }
+          },
+          {
+            "name": "service_cancel_after_unfilled_sync",
+            "result": {
+              "broker_order_created": false,
+              "broker_trace": {
+                "broker_message": "\ubaa8\uc758\ud22c\uc790 \uc815\uc815/\ucde8\uc18c\ud560 \uc218\ub7c9\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.",
+                "broker_message_code": "40330000",
+                "correlation_id": "kis-paper-1def8dd87a334890",
+                "elapsed_ms": 110.892,
+                "endpoint_path": "/uapi/overseas-stock/v1/trading/order-rvsecncl",
+                "host": "openapivts.koreainvestment.com",
+                "method": "POST",
+                "msg1": "\ubaa8\uc758\ud22c\uc790 \uc815\uc815/\ucde8\uc18c\ud560 \uc218\ub7c9\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.",
+                "msg_cd": "40330000",
+                "network_call_performed": true,
+                "operation": "POST",
+                "path": "/uapi/overseas-stock/v1/trading/order-rvsecncl",
+                "retry_count": 0,
+                "rt_cd": "1",
+                "secrets_redacted": "***REDACTED***",
+                "status_code": 200,
+                "tr_id": "VTTT1004U"
+              },
+              "cancel_supported": false,
+              "counts": {
+                "orders_count": 0,
+                "paper_account_snapshots_count": 1,
+                "paper_audit_events_count": 2,
+                "paper_fills_count": 0,
+                "paper_orders_count": 2,
+                "paper_positions_count": 1
+              },
+              "idempotency_key": "sha256:169478c199f7fd66",
+              "live_order_created": false,
+              "network_call_performed": false,
+              "ok": false,
+              "order_cancelled": false,
+              "paper_order_created": false,
+              "paper_order_id": "sha256:9404a77d21946016",
+              "reason": "KIS_PAPER_RESPONSE_ERROR",
+              "reason_codes": [
+                "KIS_PAPER_RESPONSE_ERROR"
+              ],
+              "request_hash": "7339502fa1aa94588f339ad365f9aaf6e1dbb461f995adfb164621cdabc21200",
+              "status": "cancel_failed"
+            }
+          }
+        ],
+        "symbol": "AAPL",
+        "trading_window": {
+          "calendar_quality": "static_weekday_regular_session_guard",
+          "local_time": "2026-05-28T10:05:15.333181-04:00",
+          "market": "US",
+          "next_regular_session_start": "2026-05-29T09:30:00-04:00",
+          "ok": true,
+          "premarket_session_end": "09:30",
+          "premarket_session_start": "04:00",
+          "reason_codes": [],
+          "regular_session_end": "16:00",
+          "regular_session_start": "09:30",
+          "session": "regular",
+          "timezone": "America/New_York",
+          "weekday": "Thursday"
+        }
+      }
+    }
+  ],
+  "symbol": "AAPL"
+}

@@ -35,11 +35,8 @@ def _orders_count() -> int:
 
 
 def _assert_safety_flags(payload: dict[str, object]) -> None:
-    assert payload["mode"] in {"disabled", "safety_scaffold"}
-    assert payload["can_submit"] is False
-    assert payload["preview_only"] is True
-    assert payload["token_issued"] is False
-    assert payload["token_cache_enabled"] is False
+    assert payload["mode"] == "paper"
+    assert payload["preview_only"] is False
     assert payload["network_call_performed"] is False
     assert payload["adapter_selected"] is True
     assert payload["adapter_name"] == "kis_openapi"
@@ -50,7 +47,7 @@ def _assert_safety_flags(payload: dict[str, object]) -> None:
     assert "adapter_call_performed" not in payload
 
 
-def test_broker_status_is_safety_scaffold_only_and_settings_do_not_expose_broker(client, monkeypatch):
+def test_broker_status_is_paper_only_and_settings_do_not_expose_secrets(client, monkeypatch):
     sentinel = "PHASE3D_SENTINEL_SECRET_VALUE"
     monkeypatch.setenv("KIS_APP_KEY", sentinel)
     monkeypatch.setenv("KIS_APP_SECRET", sentinel)
@@ -62,18 +59,18 @@ def test_broker_status_is_safety_scaffold_only_and_settings_do_not_expose_broker
     assert settings.status_code == 200
     status_payload = status.json()
     _assert_safety_flags(status_payload)
-    assert status_payload["broker_mode"] == "disabled"
-    assert status_payload["paper_trading_enabled"] is False
+    assert status_payload["can_submit"] is False
+    assert status_payload["broker_mode"] == "paper_kis"
+    assert status_payload["paper_trading_enabled"] is True
     assert status_payload["live_trading_enabled"] is False
-    assert status_payload["kill_switch"]["blocking"] is True
-    assert "BROKER_DISABLED" in status_payload["kill_switch"]["reason_codes"]
-    assert "broker" not in settings.json()
+    assert status_payload["kill_switch"]["blocking"] is False
+    assert "broker" in settings.json()
 
     serialized = json.dumps({"status": status_payload, "settings": settings.json()}, ensure_ascii=False)
     assert sentinel not in serialized
 
 
-def test_broker_preview_guarantees_no_order_token_network_or_adapter_execution(client, monkeypatch):
+def test_broker_preview_guarantees_no_order_network_or_adapter_execution(client, monkeypatch):
     sentinel = "PHASE3D_SENTINEL_SECRET_VALUE"
     monkeypatch.setenv("KIS_APP_KEY", sentinel)
     monkeypatch.setenv("KIS_APP_SECRET", sentinel)
@@ -87,13 +84,12 @@ def test_broker_preview_guarantees_no_order_token_network_or_adapter_execution(c
     assert response.status_code == 200
     payload = response.json()
     _assert_safety_flags(payload)
+    assert payload["can_submit"] is True
     assert payload["order_created"] is False
     assert payload["side"] == "buy"
-    assert payload["risk_gate"]["decision"] == "deny"
+    assert payload["risk_gate"]["decision"] == "allow"
     reason_codes = set(payload["risk_gate"]["reason_codes"])
-    assert {"BROKER_DISABLED", "BROKER_NETWORK_DISABLED", "PAPER_TRADING_DISABLED", "LIVE_TRADING_DISABLED"}.issubset(
-        reason_codes
-    )
+    assert reason_codes == set()
     assert _orders_count() == before_orders == 0
     assert not Path(".cache/kis/token.json").exists()
     assert sentinel not in json.dumps(payload, ensure_ascii=False)
@@ -129,17 +125,31 @@ def test_broker_sell_preview_only_checks_existing_long_position(client):
     assert "SELL_POSITION_NOT_FOUND" not in within_qty_reasons
     assert "SELL_QTY_EXCEEDS_POSITION" not in within_qty_reasons
     assert "SHORT_SELL_UNSUPPORTED" not in within_qty_reasons
-    assert "BROKER_DISABLED" in within_qty_reasons
+    assert within_qty_reasons == set()
     assert _orders_count() == 0
 
 
-def test_kis_execution_routes_remain_unregistered_404(client):
+def test_kis_order_routes_are_registered_but_gated_off_by_default(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
-    assert not any(path.startswith("/api/kis/orders") for path in route_paths)
+    assert "/api/kis/orders/status" in route_paths
+    assert "/api/kis/orders/preview" in route_paths
+    assert "/api/kis/orders/submit" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    assert client.get("/api/kis/orders").status_code == 404
-    assert client.post("/api/kis/orders/preview", json={"symbol": "005930"}).status_code == 404
+    status = client.get("/api/kis/orders/status")
+    preview = client.post("/api/kis/orders/preview", json={"symbol": "005930"})
+    submit = client.post("/api/kis/orders/submit", json={"symbol": "005930", "confirm": True})
+    assert status.status_code == 200
+    assert preview.status_code == 200
+    assert submit.status_code == 200
+    # 기본(라이브 토글/자격증명 없음): 게이트 차단 — 네트워크/실주문 없음.
+    assert status.json()["can_submit"] is False
+    assert status.json()["reason_codes"]
+    assert preview.json()["network_call_performed"] is False
+    assert preview.json()["live_order_created"] is False
+    assert submit.json()["status"] == "submit_blocked"
+    assert submit.json()["network_call_performed"] is False
+    assert submit.json()["live_order_created"] is False
     assert client.get("/api/kis/broker/status").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
 
@@ -155,7 +165,7 @@ def test_broker_config_fail_closed_modes_and_source_mismatch(tmp_path):
     assert malformed["can_submit"] is False
 
     (tmp_path / "broker.yaml").write_text(
-        "broker:\n  mode: paper\n  source_id: kis_openapi\nrisk_gate: {}\naudit: {}\n",
+        "broker:\n  mode: live\n  source_id: kis_openapi\nrisk_gate: {}\naudit: {}\n",
         encoding="utf-8",
     )
     unknown_mode = BrokerService(config_dir=tmp_path).preview_order(symbol="KR009", side="buy", qty=1)

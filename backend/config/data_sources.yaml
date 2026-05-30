@@ -65,6 +65,8 @@ sources:
     capabilities:
       - "daily_ohlcv_preview"
       - "daily_ohlcv_network_candidate"
+      - "paper_realtime_quote_polling"
+      - "paper_latest_quote_cache"
     supported_markets:
       - "KR"
     market: "KR"
@@ -76,6 +78,11 @@ sources:
     max_date_range_days: 100
     timeout_seconds: 10
     retry_count: 0
+    realtime:
+      enabled: false
+      websocket_enabled: false
+      polling_enabled: false
+      stale_quote_threshold_seconds: 30
   - source_id: "krx_index_sector"
     provider_type: "krx_market_reference"
     provider_name: "krx"
@@ -187,19 +194,22 @@ sources:
   - source_id: "kis_openapi"
     provider_type: "broker_placeholder"
     provider_name: "kis"
-    enabled: false
-    network_enabled: false
-    read_only_enabled: false
-    paper_trading_enabled: false
+    enabled: true
+    network_enabled: true
+    read_only_enabled: true
+    paper_trading_enabled: true
     live_trading_enabled: false
-    websocket_enabled: false
+    websocket_enabled: true
+    paper_sandbox_only: true
+    kis_env: "paper"
     manual_preview_only: false
     requires_api_key: true
     supported_markets:
       - "KR"
-    market: "KR"
-    venue: "KRX"
-    timezone: "Asia/Seoul"
+      - "US"
+    market: "US"
+    venue: "NASD"
+    timezone: "America/New_York"
     zero_volume_policy: "warn"
     unknown_symbol_policy: "reject"
     max_rows: 1000

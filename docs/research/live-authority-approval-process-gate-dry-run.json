@@ -1,0 +1,191 @@
+{
+  "adapter_boundary": {
+    "authority_contract": {
+      "cancel_authority_present": false,
+      "live_adapter_enabled": false,
+      "live_order_created": false,
+      "network_authority_present": false,
+      "network_call_performed": false,
+      "order_cancelled": false,
+      "present": true,
+      "reason_codes": [
+        "KIS_LIVE_BROKER_DISABLED_PLACEHOLDER",
+        "LIVE_SUBMIT_AUTHORITY_NOT_ENABLED",
+        "LIVE_CANCEL_AUTHORITY_NOT_ENABLED",
+        "LIVE_NETWORK_AUTHORITY_NOT_ENABLED"
+      ],
+      "requires_live_cancel_authority_proof": true,
+      "requires_live_submit_authority_proof": true,
+      "requires_separate_user_approval": true,
+      "requires_token_refresh_real_call_proof": true,
+      "secrets_redacted": true,
+      "status": "disabled_pending_external_approval",
+      "submit_authority_present": false
+    },
+    "can_cancel": false,
+    "can_submit": false,
+    "cancel_implementation_present": true,
+    "enabled": false,
+    "network_enabled": false,
+    "submit_implementation_present": true
+  },
+  "approval_blockers": [],
+  "approve_confirmed": true,
+  "approve_requested": true,
+  "authority_approved": true,
+  "env_file_load": {
+    "ignored_count": 23,
+    "ignored_keys": [
+      "APP_ENV",
+      "BROKER_MODE",
+      "KIS_ENV",
+      "KIS_PAPER_BASE_URL",
+      "KIS_PRODUCT_CODE",
+      "NEXT_PUBLIC_API_BASE_URL",
+      "PAPER_BOT_AUTO_SUBMIT",
+      "PAPER_BOT_CONFIRM",
+      "PAPER_BOT_ENABLED",
+      "PAPER_BOT_KILL_SWITCH",
+      "PAPER_BOT_SCHEDULER_ENABLED",
+      "PAPER_ORDER_SUBMIT_ENABLED",
+      "PAPER_TRADING_CAN_CREATE",
+      "PAPER_TRADING_ENABLED",
+      "PAPER_TRADING_KILL_SWITCH",
+      "PAPER_TRADING_NETWORK_ENABLED"
+    ],
+    "ignored_secret_like_key_count": 7,
+    "loaded_count": 1,
+    "loaded_keys": [],
+    "loaded_secret_like_key_count": 1,
+    "network_call_performed": false,
+    "ok": true,
+    "override": false,
+    "path": ".env.local",
+    "raw_secret_printed": false,
+    "secret_like_key_names_redacted": true,
+    "secrets_redacted": true,
+    "skipped_existing_count": 3,
+    "skipped_existing_keys": [
+      "ENABLE_REAL_ORDER"
+    ],
+    "skipped_secret_like_key_count": 2,
+    "status": "env_file_loaded"
+  },
+  "environment_is_prod_live_isolated": true,
+  "generated_at": "2026-05-29T11:42:21.509892+00:00",
+  "governance": {
+    "blockers": [],
+    "environment_required": "prod-live-isolated",
+    "live_order_created": false,
+    "network_call_performed": false,
+    "operator_gates": {
+      "confirmation": true,
+      "environment_is_prod_live": true,
+      "kill_switch_ready": true,
+      "minimum_size_confirmed": true,
+      "reviewer_present": true,
+      "rollback_ready": true,
+      "rollback_runbook_has_steps": true,
+      "rollback_runbook_present": true
+    },
+    "passed": true,
+    "reviewer_fingerprint": "44e928f08c4e",
+    "reviewer_present": true,
+    "rollback_runbook": {
+      "has_steps": true,
+      "path": "docs/LIVE_CANARY_RUNBOOK.md",
+      "present": true
+    },
+    "secrets_redacted": true
+  },
+  "kill_switch_ready": true,
+  "live_order_created": false,
+  "minimum_size_confirmed": true,
+  "network_call_performed": false,
+  "operations": [
+    "live_cancel_authority",
+    "live_submit_authority"
+  ],
+  "order_cancelled": false,
+  "reviewer_fingerprint": "44e928f08c4e",
+  "reviewer_present": true,
+  "rollback_ready": true,
+  "safety_controls": {
+    "all_required_controls_passed": true,
+    "blockers": [],
+    "live_order_created": false,
+    "network_call_performed": false,
+    "required_controls": {
+      "audit_log": {
+        "blockers": [],
+        "evidence": {
+          "audit_log_enabled": true,
+          "audit_redaction_enabled": true
+        },
+        "passed": true
+      },
+      "blacklist": {
+        "blockers": [],
+        "evidence": {
+          "blacklist_enabled": true,
+          "symbol_count": 2
+        },
+        "passed": true
+      },
+      "cooldown": {
+        "blockers": [],
+        "evidence": {
+          "cooldown_seconds": 30
+        },
+        "passed": true
+      },
+      "idempotency_key": {
+        "blockers": [],
+        "evidence": {
+          "idempotency_required": true
+        },
+        "passed": true
+      },
+      "kill_switch": {
+        "blockers": [],
+        "evidence": {
+          "emergency_stop_armed": true,
+          "kill_switch_ready": true
+        },
+        "passed": true
+      },
+      "max_order_notional": {
+        "blockers": [],
+        "evidence": {
+          "max_canary_notional_cap": 1000000.0,
+          "max_order_notional": 100000.0
+        },
+        "passed": true
+      },
+      "rate_limiter": {
+        "blockers": [],
+        "evidence": {
+          "burst": 5,
+          "per_second": 2.0
+        },
+        "passed": true
+      },
+      "token_refresh": {
+        "blockers": [],
+        "evidence": {
+          "base_url_host": "openapi.koreainvestment.com",
+          "endpoint_path": "/oauth2/tokenP",
+          "network_enabled": true,
+          "network_implementation_present": true,
+          "process_only": true,
+          "token_refresh_enabled": true
+        },
+        "passed": true
+      }
+    },
+    "secrets_redacted": true
+  },
+  "secrets_redacted": true,
+  "separate_user_approval": true,
+  "status": "approval_ready"
+}

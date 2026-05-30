@@ -1,0 +1,692 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from backend.app.services.kis_token_manager import KIS_ACCESS_TOKEN_ENV  # noqa: E402
+from tools.env_file_loader import load_env_file, scan_env_file_keys  # noqa: E402
+from tools.token_diagnostics import build_access_token_diagnostics  # noqa: E402
+from tools import kis_live_token_refresh_preflight, live_canary_preflight  # noqa: E402
+
+DEFAULT_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-completion-audit.json"
+DEFAULT_TEMPLATE_PATH = PROJECT_ROOT / "docs" / "research" / "live-phase3-process-env-template.ps1"
+DEFAULT_TOKEN_REFRESH_RECORD_PATH = (
+    PROJECT_ROOT / "docs" / "research" / "kis-live-token-refresh-preflight-record.json"
+)
+DEFAULT_AUTHORITY_RECORD_PATH = PROJECT_ROOT / "docs" / "research" / "live-authority-approval-record.json"
+REQUIRED_ENV_NAMES = (
+    "KIS_APP_KEY",
+    "KIS_APP_SECRET",
+    "KIS_LIVE_BASE_URL",
+    "ENABLE_REAL_ORDER",
+    "LIVE_TOKEN_REFRESH_ENABLED",
+    "LIVE_TOKEN_REFRESH_PROCESS_ONLY",
+    "LIVE_TOKEN_REFRESH_NETWORK_ENABLED",
+    "LIVE_TOKEN_REFRESH_CONFIRMATION",
+    "KIS_REFRESH_TOKEN",
+    "LIVE_CANARY_CONFIRMATION",
+    "LIVE_CANARY_REVIEWER",
+    "LIVE_CANARY_ENVIRONMENT",
+    "LIVE_CANARY_ROLLBACK_READY",
+    "LIVE_CANARY_KILL_SWITCH_READY",
+    "LIVE_CANARY_MINIMUM_SIZE_CONFIRMED",
+    "LIVE_EMERGENCY_STOP_ARMED",
+    "LIVE_RATE_LIMIT_PER_SECOND",
+    "LIVE_RATE_LIMIT_BURST",
+    "LIVE_IDEMPOTENCY_REQUIRED",
+    "LIVE_AUDIT_LOG_ENABLED",
+    "LIVE_AUDIT_REDACTION_ENABLED",
+    "LIVE_MAX_ORDER_NOTIONAL",
+    "LIVE_BLACKLIST_ENABLED",
+    "LIVE_SYMBOL_BLACKLIST",
+    "LIVE_ORDER_COOLDOWN_SECONDS",
+)
+TOKEN_DIAGNOSTIC_ENV_NAMES = (KIS_ACCESS_TOKEN_ENV, "KIS_REFRESH_TOKEN")
+POWERSHELL_TEMPLATE_VALUES = (
+    ("KIS_APP_KEY", "<kis_live_app_key>"),
+    ("KIS_APP_SECRET", "<kis_live_app_credential>"),
+    ("KIS_REFRESH_TOKEN", "<kis_refresh_token_from_authorization_code_flow>"),
+    ("KIS_LIVE_BASE_URL", "https://openapi.koreainvestment.com:9443"),
+    ("ENABLE_REAL_ORDER", "false"),
+    ("LIVE_TOKEN_REFRESH_ENABLED", "true"),
+    ("LIVE_TOKEN_REFRESH_PROCESS_ONLY", "true"),
+    ("LIVE_TOKEN_REFRESH_NETWORK_ENABLED", "true"),
+    ("LIVE_TOKEN_REFRESH_CONFIRMATION", "CONFIRM_KIS_LIVE_TOKEN_REFRESH"),
+    ("LIVE_CANARY_CONFIRMATION", "CONFIRM_LIVE_CANARY_PHASE20"),
+    ("LIVE_CANARY_REVIEWER", "<reviewer_id_no_secret>"),
+    ("LIVE_CANARY_ENVIRONMENT", "prod-live-isolated"),
+    ("LIVE_CANARY_ROLLBACK_READY", "true"),
+    ("LIVE_CANARY_KILL_SWITCH_READY", "true"),
+    ("LIVE_CANARY_MINIMUM_SIZE_CONFIRMED", "true"),
+    ("LIVE_EMERGENCY_STOP_ARMED", "true"),
+    ("LIVE_RATE_LIMIT_PER_SECOND", "2"),
+    ("LIVE_RATE_LIMIT_BURST", "5"),
+    ("LIVE_IDEMPOTENCY_REQUIRED", "true"),
+    ("LIVE_AUDIT_LOG_ENABLED", "true"),
+    ("LIVE_AUDIT_REDACTION_ENABLED", "true"),
+    ("LIVE_MAX_ORDER_NOTIONAL", "100000"),
+    ("LIVE_BLACKLIST_ENABLED", "true"),
+    ("LIVE_SYMBOL_BLACKLIST", "LEVERAGED,INVERSE"),
+    ("LIVE_ORDER_COOLDOWN_SECONDS", "30"),
+)
+
+
+def build_completion_audit(
+    env: Mapping[str, str] | None = None,
+    *,
+    token_refresh_record: Mapping[str, Any] | None = None,
+    canary_record: Mapping[str, Any] | None = None,
+    env_file_load_result: Mapping[str, Any] | None = None,
+    env_file_presence_result: Mapping[str, Any] | None = None,
+    env_file_access_token: str | None = None,
+    token_refresh_record_source: Mapping[str, Any] | None = None,
+    authority_record: Mapping[str, Any] | None = None,
+    authority_record_source: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """실계좌 주문 연동 3단계 완료 여부를 네트워크 없이 항목별로 판정한다."""
+    current_env = os.environ if env is None else env
+    token_record = dict(token_refresh_record or _preview_token_refresh_record())
+    authority = dict(authority_record or {})
+    authority_summary = _authority_record_summary(authority, source=authority_record_source)
+    canary = dict(canary_record or live_canary_preflight.build_live_canary_preflight(current_env))
+    safety_controls = dict(canary.get("safety_controls") or {})
+    control_checks = dict(safety_controls.get("required_controls") or {})
+    public_route_checks = dict(canary.get("public_route_checks") or {})
+    live_adapter_status = dict(canary.get("live_adapter_status") or {})
+
+    requirements = {
+        "kill_switch_ready": _control_passed(control_checks, "kill_switch"),
+        "rate_limiter_ready": _control_passed(control_checks, "rate_limiter"),
+        "idempotency_required": _control_passed(control_checks, "idempotency_key"),
+        "audit_log_ready": _control_passed(control_checks, "audit_log"),
+        "max_order_notional_ready": _control_passed(control_checks, "max_order_notional"),
+        "blacklist_ready": _control_passed(control_checks, "blacklist"),
+        "cooldown_ready": _control_passed(control_checks, "cooldown"),
+        "token_refresh_control_ready": _control_passed(control_checks, "token_refresh"),
+        "token_refresh_real_call_proof": _token_refresh_proof_passed(token_record),
+        "live_public_route_scaffold_present": bool(public_route_checks.get("api_live_route_present"))
+        and bool(public_route_checks.get("kis_order_route_present")),
+        "live_broker_route_not_public": not bool(public_route_checks.get("kis_broker_route_present")),
+        "live_websocket_route_not_public": not bool(public_route_checks.get("kis_websocket_route_present")),
+        "live_submit_authority_present": bool(live_adapter_status.get("enabled"))
+        and bool(live_adapter_status.get("can_submit"))
+        and bool(live_adapter_status.get("network_enabled"))
+        and bool(canary.get("canary_execution_allowed")),
+        "live_cancel_authority_present": bool(live_adapter_status.get("enabled"))
+        and bool(live_adapter_status.get("can_cancel"))
+        and bool(live_adapter_status.get("network_enabled"))
+        and bool(canary.get("canary_execution_allowed")),
+        "no_live_order_created_during_audit": not bool(canary.get("live_order_created"))
+        and not bool(token_record.get("live_order_created"))
+        and not bool(authority.get("live_order_created")),
+        "no_order_cancelled_during_audit": not bool(canary.get("order_cancelled"))
+        and not bool(authority.get("order_cancelled")),
+        "secrets_redacted": bool(canary.get("secrets_redacted"))
+        and bool(token_record.get("secrets_redacted"))
+        and bool(authority.get("secrets_redacted", True)),
+    }
+    missing_requirements = [name for name, passed in requirements.items() if not passed]
+    blocker_sources = {
+        "canary_blockers": sorted(set(str(item) for item in canary.get("blockers", []) or [])),
+        "safety_blockers": sorted(set(str(item) for item in safety_controls.get("blockers", []) or [])),
+        "token_refresh_blockers": sorted(
+            set(str(item) for item in (token_record.get("status", {}) or {}).get("reason_codes", []) or [])
+        ),
+    }
+    env_scope_status = _env_scope_status(REQUIRED_ENV_NAMES, current_env)
+    record = {
+        "phase": "3단계 실계좌 주문 연동",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "complete": not missing_requirements,
+        "requirements": requirements,
+        "missing_requirements": missing_requirements,
+        "blocker_sources": blocker_sources,
+        "token_refresh_proof_record": _token_refresh_record_summary(
+            token_record,
+            source=token_refresh_record_source,
+        ),
+        "live_authority_proof_record": authority_summary,
+        "proof_gap_summary": _proof_gap_summary(
+            requirements=requirements,
+            blocker_sources=blocker_sources,
+            token_record=token_record,
+            authority_summary=authority_summary,
+            live_adapter_status=live_adapter_status,
+            canary=canary,
+        ),
+        "canary_status": canary.get("status"),
+        "canary_execution_allowed": bool(canary.get("canary_execution_allowed")),
+        "env_scope_status": env_scope_status,
+        "missing_process_env_names": [
+            name for name, status in env_scope_status.items() if not status["process_configured"]
+        ],
+        "missing_all_scopes_env_names": [
+            name for name, status in env_scope_status.items() if not status["any_scope_configured"]
+        ],
+        "token_env_diagnostics": _token_env_diagnostics(
+            current_env,
+            env_scope_status,
+            env_file_presence_result,
+            env_file_access_token=env_file_access_token,
+        ),
+        "token_refresh_network_call_performed": bool(token_record.get("network_call_performed")),
+        "live_order_created": False,
+        "network_call_performed_by_audit": False,
+        "secrets_redacted": bool(requirements["secrets_redacted"]),
+        "next_required_action": _next_required_action(missing_requirements),
+    }
+    if env_file_load_result is not None:
+        record["env_file_load"] = dict(env_file_load_result)
+    return record
+
+
+def write_completion_audit(record: Mapping[str, Any], path: Path = DEFAULT_RECORD_PATH) -> Path:
+    """3단계 완료 감사 record를 raw secret 없이 저장한다."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(dict(record), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def build_powershell_env_template() -> str:
+    """3단계 live proof 준비용 process-only PowerShell env template을 생성한다."""
+    lines = [
+        "# Live Phase 3 process-only environment template.",
+        "# Replace placeholder values in a fresh PowerShell session. Do not commit real values.",
+        "# This template does not run a network call or create an order.",
+        "",
+    ]
+    lines.extend(f'$env:{name} = "{value}"' for name, value in POWERSHELL_TEMPLATE_VALUES)
+    lines.extend(
+        [
+            "",
+            "# No-network verification:",
+            r".\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py",
+            r".\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py",
+            "",
+            "# Token refresh proof requires separate operator approval:",
+            (
+                r"# .\.venv\Scripts\python.exe tools\kis_live_token_refresh_preflight.py "
+                "--execute --confirm CONFIRM_KIS_LIVE_TOKEN_REFRESH --write-record"
+            ),
+            "# After a successful token refresh proof record:",
+            (
+                r"# .\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py "
+                r"--token-refresh-record-path docs\research\kis-live-token-refresh-preflight-record.json"
+            ),
+            "# Optional redacted authority approval record, still no submit/cancel authority by itself:",
+            (
+                r"# .\.venv\Scripts\python.exe tools\live_authority_approval_preflight.py "
+                "--approve --confirm CONFIRM_LIVE_AUTHORITY_APPROVAL --operations submit,cancel --write-record"
+            ),
+            (
+                r"# .\.venv\Scripts\python.exe tools\live_phase3_completion_audit.py "
+                r"--authority-record-path docs\research\live-authority-approval-record.json"
+            ),
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def write_powershell_env_template(path: Path = DEFAULT_TEMPLATE_PATH) -> Path:
+    """placeholder-only PowerShell env template을 저장한다."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(build_powershell_env_template(), encoding="utf-8")
+    return path
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """3단계 completion audit CLI parser를 생성한다."""
+    parser = argparse.ArgumentParser(description="No-network live Phase 3 completion audit")
+    parser.add_argument("--write-record", action="store_true", help="write redacted audit under docs/research")
+    parser.add_argument("--record-path", default=str(DEFAULT_RECORD_PATH), help="optional output path")
+    parser.add_argument(
+        "--load-env-local",
+        action="store_true",
+        help="load allowlisted keys from .env.local into this audit process only",
+    )
+    parser.add_argument("--env-file", default=".env.local", help="env file path used with --load-env-local")
+    parser.add_argument("--env-file-override", action="store_true", help="override existing process env values")
+    parser.add_argument(
+        "--token-refresh-record-path",
+        default="",
+        help="optional redacted kis_live_token_refresh_preflight.py --write-record JSON path",
+    )
+    parser.add_argument(
+        "--authority-record-path",
+        default="",
+        help="optional redacted live submit/cancel authority approval JSON path",
+    )
+    parser.add_argument("--print-powershell-template", action="store_true", help="print a placeholder env template")
+    parser.add_argument("--write-powershell-template", action="store_true", help="write a placeholder env template")
+    parser.add_argument("--template-path", default=str(DEFAULT_TEMPLATE_PATH), help="optional template output path")
+    parser.add_argument("--fail-on-incomplete", action="store_true", help="exit 2 when Phase 3 is incomplete")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """3단계 완료 여부를 판정하고 raw secret 없이 JSON으로 출력한다."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    env_file_load_result = (
+        load_env_file(
+            Path(args.env_file),
+            allowed_keys=REQUIRED_ENV_NAMES,
+            override=bool(args.env_file_override),
+            project_root=PROJECT_ROOT,
+        )
+        if args.load_env_local
+        else None
+    )
+    env_file_presence_result = (
+        scan_env_file_keys(
+            Path(args.env_file),
+            key_names=TOKEN_DIAGNOSTIC_ENV_NAMES,
+            project_root=PROJECT_ROOT,
+        )
+        if args.load_env_local
+        else None
+    )
+    env_file_token_values: dict[str, str] = {}
+    if args.load_env_local:
+        load_env_file(
+            Path(args.env_file),
+            allowed_keys=TOKEN_DIAGNOSTIC_ENV_NAMES,
+            target=env_file_token_values,
+            project_root=PROJECT_ROOT,
+        )
+    token_refresh_record: Mapping[str, Any] | None = None
+    token_refresh_record_source: Mapping[str, Any] | None = None
+    if str(args.token_refresh_record_path).strip():
+        token_refresh_record, token_refresh_record_source = load_token_refresh_record(
+            Path(args.token_refresh_record_path)
+        )
+    authority_record: Mapping[str, Any] | None = None
+    authority_record_source: Mapping[str, Any] | None = None
+    if str(args.authority_record_path).strip():
+        authority_record, authority_record_source = load_authority_record(Path(args.authority_record_path))
+    record = build_completion_audit(
+        token_refresh_record=token_refresh_record,
+        env_file_load_result=env_file_load_result,
+        env_file_presence_result=env_file_presence_result,
+        env_file_access_token=env_file_token_values.get(KIS_ACCESS_TOKEN_ENV),
+        token_refresh_record_source=token_refresh_record_source,
+        authority_record=authority_record,
+        authority_record_source=authority_record_source,
+    )
+    if args.write_record:
+        write_completion_audit(record, Path(args.record_path))
+    if args.write_powershell_template:
+        write_powershell_env_template(Path(args.template_path))
+    if args.print_powershell_template:
+        print(build_powershell_env_template(), end="")
+    print(json.dumps(record, ensure_ascii=False, sort_keys=True, default=str))
+    if args.fail_on_incomplete and not record["complete"]:
+        return 2
+    return 0
+
+
+def _preview_token_refresh_record() -> dict[str, Any]:
+    return kis_live_token_refresh_preflight.build_record(
+        execute=False,
+        confirm="",
+        install_to_process_env=False,
+    )
+
+
+def load_token_refresh_record(path: Path) -> tuple[Mapping[str, Any] | None, dict[str, Any]]:
+    """별도 승인 후 생성된 token refresh proof record를 raw value 출력 없이 읽는다."""
+    resolved = path if path.is_absolute() else PROJECT_ROOT / path
+    source: dict[str, Any] = {
+        "provided": True,
+        "path": _record_path(resolved),
+        "loaded": False,
+        "status": "not_loaded",
+        "reason_codes": [],
+        "secrets_redacted": True,
+        "network_call_performed": False,
+        "live_order_created": False,
+    }
+    if not resolved.exists():
+        source.update({"status": "missing", "reason_codes": ["TOKEN_REFRESH_RECORD_MISSING"]})
+        return None, source
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        source.update({"status": "invalid", "reason_codes": ["TOKEN_REFRESH_RECORD_INVALID"]})
+        return None, source
+    if not isinstance(payload, Mapping):
+        source.update({"status": "invalid", "reason_codes": ["TOKEN_REFRESH_RECORD_NOT_OBJECT"]})
+        return None, source
+    source.update(
+        {
+            "loaded": True,
+            "status": "loaded",
+            "network_call_performed": bool(payload.get("network_call_performed")),
+            "live_order_created": bool(payload.get("live_order_created")),
+        }
+    )
+    return payload, source
+
+
+def load_authority_record(path: Path) -> tuple[Mapping[str, Any] | None, dict[str, Any]]:
+    """별도 승인된 live submit/cancel authority approval record를 raw value 출력 없이 읽는다."""
+    resolved = path if path.is_absolute() else PROJECT_ROOT / path
+    source: dict[str, Any] = {
+        "provided": True,
+        "path": _record_path(resolved),
+        "loaded": False,
+        "status": "not_loaded",
+        "reason_codes": [],
+        "secrets_redacted": True,
+        "network_call_performed": False,
+        "live_order_created": False,
+        "order_cancelled": False,
+    }
+    if not resolved.exists():
+        source.update({"status": "missing", "reason_codes": ["AUTHORITY_RECORD_MISSING"]})
+        return None, source
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        source.update({"status": "invalid", "reason_codes": ["AUTHORITY_RECORD_INVALID"]})
+        return None, source
+    if not isinstance(payload, Mapping):
+        source.update({"status": "invalid", "reason_codes": ["AUTHORITY_RECORD_NOT_OBJECT"]})
+        return None, source
+    source.update(
+        {
+            "loaded": True,
+            "status": "loaded",
+            "network_call_performed": bool(payload.get("network_call_performed")),
+            "live_order_created": bool(payload.get("live_order_created")),
+            "order_cancelled": bool(payload.get("order_cancelled")),
+        }
+    )
+    return payload, source
+
+
+def _token_refresh_record_summary(
+    record: Mapping[str, Any],
+    *,
+    source: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    result = record.get("result") if isinstance(record.get("result"), Mapping) else {}
+    default_source = {
+        "provided": False,
+        "loaded": False,
+        "status": "preview_record",
+        "path": None,
+        "reason_codes": [],
+        "secrets_redacted": True,
+    }
+    source_payload = dict(source or default_source)
+    return {
+        "source": source_payload,
+        "execute_requested": bool(record.get("execute_requested")),
+        "execute_confirmed": bool(record.get("execute_confirmed")),
+        "network_call_performed": bool(record.get("network_call_performed")),
+        "token_refreshed": bool(result.get("token_refreshed")),
+        "live_order_created": bool(record.get("live_order_created")),
+        "proof_passed": _token_refresh_proof_passed(record),
+        "secrets_redacted": bool(record.get("secrets_redacted")),
+    }
+
+
+def _authority_record_summary(
+    record: Mapping[str, Any],
+    *,
+    source: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    default_source = {
+        "provided": False,
+        "loaded": False,
+        "status": "no_authority_record",
+        "path": None,
+        "reason_codes": [],
+        "secrets_redacted": True,
+    }
+    source_payload = dict(source or default_source)
+    operations = _authority_operations(record)
+    return {
+        "source": source_payload,
+        "operations": sorted(operations),
+        "authority_approved": bool(record.get("authority_approved")),
+        "separate_user_approval": bool(record.get("separate_user_approval")),
+        "reviewer_present": bool(record.get("reviewer_present")),
+        "environment_is_prod_live_isolated": bool(record.get("environment_is_prod_live_isolated")),
+        "rollback_ready": bool(record.get("rollback_ready")),
+        "kill_switch_ready": bool(record.get("kill_switch_ready")),
+        "minimum_size_confirmed": bool(record.get("minimum_size_confirmed")),
+        "network_call_performed": bool(record.get("network_call_performed")),
+        "live_order_created": bool(record.get("live_order_created")),
+        "order_cancelled": bool(record.get("order_cancelled")),
+        "submit_approval_proof_passed": _authority_operation_proof_passed(record, "submit"),
+        "cancel_approval_proof_passed": _authority_operation_proof_passed(record, "cancel"),
+        "secrets_redacted": bool(record.get("secrets_redacted", True)),
+    }
+
+
+def _control_passed(controls: Mapping[str, Any], name: str) -> bool:
+    control = controls.get(name)
+    return bool(isinstance(control, Mapping) and control.get("passed"))
+
+
+def _token_refresh_proof_passed(record: Mapping[str, Any]) -> bool:
+    result = record.get("result") if isinstance(record.get("result"), Mapping) else {}
+    return (
+        bool(record.get("network_call_performed"))
+        and bool(result.get("token_refreshed"))
+        and bool(record.get("secrets_redacted"))
+        and not bool(record.get("live_order_created"))
+    )
+
+
+def _authority_operation_proof_passed(record: Mapping[str, Any], operation: str) -> bool:
+    operations = _authority_operations(record)
+    return (
+        operation in operations
+        and bool(record.get("authority_approved"))
+        and bool(record.get("separate_user_approval"))
+        and bool(record.get("reviewer_present"))
+        and bool(record.get("environment_is_prod_live_isolated"))
+        and bool(record.get("rollback_ready"))
+        and bool(record.get("kill_switch_ready"))
+        and bool(record.get("minimum_size_confirmed"))
+        and bool(record.get("secrets_redacted", True))
+        and not bool(record.get("network_call_performed"))
+        and not bool(record.get("live_order_created"))
+        and not bool(record.get("order_cancelled"))
+    )
+
+
+def _authority_operations(record: Mapping[str, Any]) -> set[str]:
+    raw_operations = record.get("operations", record.get("operation", ""))
+    values = raw_operations if isinstance(raw_operations, (list, tuple, set)) else [raw_operations]
+    operations: set[str] = set()
+    for value in values:
+        normalized = str(value or "").strip().lower()
+        if normalized in {"live_submit_cancel_authority", "submit_cancel", "both"}:
+            operations.update({"submit", "cancel"})
+        if "submit" in normalized:
+            operations.add("submit")
+        if "cancel" in normalized:
+            operations.add("cancel")
+    return operations
+
+
+def _proof_gap_summary(
+    *,
+    requirements: Mapping[str, bool],
+    blocker_sources: Mapping[str, list[str]],
+    token_record: Mapping[str, Any],
+    authority_summary: Mapping[str, Any],
+    live_adapter_status: Mapping[str, Any],
+    canary: Mapping[str, Any],
+) -> dict[str, Any]:
+    """3단계 완료를 막는 proof gap을 secret 없이 요약한다."""
+    canary_blockers = set(blocker_sources.get("canary_blockers") or [])
+    safety_blockers = set(blocker_sources.get("safety_blockers") or [])
+    token_refresh_blockers = set(blocker_sources.get("token_refresh_blockers") or [])
+    authority_contract = live_adapter_status.get("authority_contract")
+    authority_contract_present = bool(
+        isinstance(authority_contract, Mapping) and authority_contract.get("present")
+    )
+    return {
+        "authority_contract_present": authority_contract_present,
+        "authority_contract_status": (
+            str(authority_contract.get("status"))
+            if isinstance(authority_contract, Mapping) and authority_contract.get("status")
+            else None
+        ),
+        "token_refresh_real_call_proof_required": not bool(requirements.get("token_refresh_real_call_proof")),
+        "token_refresh_network_call_performed": bool(token_record.get("network_call_performed")),
+        "token_refresh_blockers_present": bool(token_refresh_blockers),
+        "submit_authority_approval_proof_recorded": bool(
+            authority_summary.get("submit_approval_proof_passed")
+        ),
+        "cancel_authority_approval_proof_recorded": bool(
+            authority_summary.get("cancel_approval_proof_passed")
+        ),
+        "safety_controls_blocked": bool(safety_blockers),
+        "live_submit_authority_required": not bool(requirements.get("live_submit_authority_present")),
+        "live_cancel_authority_required": not bool(requirements.get("live_cancel_authority_present")),
+        "live_adapter_disabled": "KIS_LIVE_BROKER_DISABLED_PLACEHOLDER" in canary_blockers
+        or not bool(live_adapter_status.get("enabled")),
+        "live_adapter_network_enabled": bool(live_adapter_status.get("network_enabled")),
+        "canary_execution_allowed": bool(canary.get("canary_execution_allowed")),
+        "network_call_required_to_close_token_refresh_proof": not bool(
+            requirements.get("token_refresh_real_call_proof")
+        ),
+        "separate_live_order_authority_required": not bool(requirements.get("live_submit_authority_present"))
+        or not bool(requirements.get("live_cancel_authority_present")),
+        "network_call_performed_by_audit": False,
+        "live_order_created": False,
+        "secrets_redacted": True,
+    }
+
+
+def _env_scope_status(names: tuple[str, ...], env: Mapping[str, str]) -> dict[str, dict[str, bool | str]]:
+    return {name: _single_env_scope_status(name, env) for name in names}
+
+
+def _single_env_scope_status(name: str, env: Mapping[str, str]) -> dict[str, bool | str]:
+    process_configured = _configured(env.get(name))
+    user_configured = _registry_env_configured(name, scope="user")
+    machine_configured = _registry_env_configured(name, scope="machine")
+    return {
+        "process_configured": process_configured,
+        "user_configured": user_configured,
+        "machine_configured": machine_configured,
+        "any_scope_configured": process_configured or user_configured or machine_configured,
+        "values_redacted": True,
+    }
+
+
+def _token_env_diagnostics(
+    env: Mapping[str, str],
+    env_scope_status: Mapping[str, Mapping[str, object]],
+    env_file_presence_result: Mapping[str, object] | None,
+    env_file_access_token: str | None = None,
+) -> dict[str, object]:
+    presence = _env_file_key_presence(env_file_presence_result)
+    process_access_token = _first_configured(env.get(KIS_ACCESS_TOKEN_ENV))
+    access_token = _first_configured(process_access_token, env_file_access_token)
+    access_process_configured = bool(process_access_token)
+    access_user_configured = _registry_env_configured(KIS_ACCESS_TOKEN_ENV, scope="user")
+    access_machine_configured = _registry_env_configured(KIS_ACCESS_TOKEN_ENV, scope="machine")
+    access_env_file_configured = bool(presence.get(KIS_ACCESS_TOKEN_ENV))
+    refresh_status = env_scope_status.get("KIS_REFRESH_TOKEN", {})
+    refresh_configured = bool(refresh_status.get("any_scope_configured")) or bool(presence.get("KIS_REFRESH_TOKEN"))
+    access_configured = (
+        access_process_configured
+        or access_user_configured
+        or access_machine_configured
+        or access_env_file_configured
+    )
+    diagnostics = {
+        "access_token_configured": access_configured,
+        "access_token_process_configured": access_process_configured,
+        "access_token_user_configured": access_user_configured,
+        "access_token_machine_configured": access_machine_configured,
+        "access_token_env_file_configured": access_env_file_configured,
+        "refresh_token_configured": refresh_configured,
+        "access_token_without_refresh_token": access_configured and not refresh_configured,
+        "refresh_token_required_variable": "KIS_REFRESH_TOKEN",
+        "access_token_variable": KIS_ACCESS_TOKEN_ENV,
+        "access_token_cannot_satisfy_refresh_proof": access_configured and not refresh_configured,
+        "values_redacted": True,
+    }
+    diagnostics.update(build_access_token_diagnostics(access_token))
+    return diagnostics
+
+
+def _env_file_key_presence(env_file_presence_result: Mapping[str, object] | None) -> dict[str, bool]:
+    if not isinstance(env_file_presence_result, Mapping):
+        return {}
+    raw_presence = env_file_presence_result.get("key_presence")
+    if not isinstance(raw_presence, Mapping):
+        return {}
+    return {str(name): bool(value) for name, value in raw_presence.items()}
+
+
+def _registry_env_configured(name: str, *, scope: str) -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        import winreg
+    except ImportError:
+        return False
+    hive = winreg.HKEY_CURRENT_USER if scope == "user" else winreg.HKEY_LOCAL_MACHINE
+    path = (
+        "Environment"
+        if scope == "user"
+        else r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+    )
+    try:
+        with winreg.OpenKey(hive, path) as key:
+            value, _value_type = winreg.QueryValueEx(key, name)
+    except OSError:
+        return False
+    return _configured(value)
+
+
+def _configured(value: object) -> bool:
+    return bool(str(value or "").strip())
+
+
+def _first_configured(*values: object) -> str | None:
+    for value in values:
+        if _configured(value):
+            return str(value).strip()
+    return None
+
+
+def _record_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(PROJECT_ROOT.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def _next_required_action(missing_requirements: list[str]) -> str:
+    if not missing_requirements:
+        return "3단계 완료 조건이 모두 충족됐다. 별도 승인된 운영 절차에 따라 최종 검증 후 단계 완료 커밋을 남긴다."
+    if "token_refresh_real_call_proof" in missing_requirements:
+        return "KIS_REFRESH_TOKEN과 live token refresh gate를 process env에 주입한 뒤 별도 승인된 token refresh proof를 먼저 생성한다."
+    if "live_submit_authority_present" in missing_requirements:
+        return "실제 live submit/cancel authority는 별도 사용자 승인과 운영 canary 조건이 충족될 때만 구현/활성화한다."
+    return "missing_requirements를 순서대로 해소한 뒤 completion audit을 재실행한다."
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

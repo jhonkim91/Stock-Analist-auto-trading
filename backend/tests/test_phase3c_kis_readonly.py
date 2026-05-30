@@ -245,13 +245,25 @@ def test_mock_kis_preview_confirm_flow_and_orders_invariant(client, monkeypatch)
     assert after["orders"] == before["orders"] == 0
 
 
-def test_kis_broker_order_and_websocket_routes_are_not_registered(client):
+def test_kis_order_routes_are_registered_but_gated_off_and_websocket_routes_are_not_registered(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
-    assert not any(path.startswith("/api/kis/orders") for path in route_paths)
+    assert "/api/kis/orders/status" in route_paths
+    assert "/api/kis/orders/preview" in route_paths
+    assert "/api/kis/orders/submit" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    assert client.get("/api/kis/orders").status_code == 404
-    assert client.post("/api/kis/orders/preview", json={"symbol": "005930"}).status_code == 404
+    status = client.get("/api/kis/orders/status")
+    preview = client.post("/api/kis/orders/preview", json={"symbol": "005930"})
+    submit = client.post("/api/kis/orders/submit", json={"symbol": "005930"})
+    assert status.status_code == 200
+    assert preview.status_code == 200
+    assert submit.status_code == 200
+    # 기본(라이브 토글/자격증명 없음): 게이트 차단 — 네트워크/실주문 없음.
+    assert status.json()["can_submit"] is False
+    assert preview.json()["network_call_performed"] is False
+    assert preview.json()["live_order_created"] is False
+    assert submit.json()["network_call_performed"] is False
+    assert submit.json()["live_order_created"] is False
     assert client.get("/api/kis/websocket/status").status_code == 404
 
 

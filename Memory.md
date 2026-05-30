@@ -1,105 +1,115 @@
 # Stock Analyst Auto Trading Memory
 
-## Checkpoint
+## 현재 체크포인트
 
-- [x] 현재 상태명: `Factor/Filter Attribution Minimal Integration`
-- [x] 현재 version: `MVP v0.24.0`
-- [x] 현재 브랜치: `main`
-- [x] 최신 targeted backend pytest: `47 passed`
-- [x] 최신 backend full pytest: `293 passed`
-- [x] 최신 Alembic pytest: `미실행` (이번 변경은 DB schema 변경 없음)
-- [x] 최신 diff check: `git diff --check` 통과, CRLF warning만 있음
-- [x] Phase 1 Backend Core MVP 구현
-- [x] Phase 2 MVP Web Flow 구현
-- [x] Phase 3A CSV validate/confirm import 구현
-- [x] Phase 3B provider-neutral external daily OHLCV preview/confirm 구현
-- [x] Phase 3C KIS read-only foundation 구현
-- [x] Phase 3D broker safety scaffold 구현
-- [x] Phase 3E-1 paper preview safety scaffold 구현
-- [x] Phase 3F read-only data reliability 구현
-- [x] Phase 3G hardened backtest execution model 구현
-- [x] Phase 3H strategy explanation, optional filters, strategy registry 구현
-- [x] Phase C strategy suite 및 hardening foundation 구현
-- [x] Phase 3I Weekly Review Report 구현
-- [x] Trade Ledger Foundation 구현
-- [x] Portfolio Risk Guard v2 구현
-- [x] Venue-aware session preview layer 구현
-- [x] Indicator incremental + breadth-aware regime 구현
-- [x] Data Reliability 2 구현
-- [x] Validation Framework Scaffold 구현
-- [x] Parameter Snapshot Foundation 구현
-- [x] Walk-forward Minimal OOS Summary 구현
-- [x] PBO/DSR Minimal Overfitting Validation 구현
-- [x] Factor/Filter Attribution Minimal Integration 구현
+- [x] 방향 전환: `Project Reset: Telegram + KIS Paper Trading Bot`.
+- [x] 기본 목표 모드: `paper_kis`.
+- [x] 실계좌 KIS live 주문은 활성화되어 있으며(사용자 본인 계좌, 고위험), 기본은 fail-closed로 다중 gate(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional) 뒤에서만 KRX 국내 현금 주문을 허용한다. live 실행 경로는 실제 KIS API 대비 미검증이므로 첫 주문은 최소 수량으로 검증한다.
+- [x] 단일 프로그램으로 패키징한다: 하나의 FastAPI 프로세스가 Next.js static export를 same-origin으로 서빙하고, pywebview native window 단일 .exe로 배포한다(`launcher.py` -> `app_main.py --host 127.0.0.1 --port 8000`, 별도 frontend 프로세스/포트 없음).
+- [x] UI는 한국어이며 monospace + beige light 테마와 light/dark 토글 슬라이더를 제공한다.
+- [x] 로컬 JSON 기반 로그인을 지원한다: `backend/data/users.json`(PBKDF2-HMAC-SHA256), HMAC 30일 토큰, opt-in(사용자 생성 시에만 auth 강제), `/api/auth/*` route, frontend AuthGate + logout.
+- [x] 기존 분석/스크리너/백테스트/리포트/포트폴리오 기능은 보존한다.
+- [x] paper 주문은 legacy `orders`가 아니라 `paper_orders`를 사용한다.
+- [x] secret/token/account/chat id 원문은 코드, 문서, API 응답, 테스트 출력에 남기지 않는다.
 
-## 현재 프로젝트 상태
+## 실행 모드
 
-- Backend: FastAPI + SQLite, sample seed, CSV import, external daily OHLCV preview/confirm, KIS read-only foundation, broker safety scaffold, paper preview scaffold, venue-aware session metadata, data quality summary, incremental indicator recompute, breadth-aware regime diagnostics, hardened backtest execution model, Data Reliability 2, strategy validation summary, validation scaffold, parameter snapshot foundation, portfolio risk guard, daily/weekly report generation.
-- Frontend: Next.js App Router, `/`, `/dashboard`, `/data`, `/screener`, `/reports`, `/backtest`, `/portfolio`, `/paper`, `/settings`.
-- Local execution: `launcher.py`와 `start_stock_analyst.cmd`가 backend `127.0.0.1:8000` + frontend `127.0.0.1:3000`을 함께 실행한다.
-- Product state: 실거래 자동매매 엔진이 아니라 분석, 스크리닝, 백테스트, 리포트 중심 자동매매 보조 MVP다.
-- Strategy default: `trend_breakout`, `vcp_breakout`, `canslim_lite`, `new_high_breakout`, `pullback_20ema`.
-- Strategy available: default 5개 + `momentum_rank`, `relative_strength_leader`, `darvas_box`, `stage_analysis_weekly`.
-- `/api/backtest/strategy-summary?lookback_days=252`는 strategy별 screener pass rate, backtest metric subset, baseline delta, walk-forward OOS summary를 additive로 반환한다.
-- `StrategyValidationService`는 validation summary 계산, `WalkForwardRunner`는 OOS test-window metric 집계, `ValidationBaselineComparator`는 baseline metric delta, `ValidationReportService`는 JSON artifact 저장을 담당한다.
-- `OverfittingValidationCalculator`는 walk-forward window `total_return` 기반 CSCV-lite PBO와 multiple-testing/non-normal input shape 기반 Deflated Sharpe Ratio를 계산 가능한 표본에서만 산출한다.
-- PBO/DSR 표본이 부족하면 `not_available_in_current_mvp`, `calculated=false`, 명확한 `reason`을 유지한다.
-- `FactorFilterAttributionService`는 `backtest_trade_ledger.signal_date = screen_results.trade_date`, `symbol`, `strategy_name/strategy_tag`로 join 가능한 행만 연결하고, 불완전 join은 `not_available_in_current_mvp`로 남긴다.
-- attribution은 realized PnL attribution과 screen filter failure counts를 분리한다. sector는 `symbol_master.sector`, market regime은 저장된 screen metadata에 있을 때만 사용한다.
-- `StrategyParameterSnapshotService`는 현재 strategy config의 `common + strategy` payload를 `strategy_parameter_snapshots`에 저장하고, 기준일 이전 최신 snapshot과 현재 config diff를 계산한다.
-- `strategy_parameter_snapshots` 최소 계약은 `strategy_name`, `config_hash`, `snapshot_date`, `effective_date`, `parameter_json`, `created_at`이다.
-- Weekly review의 `Parameter Drift Check`는 snapshot이 있으면 `changed_keys`, `unchanged_keys_count`, snapshot/effective dates, config hash diff, parameter path diff를 표시하고, 없으면 `not_available_in_current_mvp`와 `strategy_parameter_snapshot_not_found`를 명시한다.
-- Drift가 없으면 weekly Markdown과 detail metadata에 `no_drift_detected`를 명시한다.
-- report detail API의 `metadata.parameter_drift`는 저장된 Markdown에서 추출해 Markdown과 모순되지 않게 유지한다.
-- `/api/reports/daily`, `/api/reports/weekly`, `/api/reports?report_type=daily|weekly`, `/api/reports/{report_id}/markdown` contract는 유지된다.
-- DB migration head: `f7a8b9c0d1e2_add_strategy_parameter_snapshots`.
+| 모드 | 상태 | 설명 |
+|---|---|---|
+| `analysis_only` | 지원 | 로컬 DB 분석, 스크리너, 백테스트, 리포트 |
+| `telegram_report` | 진행 중 | Telegram 명령, webhook/polling dispatcher, report scheduler |
+| `paper_kis` | 진행 중 | KIS 모의투자 token/quote/order/fill/position mirror, sync worker wrapper |
+| `live_kis` | 활성(고위험, fail-closed) | 실계좌 KIS live 주문이 다중 gate 통과 시에만 허용된다. KRX 국내 현금 주문 only, 실제 KIS API 대비 미검증 |
 
 ## 최근 변경 요약
 
-- `backend/app/services/validation_service.py`: `FactorFilterAttributionService` 추가, validation framework와 strategy별 validation payload에 attribution summary 연결.
-- `backend/app/services/report_service.py`: weekly report의 `Factor/Filter Attribution` placeholder를 실제 realized PnL attribution table과 screen filter failure count table로 교체.
-- `backend/tests/test_backtest.py`, `backend/tests/test_phase2_api.py`: attribution join 성공/불완전 join, weekly markdown table, strategy-summary artifact 저장 검증 추가.
-- `backend/tests/test_report_quality.py`: weekly report quality expectation을 현재 parameter drift와 attribution table 출력 계약에 맞춤.
-- `backend/reports/strategy_validation_252d.json`: top-level `validation_framework.attribution`과 strategy별 `validation.attribution` 결과 저장.
-- `docs/PROJECT_STATUS.md`, `docs/VALIDATION.md`, `Memory.md`: `MVP v0.24.0 / Factor/Filter Attribution Minimal Integration` 기준으로 갱신.
+- `goal.md`와 `docs/PROJECT_STATUS.md`를 Telegram + KIS paper trading bot 기준으로 리셋했다.
+- `.env.example`에 실행 모드, KIS token cache, KIS quote, Telegram, paper blacklist/cooldown 변수를 추가했다.
+- `.gitignore`에 `.cache/`를 추가해 local token cache가 공개 저장소에 포함되지 않도록 했다.
+- `KisTokenManager`에 opt-in file token cache, issue, refresh-token 우선 갱신, cache-hit ensure 경로를 추가했고 `/api/kis/token/ensure`를 노출했다.
+- `KisMarketQuoteService`를 추가하고 종목 상세 조회가 KIS paper quote를 우선 시도한 뒤 DB 최신 OHLCV로 fallback하도록 했다.
+- `/api/stocks/search`, `/api/stocks/{symbol}` route를 추가했고, 상세 응답 `summary`에 현재가, 등락률, 시가/고가/저가, 거래량, 거래대금, 주요 지표, 전략 통과 요약을 담는다.
+- 종목 상세는 KIS paper quote 성공 경로와 DB fallback 경로 모두 테스트로 고정했다.
+- `TelegramBotService`와 `/api/telegram/status`, `/api/telegram/command` route를 추가했다.
+- `/api/telegram/webhook`, `/api/telegram/scheduler/status`, `/api/telegram/scheduler/run-once`를 추가했다. Scheduler는 기본 OFF, auto-start false, confirm gate 뒤에서 report summary를 Telegram channel로 dry-run/send한다.
+- `/api/telegram/polling/status`, `/api/telegram/polling/run-once`, `backend.app.jobs.telegram_polling_runner`를 추가했다. Polling은 기본 OFF, confirm gate 뒤에서만 `getUpdates`를 1회 조회하며 응답/trace에 token/chat id 원문을 남기지 않는다.
+- Telegram command dispatcher는 `/start`, `/help`, `/status`, `/search`, `/report`, `/portfolio`, `/rank`, `/bot`, `/stop`, `/buy`, `/sell`, `/orders`, `/cancel`을 지원한다.
+- `/search 종목코드`는 종목 상세 `summary`를 사용해 가격/거래/지표/통과전략을 한국어 메시지로 요약한다.
+- `/report daily`, `/report weekly`, `/report type=daily|weekly`는 해당 Markdown 리포트를 생성한 뒤 Telegram reply-safe 요약 메시지로 반환한다.
+- `/bot status|enable|disable|auto|run|stop`은 paper bot process env를 명시 제어한다. enable/disable/auto/run은 `confirm`이 필요하다.
+- `/buy`, `/sell`은 `confirm` 또는 `TELEGRAM_PAPER_TRADE_CONFIRM=true` 없이는 preview만 수행한다.
+- 가격을 생략한 `/buy`/`/sell`은 시장가 paper order로 저장되며, 시장가 주문도 DB 최신 종가 기준 추정 주문금액으로 `max_order_notional` gate를 통과해야 한다.
+- `/sell 종목 all` 또는 `qty=all`은 현재 `paper_positions` 보유 수량을 전량 매도 수량으로 사용한다.
+- `/cancel paper_order_id confirm`은 paper-only local cancel gate를 사용하며 live/network 호출 없이 `paper_orders` 상태와 audit log만 갱신한다.
+- `/orders open` 또는 `/orders 미체결`은 `GET /api/paper/orders/open`과 같은 미체결 전용 상태 집합을 사용한다.
+- `/api/paper/sync-worker/status`, `/api/paper/sync-worker/run-once`, `/api/paper/sync-worker/run-loop`와 `backend.app.jobs.paper_sync_runner`를 추가했다. Worker는 기본 OFF이며 confirm과 paper network gate가 열릴 때만 `PaperSyncService.sync()`를 호출한다. loop는 `PAPER_SYNC_WORKER_MAX_ITERATIONS_CAP` 안에서만 bounded 실행된다.
+- paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가했다.
+- `/api/paper/bot/preview`, `/api/paper/bot/run`은 요청의 `watchlist_symbols`로 저장된 passed screener 후보 universe를 제한할 수 있다.
+- paper bot 자동매매 기본값을 OFF로 정렬했다: `backend/config/bot.yaml`의 `enabled=false`, `auto_submit=false`, scheduler false.
+- Settings runtime env 버튼은 클릭 시 runtime env에 반영되며 `backend/data/runtime_env.json`에 persist된다(allowlist된 key만, 값은 masked). 자격 증명은 in-app에서 입력할 수 있다. hover/focus에서 한국어 tooltip을 표시한다. `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset과 주요 toggle은 runtime env 조회가 늦어져도 fallback 버튼으로 렌더링되고 같은 API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다.
+- 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수 일치를 재확인했다.
+- 국내 정정취소가능주문조회/매도가능수량조회는 공식 샘플에서 real `TTTC0084R`/`TTTC8408R` only로 확인되어 paper TR 확인 전 구현 보류로 유지한다.
+- paper bot loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 실행되도록 보강했다.
+- `/api/paper/risk/exit-check`는 stop-loss/trailing stop 외에 이동평균 하향 교차를 `ma_cross` local sell order/fill로 처리한다.
+- Windows sandbox 프로세스 생성 오류는 재부팅 후 재현되지 않았고 PowerShell 기반 backend 검증이 정상 실행됐다.
+- 오래된 `disabled` 전제 테스트는 새 `paper_kis` 정책에 맞춰 `paper 기능은 켜짐, 무자격 네트워크 주문은 차단` 기준으로 갱신했다. 이후 실계좌 KIS live 주문은 fail-closed 다중 gate 뒤에서 활성화됐다.
+- 오래된 문서/서비스 주석의 `paper mutation 금지`, `paper sync no-op` 표현은 새 `paper_kis` 정책에 맞춰 정리했다. paper writes는 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용된다. live mutation은 fail-closed 다중 gate(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional)를 모두 통과할 때만 KRX 국내 현금 주문으로 허용된다.
+
+## 안전 계약
+
+- [x] `paper_kis` 모드에서 KIS 모의투자 주문/체결/잔고/포지션 갱신을 허용한다.
+- [x] 실계좌 KIS live 주문은 활성화되어 있으나 기본 fail-closed다. `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional이 모두 통과해야 KRX 국내 현금 주문이 제출된다. `KisLiveOrderExecutor`(paper mapper 재사용, V->T TR ID)가 `/api/kis/orders/{status,preview,submit,cancel}`과 `/api/live/status`를 처리하며, 실제 KIS API 대비 미검증이다.
+- [x] `kill_switch`, `max_order_notional`, `max_order_qty`, `max_open_positions`, `blacklist`, `cooldown`은 paper 주문 allow/deny gate로 유지한다.
+- [x] 모든 주문 생성에는 `idempotency_key`가 필요하다.
+- [x] 주문/취소/체결/Telegram command 판단은 audit log에 남긴다.
+- [x] KIS token cache는 `KIS_TOKEN_CACHE_ENABLED=true`일 때만 local file에 기록한다.
+- [x] 테스트는 fake/mock client 기반이며 실제 KIS live 주문 호출을 수행하지 않는다.
 
 ## 최신 검증 결과
 
-- 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_backtest.py backend/tests/test_phase2_api.py -q`: 47 passed in 225.71s.
-- 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests/test_report_quality.py -q`: 4 passed in 27.29s.
-- 2026-05-26 `.\.venv\Scripts\python.exe -m pytest backend/tests -q`: 293 passed in 282.75s.
-- 2026-05-26 `git diff --check`: 통과, CRLF warning만 있음.
-- Alembic pytest와 frontend lint/typecheck/build는 이번 backend report/test 변경에서 재실행하지 않았다.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_kis_token_manager.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_token_settings_focused` -> `14 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_project_reset_after_quote_priority` -> `9 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py::test_stock_detail_api_prefers_kis_quote_when_available backend/tests/test_project_reset_telegram_kis_bot.py::test_stock_detail_api_uses_db_fallback_without_kis_network -q -p no:cacheprovider --basetemp $env:TEMP\stock_detail_kis_quote_priority` -> `2 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py backend/tests/test_paper_sync.py backend/tests/test_paper_sync_service.py backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_sync_docs_alignment` -> `32 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_token_settings` -> `536 passed`.
+- [x] `cd frontend; npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` -> 모두 통과.
+- [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_tests` -> `4 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_token_manager.py backend/tests/test_kis_token_lifecycle_phase1.py backend/tests/test_kis_paper_token_websocket_activation.py backend/tests/test_phase1_read_report_api.py backend/tests/test_paper_order_service.py backend/tests/test_paper_order_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_related_tests` -> `18 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_frontend_contract_only` -> `2 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_phase2_only` -> `10 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_default_off` -> `5 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_persists_to_file_and_is_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_can_enable_real_order_high_risk backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` -> `5 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_tests` -> `10 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_api_matrix_docs.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_docs` -> `1 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_adapter_contract` -> `15 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_bounded_loop_regression` -> `7 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_phase2_engine.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_ma_cross_exit_regression` -> `6 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sell_all_related` -> `15 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_executor_phase5.py backend/tests/test_paper_bot_scheduler.py backend/tests/test_project_reset_telegram_kis_bot.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_watchlist_related` -> `18 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_report_command` -> `16 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_cancel_related` -> `17 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py backend/tests/test_paper_sync.py backend/tests/test_paper_sync_service.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_sync_worker_loop_api` -> `19 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_telegram_scheduler_and_sync_worker.py::test_paper_sync_worker_loop_api_is_confirm_gated_and_bounded -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_sync_worker_preset` -> `2 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_kis_token_quote_preset` -> `1 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_search_settings_contract` -> `9 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_order_service.py backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_kis_paper_adapter_contract.py::test_kis_paper_adapter_submit_cancel_query_sync_with_mock_http backend/tests/test_kis_paper_adapter_contract.py::test_kis_paper_adapter_maps_domestic_market_order_to_market_division -q -p no:cacheprovider --basetemp $env:TEMP\stock_market_order_open_orders` -> `16 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_project_reset_telegram_kis_bot.py backend/tests/test_report_automation.py backend/tests/test_report_notify.py backend/tests/test_paper_sync.py backend/tests/test_paper_portfolio_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_sync_related` -> `18 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_market_orders` -> `534 passed in 477.90s`.
+- [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
+- [x] `cd frontend; npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` -> 모두 통과.
+- [x] launcher 재기동 후 `/api/settings/runtime-env`, `/api/settings/runtime-env/preset`, `/settings` Playwright screenshot smoke 통과.
+- [x] `git diff --check` -> exit 0, CRLF warning만 출력.
+- [x] PowerShell 실행 채널 재검증 -> backend pytest와 shell command 정상 실행. `CreateProcessAsUserW failed: 1312` 재현 안 됨.
 
-## 불변 조건
+## 남은 작업
 
-- 실제 주문, 주문 취소, 체결, 계좌 이동, websocket, live broker 구현 금지.
-- paper order/fill/position/audit mutation 구현 금지.
-- KIS/KRX/yfinance network call, KIS token 발급/cache/credential 저장 금지.
-- broker/order adapter import 또는 호출 금지.
-- 기존 report/backtest/screener API breaking change 금지.
-- strategy registry 순서와 기존 `StrategyResult` 필드 제거 금지.
-- walk-forward는 actual local backtest OOS metric만 집계한다. PBO/Deflated Sharpe는 충분한 walk-forward 표본에서만 계산하고, factor/filter attribution은 저장된 ledger/screen join으로 확인되는 값만 계산한다.
-- snapshot이 없을 때 parameter drift를 0이나 false normal 상태로 위장하지 않고 unavailable reason과 `comparison_available=false`를 명시한다.
-- `orders_count == 0`, `paper_* == 0`, KIS/paper execution routes 404 유지.
-- `npm audit fix --force`, Next.js downgrade, 강제 push 금지.
+- [ ] KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID를 KIS 포털/운영 문서 또는 paper host 기준으로 추가 확인한다.
 
-## 미구현 항목
+## 주의 사항
 
-- 실제 주문, 주문 취소, 체결, 계좌, 잔고, websocket, live broker.
-- paper order create, paper fill simulator, paper position mutation.
-- KIS credential/token 저장, token 발급/refresh/cache, 실제 KIS API 호출.
-- 실제 KRX/yfinance network fetch.
-- 자동매매 scheduler, live broker adapter, AI prediction model.
-- broker-synced portfolio cash/position state, cash lock, open_positions state machine, realized exposure/drawdown.
-- 저장된 parameter snapshot 기반 train-window 후보 선택과 OOS window persistence.
-- walk-forward parameter optimization, multiple-testing 보정, 저장된 parameter snapshot 기반 후보 선택.
-- parameter snapshot을 자동 생성하는 scheduler 또는 API route.
-
-## 다음 작업
-
-- [ ] Walk-forward 고도화: 저장된 parameter snapshot 기반 후보 선택, train-window parameter selection, OOS window persistence 정책을 정의한다.
-- [ ] Factor/filter attribution 고도화: market_regime 저장 계약, sector as-of 계약, 더 긴 window별 attribution persistence를 검토한다.
-- [ ] Monthly report extension은 daily/weekly 공통 persistence contract 위에 additive로만 검토한다.
-- [ ] summary endpoint의 `baseline_snapshot` 입력을 파일 기반 import flow로 확장할지 별도 검토한다.
-- [ ] frontend lint/typecheck/build는 frontend 변경이 포함될 때 재실행한다.
+- `.env.local`과 Windows User env 값은 출력하지 않는다.
+- `.cache/kis/token.json`은 local runtime artifact이며 Git에 포함하지 않는다.
+- `KIS_MARKET_QUOTE_ENABLED=false`이면 종목 상세 API는 DB 최신 OHLCV fallback을 정상 경로로 사용한다.
+- `PAPER_TRADING_NETWORK_ENABLED=true`여도 token, broker mode, kill switch, idempotency, quote freshness, risk gate가 모두 통과해야 KIS paper adapter 호출이 가능하다.
+- live base URL이 설정되어 있어도 그 자체로 주문 권한이 되지 않는다. 실계좌 주문은 `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional gate가 모두 통과할 때만 KRX 국내 현금 주문으로 제출되며, 실제 KIS API 대비 미검증이므로 첫 주문은 최소 수량으로 검증한다.

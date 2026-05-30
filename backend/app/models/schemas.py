@@ -118,6 +118,7 @@ class BrokerPreviewRequest(BaseModel):
     strategy_tag: str | None = None
     venue: str | None = None
     as_of: datetime | None = None
+    idempotency_key: str | None = None
 
 
 class PaperOrderPreviewRequest(BaseModel):
@@ -129,6 +130,248 @@ class PaperOrderPreviewRequest(BaseModel):
     strategy_tag: str | None = None
     venue: str | None = None
     as_of: datetime | None = None
+
+
+class PaperOrderSubmitRequest(PaperOrderPreviewRequest):
+    confirm: bool = False
+    idempotency_key: str | None = None
+    session: str | None = None
+    risk_basis: str | None = None
+    risk_reason: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PaperOrderSubmitResult(BaseModel):
+    """KIS paper order submit 결과 DTO다."""
+
+    ok: bool
+    status: str
+    paper_order_id: str | None = None
+    broker_order_id: str | None = None
+    broker_order_status: str | None = None
+    paper_order_created: bool = False
+    live_order_created: bool = False
+    broker_order_created: bool = False
+    network_call_performed: bool = False
+    reason_codes: list[str] = Field(default_factory=list)
+
+
+class PaperExecution(BaseModel):
+    """KIS paper 체결 DTO다."""
+
+    paper_fill_id: str | None = None
+    paper_order_id: str | None = None
+    broker_fill_id: str | None = None
+    broker_order_id: str | None = None
+    symbol: str
+    side: str
+    qty: int
+    price: float
+    fill_ts: datetime | None = None
+    source: str = "kis_paper"
+
+
+class PaperAccountSnapshot(BaseModel):
+    """KIS paper 계좌 snapshot DTO다."""
+
+    snapshot_id: str
+    snapshot_ts: datetime | None = None
+    account_alias: str | None = None
+    cash_balance: float | None = None
+    buying_power: float | None = None
+    market_value: float | None = None
+    total_equity: float | None = None
+    unrealized_pnl: float | None = None
+    realized_pnl: float | None = None
+    source: str = "kis_paper"
+    status: str = "snapshot"
+
+
+class PaperOrderCancelRequest(BaseModel):
+    paper_order_id: str = ""
+    confirm: bool = False
+    idempotency_key: str | None = None
+
+
+class PaperSyncRequest(BaseModel):
+    scope: Literal["orders", "fills", "positions", "portfolio", "all"] = "all"
+
+
+class PaperSyncWorkerRunRequest(BaseModel):
+    """KIS paper sync worker 수동 run-once 요청이다."""
+
+    scope: Literal["orders", "fills", "positions", "portfolio", "all"] = "all"
+    confirm: bool = False
+
+
+class PaperSyncWorkerLoopRequest(PaperSyncWorkerRunRequest):
+    """KIS paper sync worker bounded loop 요청이다."""
+
+    max_iterations: int | None = Field(default=None, ge=1, le=20)
+
+
+class BrokerAdapterStatus(BaseModel):
+    """broker adapter 상태를 secret 없이 표현하는 공통 schema다."""
+
+    name: str
+    mode: str
+    enabled: bool = False
+    paper_trading_enabled: bool = False
+    live_trading_enabled: bool = False
+    network_enabled: bool = False
+    can_submit: bool = False
+    can_cancel: bool = False
+    can_sync: bool = False
+    reason: str | None = None
+    adapter_boundary: str | None = None
+    live_fallback_enabled: bool = False
+
+
+class KisTokenMetadataResponse(BaseModel):
+    """KIS token lifecycle metadata를 raw value 없이 표현한다."""
+
+    state: str
+    app_key_configured: bool = False
+    app_secret_configured: bool = False
+    token_issued: bool = False
+    refresh_token_present: bool = False
+    token_cache_enabled: bool = False
+    token_file_persistence_enabled: bool = False
+    token_db_persistence_enabled: bool = False
+    token_raw_value_persisted: bool = False
+    access_token: str | None = None
+    refresh_token: str | None = None
+    access_token_fingerprint: str | None = None
+    refresh_token_fingerprint: str | None = None
+    expires_at: str | None = None
+    expired: bool = False
+
+
+class KisRequestSigningStatus(BaseModel):
+    """KIS hashkey signing 상태를 fail-closed metadata로 표현한다."""
+
+    hashkey_confirmed: bool = False
+    hashkey_provider_configured: bool = False
+    signing_enabled: bool = False
+    network_call_performed: bool = False
+    fail_closed: bool = True
+    reason: str | None = None
+
+
+class KisTokenIssueRequest(BaseModel):
+    """KIS paper token 발급 요청은 confirm과 process-only 설치를 명시해야 한다."""
+
+    confirm: bool = False
+    install_to_process_env: bool = False
+
+
+class KisWebSocketApprovalRequest(BaseModel):
+    """KIS paper WebSocket approval key 발급 요청이다."""
+
+    confirm: bool = False
+    install_to_process_env: bool = False
+
+
+class KisWebSocketSubscriptionPreviewRequest(BaseModel):
+    """KIS paper WebSocket 구독 메시지 preview 요청이다."""
+
+    symbol: str = ""
+    kind: Literal["quote", "ask", "notice"] = "quote"
+    market: Literal["KR", "US"] = "KR"
+    exchange: str | None = None
+    subscribe: bool = True
+
+
+class KisWebSocketSmokeRequest(KisWebSocketSubscriptionPreviewRequest):
+    """KIS paper WebSocket bounded smoke 요청이다."""
+
+    confirm: bool = False
+    receive_timeout_seconds: float = 3.0
+
+
+class PaperBotRunRequest(BaseModel):
+    auto_submit: bool | None = None
+    trade_date: date | None = None
+    strategies: list[str] = Field(default_factory=lambda: list(DEFAULT_STRATEGY_NAMES))
+    watchlist_symbols: list[str] = Field(default_factory=list)
+    max_candidates: int = Field(default=5, ge=1, le=100)
+    dry_run: bool = True
+
+
+class NotificationTestRequest(BaseModel):
+    channel_alias: str | None = None
+    message: str = Field(default="notification test", max_length=1000)
+    dry_run: bool = True
+
+
+class NotificationOutboxEventRequest(BaseModel):
+    event_type: str
+    channel_alias: str | None = None
+    subject: str | None = None
+    payload_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReportNotifyRequest(BaseModel):
+    mode: Literal["summary", "summary_and_file"] = "summary"
+    channel_alias: str | None = None
+    dry_run: bool | None = None
+
+
+class ReportAutomationRunRequest(BaseModel):
+    """일간/주간 report automation run-once 요청이다."""
+
+    report_types: list[Literal["daily", "weekly"]] = Field(default_factory=lambda: ["daily", "weekly"])
+    report_date: date | None = None
+    notify: bool = False
+    channel_alias: str | None = None
+    dry_run: bool | None = None
+    confirm: bool = False
+
+
+class TelegramWebhookRequest(BaseModel):
+    """Telegram webhook update payload 중 command dispatch에 필요한 필드만 받는다."""
+
+    update_id: int | None = None
+    message: dict[str, Any] | None = None
+    edited_message: dict[str, Any] | None = None
+    callback_query: dict[str, Any] | None = None
+
+
+class TelegramReportSchedulerRunRequest(BaseModel):
+    """Telegram report scheduler 수동 run-once 요청이다."""
+
+    slot: Literal["manual", "pre_market", "post_market", "weekly"] = "manual"
+    report_types: list[Literal["daily", "weekly"]] | None = None
+    report_date: date | None = None
+    channel_alias: str | None = "telegram_main"
+    dry_run: bool | None = None
+    confirm: bool = False
+
+
+class TelegramPollingRunRequest(BaseModel):
+    """Telegram getUpdates polling 수동 run-once 요청이다."""
+
+    offset: int | None = None
+    limit: int = Field(default=10, ge=1, le=100)
+    timeout_seconds: int = Field(default=0, ge=0, le=30)
+    dry_run: bool | None = None
+    send_replies: bool | None = None
+    confirm: bool = False
+
+
+class RuntimeEnvToggleRequest(BaseModel):
+    """현재 backend 프로세스에만 반영되는 boolean env toggle 요청이다."""
+
+    name: str = Field(min_length=1, max_length=80)
+    enabled: bool
+    confirm: bool = False
+
+
+class RuntimeEnvPresetRequest(BaseModel):
+    """현재 backend 프로세스에만 반영되는 paper-only env preset 요청이다."""
+
+    name: str = Field(min_length=1, max_length=80)
+    confirm: bool = False
 
 
 class ImportConfirmRequest(BaseModel):

@@ -2,9 +2,12 @@
 
 ## Current Head
 
-- Current Alembic head: `e5f6a7b8c9d0_add_indicator_breadth_fields`.
-- Latest schema addition: breadth proxy fields on `indicator_snapshot`.
+- Current Alembic head: `d1e2f3a4b5c6_extend_paper_bot_run_contract`.
+- Latest schema addition: additive paper bot run request/result columns and paper account snapshots.
 - The ledger is a backtest/report artifact only and is not connected to live orders, paper orders, broker adapters, KIS routes, or `orders` rows.
+- KIS paper broker Phase 3 added `paper_portfolio_snapshots`, `broker_audit_events`, `notification_events`, `notification_delivery_logs`, `kis_token_status_metadata`, plus nullable broker-sync metadata on `paper_orders`, `paper_fills`, and `paper_positions`. 현재 paper submit/sync writes는 `paper_kis` 실행 모드, confirm/idempotency, kill-switch, risk gate, KIS paper network gate 뒤에서만 활성화된다.
+- Goal Phase 9 added `paper_bot_runs` and `paper_bot_decisions` in Alembic revision `b9c0d1e2f3a4` for preview-only bot run/decision audit. These tables do not store raw credentials or account identifiers.
+- docs/goal.md Phase 1-6 added `paper_account_snapshots` in revision `c0d1e2f3a4b5` and extended `paper_bot_runs` with `trade_date`, `dry_run`, preview/skipped/rejected counts, `request_json`, and `result_json` in revision `d1e2f3a4b5c6`.
 
 ## 현재 정책
 
@@ -128,4 +131,5 @@ Autogenerate 결과는 그대로 신뢰하지 말고 다음을 확인한다.
 - 데이터 보존 migration은 autogenerate 대신 수동 migration으로 작성한다.
 - index/unique constraint 이름을 명시해 환경별 drift를 줄인다.
 - migration 적용 전 백업, dry-run SQL 검토, rollback 방안을 별도 문서화한다.
-- broker/KIS/live trading 관련 schema는 별도 승인 전까지 추가하지 않는다.
+- future paper broker persistence는 별도 phase에서 additive-only migration으로 작성한다.
+- broker/KIS/live trading 관련 schema는 additive-only migration으로 신중히 추가한다. 실 KIS LIVE 주문은 fail-closed 게이트(LIVE_TRADING_ENABLED + LIVE_ORDER_SUBMIT_ENABLED + ENABLE_REAL_ORDER + live credential/host + per-order confirm + kill switch + max-notional) 뒤에서 활성화되어 있으나 KRX 현금 주문 한정이며 실 API 대비 미검증 상태다. KIS credential/token은 DB가 아니라 `backend/data/runtime_env.json`(allowlist, 마스킹)에 저장되므로, autogenerate가 실주문/credential 저장용 DB 컬럼을 의도치 않게 추가하지 않았는지 검토한다.

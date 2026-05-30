@@ -1,37 +1,42 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  callApi,
-  formatNumber,
-  type ApiStatus,
-  type PaperPreviewRequest,
-  type PaperPreviewResponse,
-  type PaperStatus
-} from "../../lib/api";
+import { formatNumber, type ApiStatus, type PaperPreviewRequest, type PaperPreviewResponse, type PaperStatus } from "../../lib/api";
+import { getPaperStatus, previewPaperOrder } from "../../lib/paperApi";
+
+function PageIcon() {
+  return (
+    <svg className="pageTitleIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M10 2v6l-5 9a3 3 0 0 0 2.6 4.5h8.8A3 3 0 0 0 19 17L14 8V2" />
+      <path d="M8 2h8M8 14h8" />
+    </svg>
+  );
+}
 
 function StatusPill({ status, text }: { status: ApiStatus; text: string }) {
   return <span className={`status ${status}`}>{text}</span>;
 }
 
-function Metric({ label, value }: { label: string; value: string | number | boolean | null | undefined }) {
+function StatRow({ label, tone, value }: { label: string; tone?: "pos" | "neg" | "muted"; value: React.ReactNode }) {
   return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value === undefined || value === null ? "-" : String(value)}</strong>
+    <div className="stat-row">
+      <span className="stat-k">{label}</span>
+      <span className={tone ?? ""}>{value}</span>
     </div>
   );
 }
 
-function JsonBlock({ data }: { data: unknown }) {
-  return <pre className="compactPre">{JSON.stringify(data ?? {}, null, 2)}</pre>;
+function boolTone(value: boolean | null | undefined, positiveWhenTrue = true): "pos" | "neg" | "muted" {
+  if (value === null || value === undefined) {
+    return "muted";
+  }
+  return value === positiveWhenTrue ? "pos" : "neg";
 }
 
 export default function PaperPage() {
   const [status, setStatus] = useState<ApiStatus>("loading");
-  const [message, setMessage] = useState("Paper status loading");
+  const [message, setMessage] = useState("모의투자 상태 조회 중");
   const [paperStatus, setPaperStatus] = useState<PaperStatus | null>(null);
   const [preview, setPreview] = useState<PaperPreviewResponse | null>(null);
   const [form, setForm] = useState<PaperPreviewRequest>({
@@ -40,32 +45,34 @@ export default function PaperPage() {
     qty: 10,
     limit_price: 100,
     stop_price: 90,
-    strategy_tag: "paper_preview"
+    strategy_tag: "paper_ui",
+    venue: null,
+    as_of: null
   });
 
-  const loadStatus = useCallback(async (showLoading = true) => {
+  const loadPaperState = useCallback(async (showLoading = true) => {
     if (showLoading) {
       setStatus("loading");
-      setMessage("Paper status loading");
+      setMessage("모의투자 상태 조회 중");
     }
     try {
-      const data = await callApi<PaperStatus>("/api/paper/status");
-      setPaperStatus(data);
+      const statusData = await getPaperStatus();
+      setPaperStatus(statusData);
       setStatus("ok");
-      setMessage("Paper status loaded");
+      setMessage("모의투자 상태 조회 완료");
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Paper status failed");
+      setMessage(error instanceof Error ? error.message : "모의투자 상태 조회 실패");
       setPaperStatus(null);
     }
   }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadStatus(false);
+      void loadPaperState(false);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadStatus]);
+  }, [loadPaperState]);
 
   function updateForm<Key extends keyof PaperPreviewRequest>(key: Key, value: PaperPreviewRequest[Key]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -73,146 +80,93 @@ export default function PaperPage() {
 
   async function runPreview() {
     setStatus("loading");
-    setMessage("Paper preview running");
+    setMessage("모의투자 미리보기 실행 중");
     try {
-      const data = await callApi<PaperPreviewResponse>("/api/paper/orders/preview", {
-        method: "POST",
-        body: JSON.stringify(form)
-      });
+      const data = await previewPaperOrder(form);
       setPreview(data);
       setPaperStatus(data);
       setStatus("ok");
-      setMessage(`Paper preview ${data.risk_gate.decision}`);
+      setMessage(`미리보기: ${data.risk_gate.decision}`);
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Paper preview failed");
+      setMessage(error instanceof Error ? error.message : "모의투자 미리보기 실패");
       setPreview(null);
     }
   }
-
-  const reasonCodes = preview?.risk_gate.reason_codes ?? paperStatus?.risk_gate.reason_codes ?? [];
 
   return (
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 3E-1</p>
-          <h1>Paper Trading</h1>
+          <PageIcon />
+          <h1>
+            모의투자 <span className="muted">· Phase 3E-1</span>
+          </h1>
         </div>
-        <nav className="nav">
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/data">Data</Link>
-          <Link href="/screener">Screener</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/backtest">Backtest</Link>
-          <Link href="/portfolio">Portfolio</Link>
-          <Link href="/paper">Paper</Link>
-          <Link href="/settings">Settings</Link>
-        </nav>
-        <StatusPill status={status} text={message} />
+        <div className="topbar-actions" title={message}>
+          <StatusPill status={status} text={message} />
+        </div>
       </header>
 
-      <section className="cardGrid">
-        <article>
-          <h2>Paper Status</h2>
-          <div className="metricGrid">
-            <Metric label="enabled" value={paperStatus?.enabled} />
-            <Metric label="can_create" value={paperStatus?.can_create} />
-            <Metric label="can_simulate_fills" value={paperStatus?.can_simulate_fills} />
-            <Metric label="preview_only" value={paperStatus?.preview_only} />
-          </div>
-        </article>
-        <article>
-          <h2>Safety Flags</h2>
-          <div className="metricGrid">
-            <Metric label="live_order_created" value={paperStatus?.live_order_created} />
-            <Metric label="broker_order_created" value={paperStatus?.broker_order_created} />
-            <Metric label="network_call" value={paperStatus?.network_call_performed} />
-            <Metric label="token_issued" value={paperStatus?.token_issued} />
-          </div>
-        </article>
-        <article>
-          <h2>Write Counts</h2>
-          <div className="metricGrid">
-            <Metric label="paper_orders" value={formatNumber(paperStatus?.counts.paper_orders_count)} />
-            <Metric label="paper_fills" value={formatNumber(paperStatus?.counts.paper_fills_count)} />
-            <Metric label="paper_positions" value={formatNumber(paperStatus?.counts.paper_positions_count)} />
-            <Metric label="real_orders" value={formatNumber(paperStatus?.counts.orders_count)} />
-          </div>
-        </article>
-      </section>
+      <section className="scroll">
+        <div className="g3">
+          <article>
+            <div className="card-hd">
+              <span className="card-title">모의투자 상태</span>
+            </div>
+            <StatRow label="활성" value={String(paperStatus?.enabled ?? "-")} tone={boolTone(paperStatus?.enabled)} />
+            <StatRow label="주문 생성 가능" value={String(paperStatus?.can_create ?? "-")} tone={boolTone(paperStatus?.can_create)} />
+            <StatRow label="미리보기 전용" value={String(paperStatus?.preview_only ?? "-")} tone={boolTone(paperStatus?.preview_only)} />
+            <StatRow label="체결 시뮬레이션 가능" value={String(paperStatus?.can_simulate_fills ?? "-")} tone={boolTone(paperStatus?.can_simulate_fills)} />
+          </article>
 
-      <section className="grid">
+          <article>
+            <div className="card-hd">
+              <span className="card-title">안전 플래그</span>
+            </div>
+            <StatRow label="실주문 생성됨" value={String(paperStatus?.live_order_created ?? "-")} tone={boolTone(paperStatus?.live_order_created, false)} />
+            <StatRow label="브로커 주문 생성됨" value={String(paperStatus?.broker_order_created ?? "-")} tone={boolTone(paperStatus?.broker_order_created, false)} />
+            <StatRow label="네트워크 호출" value={String(paperStatus?.network_call_performed ?? "-")} tone={boolTone(paperStatus?.network_call_performed, false)} />
+            <StatRow label="토큰 발급됨" value={String(paperStatus?.token_issued ?? "-")} tone={boolTone(paperStatus?.token_issued, false)} />
+          </article>
+
+          <article>
+            <div className="card-hd">
+              <span className="card-title">쓰기 건수</span>
+            </div>
+            <StatRow label="모의 주문" value={formatNumber(paperStatus?.counts.paper_orders_count)} />
+            <StatRow label="모의 체결" value={formatNumber(paperStatus?.counts.paper_fills_count)} />
+            <StatRow label="모의 포지션" value={formatNumber(paperStatus?.counts.paper_positions_count)} />
+            <StatRow label="실주문" value={formatNumber(paperStatus?.counts.orders_count)} tone={paperStatus?.counts.orders_count === 0 ? "pos" : "neg"} />
+          </article>
+        </div>
+
         <article>
-          <h2>Preview Request</h2>
-          <div className="formRow">
-            <label>
-              symbol
-              <input value={form.symbol} onChange={(event) => updateForm("symbol", event.target.value)} />
-            </label>
-            <label>
-              side
-              <select value={form.side} onChange={(event) => updateForm("side", event.target.value as "buy" | "sell")}>
-                <option value="buy">buy</option>
-                <option value="sell">sell</option>
-              </select>
-            </label>
-            <label>
-              qty
-              <input
-                min="1"
-                type="number"
-                value={form.qty}
-                onChange={(event) => updateForm("qty", Number(event.target.value))}
-              />
-            </label>
-            <label>
-              limit_price
-              <input
-                min="0"
-                type="number"
-                value={form.limit_price ?? ""}
-                onChange={(event) => updateForm("limit_price", event.target.value ? Number(event.target.value) : null)}
-              />
-            </label>
-            <label>
-              stop_price
-              <input
-                min="0"
-                type="number"
-                value={form.stop_price ?? ""}
-                onChange={(event) => updateForm("stop_price", event.target.value ? Number(event.target.value) : null)}
-              />
-            </label>
-            <button type="button" onClick={runPreview}>
-              Preview
+          <div className="card-hd">
+            <span className="card-title">미리보기 요청</span>
+            <button type="button" className="primary" onClick={runPreview}>
+              미리보기
             </button>
           </div>
-        </article>
-        <article>
-          <h2>Preview Decision</h2>
-          <div className="metricGrid">
-            <Metric label="decision" value={preview?.risk_gate.decision ?? paperStatus?.risk_gate.decision} />
-            <Metric label="paper_order_created" value={preview?.paper_order_created ?? paperStatus?.paper_order_created} />
-            <Metric label="kill_switch" value={preview?.kill_switch.blocking ?? paperStatus?.kill_switch.blocking} />
-            <Metric label="reason_count" value={formatNumber(reasonCodes.length)} />
+          <div className="mockFilters">
+            <input value={form.symbol} onChange={(event) => updateForm("symbol", event.target.value)} />
+            <select value={form.side} onChange={(event) => updateForm("side", event.target.value as "buy" | "sell")}>
+              <option value="buy">매수</option>
+              <option value="sell">매도</option>
+            </select>
+            <input min="1" type="number" value={form.qty} onChange={(event) => updateForm("qty", Number(event.target.value))} />
+            <input
+              min="0"
+              type="number"
+              value={form.limit_price ?? ""}
+              onChange={(event) => updateForm("limit_price", event.target.value ? Number(event.target.value) : null)}
+            />
           </div>
-          <ul className="plainList">
-            {reasonCodes.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
-        </article>
-      </section>
-
-      <section className="grid">
-        <article>
-          <h2>Status Payload</h2>
-          <JsonBlock data={paperStatus} />
-        </article>
-        <article>
-          <h2>Preview Payload</h2>
-          <JsonBlock data={preview} />
+          <div className="previewResult">
+            <StatRow label="미리보기" value={preview?.risk_gate.decision ?? paperStatus?.risk_gate.decision ?? "-"} />
+            <StatRow label="모드" value={paperStatus?.mode ?? "paper"} />
+            <StatRow label="사유" value={(preview?.risk_gate.reason_codes ?? paperStatus?.risk_gate.reason_codes ?? [paperStatus?.reason ?? "-"])[0] ?? "-"} />
+          </div>
         </article>
       </section>
     </main>

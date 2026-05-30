@@ -15,85 +15,47 @@ launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 
 
-def test_backend_command_uses_fixed_fastapi_entrypoint_and_port():
-    command = launcher.backend_command("python")
+def test_app_command_uses_single_process_entrypoint_and_fixed_port():
+    """단일 프로그램 통합 이후: app_main.py를 고정 host/port로 실행한다(별도 백엔드/프론트 프로세스 없음)."""
+    command = launcher.app_command("python")
 
     assert command == [
         "python",
-        "-m",
-        "uvicorn",
-        "backend.app.main:app",
+        str(launcher.APP_ENTRYPOINT),
         "--host",
         "127.0.0.1",
         "--port",
         "8000",
     ]
+    assert launcher.APP_HOST == "127.0.0.1"
+    assert launcher.APP_PORT == 8000
+    assert launcher.APP_ENTRYPOINT.name == "app_main.py"
 
 
-def test_frontend_start_command_uses_next_start_fixed_port():
-    command = launcher.frontend_start_command("npm.cmd")
+def test_port_is_free_when_nothing_is_listening(monkeypatch):
+    monkeypatch.setattr(launcher, "is_port_open", lambda host, port, timeout=0.25: False)
 
-    assert command == [
-        "npm.cmd",
-        "run",
-        "start",
-        "--",
-        "--hostname",
-        "127.0.0.1",
-        "--port",
-        "3000",
-    ]
-
-
-def test_frontend_build_env_pins_public_backend_base_url():
-    env = launcher.frontend_build_env({"EXISTING": "1"})
-
-    assert env["EXISTING"] == "1"
-    assert env["NEXT_PUBLIC_API_BASE_URL"] == "http://127.0.0.1:8000"
-
-
-def test_build_metadata_requires_launcher_api_base(tmp_path):
-    metadata_path = tmp_path / "launcher-build.json"
-    metadata_path.write_text(
-        '{"next_public_api_base_url":"http://127.0.0.1:8001","frontend_port":3000,"backend_port":8000}',
-        encoding="utf-8",
-    )
-
-    assert launcher.build_metadata_is_current(metadata_path) is False
-
-    launcher.save_build_metadata(metadata_path)
-
-    assert launcher.build_metadata_is_current(metadata_path) is True
+    assert launcher.ensure_port_available({}) == "free"
 
 
 def test_unknown_port_occupancy_fails_closed(monkeypatch):
-    monkeypatch.setattr(launcher, "is_port_open", lambda host, port: True)
+    """고정 포트를 launcher가 띄우지 않은 알 수 없는 프로세스가 점유하면 fail-closed로 중단한다."""
+    monkeypatch.setattr(launcher, "is_port_open", lambda host, port, timeout=0.25: True)
     monkeypatch.setattr(launcher, "process_exists", lambda pid: False)
 
     with pytest.raises(launcher.LauncherError, match="알 수 없는 프로세스"):
-        launcher.ensure_ports_available({})
+        launcher.ensure_port_available({})
 
 
-def test_launcher_owned_ports_are_allowed(monkeypatch):
-    monkeypatch.setattr(launcher, "is_port_open", lambda host, port: True)
+def test_launcher_owned_port_is_allowed(monkeypatch):
+    """포트가 launcher state의 살아있는 단일 프로세스(app_pid)에 속하면 재사용을 허용한다."""
+    monkeypatch.setattr(launcher, "is_port_open", lambda host, port, timeout=0.25: True)
     monkeypatch.setattr(launcher, "process_exists", lambda pid: True)
     state = {
-        "backend_pid": 111,
-        "backend_host": "127.0.0.1",
-        "backend_port": 8000,
-        "frontend_pid": 222,
-        "frontend_host": "127.0.0.1",
-        "frontend_port": 3000,
+        "app_pid": 4321,
+        "app_host": "127.0.0.1",
+        "app_port": 8000,
     }
 
-    statuses = launcher.ensure_ports_available(state)
-
-    assert statuses == {"backend": "launcher-owned", "frontend": "launcher-owned"}
-    assert launcher.ensure_complete_launcher_state(statuses) is True
-
-
-def test_partial_launcher_state_fails_closed():
-    statuses = {"backend": "launcher-owned", "frontend": "free"}
-
-    with pytest.raises(launcher.LauncherError, match="일부 프로세스"):
-        launcher.ensure_complete_launcher_state(statuses)
+    assert launcher.ensure_port_available(state) == "launcher-owned"
+    assert launcher.launcher_owns_port(state) is True
