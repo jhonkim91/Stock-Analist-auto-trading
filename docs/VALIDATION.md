@@ -1,5 +1,11 @@
 # Validation
 
+> **현재 기준 / 히스토리 안내.** 이 문서는 시점별 검증 기록(append-only validation log)이다. 아래 날짜별 항목은 **각 검증 시점의 상태**를 그대로 남긴 것이며, 일부 과거 항목은 지금은 바뀐 내용을 담고 있다. 사실 보존을 위해 과거 기록은 수정하지 않으니, 현재 기준은 아래 4가지로 읽는다.
+> - **실계좌(live) 주문 정책**: 과거 항목의 "실계좌 주문 차단 / `live_disabled` / `ENABLE_REAL_ORDER` 항상 false 강제 / 별도 명시 승인 필요"는 더 이상 현재 정책이 아니다. 지금은 실계좌 KIS 주문이 다중 fail-closed 게이트(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명/호스트 + per-order confirm + kill switch + max-notional) 뒤에서 활성화되어 있다(KRX 국내 현금 한정, 실 KIS API 미검증 — 첫 주문은 최소 수량으로 확인).
+> - **실행 형태**: 과거 항목의 두 프로세스(backend :8000 + frontend `next start` :3000) 구성은 단일 프로세스(`app_main.py`가 Next.js static export를 same-origin 서빙, pywebview 단일 `.exe`)로 대체됐다. 과거 기록의 `http://127.0.0.1:3000/...` URL은 현재 `http://127.0.0.1:8000/...`로 읽는다.
+> - **런타임 설정**: 과거의 `persistence=process_only` / `file_write_performed=false`는 현재 `backend/data/runtime_env.json` 파일 영속(`persistence=file`)으로 바뀌었다.
+> - **테스트 이름**: 과거 항목이 언급하는 `test_runtime_env_toggle_is_process_only_and_allowlisted` / `test_runtime_env_toggle_keeps_live_order_locked_false`는 각각 `test_runtime_env_toggle_persists_to_file_and_is_allowlisted` / `test_runtime_env_toggle_can_enable_real_order_high_risk`로 대체됐다.
+
 ## 2026-05-30 Paper Sync Policy Documentation Alignment
 
 Project Reset 이후 허용된 `paper_kis` mutation 정책과 충돌하는 과거 문구를 정리했다. README, DB migration 문서, validation safety 표, `PaperTradingService` docstring은 이제 `paper_orders`/`paper_fills`/`paper_positions` write가 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용된다는 정책으로 정렬된다. 실제 KIS 실계좌(live) 주문은 사용자 본인 계좌 기준으로 활성화됐으며, 기본은 fail-closed로 `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + per-order confirm + kill switch + max-notional 게이트 뒤에서만 허용된다(국내 KRX 현금 주문 한정, 실 KIS API 검증 전).
