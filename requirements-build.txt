@@ -1,0 +1,4 @@
+# 단일 실행 파일(.exe) 빌드 전용 의존성.
+# 런타임 의존성은 requirements.txt 참고.
+-r requirements.txt
+pyinstaller>=6.0

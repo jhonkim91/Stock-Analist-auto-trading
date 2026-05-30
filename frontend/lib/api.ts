@@ -1,4 +1,8 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+// 단일 프로세스 배포에서는 FastAPI가 UI와 API를 같은 오리진에서 서빙하므로
+// API_BASE를 비워 상대 경로(`/api/...`)로 호출한다. next dev(개발)에서는 8000 백엔드로 향한다.
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "");
 
 export type ApiStatus = "idle" | "loading" | "ok" | "error";
 
