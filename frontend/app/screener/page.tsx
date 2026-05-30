@@ -111,7 +111,7 @@ export default function ScreenerPage() {
       });
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "strategy metadata load failed");
+      setMessage(error instanceof Error ? error.message : "전략 메타데이터 로드 실패");
     }
   }, []);
 
@@ -144,11 +144,11 @@ export default function ScreenerPage() {
   async function runScreener() {
     if (selectedStrategyNames.length === 0) {
       setStatus("error");
-      setMessage("select at least one strategy");
+      setMessage("전략을 하나 이상 선택하세요");
       return;
     }
     setStatus("loading");
-    setMessage("screener run in progress");
+    setMessage("스크리너 실행 중");
     try {
       const data = await callApi<{ rows: number; passed: number; strategies: string[] }>("/api/screener/run", {
         method: "POST",
@@ -156,10 +156,10 @@ export default function ScreenerPage() {
       });
       await loadResults(false);
       setStatus("ok");
-      setMessage(`run complete: ${data.rows} rows / ${data.strategies.length} strategies`);
+      setMessage(`실행 완료: ${data.rows}건 / 전략 ${data.strategies.length}개`);
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "screener run failed");
+      setMessage(error instanceof Error ? error.message : "스크리너 실행 실패");
     }
   }
 
@@ -168,24 +168,24 @@ export default function ScreenerPage() {
       <header className="topbar">
         <div>
           <PageIcon />
-          <h1>Screener</h1>
+          <h1>스크리너</h1>
         </div>
         <div className="topbar-actions" title={message}>
           <button type="button" className="secondary" onClick={selectDefaultStrategies} disabled={defaultStrategyNames.length === 0}>
-            Defaults
+            기본값
           </button>
           <button type="button" className="secondary" onClick={selectAllStrategies} disabled={strategyCatalog.length === 0}>
-            All
+            전체
           </button>
           <button type="button" className="primary" onClick={runScreener} disabled={selectedStrategyNames.length === 0}>
-            Run Screener
+            스크리너 실행
           </button>
         </div>
       </header>
 
       <section className="scroll">
         <div className="sec-lbl">
-          Strategy selection <span className="muted">— {selectedStrategyNames.length} selected</span>
+          전략 선택 <span className="muted">— {selectedStrategyNames.length}개 선택됨</span>
         </div>
         <StrategySelector selected={selectedStrategyNames} strategies={strategyCatalog} onChange={setSelectedStrategyNames} />
 
@@ -199,35 +199,35 @@ export default function ScreenerPage() {
               ))}
             </select>
             <select value={filters.passed} onChange={(event) => updateFilter("passed", event.target.value)}>
-              <option value="">pass/fail 전체</option>
-              <option value="true">pass</option>
-              <option value="false">fail</option>
+              <option value="">통과/탈락 전체</option>
+              <option value="true">통과</option>
+              <option value="false">탈락</option>
             </select>
             <select value={filters.grade} onChange={(event) => updateFilter("grade", event.target.value)}>
-              <option value="">grade 전체</option>
+              <option value="">등급 전체</option>
               <option value="A">A</option>
               <option value="B">B</option>
               <option value="C">C</option>
               <option value="D">D</option>
             </select>
-            <input value={filters.q} onChange={(event) => updateFilter("q", event.target.value)} placeholder="symbol 검색" />
+            <input value={filters.q} onChange={(event) => updateFilter("q", event.target.value)} placeholder="종목 검색" />
             <select value={filters.sortBy} onChange={(event) => updateFilter("sortBy", event.target.value)}>
-              <option value="total_score">total_score desc</option>
-              <option value="reward_risk_ratio">reward_risk_ratio desc</option>
+              <option value="total_score">총점 순</option>
+              <option value="reward_risk_ratio">손익비 순</option>
             </select>
             <select value={filters.sortDir} onChange={(event) => updateFilter("sortDir", event.target.value)}>
-              <option value="desc">desc</option>
-              <option value="asc">asc</option>
+              <option value="desc">내림차순</option>
+              <option value="asc">오름차순</option>
             </select>
           <button type="button" onClick={() => loadResults()}>
-            Apply
+            적용
           </button>
         </div>
 
         <article className="mockTableCard">
           <div className="sectionHeader">
             <h2>
-              결과 — {results.length} evaluated · {passedCount} passed
+              결과 — {results.length}건 평가 · {passedCount}건 통과
             </h2>
             <span className="muted">{results[0]?.trade_date ?? "-"}</span>
           </div>
@@ -237,11 +237,11 @@ export default function ScreenerPage() {
               <tr>
                 <th style={{ width: "12%" }}>종목</th>
                 <th style={{ width: "24%" }}>전략</th>
-                <th style={{ width: "9%" }}>grade</th>
-                <th style={{ width: "10%" }}>score</th>
-                <th style={{ width: "9%" }}>R/R</th>
-                <th style={{ width: "21%" }}>triggered</th>
-                <th style={{ width: "8%" }}>data</th>
+                <th style={{ width: "9%" }}>등급</th>
+                <th style={{ width: "10%" }}>점수</th>
+                <th style={{ width: "9%" }}>손익비</th>
+                <th style={{ width: "21%" }}>발동 조건</th>
+                <th style={{ width: "8%" }}>데이터</th>
                 <th style={{ width: "7%" }}>상태</th>
               </tr>
             </thead>
@@ -258,11 +258,11 @@ export default function ScreenerPage() {
                   <td className="summaryCell">{result.triggered_conditions.join(", ") || result.reason_summary}</td>
                   <td>
                     <Badge tone={Object.keys(result.data_quality_flags ?? {}).length ? "gradeC" : "pass"}>
-                      {Object.keys(result.data_quality_flags ?? {}).length ? "check" : "OK"}
+                      {Object.keys(result.data_quality_flags ?? {}).length ? "확인 필요" : "정상"}
                     </Badge>
                   </td>
                   <td>
-                    <Badge tone={result.passed ? "pass" : "fail"}>{result.passed ? "pass" : "fail"}</Badge>
+                    <Badge tone={result.passed ? "pass" : "fail"}>{result.passed ? "통과" : "탈락"}</Badge>
                   </td>
                 </tr>
               ))}

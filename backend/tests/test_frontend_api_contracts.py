@@ -68,7 +68,7 @@ def test_frontend_static_contracts_are_paper_only_and_redacted():
     assert "모의투자" in combined
     assert "즉시 반영" in combined
     assert "실거래 아님" in combined
-    assert "paper only" in combined
+    assert "모의투자" in combined
     assert "confirm" in combined
     assert "idempotency_key" in combined
     assert "data-tooltip" in combined

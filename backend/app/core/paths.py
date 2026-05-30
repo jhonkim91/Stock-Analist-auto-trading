@@ -42,6 +42,11 @@ RUNTIME_ROOT = _runtime_root()
 DATA_DIR = RUNTIME_ROOT / "backend" / "data"
 REPORT_DIR = RUNTIME_ROOT / "backend" / "reports"
 
+# 로그인/환경설정 영속 파일 (쓰기 가능, exe 옆)
+AUTH_FILE = DATA_DIR / "users.json"
+AUTH_SECRET_FILE = DATA_DIR / "auth_secret.key"
+RUNTIME_ENV_FILE = DATA_DIR / "runtime_env.json"
+
 
 def ensure_runtime_dirs() -> None:
     """런타임 산출물 디렉터리를 생성한다."""

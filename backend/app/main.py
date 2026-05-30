@@ -3,12 +3,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api import (
     account,
+    auth as auth_api,
     backtest,
     bot,
     broker,
@@ -29,8 +31,14 @@ from backend.app.api import (
     telegram,
     trade_journal,
 )
+from backend.app.core import auth as auth_core
 from backend.app.core.database import init_db
 from backend.app.core.paths import ensure_runtime_dirs
+from backend.app.core.runtime_env import load_persisted_env
+
+# 인증을 적용하지 않는 공개 경로 (로그인 화면이 동작하려면 필요)
+_PUBLIC_API_PREFIXES = ("/api/auth/",)
+_PUBLIC_PATHS = ("/health",)
 
 LOCAL_FRONTEND_ORIGINS = (
     "http://localhost:3000",
@@ -63,6 +71,8 @@ def _frontend_export_dir() -> Path | None:
 def create_app() -> FastAPI:
     """FastAPI 앱을 생성한다."""
     ensure_runtime_dirs()
+    # 사용자가 프로그램 내에서 저장한 환경변수(자격증명/토글)를 먼저 반영한다.
+    load_persisted_env()
     init_db()
     app = FastAPI(title="Stock Analyst Auto Trading API", version="0.1.0")
     app.add_middleware(
@@ -72,10 +82,30 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.middleware("http")
+    async def _auth_guard(request: Request, call_next):
+        """비밀번호가 설정된 경우에만 /api/* 호출에 유효 토큰을 요구한다.
+
+        사용자가 없으면(테스트/초기 상태) 통과시켜 기존 동작과 호환된다.
+        /api/auth/*, /health, 정적 파일은 항상 공개다.
+        """
+        path = request.url.path
+        protected = (
+            path.startswith("/api/")
+            and not any(path.startswith(prefix) for prefix in _PUBLIC_API_PREFIXES)
+            and path not in _PUBLIC_PATHS
+        )
+        if protected and auth_core.auth_configured():
+            token = request.headers.get("authorization")
+            if auth_core.verify_token(token) is None:
+                return JSONResponse({"detail": "인증이 필요합니다.", "code": "UNAUTHORIZED"}, status_code=401)
+        return await call_next(request)
+
     @app.get("/health")
     def health() -> dict[str, object]:
         return {"ok": True, "service": "backend", "version": "0.1.0"}
 
+    app.include_router(auth_api.router)
     app.include_router(data.router)
     app.include_router(indicators.router)
     app.include_router(market.router)

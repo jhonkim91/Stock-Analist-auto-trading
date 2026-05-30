@@ -1,3 +1,5 @@
+import { clearSession, getToken, notifyUnauthorized } from "./auth";
+
 // 단일 프로세스 배포에서는 FastAPI가 UI와 API를 같은 오리진에서 서빙하므로
 // API_BASE를 비워 상대 경로(`/api/...`)로 호출한다. next dev(개발)에서는 8000 백엔드로 향한다.
 export const API_BASE =
@@ -1103,10 +1105,21 @@ export async function callApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (!isFormData && init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  // 로그인 토큰을 자동으로 첨부한다(설정된 경우).
+  const token = getToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers
   });
+  // 인증 만료/누락: 세션을 비우고 로그인 화면으로 전환을 알린다.
+  if (response.status === 401) {
+    clearSession();
+    notifyUnauthorized();
+    throw new Error("인증이 필요합니다. 다시 로그인하세요.");
+  }
   const contentType = response.headers.get("content-type") ?? "";
   const data = contentType.includes("application/json") ? ((await response.json()) as T & { detail?: string }) : undefined;
   if (!response.ok) {

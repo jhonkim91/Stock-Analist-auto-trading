@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { GlobalStatusBar } from "./global-status-bar";
+import { LogoutButton } from "./logout-button";
+import { ThemeToggle } from "./theme-toggle";
 
 type NavItem = {
   href: string;
@@ -36,28 +38,29 @@ type NavIconName =
 
 const navSections: NavSection[] = [
   {
-    label: "OVERVIEW",
+    label: "개요",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-      { href: "/market", label: "Market", icon: "market" },
-      { href: "/screener", label: "Screener", icon: "filter", badge: { label: "7 pass", tone: "ok" } }
+      { href: "/dashboard", label: "대시보드", icon: "dashboard" },
+      { href: "/market", label: "마켓", icon: "market" },
+      { href: "/screener", label: "스크리너", icon: "filter", badge: { label: "7 통과", tone: "ok" } }
     ]
   },
   {
-    label: "ANALYSIS",
+    label: "분석",
     items: [
-      { href: "/backtest", label: "Backtest", icon: "history" },
-      { href: "/portfolio", label: "Portfolio", icon: "shield", badge: { label: "!", tone: "warn" } },
-      { href: "/reports", label: "Reports", icon: "file" }
+      { href: "/backtest", label: "백테스트", icon: "history" },
+      { href: "/portfolio", label: "포트폴리오", icon: "shield", badge: { label: "!", tone: "warn" } },
+      { href: "/reports", label: "리포트", icon: "file" }
     ]
   },
   {
-    label: "DATA",
+    label: "데이터",
     items: [
-      { href: "/data", label: "Data Quality", icon: "database" },
-      { href: "/paper", label: "Paper Trading", icon: "paper" },
-      { href: "/bot", label: "Paper Bot", icon: "bot" },
-      { href: "/settings", label: "Settings", icon: "settings" }
+      { href: "/data", label: "데이터 품질", icon: "database" },
+      { href: "/paper", label: "모의투자", icon: "paper" },
+      { href: "/bot", label: "모의 자동매매봇", icon: "bot" },
+      { href: "/live", label: "라이브 주문", icon: "market", badge: { label: "실거래", tone: "warn" } },
+      { href: "/settings", label: "설정", icon: "settings" }
     ]
   }
 ];
@@ -157,7 +160,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
   return (
     <div className="appChrome">
-      <aside className="appSidebar" aria-label="Primary navigation">
+      <aside className="appSidebar" aria-label="주요 내비게이션">
         <Link className="appLogo" href="/dashboard">
           <span className="appLogoMark" aria-hidden="true">
             <svg viewBox="0 0 24 24">
@@ -194,13 +197,15 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="appSidebarFooter">
-          <div>orders_count == 0 · fail-closed</div>
+          <ThemeToggle />
+          <LogoutButton />
+          <div>orders_count == 0 · 기본 차단</div>
           <div className="appNoOrderBadge">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <rect height="10" rx="2" width="14" x="5" y="10" />
               <path d="M8 10V8a4 4 0 0 1 8 0v2" />
             </svg>
-            preview-only · no real orders
+            미리보기 전용 · 실주문 없음
           </div>
         </div>
       </aside>

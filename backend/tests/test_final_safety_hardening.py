@@ -17,25 +17,25 @@ def test_goal_live_phases_remain_approval_gated():
     assert "live public route scaffold는 등록됐지만 network call, live submit 가능 상태, 실계좌 주문/취소/체결은 금지한다" in goal
 
 
-def test_live_public_routes_exist_but_are_disabled_after_approval(client):
+def test_live_public_routes_exist_and_are_gated_off_by_default(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
 
     assert "/api/reports/automation/status" in route_paths
     assert "/api/reports/automation/run-once" in route_paths
     assert "/api/live/status" in route_paths
-    assert "/api/kis/orders" in route_paths
+    assert "/api/kis/orders/status" in route_paths
     assert "/api/kis/orders/submit" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
     status = client.get("/api/live/status")
-    submit = client.post("/api/kis/orders/submit", json={"symbol": "005930"})
+    submit = client.post("/api/kis/orders/submit", json={"symbol": "005930", "confirm": True})
     assert status.status_code == 200
     assert submit.status_code == 200
-    for payload in (status.json(), submit.json()):
-        assert payload["status"] == "live_disabled"
-        assert payload["live_order_created"] is False
-        assert payload["network_call_performed"] is False
-        assert payload["endpoint_called"] is False
+    assert status.json()["can_submit"] is False
+    assert status.json()["reason_codes"]
+    assert submit.json()["status"] == "submit_blocked"
+    assert submit.json()["live_order_created"] is False
+    assert submit.json()["network_call_performed"] is False
 
 
 def test_phase12c_redacted_record_has_no_raw_secret_and_no_live_order():

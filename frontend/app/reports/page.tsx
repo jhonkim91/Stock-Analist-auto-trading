@@ -89,7 +89,7 @@ export default function ReportsPage() {
       <header className="topbar">
         <div>
           <PageIcon />
-          <h1>Reports</h1>
+          <h1>리포트</h1>
         </div>
         <div className="topbar-actions" title={message}>
           <span className={`status ${status}`}>{message}</span>
@@ -144,16 +144,16 @@ export default function ReportsPage() {
               <span className="card-title">선택된 리포트</span>
               {selectedReport ? (
                 <a className="textLink" href={reportMarkdownUrl(selectedReport.id)} download={`report-${selectedReport.id}.md`}>
-                  markdown
+                  마크다운
                 </a>
               ) : null}
             </div>
             {selectedReport ? (
               <>
                 <div className="strongLine">{selectedReport.title}</div>
-                <StatRow label="date" value={selectedReport.report_date} />
-                <StatRow label="model_version" value={<span className="muted">{selectedReport.model_version}</span>} />
-                <StatRow label="strategy_version" value={<span className="muted">{selectedReport.strategy_version}</span>} />
+                <StatRow label="날짜" value={selectedReport.report_date} />
+                <StatRow label="모델 버전" value={<span className="muted">{selectedReport.model_version}</span>} />
+                <StatRow label="전략 버전" value={<span className="muted">{selectedReport.strategy_version}</span>} />
                 <pre className="markdownPreview">{selectedReport.markdown}</pre>
               </>
             ) : (

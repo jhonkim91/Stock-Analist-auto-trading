@@ -129,18 +129,27 @@ def test_broker_sell_preview_only_checks_existing_long_position(client):
     assert _orders_count() == 0
 
 
-def test_kis_order_routes_are_registered_but_disabled(client):
+def test_kis_order_routes_are_registered_but_gated_off_by_default(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
-    assert "/api/kis/orders" in route_paths
+    assert "/api/kis/orders/status" in route_paths
     assert "/api/kis/orders/preview" in route_paths
+    assert "/api/kis/orders/submit" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    orders = client.get("/api/kis/orders")
+    status = client.get("/api/kis/orders/status")
     preview = client.post("/api/kis/orders/preview", json={"symbol": "005930"})
-    assert orders.status_code == 200
+    submit = client.post("/api/kis/orders/submit", json={"symbol": "005930", "confirm": True})
+    assert status.status_code == 200
     assert preview.status_code == 200
-    assert orders.json()["network_call_performed"] is False
+    assert submit.status_code == 200
+    # 기본(라이브 토글/자격증명 없음): 게이트 차단 — 네트워크/실주문 없음.
+    assert status.json()["can_submit"] is False
+    assert status.json()["reason_codes"]
+    assert preview.json()["network_call_performed"] is False
     assert preview.json()["live_order_created"] is False
+    assert submit.json()["status"] == "submit_blocked"
+    assert submit.json()["network_call_performed"] is False
+    assert submit.json()["live_order_created"] is False
     assert client.get("/api/kis/broker/status").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
 

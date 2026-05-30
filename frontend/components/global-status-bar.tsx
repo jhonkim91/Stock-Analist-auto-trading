@@ -15,7 +15,7 @@ const emptyStatus: GlobalStatus = {
   regime: null,
   session: null,
   broker: null,
-  message: "status loading"
+  message: "상태 불러오는 중"
 };
 
 function regimeTone(regime: string | undefined) {
@@ -67,8 +67,8 @@ export function GlobalStatusBar() {
       broker: brokerResult.status === "fulfilled" ? brokerResult.value : null,
       message:
         regimeResult.status === "fulfilled" || sessionResult.status === "fulfilled" || brokerResult.status === "fulfilled"
-          ? "status ready"
-          : "status unavailable"
+          ? "상태 준비됨"
+          : "상태 사용 불가"
     });
   }, []);
 
@@ -87,14 +87,14 @@ export function GlobalStatusBar() {
   const canSubmit = status.broker?.can_submit ?? false;
 
   return (
-    <div className="gbar" aria-label="Global market and safety status" role="status">
+    <div className="gbar" aria-label="전역 시장 및 안전 상태" role="status">
       <span className={`gbar-pill gbar-${regimeTone(regime)}`}>
         <TrendIcon />
         {regime}
       </span>
       <div className="gbar-sep" />
       <span className="gbar-txt">
-        regime score <strong>{formatRatio(status.regime?.market_score)}</strong>
+        시장 점수 <strong>{formatRatio(status.regime?.market_score)}</strong>
       </span>
       <div className="gbar-sep" />
       <span className="gbar-txt">
@@ -102,13 +102,13 @@ export function GlobalStatusBar() {
       </span>
       <div className="gbar-sep" />
       <span className="gbar-txt">
-        {benchmark} <strong>benchmark</strong>
+        {benchmark} <strong>벤치마크</strong>
       </span>
       <div className="gbar-sep" />
       <span className="gbar-txt">{tradeDate}</span>
       <span className={canSubmit && !previewOnly ? "gbar-pill gbar-err" : "gbar-pill gbar-err gbar-lock"}>
         <LockIcon />
-        {previewOnly || !canSubmit ? "no real orders" : "submit gate open"}
+        {previewOnly || !canSubmit ? "실주문 없음" : "제출 게이트 열림"}
       </span>
       <span className="gbar-txt compactOnly">{status.message}</span>
     </div>

@@ -6,7 +6,16 @@
 - Next.js를 **정적 사이트로 export**(`output: "export"` → `frontend/out`)
 - FastAPI가 동일 오리진(127.0.0.1:8000)에서 **UI와 `/api/*`를 함께 서빙**
 - 프론트엔드는 절대 URL 없이 상대 경로(`/api/...`)로 백엔드를 호출
+- **pywebview 네이티브 창**(Windows: WebView2)에 띄워 일반 Windows 프로그램처럼 동작
+  (콘솔창/브라우저 탭 없음). pywebview가 없으면 기본 브라우저로 폴백.
 - PyInstaller로 **단일 `.exe`** 패키징 → 최종 사용자는 Python/Node 설치 불필요
+
+## UI / 테마
+
+- **모노스페이스 + 밝은 베이지 톤**을 라이트 테마로 유지하고, 동일 미감의 **다크 테마**를 추가.
+- 사이드바 하단의 **슬라이더 토글**로 라이트↔다크 전환. 선택은 `localStorage('sa-theme')`에 저장되며,
+  최초 방문 시 OS 선호(`prefers-color-scheme`)를 따른다. 페인트 이전 사전 스크립트로 깜빡임(FOUC) 없음.
+- 모든 색은 `frontend/app/globals.css`의 CSS 변수(`:root` / `[data-theme="dark"]`)로 일원화.
 
 ## 구조
 

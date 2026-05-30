@@ -36,7 +36,7 @@ function SessionCard({ title, state }: { title: string; state: VenueState }) {
     <article>
       <div className="sectionHeader">
         <h2>{title}</h2>
-        <span className={`status ${sessionTone(activeName)}`}>{activeName ?? "unknown"}</span>
+        <span className={`status ${sessionTone(activeName)}`}>{activeName ?? "알 수 없음"}</span>
       </div>
       <div className="sessionBar">
         {state.windows.map((window) => {
@@ -64,10 +64,10 @@ function SessionCard({ title, state }: { title: string; state: VenueState }) {
         </div>
         <div className="metric">
           <span>submit_policy</span>
-          <strong>preview-only</strong>
+          <strong>미리보기 전용</strong>
         </div>
       </div>
-      <p className="muted">{state.session?.reason_codes.join(", ") || "preview metadata only · no real submit"}</p>
+      <p className="muted">{state.session?.reason_codes.join(", ") || "미리보기 메타데이터 전용 · 실제 제출 없음"}</p>
     </article>
   );
 }
@@ -112,18 +112,18 @@ export default function SessionsPage() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Session Preview</p>
-          <h1>Market Sessions</h1>
+          <p className="eyebrow">세션 미리보기</p>
+          <h1>장 세션</h1>
         </div>
         <nav className="nav">
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/data">Data</Link>
-          <Link href="/screener">Screener</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/backtest">Backtest</Link>
-          <Link href="/portfolio">Portfolio</Link>
-          <Link href="/paper">Paper</Link>
-          <Link href="/settings">Settings</Link>
+          <Link href="/dashboard">대시보드</Link>
+          <Link href="/data">데이터</Link>
+          <Link href="/screener">스크리너</Link>
+          <Link href="/reports">리포트</Link>
+          <Link href="/backtest">백테스트</Link>
+          <Link href="/portfolio">포트폴리오</Link>
+          <Link href="/paper">모의투자</Link>
+          <Link href="/settings">설정</Link>
         </nav>
         <StatusPill status={status} text={message} />
       </header>

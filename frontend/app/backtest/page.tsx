@@ -48,7 +48,7 @@ export default function BacktestPage() {
   const [selectedRun, setSelectedRun] = useState<BacktestRun | null>(null);
   const [strategyCatalog, setStrategyCatalog] = useState<StrategyMetadata[]>([]);
   const [strategySummary, setStrategySummary] = useState<StrategyValidationSummary | null>(null);
-  const [summaryMessage, setSummaryMessage] = useState("summary 조회 중");
+  const [summaryMessage, setSummaryMessage] = useState("요약 조회 중");
   const [strategyName, setStrategyName] = useState("");
   const [topN, setTopN] = useState(5);
   const [maxPositions, setMaxPositions] = useState(5);
@@ -91,10 +91,10 @@ export default function BacktestPage() {
     try {
       const data = await callApi<StrategyValidationSummary>("/api/backtest/strategy-summary?lookback_days=252");
       setStrategySummary(data);
-      setSummaryMessage(`summary ${data.window.available_trading_days}/${data.lookback_days} trading days`);
+      setSummaryMessage(`요약 ${data.window.available_trading_days}/${data.lookback_days} 거래일`);
     } catch (error) {
       setStrategySummary(null);
-      setSummaryMessage(error instanceof Error ? error.message : "summary 조회 실패");
+      setSummaryMessage(error instanceof Error ? error.message : "요약 조회 실패");
     }
   }, []);
 
@@ -122,7 +122,7 @@ export default function BacktestPage() {
   async function runBacktest() {
     if (!strategyName) {
       setStatus("error");
-      setMessage("select a strategy");
+      setMessage("전략을 선택하세요");
       return;
     }
     setStatus("loading");
@@ -153,12 +153,12 @@ export default function BacktestPage() {
       <header className="topbar">
         <div>
           <PageIcon />
-          <h1>Backtest</h1>
+          <h1>백테스트</h1>
         </div>
         <div className="topbar-actions" title={message}>
           <span className={`status ${status}`}>{message}</span>
           <button type="button" className="primary" onClick={runBacktest} disabled={!strategyName}>
-            Run Backtest
+            백테스트 실행
           </button>
         </div>
       </header>
@@ -170,7 +170,7 @@ export default function BacktestPage() {
               <h2>설정</h2>
             </div>
             <StatRow
-              label="strategy_name"
+              label="전략"
               value={
                 <select value={strategyName} onChange={(event) => setStrategyName(event.target.value)}>
                   {strategyCatalog.map((strategy) => (
@@ -184,11 +184,11 @@ export default function BacktestPage() {
             {isRankingStrategy ? (
               <>
                 <StatRow
-                  label="top_n"
+                  label="상위 N개"
                   value={<input min={1} type="number" value={topN} onChange={(event) => setTopN(positiveInteger(event.target.value, topN))} />}
                 />
                 <StatRow
-                  label="max_positions"
+                  label="최대 보유 종목수"
                   value={
                     <input
                       min={1}
@@ -201,7 +201,7 @@ export default function BacktestPage() {
               </>
             ) : null}
             <StatRow
-              label="weighting"
+              label="비중 방식"
               value={
                 <select value={weighting} onChange={(event) => setWeighting(event.target.value as PortfolioWeighting)}>
                   {weightingOptions.map((option) => (
@@ -218,30 +218,30 @@ export default function BacktestPage() {
             <div className="sectionHeader">
               <h2>최근 실행 메트릭</h2>
             </div>
-            <StatRow label="total_return" value={formatPercent(selectedRun?.metrics.total_return)} tone={(selectedRun?.metrics.total_return ?? 0) >= 0 ? "pos" : "neg"} />
-            <StatRow label="cagr" value={formatPercent(selectedRun?.metrics.cagr)} tone={(selectedRun?.metrics.cagr ?? 0) >= 0 ? "pos" : "neg"} />
-            <StatRow label="max_drawdown" value={formatPercent(selectedRun?.metrics.max_drawdown)} tone="neg" />
-            <StatRow label="win_rate" value={formatPercent(selectedRun?.metrics.win_rate)} tone="pos" />
-            <StatRow label="profit_factor" value={formatNumber(selectedRun?.metrics.profit_factor, 2)} tone="pos" />
-            <StatRow label="trade_count" value={formatNumber(selectedRun?.metrics.trade_count)} />
+            <StatRow label="총수익률" value={formatPercent(selectedRun?.metrics.total_return)} tone={(selectedRun?.metrics.total_return ?? 0) >= 0 ? "pos" : "neg"} />
+            <StatRow label="연복리수익률(CAGR)" value={formatPercent(selectedRun?.metrics.cagr)} tone={(selectedRun?.metrics.cagr ?? 0) >= 0 ? "pos" : "neg"} />
+            <StatRow label="최대낙폭(MDD)" value={formatPercent(selectedRun?.metrics.max_drawdown)} tone="neg" />
+            <StatRow label="승률" value={formatPercent(selectedRun?.metrics.win_rate)} tone="pos" />
+            <StatRow label="손익비" value={formatNumber(selectedRun?.metrics.profit_factor, 2)} tone="pos" />
+            <StatRow label="거래수" value={formatNumber(selectedRun?.metrics.trade_count)} />
           </article>
         </div>
 
         <article className="mockTableCard">
           <div className="sectionHeader">
-            <h2>252D Validation Summary</h2>
-            <span className="muted">baseline: {strategySummary?.baseline.status ?? "unspecified"}</span>
+            <h2>252일 검증 요약</h2>
+            <span className="muted">벤치마크: {strategySummary?.baseline.status ?? "미지정"}</span>
           </div>
           <div className="tableWrap">
           <table className="tbl">
             <thead>
               <tr>
-                <th>strategy</th>
-                <th>pass_rate</th>
-                <th>trades</th>
-                <th>win_rate</th>
-                <th>return</th>
-                <th>mdd</th>
+                <th>전략</th>
+                <th>통과율</th>
+                <th>거래수</th>
+                <th>승률</th>
+                <th>수익률</th>
+                <th>최대낙폭(MDD)</th>
               </tr>
             </thead>
             <tbody>
@@ -263,18 +263,18 @@ export default function BacktestPage() {
 
         <article className="mockTableCard">
           <div className="sectionHeader">
-            <h2>Run History (최근 20건)</h2>
+            <h2>실행 이력 (최근 20건)</h2>
           </div>
           <div className="tableWrap">
           <table className="tbl">
             <thead>
               <tr>
-                <th style={{ width: "28%" }}>run_id</th>
-                <th>strategy</th>
-                <th>return</th>
-                <th>mdd</th>
-                <th>win_rate</th>
-                <th>trades</th>
+                <th style={{ width: "28%" }}>실행 ID</th>
+                <th>전략</th>
+                <th>수익률</th>
+                <th>최대낙폭(MDD)</th>
+                <th>승률</th>
+                <th>거래수</th>
               </tr>
             </thead>
             <tbody>

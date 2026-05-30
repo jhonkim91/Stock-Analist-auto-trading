@@ -206,12 +206,12 @@ export default function MarketPage() {
       <header className="topbar">
         <div>
           <PageIcon />
-          <h1>Market</h1>
+          <h1>마켓</h1>
         </div>
         <div className="topbar-actions" title={message}>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="symbol / name" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="종목코드 / 종목명" />
           <button type="button" className="primary" onClick={() => loadMarket(symbol, query)}>
-            Search
+            검색
           </button>
           <span className={`status ${status}`}>{message}</span>
         </div>
@@ -219,10 +219,10 @@ export default function MarketPage() {
 
       <section className="scroll">
         <div className="g4">
-          <Kpi label="close" value={formatNumber(quote?.close)} tone={changeTone} />
-          <Kpi label="change" value={formatNumber(quote?.change, 2)} tone={changeTone} />
-          <Kpi label="change_pct" value={formatPercent(quote?.change_pct)} tone={changeTone} />
-          <Kpi label="volume" value={formatNumber(quote?.volume)} />
+          <Kpi label="종가" value={formatNumber(quote?.close)} tone={changeTone} />
+          <Kpi label="전일대비" value={formatNumber(quote?.change, 2)} tone={changeTone} />
+          <Kpi label="등락률" value={formatPercent(quote?.change_pct)} tone={changeTone} />
+          <Kpi label="거래량" value={formatNumber(quote?.volume)} />
         </div>
 
         <div className="g2">
@@ -231,17 +231,17 @@ export default function MarketPage() {
               <span className="card-title">{detail?.symbol.name ?? symbol}</span>
               <span className="bdg bdg-info">{detail?.symbol.symbol ?? symbol}</span>
             </div>
-            <StatRow label="sector" value={detail?.symbol.sector ?? "-"} />
-            <StatRow label="industry" value={detail?.symbol.industry ?? "-"} />
-            <StatRow label="exchange" value={detail?.symbol.exchange ?? "-"} />
-            <StatRow label="trade_date" value={quote?.trade_date ?? "-"} />
-            <StatRow label="sma20" value={formatNumber(detail?.indicator?.sma20)} />
-            <StatRow label="rs_score" value={formatNumber(detail?.indicator?.relative_strength_score, 2)} />
+            <StatRow label="섹터" value={detail?.symbol.sector ?? "-"} />
+            <StatRow label="산업" value={detail?.symbol.industry ?? "-"} />
+            <StatRow label="거래소" value={detail?.symbol.exchange ?? "-"} />
+            <StatRow label="거래일" value={quote?.trade_date ?? "-"} />
+            <StatRow label="SMA20" value={formatNumber(detail?.indicator?.sma20)} />
+            <StatRow label="상대강도 점수" value={formatNumber(detail?.indicator?.relative_strength_score, 2)} />
           </article>
 
           <article>
             <div className="card-hd">
-              <span className="card-title">chart</span>
+              <span className="card-title">차트</span>
               <span className="muted">{chart?.bars.at(-1)?.trade_date ?? "-"}</span>
             </div>
             <LineChart bars={chart?.bars ?? []} />
@@ -252,17 +252,17 @@ export default function MarketPage() {
           <article className="mockTableCard">
             <div className="sectionHeader">
               <h2>검색 결과</h2>
-              <span className="muted">{searchRows.length} rows</span>
+              <span className="muted">{searchRows.length}건</span>
             </div>
             <div className="tableWrap">
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>symbol</th>
-                    <th>name</th>
-                    <th>sector</th>
-                    <th>score</th>
-                    <th>grade</th>
+                    <th>종목코드</th>
+                    <th>종목명</th>
+                    <th>섹터</th>
+                    <th>점수</th>
+                    <th>등급</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -293,11 +293,11 @@ export default function MarketPage() {
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>rank</th>
-                    <th>symbol</th>
-                    <th>strategy</th>
-                    <th>metric</th>
-                    <th>state</th>
+                    <th>순위</th>
+                    <th>종목코드</th>
+                    <th>전략</th>
+                    <th>지표값</th>
+                    <th>상태</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -324,18 +324,18 @@ export default function MarketPage() {
 
         <article>
           <div className="sectionHeader">
-            <h2>strategy signals</h2>
+            <h2>전략 신호</h2>
             <span className="bdg bdg-fail">실거래 아님</span>
           </div>
           <div className="tableWrap">
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>strategy</th>
-                  <th>grade</th>
-                  <th>score</th>
-                  <th>R/R</th>
-                  <th>reason</th>
+                  <th>전략</th>
+                  <th>등급</th>
+                  <th>점수</th>
+                  <th>손익비</th>
+                  <th>근거</th>
                 </tr>
               </thead>
               <tbody>

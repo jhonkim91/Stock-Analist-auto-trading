@@ -276,6 +276,11 @@ def build_exe() -> None:
     if setup_required():
         print("[launcher] .exe 빌드 전 setup(의존성/정적 export)을 먼저 실행합니다.")
         setup_environment()
+    # 런타임 의존성(pywebview 등)을 보장하고 PyInstaller를 설치한다.
+    run_checked(
+        [str(VENV_PYTHON), "-m", "pip", "install", "-r", "requirements.txt"],
+        cwd=PROJECT_ROOT,
+    )
     run_checked(
         [str(VENV_PYTHON), "-m", "pip", "install", "pyinstaller"],
         cwd=PROJECT_ROOT,

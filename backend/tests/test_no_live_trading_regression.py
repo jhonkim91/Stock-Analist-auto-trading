@@ -31,25 +31,25 @@ def test_live_adapter_methods_are_unreachable():
         assert payload["reason"] == LIVE_DISABLED_REASON
 
 
-def test_kis_execution_routes_are_registered_but_remain_disabled(client):
+def test_kis_execution_routes_are_registered_but_gated_off_by_default(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
 
     assert "/api/live/status" in route_paths
-    assert "/api/kis/orders" in route_paths
+    assert "/api/kis/orders/status" in route_paths
     assert "/api/kis/orders/submit" in route_paths
     assert "/api/kis/orders/cancel" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
-    submit = client.post("/api/kis/orders/submit", json={"symbol": "005930"})
+    submit = client.post("/api/kis/orders/submit", json={"symbol": "005930", "confirm": True})
     cancel = client.post("/api/kis/orders/cancel", json={"broker_order_id": "live-1", "confirm": True})
     assert submit.status_code == 200
     assert cancel.status_code == 200
-    for payload in (submit.json(), cancel.json()):
-        assert payload["status"] == "live_disabled"
-        assert payload["route_registered"] is True
-        assert payload["live_order_created"] is False
-        assert payload["network_call_performed"] is False
-        assert payload["endpoint_called"] is False
+    assert submit.json()["status"] == "submit_blocked"
+    assert submit.json()["live_order_created"] is False
+    assert submit.json()["network_call_performed"] is False
+    assert cancel.json()["status"] == "cancel_blocked"
+    assert cancel.json()["live_order_created"] is False
+    assert cancel.json()["network_call_performed"] is False
     assert client.get("/api/kis/broker/status").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
 
@@ -155,7 +155,7 @@ def test_frontend_paper_controls_do_not_reference_live_execution_routes():
     combined = "\n".join(path.read_text(encoding="utf-8") for path in frontend_files)
 
     assert "실거래 아님" in combined
-    assert "paper only" in combined
+    assert "모의투자" in combined
     assert "/api/kis/orders" not in combined
     assert "/api/kis/broker" not in combined
     assert "/api/kis/websocket" not in combined

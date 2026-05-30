@@ -103,31 +103,40 @@ def test_broker_preview_includes_order_specific_live_safety_without_live_route(m
     assert "LIVE_ORDER_NOTIONAL_EXCEEDS_LIMIT" in safety["request_blockers"]
 
 
-def test_live_execution_routes_are_registered_but_hard_disabled(client):
+def test_live_execution_routes_are_registered_and_gated_off_by_default(client):
+    """라이브 라우트는 등록되어 있으나 기본 환경에서는 모든 게이트가 꺼져 실주문/네트워크가 없다."""
     route_paths = {getattr(route, "path", "") for route in app.routes}
 
     assert "/api/live/status" in route_paths
-    assert "/api/kis/orders" in route_paths
+    assert "/api/kis/orders/status" in route_paths
     assert "/api/kis/orders/preview" in route_paths
     assert "/api/kis/orders/submit" in route_paths
     assert "/api/kis/orders/cancel" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
 
-    for response in (
-        client.get("/api/live/status"),
-        client.get("/api/kis/orders"),
-        client.post("/api/kis/orders/preview", json={"symbol": "005930"}),
-        client.post("/api/kis/orders/submit", json={"symbol": "005930"}),
-        client.post("/api/kis/orders/cancel", json={"broker_order_id": "live-1", "confirm": True}),
-    ):
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["status"] == "live_disabled"
-        assert payload["route_registered"] is True
-        assert payload["live_order_created"] is False
-        assert payload["network_call_performed"] is False
-        assert payload["endpoint_called"] is False
+    live_status = client.get("/api/live/status")
+    kis_status = client.get("/api/kis/orders/status")
+    assert live_status.status_code == 200
+    assert kis_status.status_code == 200
+    assert live_status.json()["can_submit"] is False
+    assert kis_status.json()["can_submit"] is False
+    assert "LIVE_TRADING_DISABLED" in kis_status.json()["reason_codes"]
+    assert "ENABLE_REAL_ORDER_REQUIRED" in kis_status.json()["reason_codes"]
+
+    # confirm=True여도 게이트(토글/자격증명)가 꺼져 있으면 차단되고 네트워크가 발생하지 않는다.
+    submit = client.post(
+        "/api/kis/orders/submit",
+        json={"symbol": "005930", "side": "buy", "qty": 1, "limit_price": 70000, "confirm": True},
+    )
+    cancel = client.post("/api/kis/orders/cancel", json={"broker_order_id": "live-1", "confirm": True})
+    assert submit.status_code == 200
+    assert cancel.status_code == 200
+    assert submit.json()["status"] == "submit_blocked"
+    assert submit.json()["live_order_created"] is False
+    assert submit.json()["network_call_performed"] is False
+    assert cancel.json()["status"] == "cancel_blocked"
+    assert cancel.json()["network_call_performed"] is False
 
     assert client.get("/api/kis/broker/status").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404

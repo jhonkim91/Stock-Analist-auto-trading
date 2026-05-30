@@ -367,15 +367,16 @@ def test_settings_read_api_and_secret_key_redaction(client, tmp_path):
     assert "token_value" not in data["risk"]["nested"]
 
 
-def test_runtime_env_toggle_is_process_only_and_allowlisted(client, monkeypatch):
+def test_runtime_env_toggle_persists_to_file_and_is_allowlisted(client, monkeypatch):
     monkeypatch.delenv("PAPER_TRADING_ENABLED", raising=False)
 
     status = client.get("/api/settings/runtime-env")
     assert status.status_code == 200
     payload = status.json()
     assert payload["scope"] == "process"
-    assert payload["persistence"] == "process_only"
-    assert payload["file_write_performed"] is False
+    # 사용자가 UI에서 켠 값은 runtime_env.json에 영속되어 재시작에도 유지된다.
+    assert payload["persistence"] == "file"
+    assert payload["file_write_performed"] is True
     assert payload["secrets_redacted"] is True
     names = {item["name"] for item in payload["toggles"]}
     assert "PAPER_TRADING_ENABLED" in names
@@ -399,17 +400,21 @@ def test_runtime_env_toggle_is_process_only_and_allowlisted(client, monkeypatch)
     assert updated_payload["ok"] is True
     assert updated_payload["enabled"] is True
     assert updated_payload["network_call_performed"] is False
-    assert updated_payload["file_write_performed"] is False
+    assert updated_payload["persistence"] == "file"
+    assert updated_payload["file_write_performed"] is True
     assert os.environ["PAPER_TRADING_ENABLED"] == "true"
 
 
-def test_runtime_env_toggle_keeps_live_order_locked_false(client, monkeypatch):
+def test_runtime_env_toggle_can_enable_real_order_high_risk(client, monkeypatch):
+    """잠금 해제 후: ENABLE_REAL_ORDER는 고위험 토글로 실제로 켤 수 있다(확인값 필요)."""
     monkeypatch.setenv("ENABLE_REAL_ORDER", "false")
 
     status = client.get("/api/settings/runtime-env")
     live_toggle = next(item for item in status.json()["toggles"] if item["name"] == "ENABLE_REAL_ORDER")
     assert live_toggle["can_toggle"] is True
-    assert "false로만 강제 적용" in live_toggle["description"]
+    assert live_toggle["false_locked"] is False
+    assert live_toggle["high_impact"] is True
+    assert live_toggle["category"] == "live"
 
     enabled = client.post(
         "/api/settings/runtime-env/toggle",
@@ -417,10 +422,10 @@ def test_runtime_env_toggle_keeps_live_order_locked_false(client, monkeypatch):
     )
     assert enabled.status_code == 200
     assert enabled.json()["ok"] is True
-    assert enabled.json()["status"] == "locked_false_applied"
-    assert enabled.json()["enabled"] is False
-    assert enabled.json()["reason_codes"] == ["LIVE_ENV_FORCED_FALSE"]
-    assert os.environ["ENABLE_REAL_ORDER"] == "false"
+    assert enabled.json()["status"] == "updated"
+    assert enabled.json()["enabled"] is True
+    assert enabled.json()["file_write_performed"] is True
+    assert os.environ["ENABLE_REAL_ORDER"] == "true"
 
     disabled = client.post(
         "/api/settings/runtime-env/toggle",
@@ -428,6 +433,7 @@ def test_runtime_env_toggle_keeps_live_order_locked_false(client, monkeypatch):
     )
     assert disabled.status_code == 200
     assert disabled.json()["ok"] is True
+    assert disabled.json()["enabled"] is False
     assert os.environ["ENABLE_REAL_ORDER"] == "false"
 
 

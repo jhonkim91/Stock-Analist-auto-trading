@@ -18,9 +18,10 @@ import {
 } from "../../lib/api";
 import { getNotificationStatus, sendNotificationTest } from "../../lib/notificationApi";
 import { getBotStatus, getPaperStatus } from "../../lib/paperApi";
+import { EnvironmentSettings } from "../../components/environment-settings";
 
 const sections = ["strategies", "risk", "backtest", "app"] as const;
-const envCategoryOrder = ["paper", "bot", "broker", "kis", "telegram", "reports", "notifications", "locked"] as const;
+const envCategoryOrder = ["paper", "bot", "broker", "kis", "telegram", "reports", "notifications", "live", "locked"] as const;
 const fallbackEnvPresets: RuntimeEnvPreset[] = [
   {
     name: "paper_kis_ready",
@@ -109,16 +110,56 @@ const fallbackEnvToggles: RuntimeEnvToggle[] = [
 
 function categoryTitle(category: string) {
   const labels: Record<string, string> = {
-    paper: "Paper",
-    bot: "Bot",
-    broker: "Broker",
+    paper: "모의투자",
+    bot: "자동매매봇",
+    broker: "브로커",
     kis: "KIS",
-    telegram: "Telegram",
-    reports: "Reports",
-    notifications: "Notifications",
-    locked: "Locked"
+    telegram: "텔레그램",
+    reports: "리포트",
+    notifications: "알림",
+    live: "라이브 (실거래·고위험)",
+    locked: "잠금"
   };
   return labels[category] ?? category;
+}
+
+// 토글 라벨(영문)을 ENV 이름 기준으로 한글로 표시한다. API/폴백 라벨과 무관하게 일관 표기.
+const ENV_LABELS_KO: Record<string, string> = {
+  PAPER_TRADING_ENABLED: "모의투자 사용",
+  PAPER_TRADING_CAN_CREATE: "모의 주문 생성",
+  PAPER_TRADING_NETWORK_ENABLED: "모의 네트워크 호출",
+  PAPER_TRADING_KILL_SWITCH: "모의 킬 스위치",
+  PAPER_BOT_ENABLED: "봇 사용",
+  PAPER_BOT_AUTO_SUBMIT: "봇 자동 제출",
+  PAPER_BOT_SCHEDULER_ENABLED: "봇 스케줄러",
+  PAPER_BOT_KILL_SWITCH: "봇 킬 스위치",
+  PAPER_BOT_CONFIRM: "봇 최종 확인",
+  PAPER_ORDER_SUBMIT_ENABLED: "모의 주문 제출",
+  PAPER_SYNC_WORKER_ENABLED: "모의 동기화 워커",
+  KIS_TOKEN_ISSUE_ENABLED: "KIS 토큰 발급",
+  KIS_TOKEN_CACHE_ENABLED: "KIS 토큰 캐시",
+  KIS_MARKET_QUOTE_ENABLED: "KIS 현재가 사용",
+  KIS_WEBSOCKET_APPROVAL_ENABLED: "KIS 웹소켓 승인",
+  PAPER_WEBSOCKET_ENABLED: "모의 웹소켓",
+  PAPER_WEBSOCKET_CONNECT_ENABLED: "모의 웹소켓 연결",
+  TELEGRAM_BOT_ENABLED: "텔레그램 봇",
+  TELEGRAM_POLLING_ENABLED: "텔레그램 폴링",
+  TELEGRAM_POLLING_SEND_REPLIES: "텔레그램 응답 전송",
+  TELEGRAM_REPORT_SCHEDULER_ENABLED: "리포트 스케줄러",
+  TELEGRAM_PRE_MARKET_REPORT_ENABLED: "장 시작 전 리포트",
+  TELEGRAM_POST_MARKET_REPORT_ENABLED: "장 종료 후 리포트",
+  TELEGRAM_WEEKLY_REPORT_ENABLED: "주간 리포트",
+  TELEGRAM_REPORT_DRY_RUN: "텔레그램 리포트 드라이런",
+  REPORT_AUTOMATION_ENABLED: "리포트 자동화",
+  REPORT_AUTOMATION_DRY_RUN: "리포트 드라이런",
+  REPORT_AUTOMATION_NOTIFY: "리포트 알림 전송",
+  NOTIFICATIONS_ENABLED: "알림 사용",
+  NOTIFICATIONS_DEFAULT_DRY_RUN: "알림 드라이런",
+  ENABLE_REAL_ORDER: "실계좌 주문 잠금"
+};
+
+function envLabelKo(toggle: RuntimeEnvToggle): string {
+  return ENV_LABELS_KO[toggle.name] ?? toggle.label;
 }
 
 function PageIcon() {
@@ -323,7 +364,7 @@ export default function SettingsPage() {
       <header className="topbar">
         <div>
           <PageIcon />
-          <h1>Settings</h1>
+          <h1>설정</h1>
         </div>
         <div className="topbar-actions" title={message}>
           <span className={`status ${status}`}>{message}</span>
@@ -338,7 +379,7 @@ export default function SettingsPage() {
 
         <article className="envPanel">
           <div className="card-hd">
-            <span className="card-title">Runtime env</span>
+            <span className="card-title">런타임 환경</span>
             <span className="status ok" title={envMessage}>
               {runtimeEnv?.persistence ?? "process_only"}
             </span>
@@ -371,13 +412,13 @@ export default function SettingsPage() {
                   const disabled = envUpdating === toggle.name;
                   return (
                     <div className="envToggleRow" key={toggle.name} title={tooltip}>
-                      <div className="envToggleMeta">
-                        <span className="envToggleLabel">{toggle.label}</span>
+                      <div className="envToggleMeta" data-tooltip={tooltip} tabIndex={0}>
+                        <span className="envToggleLabel">{envLabelKo(toggle)}</span>
                         <span className="envToggleName">{toggle.name}</span>
                       </div>
                       <div className="envToggleControls">
-                        {toggle.high_impact ? <span className="badge gradeC">gate</span> : null}
-                        {toggle.false_locked ? <span className="badge fail">locked</span> : null}
+                        {toggle.high_impact ? <span className="badge gradeC">게이트</span> : null}
+                        {toggle.false_locked ? <span className="badge fail">잠금</span> : null}
                         <button
                           className={`envSwitch ${toggle.enabled ? "on" : "off"}`}
                           disabled={disabled}
@@ -398,38 +439,40 @@ export default function SettingsPage() {
           <div className="envMessage">{envMessage}</div>
         </article>
 
+        <EnvironmentSettings />
+
         <div className="g3">
           <article>
             <div className="card-hd">
-              <span className="card-title">Paper summary</span>
+              <span className="card-title">모의투자 요약</span>
             </div>
-            <StatRow label="mode" value={paperStatus?.mode ?? "disabled"} />
-            <StatRow label="enabled" value={String(paperStatus?.enabled ?? "-")} tone={boolTone(paperStatus?.enabled)} />
-            <StatRow label="preview_only" value={String(paperStatus?.preview_only ?? "-")} tone={boolTone(paperStatus?.preview_only)} />
-            <StatRow label="kill_switch" value={String(paperStatus?.kill_switch.blocking ?? "-")} tone={boolTone(paperStatus?.kill_switch.blocking, false)} />
+            <StatRow label="모드" value={paperStatus?.mode ?? "disabled"} />
+            <StatRow label="활성" value={String(paperStatus?.enabled ?? "-")} tone={boolTone(paperStatus?.enabled)} />
+            <StatRow label="미리보기 전용" value={String(paperStatus?.preview_only ?? "-")} tone={boolTone(paperStatus?.preview_only)} />
+            <StatRow label="킬 스위치" value={String(paperStatus?.kill_switch.blocking ?? "-")} tone={boolTone(paperStatus?.kill_switch.blocking, false)} />
           </article>
 
           <article>
             <div className="card-hd">
-              <span className="card-title">Notification summary</span>
+              <span className="card-title">알림 요약</span>
               <button data-tooltip={notificationDryRunTooltip} title={notificationDryRunTooltip} type="button" onClick={runNotificationTest}>
-                dry-run
+                드라이런
               </button>
             </div>
-            <StatRow label="enabled" value={String(notifications?.enabled ?? "-")} tone={boolTone(notifications?.enabled)} />
-            <StatRow label="dry_run" value={String(notifications?.default_dry_run ?? "-")} tone={boolTone(notifications?.default_dry_run)} />
-            <StatRow label="redacted" value={String(notifications?.secrets_redacted ?? "-")} tone={boolTone(notifications?.secrets_redacted)} />
-            <StatRow label="test_status" value={notificationTest?.status ?? notificationTestStatus} />
+            <StatRow label="활성" value={String(notifications?.enabled ?? "-")} tone={boolTone(notifications?.enabled)} />
+            <StatRow label="드라이런" value={String(notifications?.default_dry_run ?? "-")} tone={boolTone(notifications?.default_dry_run)} />
+            <StatRow label="비밀값 마스킹" value={String(notifications?.secrets_redacted ?? "-")} tone={boolTone(notifications?.secrets_redacted)} />
+            <StatRow label="테스트 상태" value={notificationTest?.status ?? notificationTestStatus} />
           </article>
 
           <article>
             <div className="card-hd">
-              <span className="card-title">Bot summary</span>
+              <span className="card-title">봇 요약</span>
             </div>
-            <StatRow label="runtime_enabled" value={String(botStatus?.enabled ?? "-")} tone={boolTone(botStatus?.enabled)} />
-            <StatRow label="kill_switch" value={String(botStatus?.kill_switch_enabled ?? "-")} tone={boolTone(botStatus?.kill_switch_enabled, false)} />
-            <StatRow label="auto_submit_allowed" value={String(botStatus?.auto_submit_allowed ?? "-")} tone={boolTone(botStatus?.auto_submit_allowed)} />
-            <StatRow label="paper only" value="실거래 아님" tone="pos" />
+            <StatRow label="실행 활성" value={String(botStatus?.enabled ?? "-")} tone={boolTone(botStatus?.enabled)} />
+            <StatRow label="킬 스위치" value={String(botStatus?.kill_switch_enabled ?? "-")} tone={boolTone(botStatus?.kill_switch_enabled, false)} />
+            <StatRow label="자동 제출 허용" value={String(botStatus?.auto_submit_allowed ?? "-")} tone={boolTone(botStatus?.auto_submit_allowed)} />
+            <StatRow label="실거래 아님" value="실거래 아님" tone="pos" />
           </article>
         </div>
 

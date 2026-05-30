@@ -168,7 +168,7 @@ export default function DataPage() {
       <header className="topbar">
         <div>
           <PageIcon />
-          <h1>Data Quality</h1>
+          <h1>데이터 품질</h1>
         </div>
         <div className="topbar-actions" title={message}>
           <span className="muted">Phase 3B</span>
@@ -178,18 +178,18 @@ export default function DataPage() {
 
       <section className="scroll">
         <div className="g4">
-          <Kpi label="daily_rows" value={formatNumber(summary?.row_counts.daily_ohlcv)} />
-          <Kpi label="active_symbols" value={formatNumber(summary?.row_counts.active_symbols)} />
-          <Kpi label="coverage" value={coverageRatio === null || coverageRatio === undefined ? "-" : `${formatNumber(coverageRatio * 100, 1)}%`} tone="pos" />
-          <Kpi label="safety_closed" value={String(safetyClosed)} tone={safetyClosed ? "pos" : "neg"} />
+          <Kpi label="일별 행 수" value={formatNumber(summary?.row_counts.daily_ohlcv)} />
+          <Kpi label="활성 종목 수" value={formatNumber(summary?.row_counts.active_symbols)} />
+          <Kpi label="커버리지" value={coverageRatio === null || coverageRatio === undefined ? "-" : `${formatNumber(coverageRatio * 100, 1)}%`} tone="pos" />
+          <Kpi label="안전 차단" value={String(safetyClosed)} tone={safetyClosed ? "pos" : "neg"} />
         </div>
 
         <div className="g2">
           <article>
             <div className="card-hd">
-              <span className="card-title">CSV Validation</span>
+              <span className="card-title">CSV 검증</span>
               <button type="button" onClick={validateCsv}>
-                Validate CSV
+                CSV 검증
               </button>
             </div>
             <div className="mockFilters">
@@ -204,7 +204,7 @@ export default function DataPage() {
             </div>
             <div className="mockButtonRow">
               <button type="button" className="secondary" disabled={!validationRun?.can_confirm} onClick={confirmImport}>
-                Confirm Import
+                가져오기 확정
               </button>
               <StatusPill status={actionStatus} text={actionMessage} />
             </div>
@@ -212,15 +212,15 @@ export default function DataPage() {
 
           <article>
             <div className="card-hd">
-              <span className="card-title">Source Freshness</span>
+              <span className="card-title">소스 최신성</span>
             </div>
             <div className="tableWrap">
               <table className="tbl mockCompactTable">
                 <thead>
                   <tr>
-                    <th>source_id</th>
-                    <th>freshness</th>
-                    <th>lag</th>
+                    <th>소스 ID</th>
+                    <th>최신성</th>
+                    <th>지연</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -243,21 +243,21 @@ export default function DataPage() {
 
         <article className="mockTableCard">
           <div className="card-hd">
-            <span className="card-title">Import History</span>
+            <span className="card-title">가져오기 이력</span>
             <span className="muted">최근 20건</span>
           </div>
           <div className="tableWrap">
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>run_id</th>
-                  <th>source_id</th>
-                  <th>status</th>
-                  <th>can_confirm</th>
-                  <th>rows</th>
-                  <th>errors</th>
-                  <th>warnings</th>
-                  <th>created_at</th>
+                  <th>실행 ID</th>
+                  <th>소스 ID</th>
+                  <th>상태</th>
+                  <th>확정 가능</th>
+                  <th>행 수</th>
+                  <th>오류</th>
+                  <th>경고</th>
+                  <th>생성 시각</th>
                 </tr>
               </thead>
               <tbody>
@@ -266,7 +266,7 @@ export default function DataPage() {
                     <td>{run.run_id}</td>
                     <td>{run.source_id}</td>
                     <td>{run.status}</td>
-                    <td>{run.can_confirm ? "yes" : "no"}</td>
+                    <td>{run.can_confirm ? "예" : "아니오"}</td>
                     <td>{formatNumber(run.total_rows)}</td>
                     <td>{formatNumber(run.error_count)}</td>
                     <td>{formatNumber(run.warning_count)}</td>

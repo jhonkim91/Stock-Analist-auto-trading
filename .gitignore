@@ -19,5 +19,9 @@ build/
 .env*.local
 backend/data/*.db
 backend/data/*.sqlite
+# 런타임 인증/환경 산출물 — 비밀번호 해시, 토큰 서명키, 영속 env(자격증명) 절대 커밋 금지
+backend/data/users.json
+backend/data/auth_secret.key
+backend/data/runtime_env.json
 backend/reports/*.md
 *.log

@@ -168,7 +168,7 @@ export default function DashboardClient() {
             <rect height="6" width="6" x="4" y="14" />
             <rect height="6" width="6" x="14" y="14" />
           </svg>
-          <h1>Dashboard</h1>
+          <h1>대시보드</h1>
         </div>
         <div className="topbar-actions">
           <select value={selectedStrategyName} onChange={(event) => setSelectedStrategyName(event.target.value)} aria-label="strategy_name">
@@ -181,32 +181,32 @@ export default function DashboardClient() {
           <button type="button" className="primary" onClick={() => runAction("screener", "/api/screener/run", {})}>
             <PlayIcon />
             <span>
-              Run
+              스크리너
               <br />
-              Screener
+              실행
             </span>
           </button>
         </div>
       </header>
 
       <section className="dashboardContent" title={latestActionMessage ?? health.message}>
-        <section className="dashboardKpiGrid" aria-label="Dashboard KPI summary">
-          <KpiCard label="API 상태" value={<span className={`bdg ${health.status === "ok" ? "bdg-ok" : "bdg-warn"}`}>{health.status}</span>} sub={health.status === "ok" ? "healthy" : health.message} />
-          <KpiCard label="데이터 rows" value={formatNumber(dataStatus.data?.daily_ohlcv_count)} sub={`${dataStatus.data?.latest_trade_date ?? "-"} 기준`} />
-          <KpiCard label="스크리너 pass" value={`${formatNumber(screenerSummary.passed)} / ${formatNumber(screenerSummary.total)}`} sub="오늘 기준" tone={screenerSummary.passed > 0 ? "pos" : "muted"} />
-          <KpiCard label="orders_count" value={formatNumber(dataStatus.data?.orders_count)} sub="safety closed" tone="pos" />
+        <section className="dashboardKpiGrid" aria-label="대시보드 KPI 요약">
+          <KpiCard label="API 상태" value={<span className={`bdg ${health.status === "ok" ? "bdg-ok" : "bdg-warn"}`}>{health.status}</span>} sub={health.status === "ok" ? "정상" : health.message} />
+          <KpiCard label="데이터 건수" value={formatNumber(dataStatus.data?.daily_ohlcv_count)} sub={`${dataStatus.data?.latest_trade_date ?? "-"} 기준`} />
+          <KpiCard label="스크리너 통과" value={`${formatNumber(screenerSummary.passed)} / ${formatNumber(screenerSummary.total)}`} sub="오늘 기준" tone={screenerSummary.passed > 0 ? "pos" : "muted"} />
+          <KpiCard label="주문 건수" value={formatNumber(dataStatus.data?.orders_count)} sub="안전 차단" tone="pos" />
         </section>
 
         <section className="dashboardSplit">
           <article>
             <div className="sectionHeader">
               <h2>시장 국면 (regime)</h2>
-              <span className={`bdg ${regime.data?.regime === "bear" ? "bdg-fail" : "bdg-ok"}`}>{regime.data?.regime ?? "loading"}</span>
+              <span className={`bdg ${regime.data?.regime === "bear" ? "bdg-fail" : "bdg-ok"}`}>{regime.data?.regime ?? "조회 중"}</span>
             </div>
-            <StatRow label="regime" value={regime.data?.regime ?? "-"} tone={regime.data?.regime === "bear" ? "neg" : "pos"} />
-            <StatRow label="market_score" value={formatMaybeNumber(regime.data?.market_score)} />
-            <StatRow label="benchmark" value={regime.data?.benchmark ?? "-"} tone="muted" />
-            <StatRow label="trade_date" value={regime.data?.trade_date ?? "-"} tone="muted" />
+            <StatRow label="시장 국면" value={regime.data?.regime ?? "-"} tone={regime.data?.regime === "bear" ? "neg" : "pos"} />
+            <StatRow label="시장 점수" value={formatMaybeNumber(regime.data?.market_score)} />
+            <StatRow label="벤치마크" value={regime.data?.benchmark ?? "-"} tone="muted" />
+            <StatRow label="거래일" value={regime.data?.trade_date ?? "-"} tone="muted" />
             <StatRow label="close_vs_200dma" value={formatMaybePercent(regime.data?.close_vs_200dma)} tone="pos" />
             <StatRow label="sma50_vs_200dma" value={formatMaybePercent(regime.data?.sma50_vs_200dma)} tone="pos" />
           </article>
@@ -214,22 +214,22 @@ export default function DashboardClient() {
           <article>
             <div className="sectionHeader">
               <h2>최신 백테스트</h2>
-              <span className="muted">{latestBacktestRun?.strategy_name ?? "not_available"}</span>
+              <span className="muted">{latestBacktestRun?.strategy_name ?? "정보 없음"}</span>
             </div>
-            <StatRow label="total_return" value={formatMaybePercent(latestBacktestRun?.metrics.total_return)} tone={(latestBacktestRun?.metrics.total_return ?? 0) >= 0 ? "pos" : "neg"} />
-            <StatRow label="cagr" value={formatMaybePercent(latestBacktestRun?.metrics.cagr)} tone={(latestBacktestRun?.metrics.cagr ?? 0) >= 0 ? "pos" : "neg"} />
-            <StatRow label="max_drawdown" value={formatMaybePercent(latestBacktestRun?.metrics.max_drawdown)} tone="neg" />
-            <StatRow label="win_rate" value={formatMaybePercent(latestBacktestRun?.metrics.win_rate)} tone="pos" />
-            <StatRow label="trade_count" value={formatNumber(latestBacktestRun?.metrics.trade_count)} />
+            <StatRow label="총수익률" value={formatMaybePercent(latestBacktestRun?.metrics.total_return)} tone={(latestBacktestRun?.metrics.total_return ?? 0) >= 0 ? "pos" : "neg"} />
+            <StatRow label="연복리수익률(CAGR)" value={formatMaybePercent(latestBacktestRun?.metrics.cagr)} tone={(latestBacktestRun?.metrics.cagr ?? 0) >= 0 ? "pos" : "neg"} />
+            <StatRow label="최대낙폭(MDD)" value={formatMaybePercent(latestBacktestRun?.metrics.max_drawdown)} tone="neg" />
+            <StatRow label="승률" value={formatMaybePercent(latestBacktestRun?.metrics.win_rate)} tone="pos" />
+            <StatRow label="거래수" value={formatNumber(latestBacktestRun?.metrics.trade_count)} />
             <Link className="textLink mockLink" href="/backtest">
-              Backtest 페이지로 →
+              백테스트 페이지로 →
             </Link>
           </article>
         </section>
 
         <section>
           <div className="sec-lbl">빠른 실행</div>
-          <div className="actionList" aria-label="Quick backend actions">
+          <div className="actionList" aria-label="빠른 백엔드 작업">
             <button type="button" onClick={() => runAction("seed", "/api/data/seed", {})}>
               <span className="action-icon seed" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
@@ -239,7 +239,7 @@ export default function DashboardClient() {
                   <path d="M15 10l2 2-2 2" />
                 </svg>
               </span>
-              <span className="action-name">Seed Sample Data</span>
+              <span className="action-name">샘플 데이터 생성</span>
               <span className="action-desc">테스트 데이터 삽입</span>
             </button>
             <button type="button" onClick={() => runAction("indicators", "/api/indicators/recompute", {})}>
@@ -255,7 +255,7 @@ export default function DashboardClient() {
                   <path d="M15 16h.01" />
                 </svg>
               </span>
-              <span className="action-name">Recompute Indicators</span>
+              <span className="action-name">지표 재계산</span>
               <span className="action-desc">기술 지표 재계산</span>
             </button>
             <button type="button" onClick={() => runAction("report", "/api/reports/daily", {})}>
@@ -267,7 +267,7 @@ export default function DashboardClient() {
                   <path d="M9 16h4" />
                 </svg>
               </span>
-              <span className="action-name">Generate Daily Report</span>
+              <span className="action-name">일일 리포트 생성</span>
               <span className="action-desc">오늘 리포트 생성</span>
             </button>
           </div>
@@ -275,14 +275,14 @@ export default function DashboardClient() {
 
         <article>
           <div className="sectionHeader">
-            <h2>Mock Broker 상태</h2>
-            <span className="bdg bdg-fail">preview_only</span>
+            <h2>모의 브로커 상태</h2>
+            <span className="bdg bdg-fail">미리보기 전용</span>
           </div>
           <div className="brokerGrid">
-            <KpiCard label="mode" value={broker.data?.broker_mode ?? broker.data?.mode ?? "-"} />
-            <KpiCard label="can_submit" value={broker.data?.can_submit ? "true" : "false"} tone={broker.data?.can_submit ? "neg" : "pos"} />
-            <KpiCard label="live_trading" value={broker.data?.live_trading_enabled ? "enabled" : "disabled"} tone={broker.data?.live_trading_enabled ? "neg" : "pos"} />
-            <KpiCard label="paper_trading" value={broker.data?.paper_trading_enabled ? "enabled" : "disabled"} tone={broker.data?.paper_trading_enabled ? "pos" : "muted"} />
+            <KpiCard label="모드" value={broker.data?.broker_mode ?? broker.data?.mode ?? "-"} />
+            <KpiCard label="제출 가능" value={broker.data?.can_submit ? "true" : "false"} tone={broker.data?.can_submit ? "neg" : "pos"} />
+            <KpiCard label="실거래" value={broker.data?.live_trading_enabled ? "활성" : "비활성"} tone={broker.data?.live_trading_enabled ? "neg" : "pos"} />
+            <KpiCard label="모의투자" value={broker.data?.paper_trading_enabled ? "활성" : "비활성"} tone={broker.data?.paper_trading_enabled ? "pos" : "muted"} />
           </div>
         </article>
       </section>

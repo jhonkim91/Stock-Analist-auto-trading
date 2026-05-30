@@ -35,7 +35,7 @@ function DecisionRows({ decisions }: { decisions: PaperBotDecision[] }) {
           <td>{formatNumber(decision.total_score, 2)}</td>
           <td>{formatNumber(decision.qty)}</td>
           <td>{formatNumber(decision.limit_price, 2)}</td>
-          <td>{decision.risk_passed ? "pass" : "blocked"}</td>
+          <td>{decision.risk_passed ? "통과" : "차단"}</td>
           <td>{decision.paper_order_id ?? "-"}</td>
         </tr>
       ))}
@@ -124,90 +124,90 @@ export default function BotPage() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Phase 10 · 모의투자 Bot</p>
-          <h1>Paper Bot</h1>
+          <p className="eyebrow">Phase 10 · 모의 자동매매봇</p>
+          <h1>모의 자동매매봇</h1>
         </div>
         <nav className="nav">
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/data">Data</Link>
-          <Link href="/screener">Screener</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/backtest">Backtest</Link>
-          <Link href="/portfolio">Portfolio</Link>
-          <Link href="/paper">Paper</Link>
-          <Link href="/bot">Bot</Link>
-          <Link href="/settings">Settings</Link>
+          <Link href="/dashboard">대시보드</Link>
+          <Link href="/data">데이터</Link>
+          <Link href="/screener">스크리너</Link>
+          <Link href="/reports">리포트</Link>
+          <Link href="/backtest">백테스트</Link>
+          <Link href="/portfolio">포트폴리오</Link>
+          <Link href="/paper">모의투자</Link>
+          <Link href="/bot">자동매매봇</Link>
+          <Link href="/settings">설정</Link>
         </nav>
         <span className={`status ${status}`}>{message}</span>
       </header>
 
-      <PaperModeBanner title="모의투자 Bot 제어 · 실거래 아님" />
+      <PaperModeBanner title="모의 자동매매봇 제어 · 실거래 아님" />
 
       <section className="cardGrid">
         <article>
-          <h2>Bot Status</h2>
+          <h2>봇 상태</h2>
           <div className="metricGrid">
-            <Metric label="enabled" value={botStatus?.enabled} />
-            <Metric label="mode" value={botStatus?.mode} />
-            <Metric label="scheduler" value={botStatus?.scheduler_enabled} />
-            <Metric label="loop_allowed" value={botStatus?.loop_allowed} />
+            <Metric label="활성" value={botStatus?.enabled} />
+            <Metric label="모드" value={botStatus?.mode} />
+            <Metric label="스케줄러" value={botStatus?.scheduler_enabled} />
+            <Metric label="반복 실행 허용" value={botStatus?.loop_allowed} />
           </div>
         </article>
         <article>
-          <h2>Kill Switch / Submit Gate</h2>
+          <h2>킬 스위치 / 제출 게이트</h2>
           <div className="metricGrid">
-            <Metric label="kill_switch" value={botStatus?.kill_switch_enabled ?? paperStatus?.kill_switch.blocking} />
-            <Metric label="auto_submit_config" value={botStatus?.auto_submit} />
-            <Metric label="auto_submit_allowed" value={botStatus?.auto_submit_allowed} />
-            <Metric label="session_passed" value={botStatus?.session_check_passed} />
+            <Metric label="킬 스위치" value={botStatus?.kill_switch_enabled ?? paperStatus?.kill_switch.blocking} />
+            <Metric label="자동 제출 설정" value={botStatus?.auto_submit} />
+            <Metric label="자동 제출 허용" value={botStatus?.auto_submit_allowed} />
+            <Metric label="세션 통과" value={botStatus?.session_check_passed} />
           </div>
         </article>
         <article>
-          <h2>Safety Markers</h2>
+          <h2>안전 표시</h2>
           <div className="metricGrid">
-            <Metric label="paper only" value="실거래 아님" />
-            <Metric label="live_order_created" value={botStatus?.live_order_created} />
-            <Metric label="broker_order_created" value={botStatus?.broker_order_created} />
-            <Metric label="network_call" value={botStatus?.network_call_performed} />
+            <Metric label="모의투자 전용" value="실거래 아님" />
+            <Metric label="실주문 생성됨" value={botStatus?.live_order_created} />
+            <Metric label="증권사 주문 생성됨" value={botStatus?.broker_order_created} />
+            <Metric label="네트워크 호출" value={botStatus?.network_call_performed} />
           </div>
         </article>
       </section>
 
       <section className="grid">
         <article>
-          <h2>Run-once Control</h2>
+          <h2>단일 실행 제어</h2>
           <p className="muted">
-            기본은 preview decision loop입니다. 자동 submit은 config와 화면 checkbox가 모두 켜져도 kill switch와 세션 gate가 통과해야만 허용됩니다.
+            기본은 미리보기 의사결정 반복입니다. 자동 제출은 설정과 화면 체크박스가 모두 켜져도 킬 스위치와 장 세션 게이트가 통과해야만 허용됩니다.
           </p>
           <div className="formRow compactToolbar">
             <label>
-              explicit auto-submit opt-in
+              자동 제출 명시적 동의
               <input checked={autoSubmit} type="checkbox" onChange={(event) => setAutoSubmit(event.target.checked)} />
             </label>
             <button type="button" onClick={runOnce}>
-              모의투자 run-once
+              모의투자 단일 실행
             </button>
             <button type="button" className="secondary" onClick={stopScheduler}>
-              모의투자 stop
+              모의투자 중지
             </button>
             <button type="button" className="secondary" onClick={() => loadBotState()}>
-              Refresh
+              새로고침
             </button>
           </div>
           <div className="metricGrid">
-            <Metric label="last_run_status" value={runResult?.status ?? stopResult?.status ?? "-"} />
-            <Metric label="auto_submit_requested" value={runResult?.auto_submit_requested ?? autoSubmit} />
-            <Metric label="submitted_count" value={formatNumber(runResult?.submitted_count)} />
-            <Metric label="decision_count" value={formatNumber(runResult?.decision_count)} />
+            <Metric label="마지막 실행 상태" value={runResult?.status ?? stopResult?.status ?? "-"} />
+            <Metric label="자동 제출 요청됨" value={runResult?.auto_submit_requested ?? autoSubmit} />
+            <Metric label="제출 건수" value={formatNumber(runResult?.submitted_count)} />
+            <Metric label="의사결정 건수" value={formatNumber(runResult?.decision_count)} />
           </div>
         </article>
         <article>
-          <h2>Session / Reasons</h2>
+          <h2>장 세션 / 사유</h2>
           <div className="metricGrid">
-            <Metric label="session" value={botStatus?.session.session} />
-            <Metric label="session_state" value={botStatus?.session.session_state} />
-            <Metric label="trade_date" value={botStatus?.session.trade_date} />
-            <Metric label="max_candidates" value={botStatus?.max_candidates} />
+            <Metric label="장 세션" value={botStatus?.session.session} />
+            <Metric label="세션 상태" value={botStatus?.session.session_state} />
+            <Metric label="거래일" value={botStatus?.session.trade_date} />
+            <Metric label="최대 후보 수" value={botStatus?.max_candidates} />
           </div>
           <ul className="plainList">
             {reasonCodes.map((reason) => (
@@ -219,19 +219,19 @@ export default function BotPage() {
 
       <section className="grid">
         <article>
-          <h2>Decision Preview</h2>
+          <h2>의사결정 미리보기</h2>
           <div className="tableWrap compactTable">
             <table className="miniTable">
               <thead>
                 <tr>
-                  <th>symbol</th>
-                  <th>strategy</th>
-                  <th>action</th>
-                  <th>score</th>
-                  <th>qty</th>
-                  <th>limit</th>
-                  <th>risk</th>
-                  <th>paper_order_id</th>
+                  <th>종목코드</th>
+                  <th>전략</th>
+                  <th>액션</th>
+                  <th>점수</th>
+                  <th>수량</th>
+                  <th>지정가</th>
+                  <th>리스크</th>
+                  <th>모의 주문 ID</th>
                 </tr>
               </thead>
               <DecisionRows decisions={runResult?.decisions ?? []} />
@@ -239,14 +239,14 @@ export default function BotPage() {
           </div>
         </article>
         <article>
-          <h2>Run Steps</h2>
+          <h2>실행 단계</h2>
           <div className="tableWrap compactTable">
             <table className="miniTable">
               <thead>
                 <tr>
-                  <th>step</th>
-                  <th>status</th>
-                  <th>reason</th>
+                  <th>단계</th>
+                  <th>상태</th>
+                  <th>사유</th>
                 </tr>
               </thead>
               <tbody>
@@ -265,20 +265,20 @@ export default function BotPage() {
 
       <section className="cardGrid">
         <article>
-          <h2>Bot Counts</h2>
+          <h2>봇 카운트</h2>
           <div className="metricGrid">
-            <Metric label="paper_bot_runs" value={formatNumber(botStatus?.counts.paper_bot_runs_count)} />
-            <Metric label="paper_bot_decisions" value={formatNumber(botStatus?.counts.paper_bot_decisions_count)} />
-            <Metric label="paper_orders" value={formatNumber(botStatus?.counts.paper_orders_count)} />
-            <Metric label="orders table" value={formatNumber(botStatus?.counts.orders_count)} />
+            <Metric label="모의 봇 실행 수" value={formatNumber(botStatus?.counts.paper_bot_runs_count)} />
+            <Metric label="모의 봇 의사결정 수" value={formatNumber(botStatus?.counts.paper_bot_decisions_count)} />
+            <Metric label="모의 주문 수" value={formatNumber(botStatus?.counts.paper_orders_count)} />
+            <Metric label="주문 테이블" value={formatNumber(botStatus?.counts.orders_count)} />
           </div>
         </article>
         <article>
-          <h2>Supported Modes</h2>
+          <h2>지원 모드</h2>
           <p className="muted">{botStatus?.supported_modes.join(", ") ?? "-"}</p>
         </article>
         <article>
-          <h2>Raw Result</h2>
+          <h2>원본 결과</h2>
           <pre className="compactPre">{JSON.stringify(runResult ?? stopResult ?? botStatus ?? {}, null, 2)}</pre>
         </article>
       </section>

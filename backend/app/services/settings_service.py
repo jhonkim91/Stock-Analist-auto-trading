@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from backend.app.core import runtime_env
 from backend.app.core.paths import CONFIG_DIR
 
 SENSITIVE_KEY_PARTS = (
@@ -246,11 +247,38 @@ RUNTIME_ENV_TOGGLE_SPECS: tuple[RuntimeEnvToggleSpec, ...] = (
         "Telegram 리포트 전송을 dry-run으로 둘지 제어합니다.",
     ),
     RuntimeEnvToggleSpec(
+        "LIVE_TRADING_ENABLED",
+        "Live trading",
+        "live",
+        "실계좌(라이브) 트레이딩 경로를 켭니다. 라이브 어댑터/주문 제출은 이 게이트가 켜져 있어야 합니다(고위험).",
+        high_impact=True,
+    ),
+    RuntimeEnvToggleSpec(
+        "LIVE_ORDER_SUBMIT_ENABLED",
+        "Live order submit",
+        "live",
+        "라이브 주문 제출(실주문)을 허용합니다. ENABLE_REAL_ORDER, 라이브 자격증명과 함께 동작합니다(고위험).",
+        high_impact=True,
+    ),
+    RuntimeEnvToggleSpec(
+        "LIVE_ORDER_CONFIRM_REQUIRED",
+        "Live order confirm",
+        "live",
+        "라이브 주문/취소에 명시적 confirm을 요구합니다(안전장치). 끄면 확인 없이 실주문이 나갈 수 있습니다.",
+        high_impact=True,
+    ),
+    RuntimeEnvToggleSpec(
+        "LIVE_KILL_SWITCH",
+        "Live kill switch",
+        "live",
+        "켜져 있으면 모든 라이브 주문을 즉시 차단하는 비상 정지입니다.",
+        high_impact=True,
+    ),
+    RuntimeEnvToggleSpec(
         "ENABLE_REAL_ORDER",
-        "Live order lock",
-        "locked",
-        "실계좌 주문 잠금입니다. 버튼을 눌러도 false로만 강제 적용됩니다.",
-        false_locked=True,
+        "Real order enable",
+        "live",
+        "실계좌에 진짜 주문이 나가도록 허용합니다. 켜면 실제 금전 손실 위험이 있습니다(고위험). 라이브 자격증명과 LIVE_TRADING_ENABLED가 함께 필요합니다.",
         high_impact=True,
     ),
 )
@@ -353,6 +381,57 @@ RUNTIME_ENV_PRESET_SPECS: tuple[RuntimeEnvPresetSpec, ...] = (
 
 RUNTIME_ENV_PRESET_MAP = {spec.name.upper(): spec for spec in RUNTIME_ENV_PRESET_SPECS}
 
+# 프로그램 내에서 직접 입력 가능한 자격증명/환경 값 그룹 (값은 마스킹되어 노출됨)
+ENVIRONMENT_FIELD_GROUPS: tuple[dict[str, Any], ...] = (
+    {
+        "category": "kis_credentials",
+        "label": "KIS 자격증명",
+        "fields": (
+            {"key": "KIS_APP_KEY", "label": "앱키 (App Key)", "placeholder": "KIS Open API App Key"},
+            {"key": "KIS_APP_SECRET", "label": "앱시크릿 (App Secret)", "placeholder": "KIS Open API App Secret"},
+            {"key": "KIS_ACCOUNT_NO", "label": "계좌번호 (CANO)", "placeholder": "예: 50000000"},
+            {"key": "KIS_PRODUCT_CODE", "label": "상품코드 (ACNT_PRDT_CD)", "placeholder": "예: 01"},
+            {"key": "KIS_ACCESS_TOKEN", "label": "액세스 토큰", "placeholder": "발급된 토큰(선택)"},
+            {"key": "KIS_REFRESH_TOKEN", "label": "리프레시 토큰", "placeholder": "라이브 토큰 갱신용(선택)"},
+        ),
+    },
+    {
+        "category": "kis_mode",
+        "label": "KIS 모드 / 엔드포인트",
+        "fields": (
+            {"key": "KIS_ENV", "label": "KIS 환경 (paper/live)", "placeholder": "paper 또는 live"},
+            {"key": "EXECUTION_MODE", "label": "실행 모드", "placeholder": "예: paper_kis / live_kis"},
+            {"key": "BROKER_MODE", "label": "브로커 모드", "placeholder": "예: paper_kis / live_kis"},
+            {"key": "KIS_PAPER_BASE_URL", "label": "모의 베이스 URL", "placeholder": "https://openapivts.koreainvestment.com:29443"},
+            {"key": "KIS_LIVE_BASE_URL", "label": "라이브 베이스 URL", "placeholder": "https://openapi.koreainvestment.com:9443"},
+        ),
+    },
+    {
+        "category": "live_safety",
+        "label": "라이브 안전장치 값",
+        "fields": (
+            {"key": "LIVE_MAX_ORDER_NOTIONAL", "label": "주문당 최대 금액", "placeholder": "예: 100000"},
+            {"key": "LIVE_RATE_LIMIT_PER_SECOND", "label": "초당 주문 제한", "placeholder": "예: 2"},
+            {"key": "LIVE_RATE_LIMIT_BURST", "label": "버스트 한도", "placeholder": "예: 5"},
+            {"key": "LIVE_ORDER_COOLDOWN_SECONDS", "label": "주문 쿨다운(초)", "placeholder": "예: 1"},
+            {"key": "LIVE_SYMBOL_BLACKLIST", "label": "차단 종목(쉼표구분)", "placeholder": "예: 000000,000001"},
+        ),
+    },
+    {
+        "category": "telegram",
+        "label": "텔레그램",
+        "fields": (
+            {"key": "TELEGRAM_BOT_TOKEN", "label": "봇 토큰", "placeholder": "123456:ABC-..."},
+            {"key": "TELEGRAM_CHAT_ID", "label": "챗 ID", "placeholder": "예: 123456789"},
+        ),
+    },
+    {
+        "category": "discord",
+        "label": "디스코드",
+        "fields": ({"key": "DISCORD_OPS_WEBHOOK_URL", "label": "운영 웹훅 URL", "placeholder": "https://discord.com/api/webhooks/..."},),
+    },
+)
+
 
 class SettingsService:
     def __init__(self, config_dir: Path = CONFIG_DIR) -> None:
@@ -385,8 +464,8 @@ class SettingsService:
         """UI에서 토글 가능한 process-only env gate 상태를 반환한다."""
         return {
             "scope": "process",
-            "persistence": "process_only",
-            "file_write_performed": False,
+            "persistence": "file",
+            "file_write_performed": True,
             "secrets_redacted": True,
             "toggles": [self._toggle_status(spec) for spec in RUNTIME_ENV_TOGGLE_SPECS],
             "presets": [self._preset_status(spec) for spec in RUNTIME_ENV_PRESET_SPECS],
@@ -412,12 +491,13 @@ class SettingsService:
                 name=spec.name,
                 enabled=self._env_enabled(spec.name),
             )
-        applied_enabled = False if spec.false_locked else enabled
-        os.environ[spec.name] = "true" if applied_enabled else "false"
+        applied_enabled = enabled
+        # 현재 프로세스에 반영하고 runtime_env.json에 영속화한다(재시작에도 유지).
+        runtime_env.set_persisted_env(spec.name, "true" if applied_enabled else "false")
         return self._toggle_result(
             ok=True,
-            status="locked_false_applied" if spec.false_locked else "updated",
-            reason_codes=["LIVE_ENV_FORCED_FALSE"] if spec.false_locked and enabled else [],
+            status="updated",
+            reason_codes=[],
             name=spec.name,
             enabled=applied_enabled,
             toggle=self._toggle_status(spec),
@@ -446,25 +526,69 @@ class SettingsService:
             )
 
         applied: list[dict[str, str]] = []
-        reason_codes: list[str] = []
         for key, value in spec.values:
             safe_key = key.strip().upper()
             safe_value = value.strip()
-            toggle = RUNTIME_ENV_TOGGLE_MAP.get(safe_key)
-            if toggle is not None and toggle.false_locked:
-                safe_value = "false"
-                reason_codes.append("LIVE_ENV_FORCED_FALSE")
-            os.environ[safe_key] = safe_value
+            # 프로세스 반영 + 영속화. 허용 키가 아니면 os.environ만 반영한다.
+            if not runtime_env.set_persisted_env(safe_key, safe_value):
+                os.environ[safe_key] = safe_value
             applied.append({"name": safe_key, "value": safe_value})
 
         return self._preset_result(
             ok=True,
             status="updated",
-            reason_codes=sorted(set(reason_codes)),
+            reason_codes=[],
             preset_name=spec.name,
             applied=applied,
             preset=self._preset_status(spec),
         )
+
+    def environment_status(self) -> dict[str, Any]:
+        """UI에서 입력 가능한 자격증명/환경 값의 (마스킹된) 현재 상태를 그룹별로 반환한다."""
+        groups = []
+        for group in ENVIRONMENT_FIELD_GROUPS:
+            keys = [field["key"] for field in group["fields"]]
+            snapshot = {row["key"]: row for row in runtime_env.masked_snapshot(keys)}
+            fields = []
+            for field in group["fields"]:
+                row = snapshot.get(field["key"], {})
+                fields.append(
+                    {
+                        **field,
+                        "configured": row.get("configured", False),
+                        "persisted": row.get("persisted", False),
+                        "sensitive": row.get("sensitive", False),
+                        "masked_value": row.get("masked_value", ""),
+                    }
+                )
+            groups.append({"category": group["category"], "label": group["label"], "fields": fields})
+        return {"persistence": "file", "secrets_redacted": True, "groups": groups}
+
+    def set_environment_value(self, *, key: str, value: str, confirm: bool) -> dict[str, Any]:
+        """허용된 환경 값 하나를 영속 저장하고 현재 프로세스에 반영한다."""
+        normalized = key.strip().upper()
+        if not confirm:
+            return {"ok": False, "status": "blocked", "key": normalized, "reason_codes": ["ENV_VALUE_CONFIRM_REQUIRED"]}
+        if not runtime_env.is_allowed_key(normalized):
+            return {"ok": False, "status": "blocked", "key": normalized, "reason_codes": ["ENV_VALUE_NOT_ALLOWED"]}
+        trimmed = value.strip()
+        if trimmed == "":
+            runtime_env.delete_persisted_env(normalized)
+            status = "cleared"
+        else:
+            runtime_env.set_persisted_env(normalized, trimmed)
+            status = "updated"
+        return {
+            "ok": True,
+            "status": status,
+            "key": normalized,
+            "persistence": "file",
+            "file_write_performed": True,
+            "secrets_redacted": True,
+            "masked_value": runtime_env.mask_value(normalized, os.environ.get(normalized)),
+            "configured": bool(os.environ.get(normalized)),
+            "reason_codes": [],
+        }
 
     @classmethod
     def _redact(cls, value: Any, key: str = "") -> Any:
@@ -544,8 +668,8 @@ class SettingsService:
             "name": name,
             "enabled": enabled,
             "scope": "process",
-            "persistence": "process_only",
-            "file_write_performed": False,
+            "persistence": "file",
+            "file_write_performed": True,
             "network_call_performed": False,
             "live_order_created": False,
             "secrets_redacted": True,
@@ -571,8 +695,8 @@ class SettingsService:
             "preset": preset_name,
             "applied": applied,
             "scope": "process",
-            "persistence": "process_only",
-            "file_write_performed": False,
+            "persistence": "file",
+            "file_write_performed": True,
             "network_call_performed": False,
             "live_order_created": False,
             "secrets_redacted": True,

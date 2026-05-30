@@ -137,8 +137,9 @@ def test_paper_create_fill_and_kis_order_routes_remain_disabled(client):
     route_paths = {getattr(route, "path", "") for route in app.routes}
     assert "/api/paper/orders" in route_paths
     assert "/api/paper/fill-simulator/run" in route_paths
-    assert "/api/kis/orders" in route_paths
+    assert "/api/kis/orders/status" in route_paths
     assert "/api/kis/orders/preview" in route_paths
+    assert "/api/kis/orders/submit" in route_paths
     assert not any(path.startswith("/api/kis/broker") for path in route_paths)
     assert not any(path.startswith("/api/kis/websocket") for path in route_paths)
 
@@ -147,11 +148,16 @@ def test_paper_create_fill_and_kis_order_routes_remain_disabled(client):
     assert submit.json()["paper_order_created"] is False
     assert submit.json()["network_call_performed"] is False
     assert client.post("/api/paper/fill-simulator/run", json={}).status_code == 422
-    orders = client.get("/api/kis/orders")
+    live_status = client.get("/api/kis/orders/status")
     preview = client.post("/api/kis/orders/preview", json={"symbol": "005930"})
-    assert orders.status_code == 200
+    live_submit = client.post("/api/kis/orders/submit", json={"symbol": "005930"})
+    assert live_status.status_code == 200
     assert preview.status_code == 200
-    assert orders.json()["network_call_performed"] is False
+    assert live_submit.status_code == 200
+    assert live_status.json()["can_submit"] is False
+    assert preview.json()["network_call_performed"] is False
     assert preview.json()["live_order_created"] is False
+    assert live_submit.json()["network_call_performed"] is False
+    assert live_submit.json()["live_order_created"] is False
     assert client.get("/api/kis/broker/status").status_code == 404
     assert client.get("/api/kis/websocket/status").status_code == 404
