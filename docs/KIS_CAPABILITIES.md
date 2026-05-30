@@ -10,7 +10,7 @@
 |---|---|---|
 | `paper` | `regular` | KIS paper 주문 경로 진입 허용 |
 | `paper` | `premarket`, `aftermarket`, `daytime`, `extended` | `KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED`로 API 호출 전 차단 |
-| `real` | `regular`, `premarket`, `aftermarket`, `daytime` | capability map상 허용. 단, 현재 프로젝트의 live adapter는 별도 승인 전까지 disabled scaffold 유지 |
+| `real` | `regular`, `premarket`, `aftermarket`, `daytime` | capability map상 허용. KRX 국내 현금 주문 실계좌 실행이 활성화되어 있으며, fail-closed 다중 게이트(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + 주문별 confirm + kill switch + max-notional) 뒤에서 기본 차단된다. 실계좌 실행은 실제 KIS API 대비 미검증 상태이므로 첫 주문은 최소 수량으로 검증할 것 |
 
 ## Guard 정책
 

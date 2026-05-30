@@ -1,7 +1,9 @@
 # 개선 계획 (전략 엔진 · 프론트엔드 UI)
 
 코드베이스 정밀 분석 결과를 바탕으로 한 우선순위별 개선 로드맵.
-원칙: **live 안전게이트(실계좌 차단)와 기존 pytest(521건)를 깨지 않는 추가형(additive)·config 게이트 변경**만 권장.
+원칙: **실주문 fail-closed 게이트(LIVE_TRADING_ENABLED + LIVE_ORDER_SUBMIT_ENABLED + ENABLE_REAL_ORDER + live 자격증명/호스트 + 주문별 확인 + kill switch + max-notional)와 기존 pytest(534건)를 깨지 않는 추가형(additive)·config 게이트 변경**만 권장.
+
+> 패키징/실행: 단일 Windows .exe(pywebview 네이티브 창)로 FastAPI 단일 프로세스가 Next.js 정적 export를 same-origin으로 서빙(별도 frontend 프로세스 없음). UI는 한국어, monospace+beige 라이트 테마 + 라이트/다크 토글. 로그인은 로컬 JSON(`backend/data/users.json`, PBKDF2-HMAC-SHA256, HMAC 30일 토큰) opt-in 방식. KIS 실계좌 주문은 위 fail-closed 게이트(KRX 현금 주문 한정, 실제 API 대비 미검증 — 첫 주문은 최소 수량으로 확인) 뒤에서 활성화됨.
 
 ---
 
@@ -41,12 +43,12 @@
 4. **원시 필드명 → 사람친화 라벨** — `close_vs_200dma`, `proposed_notional` 등을 매핑하는 `lib/labels.ts` 헬퍼. 한/영 카피 혼용 정리.
 5. **수동 새로고침 + 폴링 훅** — 6개 페이지에 반복되는 `useEffect`+`loadX`를 `useApiResource` 훅으로 추출.
 6. **사이드바 배지 라이브 연동** — `app-chrome.tsx` 43·50·197행 하드코딩(`"7 pass"`, `"!"`, `orders_count == 0`)을 실데이터로.
-7. **다크 모드** — 기존 CSS 변수 위에 `prefers-color-scheme` 블록 추가(대부분 컴포넌트가 변수 사용 중).
+7. **다크 모드** — 라이트/다크 토글 슬라이더는 이미 적용됨. 추가로 `prefers-color-scheme` 자동 감지를 기존 CSS 변수 위에 보강 가능(대부분 컴포넌트가 변수 사용 중).
 8. **테이블 개선** — 정렬/페이지네이션/컬럼 툴팁, `run_id` 등 말줄임 silent truncation 보완.
 
 ---
 
 ## 안전 원칙 (필수)
-- `paper_kis`에서만 주문 허용, live 차단 게이트(Phase 19/20) 절대 유지.
+- KIS 실계좌 주문은 활성화돼 있으며(고위험, 사용자 본인 계좌, KRX 현금 주문 한정, 실제 API 대비 미검증), 기본 fail-closed 다중 게이트(LIVE_TRADING_ENABLED + LIVE_ORDER_SUBMIT_ENABLED + ENABLE_REAL_ORDER + live 자격증명/호스트 + 주문별 확인 + kill switch + max-notional)를 절대 유지.
 - 백엔드 변경은 추가형 + config 기본 OFF로 기존 테스트 보존.
 - 키/토큰/계좌/chat id 하드코딩 금지(.env).

@@ -18,10 +18,12 @@ record. Phase 12 must not be marked complete from env flags alone.
 
 Status: Phase 12 remains incomplete. Phase 12B adapter implementation is present, and Phase 12C reached the KIS paper submit endpoint after human confirmation. KIS returned `40580000` / `모의투자 장종료 입니다.`, so no broker order id was created and cancel/query/sync did not run.
 
-The current code has paper-only KIS submit/cancel/list/sync adapter paths behind
-explicit gates. Default runtime remains fail-closed. A controlled Phase 12C KIS
-paper submit call was executed only after human confirmation and produced a
-redacted failure record; no live endpoint was called.
+The current code has dedicated paper KIS submit/cancel/list/sync adapter paths behind
+explicit gates. A separate real KIS live-order path now also exists (KRX domestic
+cash only) behind its own fail-closed gates and reuses the paper mappers; it is not
+exercised by this paper checklist. Default runtime remains fail-closed. A controlled
+Phase 12C KIS paper submit call was executed only after human confirmation and
+produced a redacted failure record; no live endpoint was called during this paper run.
 
 | Area | Current code behavior | Evidence |
 |---|---|---|
@@ -30,22 +32,24 @@ redacted failure record; no live endpoint was called.
 | Paper cancel | KIS paper network cancel exists only for a stored paper order with broker order id and all cancel gates passing | `PaperOrderService.cancel_order()` and `KisPaperBrokerAdapter.cancel_order()` |
 | Paper query/sync | KIS paper query/sync exists only when paper network/config/adapter/credential gates pass, and persists only dedicated paper tables | `KisPaperBrokerAdapter.list_orders()` and `PaperSyncService.sync()` |
 | KIS paper adapter | Uses paper endpoint/TR ID mappers, redacted trace, timeout/retry/rate-limit/error handling; unconfirmed cancelable-order query remains unimplemented/fail-closed | `KisPaperBrokerAdapter` |
-| Live adapter | Placeholder only and always disabled | `KisLiveBrokerAdapter` |
+| Live adapter | Real KIS live orders are now enabled (KRX domestic cash only) but fail-closed by default behind multiple gates: `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live credentials + live host + per-order confirm + kill switch + max-notional. Routes `/api/kis/orders/{status,preview,submit,cancel}` + `/api/live/status` reuse the paper mappers (V->T TR ID). Live execution is UNTESTED vs the real KIS API; verify the first order with minimal qty | `KisLiveOrderExecutor` |
 
 ## Required Env/Config Items
 
-Do not create or modify `.env` or `.env.local`. Inject runtime values through
-the current process environment only, and do not print raw values.
+Settings are toggleable from the UI and persist to `backend/data/runtime_env.json`
+(allowlisted keys, masked values); credentials can be entered in-app. Runtime
+values may still be injected through the process environment for this checklist,
+and raw values must not be printed.
 
 | Item | Phase 12A | Phase 12B | Phase 12C |
 |---|---|---|---|
-| `KIS_APP_KEY` | Required for read-only balance dry-run | Mocked in tests only; real value not required | Required through process env only |
-| `KIS_APP_SECRET` | Required for read-only balance dry-run | Mocked in tests only; real value not required | Required through process env only |
-| `KIS_ACCESS_TOKEN` | Required for read-only balance dry-run | Mocked in tests only; real value not required | Required through process env only |
-| `KIS_ACCOUNT_NO` | Required for read-only balance dry-run | Mocked/redacted only | Required through process env only |
-| `KIS_PRODUCT_CODE` | Required for read-only balance dry-run | Mocked/redacted only | Required through process env only |
+| `KIS_APP_KEY` | Required for read-only balance dry-run | Mocked in tests only; real value not required | Required via in-app persisted settings or process env |
+| `KIS_APP_SECRET` | Required for read-only balance dry-run | Mocked in tests only; real value not required | Required via in-app persisted settings or process env |
+| `KIS_ACCESS_TOKEN` | Required for read-only balance dry-run | Mocked in tests only; real value not required | Required via in-app persisted settings or process env |
+| `KIS_ACCOUNT_NO` | Required for read-only balance dry-run | Mocked/redacted only | Required via in-app persisted settings or process env |
+| `KIS_PRODUCT_CODE` | Required for read-only balance dry-run | Mocked/redacted only | Required via in-app persisted settings or process env |
 | `KIS_PAPER_BASE_URL` | Optional; must not be live host | Mocked; live host must be rejected | Optional; must not be live host |
-| `ENABLE_REAL_ORDER` | Must be absent or false | Must be absent or false | Must be absent or false |
+| `ENABLE_REAL_ORDER` | Keep absent or false for this paper dry-run (it is now a live-order gate, not forced false) | Keep absent or false for this paper dry-run (it is now a live-order gate, not forced false) | Keep absent or false for this paper dry-run (it is now a live-order gate, not forced false) |
 | `PAPER_TRADING_ENABLED` | Explicit true only for manual read-only test | Required gate in implementation tests | Explicit true only for controlled dry-run |
 | `PAPER_TRADING_CAN_CREATE` | Keep false/not needed for read-only | Required for local submit path tests | Explicit true only around controlled submit |
 | `PAPER_TRADING_NETWORK_ENABLED` | Explicit true only for read-only balance network call | Required gate, but mocked HTTP only | Explicit true only for controlled paper network call |
@@ -59,11 +63,10 @@ the current process environment only, and do not print raw values.
 
 - [ ] Confirm current branch is not `main`.
 - [ ] Confirm worktree is clean before injecting any runtime credential.
-- [ ] Confirm `.env` and `.env.local` are not created or modified.
-- [ ] Inject KIS paper credentials only through the process environment.
+- [ ] Provide KIS paper credentials in-app (persisted to `backend/data/runtime_env.json`, allowlisted and masked) or through the process environment; do not print raw values.
 - [ ] Confirm `ENABLE_REAL_ORDER` is absent or false.
 - [ ] Confirm `PAPER_BOT_AUTO_SUBMIT=false`.
-- [ ] Confirm live adapter and live fallback remain disabled.
+- [ ] Confirm the live-order gates stay off for this paper dry-run so no live path activates.
 - [ ] Confirm submit/cancel/sync paths remain blocked.
 
 ### Read-only execution
@@ -140,10 +143,9 @@ Phase 12C is blocked until Phase 12B is implemented and tested.
 
 - [ ] Confirm Phase 12B commit is present and tests passed.
 - [ ] Confirm current branch is not `main`.
-- [ ] Confirm `.env` and `.env.local` are not created or modified.
-- [ ] Inject credentials only through process env.
+- [ ] Provide credentials in-app (persisted to `backend/data/runtime_env.json`, allowlisted and masked) or through the process environment; do not print raw values.
 - [ ] Confirm `ENABLE_REAL_ORDER` is absent or false.
-- [ ] Confirm live adapter/fallback remain disabled.
+- [ ] Confirm the live-order gates stay off for this paper dry-run so no live path activates.
 - [ ] Confirm `PAPER_BOT_AUTO_SUBMIT=false`.
 - [ ] Keep bot loop stopped during first controlled dry-run.
 

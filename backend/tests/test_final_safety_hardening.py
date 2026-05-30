@@ -7,14 +7,17 @@ from backend.app.main import app
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_goal_live_phases_remain_approval_gated():
+def test_goal_documents_gated_live_policy():
+    """goal.md는 실계좌 라이브 주문이 다중 게이트로 활성화됐음을 문서화한다(기본 차단)."""
     goal = (ROOT / "goal.md").read_text(encoding="utf-8")
 
     assert "| Phase 19 | 완료 |" in goal
-    assert "| Phase 20 | route scaffold 차단 |" in goal
-    assert "실계좌 주문" in goal
-    assert "별도 명시 승인" in goal
-    assert "live public route scaffold는 등록됐지만 network call, live submit 가능 상태, 실계좌 주문/취소/체결은 금지한다" in goal
+    assert "Live Gate" in goal
+    assert "실계좌" in goal
+    assert "LIVE_TRADING_ENABLED" in goal
+    assert "ENABLE_REAL_ORDER" in goal
+    # 라이브 실행은 실제 KIS API로 미검증 — 최초 1건 최소 수량 확인을 문서가 명시해야 한다.
+    assert "최소 수량" in goal
 
 
 def test_live_public_routes_exist_and_are_gated_off_by_default(client):

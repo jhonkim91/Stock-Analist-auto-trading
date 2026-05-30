@@ -4,12 +4,14 @@
 
 | 항목 | 값 |
 |---|---|
-| 방향 | `Project Reset: Telegram + KIS Paper Trading Bot` |
-| 목표 모드 | `paper_kis` |
-| 허용 범위 | KIS 모의투자 계좌 기반 주문/체결/잔고/포지션 mirror |
-| 차단 범위 | 실계좌 live 주문/취소/체결, live fallback, secret 하드코딩 |
-| Backend | FastAPI + SQLite + Alembic |
-| Frontend | Next.js App Router |
+| 방향 | `Telegram + KIS Trading Bot` |
+| 패키징 | 단일 Windows `.exe` (pywebview native window). launcher.py가 단일 프로세스로 `app_main.py --host 127.0.0.1 --port 8000` 실행. 별도 frontend 프로세스 없음. |
+| 목표 모드 | `paper_kis` (paper 기본) + gated `live` (KIS 실계좌 KRX 현금 주문) |
+| 허용 범위 | KIS 모의투자 계좌 기반 주문/체결/잔고/포지션 mirror + fail-closed gate 뒤 KIS 실계좌 KRX 현금 주문 |
+| 차단 범위 | gate 미통과 live 주문, secret 하드코딩 |
+| Backend | FastAPI + SQLite + Alembic. Next.js static export를 same-origin으로 serve (별도 :3000 frontend·`NEXT_PUBLIC_API_BASE_URL` 분리 backend 없음). |
+| Frontend | Next.js App Router static export. 한국어 UI, monospace + beige light 테마와 light/dark 토글 슬라이더. 로컬 JSON 로그인(AuthGate + logout). |
+| 인증 | 로컬 JSON 로그인 `backend/data/users.json` (PBKDF2-HMAC-SHA256), HMAC 30일 토큰, opt-in(사용자 생성 시에만 강제), `/api/auth/*` |
 | 보존 기능 | data, indicator, screener, backtest, report, portfolio, paper state |
 
 ## 실행 모드 정책
@@ -19,7 +21,7 @@
 | `analysis_only` | 지원 | 기존 로컬 분석/스크리너/백테스트/리포트 |
 | `telegram_report` | 진행 중 | Telegram command/webhook/polling dispatcher와 report scheduler 구조 |
 | `paper_kis` | 진행 중 | KIS paper token/cache, quote fallback, paper order guard, sync worker wrapper |
-| `live_disabled` | 유지 | live endpoint/config가 있어도 실계좌 주문은 비활성 |
+| `live` | 활성(고위험, 사용자 본인 계좌) | KIS 실계좌 KRX 현금 주문 활성화. 기본 fail-closed: `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live credentials + live host + per-order confirm + kill switch + max-notional gate를 모두 통과해야 제출. 실제 KIS API 대비 미검증(첫 주문은 최소 수량으로 검증할 것). |
 
 ## 이번 리셋 반영 항목
 
@@ -44,9 +46,9 @@
 - `/api/paper/bot/preview`, `/api/paper/bot/run`은 기본 screener 결과 후보 외에 요청의 `watchlist_symbols`로 후보 universe를 제한할 수 있다.
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가.
 - paper risk gate는 시장가 주문의 `max_order_notional`을 DB 최신 종가 기준 추정 주문금액으로 평가한다. 최신 가격이 없으면 금액 한도 우회를 막기 위해 market notional 평가 실패로 차단한다.
-- 과거 문서/서비스 주석의 `paper mutation 금지`, `paper sync no-op` 표현을 새 `paper_kis` 정책에 맞춰 정리했다. paper writes는 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용되고 live mutation은 계속 차단된다.
+- 과거 문서/서비스 주석의 `paper mutation 금지`, `paper sync no-op` 표현을 새 `paper_kis` 정책에 맞춰 정리했다. paper writes는 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용되며, live mutation은 fail-closed gate 묶음(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live credentials/host + per-order confirm + kill switch + max-notional)을 모두 통과한 KRX 현금 주문에 한해 허용된다.
 - `backend/config/bot.yaml`과 `.env.example`에서 paper bot 자동매매는 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false)로 정렬.
-- Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 즉시 반영되며, hover/focus 시 한국어 설명 tooltip을 표시한다. 개별 ON/OFF 외에 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 제공한다. runtime env 상태 조회가 늦어져도 preset/toggle fallback 버튼은 렌더링되어 같은 API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞추고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로만 강제 적용된다.
+- Settings runtime env 버튼은 클릭 시 현재 backend 프로세스에 반영되고 allowlist 키를 `backend/data/runtime_env.json`에 마스킹 저장해 재시작 후에도 유지된다(자격증명도 in-app 입력 가능). hover/focus 시 한국어 설명 tooltip을 표시한다. 개별 ON/OFF 외에 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 제공한다. runtime env 상태 조회가 늦어져도 preset/toggle fallback 버튼은 렌더링되어 같은 API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다. live 주문은 `ENABLE_REAL_ORDER`를 포함한 fail-closed gate 묶음을 모두 통과해야만 제출된다.
 - 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 KIS paper domestic/overseas regular endpoint/TR ID를 재확인하고 stale Phase 0 matrix 문서를 갱신했다.
 - 국내 정정취소가능주문조회/매도가능수량조회는 공식 샘플에서 real `TTTC0084R`/`TTTC8408R` only로 확인되어, paper TR 확인 전 구현 보류와 fail-closed 정책을 유지한다.
 - `backend.app.jobs.paper_bot_runner` loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 동작한다.
@@ -65,7 +67,7 @@
 |---|---|
 | `GET /api/stocks/search` | 종목 검색 alias |
 | `GET /api/stocks/{symbol}` | KIS quote 우선, DB fallback 종목 상세와 `summary` |
-| `GET /api/kis/token/status` | KIS paper token issue/refresh/cache readiness, live endpoint disabled status |
+| `GET /api/kis/token/status` | KIS paper token issue/refresh/cache readiness, live endpoint status |
 | `POST /api/kis/token/issue` | confirm-gated KIS paper token 발급 |
 | `POST /api/kis/token/refresh` | refresh token 우선 갱신, 없으면 paper issue fallback |
 | `POST /api/kis/token/ensure` | cache 우선 token 확보, 만료/임박 시 refresh/issue |
@@ -82,9 +84,15 @@
 | `GET /api/paper/sync-worker/status` | paper sync worker status |
 | `POST /api/paper/sync-worker/run-once` | confirm-gated KIS paper sync worker wrapper |
 | `POST /api/paper/sync-worker/run-loop` | confirm-gated bounded KIS paper sync worker loop |
-| `GET /api/settings/runtime-env` | process-only runtime gate/preset status |
-| `POST /api/settings/runtime-env/toggle` | allowlist boolean env gate 1개 적용 |
-| `POST /api/settings/runtime-env/preset` | paper_kis/Telegram/bot gate 묶음 적용, live lock false 유지 |
+| `GET /api/settings/runtime-env` | persisted(allowlist, masked) runtime gate/preset status |
+| `POST /api/settings/runtime-env/toggle` | allowlist boolean env gate 1개 적용 및 `backend/data/runtime_env.json` 저장 |
+| `POST /api/settings/runtime-env/preset` | paper_kis/Telegram/bot gate 묶음 적용 및 영속화 |
+| `POST /api/auth/*` | 로컬 JSON 로그인/로그아웃, HMAC 30일 토큰, opt-in(사용자 생성 시에만 강제) |
+| `GET /api/kis/orders/status` | live 주문 상태 조회 (KisLiveOrderExecutor) |
+| `POST /api/kis/orders/preview` | live 주문 preview (fail-closed gate) |
+| `POST /api/kis/orders/submit` | gate 통과 시 KIS 실계좌 KRX 현금 주문 제출 (paper mapper 재사용, V->T TR ID) |
+| `POST /api/kis/orders/cancel` | live 주문 취소 |
+| `GET /api/live/status` | live trading gate/kill switch/max-notional 상태 |
 
 ## 최신 검증
 
@@ -104,7 +112,7 @@
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_frontend_contract_only` | `2 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_phase2_only` | `10 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_default_off` | `5 passed` |
-| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` | `5 passed` |
+| `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_persists_to_file_and_is_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_can_enable_real_order_high_risk backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` | `5 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_tests` | `10 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_api_matrix_docs.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_docs` | `1 passed` |
 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_paper_bot_bounded_loop_regression` | `7 passed` |

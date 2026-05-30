@@ -5,7 +5,7 @@
 - 이 문서는 현재 `Project Reset: Telegram + KIS Paper Trading Bot` 기준 KIS 모의투자 API 확인 matrix다.
 - 확인 기준은 한국투자증권 공식 GitHub 샘플 저장소 `koreainvestment/open-trading-api` shallow clone이다.
 - 확인한 공식 샘플 commit: `33e0e1e65cd1c8c8b639531483ec0b327087bab1`.
-- 실제 KIS live 주문, live cancel, live fallback은 계속 금지한다.
+- 이 matrix는 KIS **모의(paper)** adapter 기준이다. 실계좌 라이브 국내 현금 주문은 별도 게이트 실행기(`KisLiveOrderExecutor`)가 담당하며(다중 게이트·기본 차단·실 API 미검증), paper→live fallback은 계속 금지한다.
 - `.env`, `.env.local`, 계좌번호, AppKey/AppSecret, access token 원문은 문서/응답/로그에 기록하지 않는다.
 
 ## 공식 샘플 확인 범위
@@ -49,7 +49,7 @@
 | 미국주간정정취소 | `/uapi/overseas-stock/v1/trading/daytime-order-rvsecncl` | 공식 샘플 `TTTS6038U` only | 차단 | paper adapter는 `KIS_PAPER_US_DAYTIME_ORDER_UNSUPPORTED`로 API 호출 전 차단 |
 | Broker audit events | KIS API 아님 | 해당 없음 | 구현 | 주문/취소/체결/sync/bot 판단은 audit log 기록 |
 | Telegram report/bot command | KIS API 아님 | 해당 없음 | 구현 | Telegram token/chat id는 env only, raw 값 미노출 |
-| KIS live broker adapter | 현재 범위 제외 | 해당 없음 | disabled scaffold | 실계좌 주문/취소/체결 금지 |
+| KIS live broker adapter (legacy) | 현재 범위 제외 | 해당 없음 | disabled scaffold | 이 legacy adapter는 실계좌 주문/취소/체결 금지(실거래는 `KisLiveOrderExecutor`가 게이트 통과 시 담당) |
 
 ## 현재 Adapter Constants
 

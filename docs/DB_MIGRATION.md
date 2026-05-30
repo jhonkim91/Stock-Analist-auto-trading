@@ -132,4 +132,4 @@ Autogenerate 결과는 그대로 신뢰하지 말고 다음을 확인한다.
 - index/unique constraint 이름을 명시해 환경별 drift를 줄인다.
 - migration 적용 전 백업, dry-run SQL 검토, rollback 방안을 별도 문서화한다.
 - future paper broker persistence는 별도 phase에서 additive-only migration으로 작성한다.
-- broker/KIS/live trading 관련 schema는 별도 승인 전까지 추가하지 않는다.
+- broker/KIS/live trading 관련 schema는 additive-only migration으로 신중히 추가한다. 실 KIS LIVE 주문은 fail-closed 게이트(LIVE_TRADING_ENABLED + LIVE_ORDER_SUBMIT_ENABLED + ENABLE_REAL_ORDER + live credential/host + per-order confirm + kill switch + max-notional) 뒤에서 활성화되어 있으나 KRX 현금 주문 한정이며 실 API 대비 미검증 상태다. KIS credential/token은 DB가 아니라 `backend/data/runtime_env.json`(allowlist, 마스킹)에 저장되므로, autogenerate가 실주문/credential 저장용 DB 컬럼을 의도치 않게 추가하지 않았는지 검토한다.

@@ -2,25 +2,32 @@
 
 ## 핵심 요약
 
-이 문서는 `goal.md` Phase 18-20 범위의 live readiness 산출물이다. 현재 저장소에서 live trading 실행, live order network call, 실계좌 주문/취소/체결은 금지된다. 사용자가 승인한 범위는 disabled public route scaffold까지이며, route는 항상 fail-closed payload만 반환한다.
+이 문서는 `goal.md` Phase 18-20 범위의 live readiness 산출물이다. 현재 저장소에서 REAL KIS LIVE 주문이 활성화되어 있다(사용자 본인 계좌, high risk). 기본값은 fail-closed이며 다중 게이트(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + per-order confirm + kill switch + max-notional) 뒤에서만 실제 주문이 나간다. 대상은 KRX 국내 현금 주문에 한정되며, real KIS API 대비 live 실행은 아직 미검증이므로 첫 주문은 최소 수량으로 확인한다.
 
-## 현재 금지 상태
+이 프로그램은 단일 Windows .exe로 패키징된다: 하나의 FastAPI 프로세스(`app_main.py --host 127.0.0.1 --port 8000`)가 Next.js static export를 same-origin으로 서빙하고, pywebview 네이티브 창으로 표시된다. `launcher.py`는 단일 프로세스이며 별도 frontend 프로세스(`npm run start`/`next start`, :3000)는 없다. UI는 한국어, monospace + beige 라이트 테마에 라이트/다크 토글 슬라이더를 제공한다. 로그인은 로컬 JSON 기반(`backend/data/users.json`, PBKDF2-HMAC-SHA256, HMAC 30일 토큰, 사용자가 생성된 경우에만 인증 강제)이며 `/api/auth/*` 라우트와 프론트엔드 AuthGate/logout으로 동작한다. 설정은 UI에서 토글 가능하고 `backend/data/runtime_env.json`(allowlist 키, 마스킹된 값)에 영속화된다.
+
+## 현재 상태
+
+REAL KIS live 주문이 활성화되어 있으며, 모든 경로는 기본값에서 fail-closed다. `KisLiveOrderExecutor`가 paper mapper를 재사용하고 V->T TR ID로 전환하여 KRX 국내 현금 주문을 처리한다. live 실행은 real KIS API 대비 미검증 상태이므로 첫 주문은 최소 수량으로 검증한다.
 
 | 항목 | 상태 |
 |---|---|
-| live submit route | `/api/kis/orders/submit` disabled scaffold |
-| live cancel route | `/api/kis/orders/cancel` disabled scaffold |
-| live broker fallback | 없음 |
+| live status route | `/api/live/status` |
+| live order status route | `/api/kis/orders/status` |
+| live preview route | `/api/kis/orders/preview` |
+| live submit route | `/api/kis/orders/submit` (다중 게이트 뒤 활성) |
+| live cancel route | `/api/kis/orders/cancel` (다중 게이트 뒤 활성) |
+| 실행기 | `KisLiveOrderExecutor` (paper mapper 재사용, V->T TR ID) |
+| 대상 시장 | KRX 국내 현금 주문 한정 |
 | WebSocket execution | 없음 |
-| 실계좌 체결 처리 | 없음 |
 | token raw persistence | 없음 |
-| paper-to-live fallback | 금지 |
+| paper-to-live fallback | 없음 (각 모드 명시적) |
 
 ## Live 전환 전 필수 조건
 
 | 영역 | 조건 |
 |---|---|
-| 승인 | 사용자 별도 명시 승인, 실행 직전 human confirmation |
+| 게이트 | `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + per-order confirm + kill switch + max-notional |
 | 환경 | paper, prod-readonly, prod-live 분리 |
 | secrets | environment-level secret, raw value 출력 금지 |
 | 주문 | idempotency key, duplicate guard, kill switch proof |
@@ -44,28 +51,28 @@
 | Cooldown | `LIVE_ORDER_COOLDOWN_SECONDS` |
 | Token Refresh | `LIVE_TOKEN_REFRESH_ENABLED=true`, `LIVE_TOKEN_REFRESH_PROCESS_ONLY=true`, live token refresh implementation proof |
 
-현재 live token refresh는 `KisLiveTokenRefreshService`에 gated scaffold만 있으며 real KIS 호출 proof가 없다. live adapter와 live public route scaffold는 submit/cancel safety boundary를 반환하지만 `enabled=false`, `can_submit=false`, `can_cancel=false`, `network_enabled=false`, `network_call_performed=false`, `live_order_created=false`로 고정되어 있으므로 3단계 완료 조건은 충족되지 않는다.
+`KisLiveOrderExecutor`와 live public route는 위 게이트가 모두 충족될 때 실제 submit/cancel을 수행한다. 게이트 중 하나라도 미충족이면 동일 경로가 fail-closed로 동작하여 `enabled=false`, `can_submit=false`, `can_cancel=false`, `network_call_performed=false`, `live_order_created=false` 형태의 safety boundary를 반환한다.
 
 기존 `POST /api/broker/orders/preview`와 승인된 `/api/kis/orders/*` scaffold는 주문 후보별 안전장치 판정만 반환한다. optional `idempotency_key`를 받아 후보 주문의 blacklist, max notional, cooldown, idempotency blocker를 `live_order_safety`에 포함하며, `order_created=false`, `network_call_performed=false`를 유지한다.
 
-`LiveRateLimiter`, `LiveIdempotencyGuard`, `LiveCooldownGuard`, `LiveOrderAuditService`는 실제 live 주문 adapter가 붙기 전에도 단위 검증 가능하도록 분리되어 있다. 현재 이 helper들은 process-local 평가와 redacted audit event 생성을 제공하며, audit DB 저장은 명시 호출 시에만 수행한다. 주문 route, live submit/cancel network call, live token refresh network call은 기본값에서 열지 않는다.
+`LiveRateLimiter`, `LiveIdempotencyGuard`, `LiveCooldownGuard`, `LiveOrderAuditService`는 단위 검증 가능하도록 분리되어 있다. 이 helper들은 process-local 평가와 redacted audit event 생성을 제공하며, audit DB 저장은 명시 호출 시에만 수행한다. 주문 route, live submit/cancel network call, live token refresh network call은 위 게이트가 충족된 경우에만 실제로 수행된다.
 
 `LiveCanaryGovernanceService`는 별도 live canary 실행 전에 reviewer, `prod-live-isolated` 환경, rollback ready, kill switch ready, minimum-size 확인, rollback runbook proof를 검사한다. reviewer 원문은 응답에 남기지 않고 fingerprint만 반환한다.
 
 `tools/kis_live_token_refresh_preflight.py`는 live token refresh real-call proof를 만들기 위한 별도 CLI다. 기본 실행은 preview-only이며 `--execute --confirm CONFIRM_KIS_LIVE_TOKEN_REFRESH`와 모든 refresh gate가 있을 때만 network call을 시도한다.
 
-`tools/live_authority_approval_preflight.py`는 live submit/cancel authority를 열기 전 별도 승인 증거를 no-network record로 남기는 CLI다. `--approve --confirm CONFIRM_LIVE_AUTHORITY_APPROVAL --operations submit,cancel`와 governance/safety gate가 모두 통과해도 이 record는 adapter enablement가 아니며, `network_call_performed=false`, `live_order_created=false`, `order_cancelled=false`를 유지한다.
+`tools/live_authority_approval_preflight.py`는 live submit/cancel authority 승인 증거를 no-network record로 남기는 CLI다. `--approve --confirm CONFIRM_LIVE_AUTHORITY_APPROVAL --operations submit,cancel`와 governance/safety gate를 통과시키며, 이 record 자체는 증거용 no-network 산출물이므로 `network_call_performed=false`, `live_order_created=false`, `order_cancelled=false`를 유지한다. 실제 주문 실행은 `KisLiveOrderExecutor`와 런타임 게이트가 담당한다.
 
-`tools/live_phase3_completion_audit.py`는 별도 승인 후 생성된 redacted token refresh proof record를 `--token-refresh-record-path`로, submit/cancel authority approval record를 `--authority-record-path`로 읽어 proof gap summary에 반영한다. authority approval record는 증거 요약용이며, live adapter가 `enabled=false`, `network_enabled=false`인 동안에는 `live_submit_authority_present` 또는 `live_cancel_authority_present` 완료 조건을 충족시키지 않는다.
+`tools/live_phase3_completion_audit.py`는 redacted token refresh proof record를 `--token-refresh-record-path`로, submit/cancel authority approval record를 `--authority-record-path`로 읽어 proof gap summary에 반영한다. authority approval record는 증거 요약용이며, `live_submit_authority_present`/`live_cancel_authority_present` 완료 조건의 증빙 입력으로 사용된다.
 
 ## Phase 19 허용 범위
 
-Phase 19는 disabled live adapter scaffold와 no-live regression만 허용했다. live endpoint URL, live order mapper, live network call은 넣지 않는다.
+Phase 19는 live adapter scaffold와 regression 기반을 도입했다. 이후 이 기반 위에 live endpoint, live order mapper(paper mapper 재사용, V->T TR ID), live network call이 `KisLiveOrderExecutor`로 연결되어 게이트 뒤에서 활성화되었다.
 
 ## Phase 20 허용 범위
 
-Phase 20은 별도 승인형 controlled live canary다. 현재 승인 범위는 public route scaffold 등록까지이며, 실제 canary 주문은 시작하지 않는다. 이후에도 단일 전략, 단일 market, minimum-size, 수동 확인, 즉시 rollback 기준을 충족해야 한다.
+Phase 20은 controlled live canary다. 현재 REAL KIS live 주문이 활성화되어 있으나 다중 게이트 뒤에서만 동작하며, real KIS API 대비 미검증이므로 단일 전략, 단일 market(KRX 현금), minimum-size, 수동 확인(per-order confirm), 즉시 rollback(kill switch) 기준을 충족해야 한다. 첫 주문은 최소 수량으로 검증한다.
 
 ## 완료 판정
 
-Phase 18 완료는 live 기능 구현이 아니라, 전환 조건과 금지 조건이 decision-complete로 문서화되고 no-live 상태가 유지되는 것으로 판정한다.
+Phase 18 완료는 전환 조건과 안전장치 조건이 decision-complete로 문서화되는 것으로 판정한다. 현재는 그 조건 위에서 REAL KIS live 주문이 다중 게이트(fail-closed by default) 뒤로 활성화되어 있으며, real KIS API 대비 live 실행은 미검증이므로 첫 주문은 최소 수량으로 확인한다.

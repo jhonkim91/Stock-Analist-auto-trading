@@ -2,12 +2,14 @@
 
 ## 핵심 요약
 
-현재 MVP는 분석, 스크리닝, 백테스트, 리포트, paper preview 중심이다. 이번 목표는 `jhonkim91/Stock-Analist-auto-trading` 저장소를 KIS 모의투자 전용 자동매매 봇으로 확장하되, 기본값은 계속 disabled/fail-closed/dry-run으로 유지하는 것이다.
+현재 MVP는 분석, 스크리닝, 백테스트, 리포트, paper preview 중심이다. 이번 목표는 `jhonkim91/Stock-Analist-auto-trading` 저장소를 KIS 모의투자 및 실전투자 자동매매 봇으로 확장하되, 기본값은 계속 fail-closed/dry-run으로 유지하는 것이다. 실전 KIS 주문은 다중 게이트(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + per-order confirm + kill switch + max-notional) 뒤에서 활성화되며 기본값은 fail-closed다.
+
+배포 형태는 단일 프로그램이다. 하나의 FastAPI 프로세스가 Next.js static export를 same-origin으로 서빙하고, pywebview 네이티브 윈도우로 단일 Windows `.exe`로 패키징된다(`launcher.py`가 `app_main.py --host 127.0.0.1 --port 8000` 단일 프로세스 실행). 별도 frontend 프로세스(`npm run start`/`next start`, :3000)나 별도 backend를 가리키는 `NEXT_PUBLIC_API_BASE_URL`은 없다. UI는 한국어이며 monospace + beige light 테마에 light/dark 토글 슬라이더를 제공한다. 로그인은 `backend/data/users.json` 기반 로컬 JSON(PBKDF2-HMAC-SHA256, HMAC 30일 토큰, 사용자가 존재할 때만 인증 강제, `/api/auth/*` + 프론트 AuthGate/logout)으로 opt-in 제공한다.
 
 ## 목표
 
-- KIS paper/sandbox 환경에서만 시세 수신, 후보 선정, 리스크 검증, 주문 제출, 주문/체결/포지션/계좌 동기화, 감사 로그, 운영 상태 조회를 수행한다.
-- 실전투자 주문, 실계좌 주문취소, 신용, 공매도, 파생상품, live fallback은 구현하지 않는다.
+- KIS paper/sandbox 및 실전 환경에서 시세 수신, 후보 선정, 리스크 검증, 주문 제출, 주문/체결/포지션/계좌 동기화, 감사 로그, 운영 상태 조회를 수행한다.
+- 실전 KIS 주문은 사용자 본인 계좌 대상 KRX 국내 현금 주문만 다중 게이트 뒤에서 활성화한다(고위험). 신용, 공매도, 파생상품은 구현하지 않는다.
 - CI와 일반 테스트는 mock/fake client만 사용하고 실제 KIS 호출은 runbook의 수동 절차로 분리한다.
 
 ## 범위
@@ -15,7 +17,7 @@
 | 구분 | 포함 | 제외 |
 |---|---|---|
 | Phase 1 | KIS paper 설정, env 계약, token lifecycle metadata/issue gate, `KisHttpClient`, KIS 상태 API 보강 | 기본 자동 token 발급, raw token 저장 |
-| Phase 2 | KIS paper broker adapter, DTO, mock submit/cancel/status/account 조회, capability 표시 | live adapter, paper-to-live fallback |
+| Phase 2 | KIS paper broker adapter, DTO, mock submit/cancel/status/account 조회, capability 표시 | paper-to-live 자동 fallback |
 | Phase 3 | `paper_orders`, `paper_fills`, `paper_positions`, `paper_account_snapshots`, `paper_audit_events`, idempotency, paper API alias | 기존 API key 제거, legacy `orders` 생성 |
 | Phase 4 | realtime worker skeleton, polling quote cache, heartbeat/stale 상태, `/api/paper/realtime/status`, stale quote 신규 주문 차단 | 실전 WebSocket 운영, live 체결 통보 |
 | Phase 5 | bot executor, 후보 선정, sizing, 주문 전 risk gate, dry-run/run 분리, run/decision 저장 | 실전 주문, 임의 후보 생성 |
@@ -25,7 +27,7 @@
 
 - `KIS_ENV=paper`, `PAPER_TRADING_ENABLED=true`, `PAPER_BOT_CONFIRM=true`, kill switch off 상태가 모두 충족될 때만 KIS 모의투자 주문 경로가 열릴 수 있다.
 - 기본 설정은 항상 `enabled=false`, `network_enabled=false`, `preview_only=true`, `kill_switch_enabled=true`다.
-- `ENABLE_REAL_ORDER=true`, live base URL, live fallback, live adapter submit은 항상 차단한다.
+- 실전 KIS 주문은 기본값 fail-closed이며 `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + per-order confirm + kill switch + max-notional 게이트를 모두 충족할 때만 KRX 국내 현금 주문으로 열린다. 실전 실행 경로는 실제 KIS API 대비 아직 미검증이므로 첫 주문은 최소 수량으로 검증한다.
 - secret, token, account number 원문은 로그, API 응답, DB에 저장하지 않는다.
 - 기존 API 응답 key는 제거하지 않고 additive 필드와 route만 추가한다.
 - 실제 KIS 네트워크 호출은 테스트에서 금지하고 수동 runbook으로만 수행한다.
@@ -94,5 +96,5 @@
 - bot preview와 bot run은 분리되어 있고 auto-submit은 별도 gate 뒤에 있다.
 - bot run 결과는 submitted/skipped/rejected와 reason code로 저장 및 조회된다.
 - paper dashboard와 daily/weekly report paper section이 제공된다.
-- 실전투자 경로는 계속 차단된다.
+- 실전투자 경로는 기본값 fail-closed이며 다중 게이트(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + per-order confirm + kill switch + max-notional)를 충족할 때만 KRX 국내 현금 주문으로 활성화된다.
 - `python -m pytest backend/tests -q`, `alembic upgrade head`, `git diff --check` 검증 결과를 문서화한다.

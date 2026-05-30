@@ -57,7 +57,7 @@ Phase 7 이후 구현은 다음 shape를 따른다. Phase 6에서는 코드로 �
 
 - Phase 6에서는 notifier service, route, migration, scheduler, UI를 구현하지 않는다.
 - KIS paper submit/cancel/sync network path를 열지 않는다.
-- live trading, real account submit/cancel/balance mutation, WebSocket order execution은 notifier 결정과 무관하게 계속 금지한다.
+- live trading(real account submit/cancel/balance mutation, WebSocket order execution)은 별도 fail-closed gate(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live credential/host + per-order confirm + kill switch + max-notional)로 제어되며, notifier 결정이 이 gate를 열거나 trading path를 변경하지 않는다.
 - notifier 실패는 paper order, fill, position, portfolio snapshot commit을 실패시키면 안 된다.
 - retry는 bounded outbox 기반으로만 허용하고 synchronous trading path에서 무한 재시도하지 않는다.
 

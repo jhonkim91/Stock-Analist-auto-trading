@@ -7,7 +7,7 @@ Phase 3F는 주문 기능 확장보다 먼저 데이터 read-only adapter 기반
 - Phase 3E-1 paper trading safety shell은 완료 상태로 유지한다.
 - 유지: `/api/paper/status`, `/api/paper/orders/preview`, `/paper`.
 - 미구현 유지: `POST /api/paper/orders`, fill simulator, paper mutation.
-- 금지: 실주문, KIS 주문, cancel, fill, websocket, live broker, token 발급/cache, KIS credential 저장, broker network call.
+- Phase 3F 작업 범위 한정: 이 단계는 read-only 데이터에만 관여하며 주문 경로(실주문, KIS 주문, cancel, fill), websocket, live broker, token 발급/cache, broker network call을 다루지 않는다. (참고: 이후 baseline에서 실제 KIS live 주문은 다중 fail-closed 게이트 뒤에서 활성화되었다. 아래 "다음 Phase 연결" 참조.)
 - 안전 기준: `orders_count == 0`, `paper_orders/fills/positions/audit_events == 0`.
 
 ## Phase 3F 목표
@@ -123,8 +123,8 @@ DB 변경 원칙:
 - index/sector, symbol master, trading calendar, corporate action normalize output 검증.
 - fixture sensitive field 부재 검증.
 - no network/no token/no mutation 검증.
-- KIS execution routes 404 유지.
-- `POST /api/paper/orders`, `POST /api/paper/fill-simulator/run` 404 유지.
+- (Phase 3F-3 시점 검증) KIS execution routes 404 유지. (참고: 이후 baseline에서 `/api/kis/orders/*` live 주문 routes가 다중 fail-closed 게이트 뒤에서 추가되었다.)
+- (Phase 3F-3 시점 검증) `POST /api/paper/orders`, `POST /api/paper/fill-simulator/run` 404 유지.
 - targeted pytest, 전체 backend pytest, frontend lint/typecheck/build/audit 통과.
 
 ## Phase 3F-4: Data Freshness/Quality Summary
@@ -188,7 +188,7 @@ Response 주요 필드:
 - `npm.cmd exec tsc -- --noEmit`: 통과.
 - `npm.cmd run build`: 통과.
 - `npm.cmd audit --audit-level=moderate`: found 0 vulnerabilities.
-- fresh `8010/3010` `/data` Playwright screenshot smoke 통과.
+- fresh single-process app (`app_main.py --host 127.0.0.1 --port 8000`, Next static export same-origin) `/data` Playwright screenshot smoke 통과.
 
 ## Phase 3F 공통 검증 명령
 
@@ -201,7 +201,7 @@ npm.cmd run build
 npm.cmd audit --audit-level=moderate
 ```
 
-필요 시 fresh server `8010/3010`으로 `/data` browser smoke를 수행한다.
+필요 시 fresh single-process app(`app_main.py --host 127.0.0.1 --port 8000`, Next static export를 same-origin으로 서빙)으로 `/data` browser smoke를 수행한다.
 
 ## 다음 Phase 연결
 
@@ -209,5 +209,5 @@ npm.cmd audit --audit-level=moderate
 - Phase 3H: momentum rank, relative strength leader, new high breakout, Darvas box, pullback 20EMA, weekly stage analysis.
 - Phase 3I: weekly return, YTD return, benchmark return, setup별 win rate/expectancy, failed trades review, filter attribution, regime diagnostics, parameter drift.
 - Phase 3J: max open positions, gross/sector/symbol/strategy exposure, daily loss limit, event risk hold, gap risk estimate.
-- Phase 4A: broker paper adapter. 실제 live가 아니라 paper부터 다루며 별도 승인 전까지 paper mutation은 구현하지 않는다.
-- Phase 4B: live gate design. 실주문 설계와 연결은 별도 승인 전까지 구현하지 않는다.
+- Phase 4A: broker paper adapter. paper부터 다룬다.
+- Phase 4B: live gate design. 실제 KIS live 주문은 현재 활성화되어 있으며(사용자 본인 계좌, 고위험), 기본 fail-closed로 다중 게이트(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live credential + live host + per-order confirm + kill switch + max-notional) 뒤에서만 동작한다. KRX 국내 현금 주문만 지원하며, `/api/kis/orders/{status,preview,submit,cancel}`와 `/api/live/status`가 `KisLiveOrderExecutor`(paper mapper 재사용, V->T TR ID)를 통해 제공된다. 실제 KIS API 대비 live 실행은 미검증 상태이므로 첫 주문은 최소 수량으로 검증한다.

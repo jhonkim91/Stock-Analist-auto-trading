@@ -2,7 +2,9 @@
 
 ## 핵심 요약
 
-Phase 20은 실전 주문 기능 구현이 아니라 별도 승인형 canary 절차와 redacted 검증 기록을 준비하는 단계다. 현재 저장소는 live adapter가 disabled scaffold로 고정되어 있고 live 주문 route가 없으므로 실계좌 주문은 실행할 수 없다.
+실전 KIS live 주문이 ENABLED 되어 있다(고위험, 사용자 본인 계좌). 기본값은 fail-closed이며 다중 게이트(LIVE_TRADING_ENABLED + LIVE_ORDER_SUBMIT_ENABLED + ENABLE_REAL_ORDER + live credential + live host + per-order confirm + kill switch + max-notional) 뒤에서만 동작한다. KRX 국내 현금 주문만 지원하며 route는 `/api/kis/orders/{status,preview,submit,cancel}` + `/api/live/status`로 `KisLiveOrderExecutor`(paper mapper 재사용, V->T TR ID)를 사용한다. live 실행은 실제 KIS API 대비 아직 미검증이므로 첫 주문은 최소 수량으로 검증한다. 이 canary runbook은 redacted 검증 기록과 rollback 절차를 다룬다.
+
+본 프로그램은 단일 .exe(pywebview 네이티브 창)로 배포되며, 하나의 FastAPI 프로세스가 Next.js static export를 same-origin으로 서빙한다(별도 frontend 프로세스 없음). UI는 한국어, monospace + beige 라이트 테마에 라이트/다크 토글 슬라이더를 제공한다. 로그인은 `backend/data/users.json`(PBKDF2-HMAC-SHA256) 기반 로컬 JSON 인증과 HMAC 30일 토큰을 사용하는 opt-in 방식이다.
 
 ## 공식 확인 기준
 
@@ -16,12 +18,12 @@ Phase 20은 실전 주문 기능 구현이 아니라 별도 승인형 canary 절
 
 | Gate | 필요 조건 | 현재 판정 |
 |---|---|---|
-| 사용자 승인 | Phase 20 별도 승인 문구 | 요청 수신 |
+| 사용자 승인 | live 주문 활성화 승인 문구 | 요청 수신 |
 | reviewer | 실행 직전 human reviewer 지정 | 미확인 |
 | 환경 분리 | paper, prod-readonly, prod-live 분리 증거 | 미확인 |
 | rollback | kill switch, scheduler stop, notifier-only rollback 절차 | 문서화 필요 |
-| live adapter | endpoint, 주문/취소/조회/체결 contract 확인 | 현재 disabled scaffold |
-| public route | live route는 Phase 20 실제 승인 전까지 없음 | 없음 |
+| live executor | endpoint, 주문/취소/조회/체결 contract 확인 | `KisLiveOrderExecutor` 활성, 실제 KIS API 대비 미검증 |
+| public route | `/api/kis/orders/{status,preview,submit,cancel}` + `/api/live/status` | 활성 (fail-closed 기본값) |
 | secret | env-level secret, 원문 출력 금지 | 원문 미노출 유지 |
 
 ## Rollback 절차
@@ -54,4 +56,4 @@ git diff --check
 
 ## 완료 판정
 
-현재 Phase 20 산출물의 완료 기준은 redacted preflight record와 canary 금지 조건이 문서화되고, 저장소가 실전 주문을 실행할 수 없음을 테스트로 증명하는 것이다. 실제 controlled live canary 실행은 별도 구현 승인, 환경 분리, reviewer, rollback proof가 모두 갖춰진 다음 별도 작업으로 다룬다.
+완료 기준은 redacted preflight record와 canary 금지 조건이 문서화되고, live 주문이 fail-closed 다중 게이트 뒤에서만 동작함을 테스트로 증명하는 것이다(전체 pytest 534 통과). 실제 controlled live canary 실행은 환경 분리, reviewer, rollback proof가 모두 갖춰지고 첫 주문을 최소 수량으로 검증한 다음 진행한다.

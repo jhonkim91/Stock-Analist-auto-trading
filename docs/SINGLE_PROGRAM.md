@@ -16,6 +16,9 @@
 - 사이드바 하단의 **슬라이더 토글**로 라이트↔다크 전환. 선택은 `localStorage('sa-theme')`에 저장되며,
   최초 방문 시 OS 선호(`prefers-color-scheme`)를 따른다. 페인트 이전 사전 스크립트로 깜빡임(FOUC) 없음.
 - 모든 색은 `frontend/app/globals.css`의 CSS 변수(`:root` / `[data-theme="dark"]`)로 일원화.
+- **로컬 JSON 로그인**: 자격증명은 `backend/data/users.json`(PBKDF2-HMAC-SHA256)에 저장하고,
+  HMAC 서명 30일 토큰을 발급한다. 사용자가 한 명이라도 생성된 뒤에만 인증을 강제하는 **opt-in** 방식이며,
+  프론트엔드의 AuthGate(설정/로그인)와 로그아웃을 제공한다. 라우트는 `/api/auth/*`.
 
 ## 구조
 
@@ -64,7 +67,8 @@ py launcher.py build-exe
 | `DATABASE_URL` | DB 위치 override | exe 옆 `backend/data/app.db` |
 | `NEXT_PUBLIC_API_BASE_URL` | (개발) 프론트 API base | 빌드 시 빈 값(동일 오리진) |
 
-> KIS/Telegram/Discord 등 외부 연동 자격증명은 기존과 동일하게 `.env`/환경 변수로 주입한다.
+> KIS/Telegram/Discord 등 외부 연동 자격증명과 설정은 `.env`/환경 변수뿐 아니라 **UI에서 직접 입력·토글**할 수 있고,
+> `backend/data/runtime_env.json`에 **영속**된다(허용 키만, 민감 값은 마스킹). 시작 시 로드된다.
 
 ## 개발 모드(선택)
 

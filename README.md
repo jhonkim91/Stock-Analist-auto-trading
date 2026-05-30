@@ -1,8 +1,8 @@
 # Stock Analyst Auto Trading
 
-주식 분석, 스크리닝, 백테스트, 텔레그램 리포트, KIS 모의투자 자동매매봇을 단계적으로 구현하는 FastAPI + Next.js 프로젝트입니다.
+주식 분석, 스크리닝, 백테스트, 텔레그램 리포트, KIS 모의투자 자동매매봇을 단계적으로 구현하는 FastAPI + Next.js 프로젝트입니다. 하나의 FastAPI 프로세스가 Next.js static export를 same-origin으로 서빙하고, pywebview 네이티브 창으로 단일 Windows `.exe`로 패키징됩니다. UI는 한국어이며, monospace + beige 라이트 테마에 라이트/다크 토글 슬라이더를 제공합니다. 로컬 JSON 기반 로그인(`backend/data/users.json`, PBKDF2-HMAC-SHA256, HMAC 30일 토큰)은 사용자가 한 명이라도 생기면 적용되는 opt-in 방식입니다.
 
-현재 기준선은 `Project Reset: Telegram + KIS Paper Trading Bot`입니다. 기존 분석/스크리너/백테스트/리포트/포트폴리오 기능은 보존하고, 주문/체결/잔고/포지션 갱신은 KIS paper 모의투자 계좌에서만 허용합니다. 실계좌 live 자동매매, live fallback, secret 하드코딩은 계속 비활성화합니다.
+현재 기준선은 `Project Reset: Telegram + KIS Paper Trading Bot`입니다. 기존 분석/스크리너/백테스트/리포트/포트폴리오 기능은 보존하고, 주문/체결/잔고/포지션 갱신은 KIS paper 모의투자 계좌를 중심으로 다룹니다. 실계좌 live 주문은 활성화되어 있으나(사용자 본인 계좌, 고위험) 기본은 fail-closed이며 다중 gate를 모두 통과해야만 동작합니다.
 
 상태 요약은 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md), 단계 계획은 [docs/plans/README.md](docs/plans/README.md), 최신 검증 기록은 [docs/VALIDATION.md](docs/VALIDATION.md), DB migration 절차는 [docs/DB_MIGRATION.md](docs/DB_MIGRATION.md)를 기준으로 봅니다.
 
@@ -14,7 +14,7 @@
 | Phase | `Telegram + KIS Paper Trading Bot skeleton` |
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석 엔진 + Telegram command/webhook/polling/report scheduler + KIS paper bot 전환 진행 |
-| Trading state | `analysis_only`, `telegram_report`, `paper_kis`, `live_disabled` 실행 모드 분리 |
+| Trading state | `analysis_only`, `telegram_report`, `paper_kis`, `live_kis` 실행 모드 분리. live는 다중 gate fail-closed 기본 |
 | Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_market_orders` -> `534 passed in 477.90s`; market/open-order focused `16 passed` |
 | Latest secret scan | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
@@ -27,7 +27,7 @@
 | `analysis_only` | 로컬 DB 기반 분석, 스크리너, 백테스트, 리포트 |
 | `telegram_report` | Telegram 명령과 daily/weekly 리포트 전송 |
 | `paper_kis` | KIS 모의투자 API 기반 주문, 체결 동기화, 포지션 갱신 |
-| `live_disabled` | 실계좌 live 주문/취소/체결 차단 |
+| `live_kis` | 실계좌 KIS live 주문/취소/체결. 기본 fail-closed, 다중 gate(LIVE_TRADING_ENABLED + LIVE_ORDER_SUBMIT_ENABLED + ENABLE_REAL_ORDER + live credentials + live host + per-order confirm + kill switch + max-notional)를 모두 통과해야만 동작. KRX 국내 현금 주문 only |
 
 ## Telegram + KIS Paper Reset Surface
 
@@ -44,7 +44,7 @@
 - Paper bot 자동매매: 기본 OFF(`enabled=false`, `auto_submit=false`, scheduler false). Telegram 또는 설정에서 명시적으로 켜야 동작.
 - Paper bot runner: 자동 시작은 없고, loop는 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE`로 제한된 bounded runner만 허용한다.
 - Telegram `/bot status|enable|disable|auto|run|stop`: paper bot을 process env 기준으로 명시 제어한다. `enable`, `disable`, `auto`, `run`은 `confirm`이 필요하다.
-- Settings runtime env 버튼: 개별 gate ON/OFF와 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 현재 backend 프로세스에 즉시 반영한다. Runtime env 상태 조회가 늦어져도 preset/toggle fallback 버튼은 먼저 렌더링되어 같은 API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다. 모든 주요 버튼은 hover/focus 시 한국어 설명을 표시하고, `ENABLE_REAL_ORDER`는 클릭해도 `false`로 강제 적용한다.
+- Settings runtime env 버튼: 개별 gate ON/OFF와 `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset을 현재 backend 프로세스에 반영하고 allowlist 키는 `backend/data/runtime_env.json`에 마스킹 저장으로 persist한다. KIS credential 등 자격 증명도 in-app에서 입력해 저장할 수 있다. Runtime env 상태 조회가 늦어져도 preset/toggle fallback 버튼은 먼저 렌더링되어 같은 API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다. 모든 주요 버튼은 hover/focus 시 한국어 설명을 표시한다.
 - KIS paper API matrix: 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수를 재확인했다. 국내 정정취소가능/매도가능수량조회는 샘플상 real `TTTC0084R`/`TTTC8408R` only라 paper 구현은 계속 보류한다.
 
 ## Implemented Scope
@@ -285,10 +285,15 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `GET` | `/api/trade-journal/entries`, `/api/trade-journal/csv` | backtest ledger와 paper fill/order 기반 매매일지 조회/CSV export |
 | `GET` | `/api/broker/status` | broker safety status |
 | `POST` | `/api/broker/orders/preview` | venue/session metadata 포함 dry-run preview only |
-| `GET` | `/api/kis/token/status` | KIS paper token issue/refresh/cache readiness, live endpoint disabled status |
+| `GET` | `/api/kis/token/status` | KIS paper token issue/refresh/cache readiness, live endpoint gate status |
 | `POST` | `/api/kis/token/issue` | confirm-gated KIS paper access token 발급, secret redacted metadata 반환 |
 | `POST` | `/api/kis/token/refresh` | refresh token 우선 갱신, refresh token 없으면 paper issue fallback |
 | `POST` | `/api/kis/token/ensure` | cache hit 우선, 만료/임박 시 refresh 또는 issue fallback |
+| `GET` | `/api/live/status` | 실계좌 live 주문 gate 상태 표시 |
+| `GET` | `/api/kis/orders/status` | live 주문 상태 조회 |
+| `POST` | `/api/kis/orders/preview` | live 주문 dry-run preview |
+| `POST` | `/api/kis/orders/submit` | 다중 gate(LIVE_TRADING_ENABLED + LIVE_ORDER_SUBMIT_ENABLED + ENABLE_REAL_ORDER + live credentials + live host + per-order confirm + kill switch + max-notional)를 모두 통과해야만 실계좌 KRX 국내 현금 주문 제출 |
+| `POST` | `/api/kis/orders/cancel` | 동일 gate 뒤 live 주문 취소 |
 | `GET` | `/api/paper/status` | paper_kis safety status |
 | `POST` | `/api/paper/orders/preview` | venue/session metadata 포함 paper deny preview only |
 | `POST` | `/api/paper/orders/submit`, `/api/paper/orders` | local/KIS paper submit alias, `KIS_ENV=paper`, `PAPER_TRADING_ENABLED=true`, `PAPER_BOT_CONFIRM=true`, `confirm=true`, idempotency, kill-switch off 필요 |
@@ -313,9 +318,9 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 | `GET` | `/api/telegram/scheduler/status` | Telegram report scheduler 상태, 기본 OFF/auto-start false |
 | `POST` | `/api/telegram/scheduler/run-once` | confirm 뒤 daily/weekly report 생성 및 Telegram summary dry-run/send |
 | `POST` | `/api/telegram/webhook` | Telegram webhook update를 command dispatcher로 연결 |
-| `GET` | `/api/settings/runtime-env` | process-only runtime gate와 Settings preset 목록, secret redacted |
-| `POST` | `/api/settings/runtime-env/toggle` | allowlist boolean env gate 1개를 현재 backend 프로세스에 반영 |
-| `POST` | `/api/settings/runtime-env/preset` | paper_kis/Telegram/paper bot gate 묶음을 현재 backend 프로세스에 일괄 반영, live lock은 false 유지 |
+| `GET` | `/api/settings/runtime-env` | runtime gate와 Settings preset 목록, secret redacted. allowlist 키는 `backend/data/runtime_env.json`에 persist |
+| `POST` | `/api/settings/runtime-env/toggle` | allowlist boolean env gate 1개를 현재 backend 프로세스에 반영하고 `backend/data/runtime_env.json`에 마스킹 저장 |
+| `POST` | `/api/settings/runtime-env/preset` | paper_kis/Telegram/paper bot gate 묶음을 현재 backend 프로세스에 일괄 반영하고 `backend/data/runtime_env.json`에 persist |
 | `POST` | `/api/screener/run` | rule-based screener run |
 | `GET` | `/api/screener/strategies` | frontend strategy selector metadata |
 | `GET` | `/api/screener/results` | screener result list with explanation contract |
@@ -332,7 +337,7 @@ Weekly review는 `backtest_trade_ledger`가 있으면 `realized_trade_count`, `r
 
 ## Single PC Launcher
 
-Windows 단일 PC 실행은 기존 FastAPI backend와 Next.js frontend 구조를 유지한 채 launcher가 두 프로세스를 함께 관리한다.
+Windows 단일 PC 실행은 단일 프로세스 구조다. launcher는 별도 frontend 프로세스 없이 `app_main.py --host 127.0.0.1 --port 8000` 하나만 띄우며, 이 FastAPI 프로세스가 Next.js static export를 same-origin으로 서빙하고 pywebview 네이티브 창으로 표시한다. 전체는 단일 Windows `.exe`로 패키징된다.
 
 ```powershell
 py launcher.py check
@@ -340,7 +345,7 @@ py launcher.py setup
 py launcher.py run
 ```
 
-더블클릭 실행은 프로젝트 루트의 `start_stock_analyst.cmd`를 사용한다. 실행이 완료되면 `http://127.0.0.1:3000/dashboard`가 기본 화면이며, backend는 `http://127.0.0.1:8000`에서 동작한다.
+더블클릭 실행은 프로젝트 루트의 `start_stock_analyst.cmd`를 사용한다. 실행이 완료되면 backend와 UI 모두 `http://127.0.0.1:8000`에서 same-origin으로 동작한다.
 
 종료:
 
@@ -350,10 +355,10 @@ py launcher.py stop
 
 주의 사항:
 
-- launcher는 기본 포트 `8000`과 `3000`만 사용한다.
+- launcher는 기본 포트 `8000` 하나만 사용한다.
 - 해당 포트가 launcher가 띄운 프로세스가 아닌 다른 프로세스에 의해 점유되어 있으면 stale server 위험 때문에 실행을 중단한다.
-- `setup`은 `.env.local`을 수정하지 않고 `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000` 환경 변수로 Next.js production build를 수행한다.
-- 실주문, 실계좌 체결, live broker/order route는 추가하지 않는다. local paper fill/position mutation은 simulator gate와 confirm/idempotency 조건에서만 허용한다.
+- `setup`은 Next.js static export를 빌드해 같은 FastAPI 프로세스에서 same-origin으로 서빙한다. 별도 frontend 호스트나 `NEXT_PUBLIC_API_BASE_URL`로 분리된 backend 지정은 사용하지 않는다.
+- 실계좌 live 주문은 다중 gate fail-closed 뒤에서만 허용한다. local paper fill/position mutation은 simulator gate와 confirm/idempotency 조건에서만 허용한다.
 
 ## Run Locally
 
@@ -365,16 +370,15 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Frontend:
+Frontend (static export):
 
 ```powershell
 cd frontend
 npm.cmd install
 npm.cmd run build
-npm.cmd run start -- --hostname 127.0.0.1 --port 3000
 ```
 
-backend 포트가 `8001` 등으로 바뀌면 `frontend/.env.local`의 `NEXT_PUBLIC_API_BASE_URL`을 맞춘 뒤 다시 build/start 해야 합니다.
+frontend는 별도 프로세스로 실행하지 않습니다. `npm.cmd run build`가 Next.js static export를 생성하면 위 FastAPI 프로세스가 same-origin으로 서빙하므로, API는 항상 같은 origin(`http://127.0.0.1:8000`)을 사용합니다.
 
 ## Verification Commands
 
@@ -387,7 +391,7 @@ py launcher.py setup
 py launcher.py run --no-browser
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:8000/api/data/status
-Invoke-WebRequest http://127.0.0.1:3000/dashboard -UseBasicParsing
+Invoke-WebRequest http://127.0.0.1:8000/dashboard -UseBasicParsing
 py launcher.py stop
 ```
 
@@ -439,22 +443,22 @@ npm.cmd run build
 ## Safety Invariants
 
 - `orders_count == 0` 유지.
-- 기본 config에서는 실계좌 live 주문/취소/체결이 계속 0건이다. `paper_orders`는 confirm/idempotency/risk/quote/KIS paper gate를 통과한 경우, `paper_fills`/`paper_positions`는 simulator/sync gate를 통과한 경우에만 증가한다.
-- `/api/broker/status`는 `live_trading_enabled=false`, `token_issued=false`, `network_call_performed=false`를 반환하고, paper adapter는 credentials 미충족 시 `can_submit=false`다.
+- 기본 config에서는 실계좌 live 주문/취소/체결이 fail-closed로 0건이다. live 주문은 다중 gate(LIVE_TRADING_ENABLED + LIVE_ORDER_SUBMIT_ENABLED + ENABLE_REAL_ORDER + live credentials + live host + per-order confirm + kill switch + max-notional)를 모두 통과해야만 생성되며 KRX 국내 현금 주문 only다. `paper_orders`는 confirm/idempotency/risk/quote/KIS paper gate를 통과한 경우, `paper_fills`/`paper_positions`는 simulator/sync gate를 통과한 경우에만 증가한다.
+- `/api/broker/status`는 기본 gate 미충족 시 `live_trading_enabled=false`, `token_issued=false`, `network_call_performed=false`를 반환하고, paper adapter는 credentials 미충족 시 `can_submit=false`다.
 - `/api/broker/orders/preview`는 실제 주문, token 발급, network call, adapter order call 없이 deny preview만 반환하며, `session_metadata`는 additive metadata다.
 - `/api/paper/status`는 `paper_kis` runtime/config gate를 반영하되 live submit과 live fallback은 계속 false로 유지한다.
 - `/api/paper/orders/preview`는 paper order/fill/position/audit mutation 없이 preview만 반환한다. `/api/paper/orders/submit`은 backend confirm/idempotency/kill-switch gate 없이는 생성하지 않는다.
 - `/api/paper/fill-simulator/run`과 `/api/paper/risk/exit-check`는 `can_simulate_fills`, simulator enabled, confirm, idempotency, kill-switch, no-live gate 없이는 fill/position을 생성하지 않는다.
 - KRX/NXT session window 판정은 로컬 정적 metadata이며 실제 거래소, KIS token, 호출량 API와 통신하지 않는다.
-- `/api/live/status`, `/api/kis/orders/*` route는 disabled scaffold로만 등록되어 `live_order_created=false`, `network_call_performed=false`를 유지한다.
+- `/api/live/status`, `/api/kis/orders/*` route는 `KisLiveOrderExecutor`로 실제 KRX 국내 현금 live 주문을 지원한다(paper mapper 재사용, V->T TR ID 변환). 다중 gate(LIVE_TRADING_ENABLED + LIVE_ORDER_SUBMIT_ENABLED + ENABLE_REAL_ORDER + live credentials + live host + per-order confirm + kill switch + max-notional)를 모두 통과하지 않으면 `live_order_created=false`, `network_call_performed=false`로 fail-closed 유지한다. live 실행 경로는 실제 KIS API 대비 아직 검증되지 않았으므로 첫 주문은 최소 수량으로 확인해야 한다.
 - `/api/kis/broker/*`, `/api/kis/websocket/*` route는 미등록 404 상태를 유지.
 - `.cache/kis/token.json`은 `KIS_TOKEN_CACHE_ENABLED=true`에서만 생성되며 Git에는 포함하지 않음.
 - API key, secret, token, password, account/header/raw credential 값을 저장하거나 출력하지 않음.
 
 ## Not Implemented
 
-- 실계좌 실제 주문, 주문 취소, 체결, 계좌 자금 이동, live broker.
-- live broker order create, live fill, live position mutation.
+- 계좌 자금 이동. (실계좌 live 주문/취소는 다중 gate fail-closed 뒤에서 구현됨. KRX 국내 현금 주문 only이며 실제 KIS API 대비 미검증.)
+- 해외 시장 live 주문, live position state machine 기반 자동 운영.
 - Telegram 장시간 상주 운영 scheduler auto-start. Polling/webhook run-once 구조는 구현됨.
 - KRX/yfinance 실제 network fetch.
 - 장시간 상주형 완전 자동매매 운영 loop, live broker adapter, AI prediction model.

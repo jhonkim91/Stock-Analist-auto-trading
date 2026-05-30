@@ -2,7 +2,9 @@
 
 ## 핵심 요약
 
-이 프로젝트의 paper trading은 `모의투자` 보조 기능이며 `실거래 아님` 상태를 유지한다. KIS paper endpoint, TR ID, request field가 공식 문서로 완전 확인되기 전에는 broker submit/cancel/sync network 구현을 사용하지 않는다.
+이 프로젝트의 paper trading은 `모의투자` 기능이다. 실계좌 KIS 주문도 다중 게이트(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + 주문별 confirm + kill switch + max-notional) 뒤에서 기본 fail-closed로 활성화되어 있으며, KRX 국내 현금 주문만 허용한다(`/api/kis/orders/{status,preview,submit,cancel}` + `/api/live/status`, `KisLiveOrderExecutor`가 paper mapper 재사용, V->T TR ID). 실계좌 실행 경로는 실제 KIS API 대비 미검증이므로 첫 주문은 최소 수량으로 검증한다.
+
+전체 시스템은 단일 프로그램이다. 하나의 FastAPI 프로세스가 Next.js 정적 export를 서빙하고, pywebview 네이티브 창으로 단일 Windows .exe로 패키징된다(`launcher.py`가 `app_main.py --host 127.0.0.1 --port 8000` 단일 프로세스 구동, 별도 frontend 프로세스 없음, same-origin). UI는 한국어이며 monospace + beige 라이트 테마에 라이트/다크 토글 슬라이더를 제공한다. 로그인은 로컬 JSON 기반(`backend/data/users.json`, PBKDF2-HMAC-SHA256, HMAC 30일 토큰, 사용자가 생성된 뒤에만 인증 강제되는 opt-in, 라우트 `/api/auth/*`, 프론트엔드 AuthGate + logout)이다.
 
 ## 허용 범위
 
@@ -21,9 +23,8 @@
 
 ## 금지 범위
 
-- 실거래 주문, 주문 취소, 체결, 계좌 자금 이동.
-- live broker adapter 활성화.
-- paper mode에서 live mode fallback.
+- 실계좌 주문은 위 다중 게이트가 모두 통과된 경우에만 허용되며 기본값은 fail-closed이다. KRX 국내 현금 주문 외 경로(해외/파생 등)는 금지.
+- paper mode에서 의도하지 않은 live mode fallback.
 - KIS credential, access token, refresh token, 계좌번호, webhook, chat_id 원문 저장 또는 출력.
 - 공식 문서로 확인되지 않은 KIS endpoint, TR ID, request field 추정 구현.
 
@@ -64,8 +65,8 @@ cd ..
 | `PAPER_SYNC_WORKER_ENABLED` | `false` | KIS paper sync worker 실행 허용 |
 | `PAPER_SYNC_WORKER_INTERVAL_SECONDS` | `60` | bounded loop 간격 |
 | `PAPER_SYNC_WORKER_MAX_ITERATIONS` | `1` | runner 기본 반복 수 |
-| `ENABLE_REAL_ORDER` | `false` | KIS balance 조회 포함 실전/주문 경로 차단 |
-| `KIS_ACCESS_TOKEN` | `<placeholder>` | KIS paper balance 조회에 필요한 env-only token placeholder |
+| `ENABLE_REAL_ORDER` | `false` | 실계좌 주문 경로 fail-closed 게이트 중 하나(기본 false). live 주문은 `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명/host + 주문별 confirm + kill switch + max-notional이 모두 충족돼야 활성화 |
+| `KIS_ACCESS_TOKEN` | `<placeholder>` | KIS paper balance 조회에 필요한 token placeholder. 자격증명은 UI에서 입력해 `backend/data/runtime_env.json`(allowlist, 마스킹)에 영속화하거나 env로 제공 |
 | `KIS_ACCOUNT_NO` | `<placeholder>` | KIS paper balance 조회 CANO env placeholder |
 | `KIS_PRODUCT_CODE` | `<placeholder>` | KIS paper balance 조회 ACNT_PRDT_CD env placeholder |
 

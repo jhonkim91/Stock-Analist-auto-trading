@@ -4,7 +4,10 @@
 
 - [x] 방향 전환: `Project Reset: Telegram + KIS Paper Trading Bot`.
 - [x] 기본 목표 모드: `paper_kis`.
-- [x] 실계좌 live 자동매매는 범위 밖이며 `ENABLE_REAL_ORDER=true`는 계속 차단한다.
+- [x] 실계좌 KIS live 주문은 활성화되어 있으며(사용자 본인 계좌, 고위험), 기본은 fail-closed로 다중 gate(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional) 뒤에서만 KRX 국내 현금 주문을 허용한다. live 실행 경로는 실제 KIS API 대비 미검증이므로 첫 주문은 최소 수량으로 검증한다.
+- [x] 단일 프로그램으로 패키징한다: 하나의 FastAPI 프로세스가 Next.js static export를 same-origin으로 서빙하고, pywebview native window 단일 .exe로 배포한다(`launcher.py` -> `app_main.py --host 127.0.0.1 --port 8000`, 별도 frontend 프로세스/포트 없음).
+- [x] UI는 한국어이며 monospace + beige light 테마와 light/dark 토글 슬라이더를 제공한다.
+- [x] 로컬 JSON 기반 로그인을 지원한다: `backend/data/users.json`(PBKDF2-HMAC-SHA256), HMAC 30일 토큰, opt-in(사용자 생성 시에만 auth 강제), `/api/auth/*` route, frontend AuthGate + logout.
 - [x] 기존 분석/스크리너/백테스트/리포트/포트폴리오 기능은 보존한다.
 - [x] paper 주문은 legacy `orders`가 아니라 `paper_orders`를 사용한다.
 - [x] secret/token/account/chat id 원문은 코드, 문서, API 응답, 테스트 출력에 남기지 않는다.
@@ -16,7 +19,7 @@
 | `analysis_only` | 지원 | 로컬 DB 분석, 스크리너, 백테스트, 리포트 |
 | `telegram_report` | 진행 중 | Telegram 명령, webhook/polling dispatcher, report scheduler |
 | `paper_kis` | 진행 중 | KIS 모의투자 token/quote/order/fill/position mirror, sync worker wrapper |
-| `live_disabled` | 유지 | live endpoint/config가 있어도 실계좌 주문 차단 |
+| `live_kis` | 활성(고위험, fail-closed) | 실계좌 KIS live 주문이 다중 gate 통과 시에만 허용된다. KRX 국내 현금 주문 only, 실제 KIS API 대비 미검증 |
 
 ## 최근 변경 요약
 
@@ -43,19 +46,19 @@
 - paper risk gate에 `blacklist`, `cooldown_seconds`, `max_open_positions` 검사를 추가했다.
 - `/api/paper/bot/preview`, `/api/paper/bot/run`은 요청의 `watchlist_symbols`로 저장된 passed screener 후보 universe를 제한할 수 있다.
 - paper bot 자동매매 기본값을 OFF로 정렬했다: `backend/config/bot.yaml`의 `enabled=false`, `auto_submit=false`, scheduler false.
-- Settings runtime env 버튼은 클릭 시 process env에 반영되며 hover/focus에서 한국어 tooltip을 표시한다. `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset과 주요 toggle은 runtime env 조회가 늦어져도 fallback 버튼으로 렌더링되고 같은 API를 호출한다. `ENABLE_REAL_ORDER`는 항상 `false`로 강제 적용한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다.
+- Settings runtime env 버튼은 클릭 시 runtime env에 반영되며 `backend/data/runtime_env.json`에 persist된다(allowlist된 key만, 값은 masked). 자격 증명은 in-app에서 입력할 수 있다. hover/focus에서 한국어 tooltip을 표시한다. `모의 주문 준비`, `자동매매 ON`, `텔레그램 리포트 ON`, `봇/주문 정지` preset과 주요 toggle은 runtime env 조회가 늦어져도 fallback 버튼으로 렌더링되고 같은 API를 호출한다. `모의 주문 준비`와 `자동매매 ON`은 KIS token issue/cache, KIS quote, paper sync worker bounded loop gate도 함께 맞춘다.
 - 공식 `koreainvestment/open-trading-api` sample commit `33e0e1e65cd1c8c8b639531483ec0b327087bab1` 기준으로 국내/해외 regular paper endpoint/TR ID와 현재 adapter 상수 일치를 재확인했다.
 - 국내 정정취소가능주문조회/매도가능수량조회는 공식 샘플에서 real `TTTC0084R`/`TTTC8408R` only로 확인되어 paper TR 확인 전 구현 보류로 유지한다.
 - paper bot loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 실행되도록 보강했다.
 - `/api/paper/risk/exit-check`는 stop-loss/trailing stop 외에 이동평균 하향 교차를 `ma_cross` local sell order/fill로 처리한다.
 - Windows sandbox 프로세스 생성 오류는 재부팅 후 재현되지 않았고 PowerShell 기반 backend 검증이 정상 실행됐다.
-- 오래된 `disabled` 전제 테스트는 새 `paper_kis` 정책에 맞춰 `paper 기능은 켜짐, 실계좌/live와 무자격 네트워크 주문은 차단` 기준으로 갱신했다.
-- 오래된 문서/서비스 주석의 `paper mutation 금지`, `paper sync no-op` 표현은 새 `paper_kis` 정책에 맞춰 정리했다. paper writes는 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용되고 live mutation은 계속 차단된다.
+- 오래된 `disabled` 전제 테스트는 새 `paper_kis` 정책에 맞춰 `paper 기능은 켜짐, 무자격 네트워크 주문은 차단` 기준으로 갱신했다. 이후 실계좌 KIS live 주문은 fail-closed 다중 gate 뒤에서 활성화됐다.
+- 오래된 문서/서비스 주석의 `paper mutation 금지`, `paper sync no-op` 표현은 새 `paper_kis` 정책에 맞춰 정리했다. paper writes는 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용된다. live mutation은 fail-closed 다중 gate(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional)를 모두 통과할 때만 KRX 국내 현금 주문으로 허용된다.
 
 ## 안전 계약
 
-- [x] `paper_kis` 모드에서만 KIS 모의투자 주문/체결/잔고/포지션 갱신을 허용한다.
-- [x] live 실계좌 주문, 주문취소, 체결 처리, live fallback은 비활성화한다.
+- [x] `paper_kis` 모드에서 KIS 모의투자 주문/체결/잔고/포지션 갱신을 허용한다.
+- [x] 실계좌 KIS live 주문은 활성화되어 있으나 기본 fail-closed다. `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional이 모두 통과해야 KRX 국내 현금 주문이 제출된다. `KisLiveOrderExecutor`(paper mapper 재사용, V->T TR ID)가 `/api/kis/orders/{status,preview,submit,cancel}`과 `/api/live/status`를 처리하며, 실제 KIS API 대비 미검증이다.
 - [x] `kill_switch`, `max_order_notional`, `max_order_qty`, `max_open_positions`, `blacklist`, `cooldown`은 paper 주문 allow/deny gate로 유지한다.
 - [x] 모든 주문 생성에는 `idempotency_key`가 필요하다.
 - [x] 주문/취소/체결/Telegram command 판단은 audit log에 남긴다.
@@ -76,7 +79,7 @@
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_frontend_contract_only` -> `2 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_phase2_only` -> `10 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_paper_bot_scheduler.py backend/tests/test_no_live_trading_regression.py::test_paper_bot_endpoint_does_not_auto_submit_or_start_live_path -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_bot_default_off` -> `5 passed`.
-- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_is_process_only_and_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_keeps_live_order_locked_false backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` -> `5 passed`.
+- [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_phase2_api.py::test_runtime_env_toggle_persists_to_file_and_is_allowlisted backend/tests/test_phase2_api.py::test_runtime_env_toggle_can_enable_real_order_high_risk backend/tests/test_phase2_api.py::test_runtime_env_preset_enables_paper_kis_gates_without_live_order backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_settings_preset_focused` -> `5 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_telegram_scheduler_and_sync_worker.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_telegram_bot_control_tests` -> `10 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_api_matrix_docs.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_docs` -> `1 passed`.
 - [x] `.\.venv\Scripts\python.exe -m pytest backend/tests/test_kis_paper_adapter_contract.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_kis_matrix_adapter_contract` -> `15 passed`.
@@ -109,4 +112,4 @@
 - `.cache/kis/token.json`은 local runtime artifact이며 Git에 포함하지 않는다.
 - `KIS_MARKET_QUOTE_ENABLED=false`이면 종목 상세 API는 DB 최신 OHLCV fallback을 정상 경로로 사용한다.
 - `PAPER_TRADING_NETWORK_ENABLED=true`여도 token, broker mode, kill switch, idempotency, quote freshness, risk gate가 모두 통과해야 KIS paper adapter 호출이 가능하다.
-- `live_disabled` 정책 때문에 live base URL이 설정되어 있어도 실계좌 주문 권한으로 해석하지 않는다.
+- live base URL이 설정되어 있어도 그 자체로 주문 권한이 되지 않는다. 실계좌 주문은 `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional gate가 모두 통과할 때만 KRX 국내 현금 주문으로 제출되며, 실제 KIS API 대비 미검증이므로 첫 주문은 최소 수량으로 검증한다.

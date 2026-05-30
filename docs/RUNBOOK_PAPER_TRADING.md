@@ -2,14 +2,16 @@
 
 ## 핵심 요약
 
-이 runbook은 KIS 모의투자 전용 자동매매 기능의 수동 운영 절차다. 현재 repo 기본값은 paper/broker/bot/report/notification을 수동 실행 가능 상태로 열어두되, live 주문, live cancel, live fallback, scheduler auto-start, unattended loop는 비활성 상태로 유지한다. 실제 KIS 호출은 CI에서 실행하지 않는다.
+이 runbook은 KIS 모의투자 전용 자동매매 기능의 수동 운영 절차다. 현재 repo 기본값은 paper/broker/bot/report/notification을 수동 실행 가능 상태로 열어두되, scheduler auto-start와 unattended loop는 비활성 상태로 유지한다. 실제 KIS live 주문은 별도로 활성화되어 있으나 기본값은 fail-closed이며 다중 gate(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live credential + live host + 주문별 confirm + kill switch + max-notional)를 모두 통과해야 한다. 이 runbook 절차 자체는 paper 경로만 다룬다. 실제 KIS 호출은 CI에서 실행하지 않는다.
+
+이 프로그램은 단일 Windows .exe로 배포된다. 하나의 FastAPI 프로세스(`app_main.py --host 127.0.0.1 --port 8000`)가 Next.js static export를 같은 origin에서 서빙하고, pywebview 네이티브 창으로 표시된다. 별도 frontend 프로세스(`npm run start`/`next start`, :3000)는 없다. UI는 한국어이며 monospace + beige light 테마에 light/dark 토글 슬라이더를 제공한다. 로그인은 로컬 JSON 백업(`backend/data/users.json`, PBKDF2-HMAC-SHA256, HMAC 30일 토큰) 기반이며 사용자가 한 명이라도 생성되면 그때부터 `/api/auth/*` 경로로 인증이 강제된다.
 
 ## 사전 조건
 
 | 항목 | 필요값 | 비고 |
 |---|---|---|
 | `KIS_ENV` | `paper` | `live` 또는 빈 값이면 차단 |
-| `ENABLE_REAL_ORDER` | `false` 또는 미설정 | true면 항상 차단 |
+| `ENABLE_REAL_ORDER` | `false` 또는 미설정 | paper 절차에서는 false 유지. (live 주문은 별도 다중 gate를 모두 통과해야만 실행됨) |
 | `PAPER_TRADING_ENABLED` | `true` | paper trading runtime gate |
 | `PAPER_TRADING_CAN_CREATE` | `true` | local paper order 생성 gate |
 | `PAPER_TRADING_NETWORK_ENABLED` | `true` | KIS paper network gate |
@@ -290,7 +292,7 @@ $env:PAPER_ORDER_SUBMIT_ENABLED = "true"
 
 미국장 해외주식 1회 검증은 process-only gate와 trading-window 확인 토큰을 함께 사용한다. helper는 `market=US`일 때 `America/New_York` 기준 정규장 `09:30-16:00`, 평일 조건만 submit 가능 세션으로 본다. 프리마켓은 `session=premarket`으로 기록하지만 adapter 호출 전 `US_REGULAR_SESSION_REQUIRED`로 중단하고 `next_regular_session_start`를 redacted record에 남긴다. 이 guard는 휴장일 calendar feed를 포함하지 않으므로 실제 실행 전 휴장/거래 가능 여부는 별도로 확인한다. 일반 프리마켓 주문 `VTTT1002U`는 `40570000`, 공식 미국주간주문 `/uapi/overseas-stock/v1/trading/daytime-order`, `TTTS6036U`는 `EGW02006 / 모의투자 TR 이 아닙니다.`로 각각 실제 KIS paper host에서 거부됐다. 따라서 premarket/daytime/extended submit은 현재 네트워크 전 차단하며, 장종료/거부/auth/rate-limit/stale 응답은 재시도하지 않고 record만 남긴다.
 
-세션별 capability와 차단 trace 필드는 `docs/KIS_CAPABILITIES.md`를 기준으로 한다. paper 환경은 미국 정규장 `regular`만 허용하며, real 환경의 extended/daytime capability는 map상 분리되어 있지만 현재 프로젝트의 live adapter는 별도 승인 전까지 disabled scaffold 상태다.
+세션별 capability와 차단 trace 필드는 `docs/KIS_CAPABILITIES.md`를 기준으로 한다. paper 환경은 미국 정규장 `regular`만 허용하며, real 환경의 extended/daytime capability는 map상 분리되어 있다. 이 runbook은 paper 경로만 다룬다. live KRX 현금 주문은 `KisLiveOrderExecutor`(`/api/kis/orders/{status,preview,submit,cancel}` + `/api/live/status`)로 활성화되어 있으나, 기본값은 fail-closed이며 다중 gate를 모두 통과해야 하고 실제 KIS API 대비 미검증 상태이므로 최초 주문은 최소 수량으로 검증한다.
 
 ```powershell
 .\.venv\Scripts\python.exe tools\kis_paper_phase12c_dry_run.py `
@@ -399,7 +401,7 @@ API/bot submit 경로에서 미국주간주문 세션을 명시해야 하는 경
 $env:KIS_OVERSEAS_ORDER_SESSION = "premarket"
 ```
 
-공식 Open API 샘플에는 미국주간주문 `/uapi/overseas-stock/v1/trading/daytime-order`, `TTTS6036U`/`TTTS6037U`와 주간정정취소 `/daytime-order-rvsecncl`, `TTTS6038U`가 별도 존재하지만, 공식 legacy 지원표에서 모의투자 지원 표시가 없고 실제 paper host도 거부했다. live base URL, live fallback, 실전 주문은 계속 차단한다.
+공식 Open API 샘플에는 미국주간주문 `/uapi/overseas-stock/v1/trading/daytime-order`, `TTTS6036U`/`TTTS6037U`와 주간정정취소 `/daytime-order-rvsecncl`, `TTTS6038U`가 별도 존재하지만, 공식 legacy 지원표에서 모의투자 지원 표시가 없고 실제 paper host도 거부했다. paper bot run 경로에서는 live base URL과 live fallback을 사용하지 않는다. 실계좌 KRX 현금 주문은 별도 live order 경로(`/api/kis/orders/*`)에서 다중 gate를 모두 통과한 경우에만 실행되며, 이 paper bot run 절차에서는 호출하지 않는다.
 
 실행:
 

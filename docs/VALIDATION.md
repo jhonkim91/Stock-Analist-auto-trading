@@ -2,7 +2,7 @@
 
 ## 2026-05-30 Paper Sync Policy Documentation Alignment
 
-Project Reset 이후 허용된 `paper_kis` mutation 정책과 충돌하는 과거 문구를 정리했다. README, DB migration 문서, validation safety 표, `PaperTradingService` docstring은 이제 `paper_orders`/`paper_fills`/`paper_positions` write가 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용되고, live mutation은 계속 차단된다는 정책으로 정렬된다.
+Project Reset 이후 허용된 `paper_kis` mutation 정책과 충돌하는 과거 문구를 정리했다. README, DB migration 문서, validation safety 표, `PaperTradingService` docstring은 이제 `paper_orders`/`paper_fills`/`paper_positions` write가 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용된다는 정책으로 정렬된다. 실제 KIS 실계좌(live) 주문은 사용자 본인 계좌 기준으로 활성화됐으며, 기본은 fail-closed로 `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + per-order confirm + kill switch + max-notional 게이트 뒤에서만 허용된다(국내 KRX 현금 주문 한정, 실 KIS API 검증 전).
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
