@@ -1029,6 +1029,7 @@ export type RuntimeEnvToggle = {
   false_locked: boolean;
   high_impact: boolean;
   scope: string;
+  persisted?: boolean;
   reason_codes: string[];
 };
 
@@ -1049,6 +1050,7 @@ export type RuntimeEnvPreset = {
 
 export type RuntimeEnvStatus = {
   scope: string;
+  user_id?: string | null;
   persistence: string;
   file_write_performed: boolean;
   secrets_redacted: boolean;

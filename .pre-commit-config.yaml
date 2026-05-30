@@ -1,0 +1,18 @@
+# Pre-commit hooks for Stock Analyst Auto Trading.
+#
+# 설치(개발자 1회):
+#   pip install pre-commit
+#   pre-commit install
+#
+# 커밋 전 저장소 트리에서 KIS/Telegram/Discord 자격증명 평문 유출을 차단한다.
+# CI의 `python tools/secret_scan.py` 스텝과 동일한 스캐너를 로컬에서 먼저 실행해
+# 비밀값이 커밋에 포함되기 전에 잡는다.
+repos:
+  - repo: local
+    hooks:
+      - id: secret-scan
+        name: secret scan (KIS/Telegram/Discord credentials)
+        entry: python tools/secret_scan.py
+        language: system
+        pass_filenames: false
+        always_run: true

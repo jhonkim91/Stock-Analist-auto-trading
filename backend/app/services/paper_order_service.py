@@ -68,9 +68,11 @@ class PaperOrderService:
         strategy_tag: str | None = None,
         venue: str | None = None,
         as_of: datetime | None = None,
+        command_source: str | None = None,
     ) -> dict[str, Any]:
         """confirm/idempotency/kill-switch gate를 통과한 local paper order만 저장한다."""
         submit_started = perf_counter()
+        normalized_source = self._normalize_command_source(command_source)
         request_payload = self._canonical_payload(
             symbol=symbol,
             side=side,
@@ -164,6 +166,7 @@ class PaperOrderService:
                 risk_gate=risk_gate,
                 config=config,
                 submit_started=submit_started,
+                command_source=normalized_source,
             )
 
         now = utc_now()
@@ -198,6 +201,7 @@ class PaperOrderService:
                 event_type="paper_order_submit",
                 paper_order_id=order.paper_order_id,
                 decision="allow",
+                command_source=normalized_source,
                 reason_codes_json="[]",
                 payload_json=json.dumps(
                     {
@@ -207,6 +211,7 @@ class PaperOrderService:
                         "qty": order.qty,
                         "limit_price": order.limit_price,
                         "stop_price": order.stop_price,
+                        "command_source": normalized_source,
                         "submit_latency_ms": self._elapsed_ms(submit_started),
                     },
                     sort_keys=True,
@@ -230,9 +235,11 @@ class PaperOrderService:
         paper_order_id: str,
         confirm: bool,
         idempotency_key: str | None,
+        command_source: str | None = None,
     ) -> dict[str, Any]:
         """network gate가 닫혀 있으면 cancel을 막고, 열려 있을 때만 KIS paper cancel을 호출한다."""
         request_hash = self.canonical_request_hash({"paper_order_id": paper_order_id, "operation": "cancel"})
+        normalized_source = self._normalize_command_source(command_source)
         if not confirm:
             return self._cancel_disabled_response(
                 status="confirm_required",
@@ -266,6 +273,7 @@ class PaperOrderService:
                 config_reasons=config_reasons,
                 request_hash=request_hash,
                 idempotency_key=idempotency_key.strip(),
+                command_source=normalized_source,
             )
         if not bool(config.get("network_enabled")):
             return self._cancel_disabled_response(
@@ -318,12 +326,14 @@ class PaperOrderService:
                 paper_order_id=paper_order_id,
                 broker_order_id=order.broker_order_id,
                 decision="allow",
+                command_source=normalized_source,
                 reason_codes_json="[]",
                 sanitized_payload_json=json.dumps(
                     self.redactor.redact(
                         {
                             "paper_order_id": paper_order_id,
                             "broker_order_id": order.broker_order_id,
+                            "command_source": normalized_source,
                             "broker_trace": broker_result.get("broker_trace"),
                         }
                     ),
@@ -337,12 +347,14 @@ class PaperOrderService:
                 event_type="paper_order_cancel",
                 paper_order_id=paper_order_id,
                 decision="allow",
+                command_source=normalized_source,
                 reason_codes_json="[]",
                 payload_json=json.dumps(
                     self.redactor.redact(
                         {
                             "paper_order_id": paper_order_id,
                             "broker_order_id": order.broker_order_id,
+                            "command_source": normalized_source,
                             "broker_trace": broker_result.get("broker_trace"),
                         }
                     ),
@@ -550,6 +562,7 @@ class PaperOrderService:
         risk_gate: dict[str, Any],
         config: dict[str, object],
         submit_started: float,
+        command_source: str | None = None,
     ) -> dict[str, Any]:
         request = BrokerOrderRequest(
             symbol=str(request_payload["symbol"]),
@@ -610,6 +623,7 @@ class PaperOrderService:
                 paper_order_id=order.paper_order_id,
                 broker_order_id=order.broker_order_id,
                 decision="allow",
+                command_source=command_source,
                 reason_codes_json="[]",
                 sanitized_payload_json=json.dumps(
                     self.redactor.redact(
@@ -619,6 +633,7 @@ class PaperOrderService:
                             "side": order.side,
                             "qty": order.qty,
                             "broker_order_id": order.broker_order_id,
+                            "command_source": command_source,
                             "broker_trace": broker_result.get("broker_trace"),
                             "submit_latency_ms": self._elapsed_ms(submit_started),
                         }
@@ -633,6 +648,7 @@ class PaperOrderService:
                 event_type="paper_order_submit",
                 paper_order_id=order.paper_order_id,
                 decision="allow",
+                command_source=command_source,
                 reason_codes_json="[]",
                 payload_json=json.dumps(
                     self.redactor.redact(
@@ -642,6 +658,7 @@ class PaperOrderService:
                             "side": order.side,
                             "qty": order.qty,
                             "broker_order_id": order.broker_order_id,
+                            "command_source": command_source,
                             "broker_trace": broker_result.get("broker_trace"),
                             "submit_latency_ms": self._elapsed_ms(submit_started),
                         }
@@ -758,6 +775,7 @@ class PaperOrderService:
         config_reasons: list[str],
         request_hash: str,
         idempotency_key: str,
+        command_source: str | None = None,
     ) -> dict[str, Any]:
         reason_codes = self._merge_reason_codes(config_reasons, self._local_cancel_config_reasons(config))
         if reason_codes:
@@ -785,12 +803,14 @@ class PaperOrderService:
                 event_type="paper_order_cancel",
                 paper_order_id=order.paper_order_id,
                 decision="allow",
+                command_source=command_source,
                 reason_codes_json="[]",
                 payload_json=json.dumps(
                     {
                         "request_hash": request_hash,
                         "paper_order_id": order.paper_order_id,
                         "cancel_mode": "local_paper",
+                        "command_source": command_source,
                         "idempotency_key_hash": hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:16],
                     },
                     sort_keys=True,
@@ -912,6 +932,14 @@ class PaperOrderService:
             stale_quote_threshold_seconds=int(config.get("realtime_stale_quote_threshold_seconds") or 30),
         )
         return list(gate.get("reason_codes") or [])
+
+    @staticmethod
+    def _normalize_command_source(command_source: str | None) -> str | None:
+        """요청 출처 라벨을 audit 저장용으로 정규화한다(빈 값은 None)."""
+        if not command_source:
+            return None
+        normalized = str(command_source).strip().lower()[:32]
+        return normalized or None
 
     @staticmethod
     def _merge_reason_codes(*groups: list[str]) -> list[str]:

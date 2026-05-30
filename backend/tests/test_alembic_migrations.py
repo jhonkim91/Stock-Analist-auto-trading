@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 from backend.app.core.database import Base
 from backend.app.models import tables  # noqa: F401
 
-ALEMBIC_HEAD = "d1e2f3a4b5c6"
+ALEMBIC_HEAD = "e1f2a3b4c5d6"
 
 
 def _alembic_config(database_url: str) -> Config:

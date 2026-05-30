@@ -10,15 +10,16 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from backend.app.brokers.base import BrokerOrderRequest
+from backend.app.models.schemas import OrderGovernanceFields
 from backend.app.services.kis_live_order_executor import KisLiveOrderExecutor
 
 router = APIRouter(tags=["live"])
 
 
-class LiveOrderRouteRequest(BaseModel):
+class LiveOrderRouteRequest(OrderGovernanceFields):
     """실계좌 주문 요청 DTO."""
 
     symbol: str = ""
@@ -31,7 +32,7 @@ class LiveOrderRouteRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class LiveOrderCancelRouteRequest(BaseModel):
+class LiveOrderCancelRouteRequest(OrderGovernanceFields):
     """실계좌 주문 취소 요청 DTO."""
 
     broker_order_id: str = ""

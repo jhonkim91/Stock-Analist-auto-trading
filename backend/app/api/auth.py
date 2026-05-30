@@ -39,14 +39,12 @@ def auth_status() -> dict[str, object]:
 
 @router.post("/setup")
 def auth_setup(payload: SetupRequest) -> dict[str, object]:
-    """최초 사용자(ID/PW)를 생성한다. 이미 설정돼 있으면 거부한다."""
-    if auth.auth_configured():
-        return {"ok": False, "reason": "ALREADY_CONFIGURED"}
+    """신규 사용자(ID/PW)를 생성한다. 같은 ID가 이미 있으면 거부한다."""
     user_id = payload.id.strip()
     if not user_id or not payload.password:
         return {"ok": False, "reason": "ID_AND_PASSWORD_REQUIRED"}
     if not auth.add_user(user_id, payload.password):
-        return {"ok": False, "reason": "USER_CREATE_FAILED"}
+        return {"ok": False, "reason": "USER_ALREADY_EXISTS"}
     token = auth.issue_token(user_id)
     return {"ok": True, "id": user_id, "token": token}
 

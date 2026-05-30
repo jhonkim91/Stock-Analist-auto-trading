@@ -6,6 +6,63 @@
 > - **런타임 설정**: 과거의 `persistence=process_only` / `file_write_performed=false`는 현재 `backend/data/runtime_env.json` 파일 영속(`persistence=file`)으로 바뀌었다.
 > - **테스트 이름**: 과거 항목이 언급하는 `test_runtime_env_toggle_is_process_only_and_allowlisted` / `test_runtime_env_toggle_keeps_live_order_locked_false`는 각각 `test_runtime_env_toggle_persists_to_file_and_is_allowlisted` / `test_runtime_env_toggle_can_enable_real_order_high_risk`로 대체됐다.
 
+## 2026-05-30 Order Governance Contract and Audit Command Source
+
+주문성 요청 schema에 추적용 공통 필드(`request_id`, `command_source`, `client_ts`)를 `OrderGovernanceFields` mixin으로 추가하고, paper/broker audit event에 `command_source` 컬럼을 더해 주문 출처(api/telegram/paper_bot)를 명시 기록하도록 했다. 모든 신규 필드는 선택값이라 기존 호출과 하위호환되며, 실계좌 주문/체결/네트워크 호출 동작은 바꾸지 않았다. secret scan도 CI 스텝에 더해 `.pre-commit-config.yaml` 로컬 훅으로 커밋 전에 먼저 돌도록 했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Governance fields 하위호환 | 통과 | `OrderGovernanceFields` mixin은 `request_id`/`command_source`/`client_ts`를 모두 None 기본값으로 두어 기존 요청과 호환 (`backend/tests/test_order_governance_contract.py`) |
+| Command source audit | 통과 | paper submit/cancel가 정규화된 `command_source`를 `PaperAuditEvent`/`BrokerAuditEvent`에 기록; 미지정 시 None. API=`api`, Telegram=`telegram`, paper bot=`paper_bot` |
+| Additive migration | 통과 | `e1f2a3b4c5d6_add_audit_command_source` 추가, head upgrade/downgrade 및 create_all stamp 검증 (`test_alembic_migrations.py`, `test_paper_persistence_migration.py`) |
+| Pre-commit secret hook | 추가 | `.pre-commit-config.yaml`이 기존 `tools/secret_scan.py`를 local hook으로 실행 |
+| Full backend pytest | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider` -> `541 passed` (이전 baseline 537 + governance 4건) |
+| Secret scan | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Frontend lint/typecheck | 통과 | `cd frontend; npm.cmd run lint` -> exit 0, `npm.cmd exec tsc -- --noEmit` -> exit 0 (frontend 파일 변경 없음, build 생략) |
+
+## 2026-05-30 Auth First Screen Login and Local ID Creation
+
+첫 화면 인증 흐름을 로그인 우선으로 변경했다. 계정이 없더라도 바로 생성 화면으로 이동하지 않고 로그인 창을 먼저 보여주며, 사용자가 `아이디 만들기`를 누르면 생성 화면으로 전환된다. 생성 화면의 `아이디 생성` 버튼은 기존 `/api/auth/setup`을 호출해 첫 로컬 계정을 생성한다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| First screen | 통과 | `AuthGate`가 `setup_required=true`여도 `setPhase("login")`으로 시작 |
+| ID creation UI | 통과 | 로그인 화면 `아이디 만들기`, 생성 화면 `아이디 생성`, `로그인으로 돌아가기` 동작 추가 |
+| Browser cache guard | 통과 | frontend 정적 응답에 `Cache-Control: no-store`, `Pragma: no-cache`, `Expires: 0` 적용 |
+| Backend setup flow | 통과 | `backend/tests/test_auth_flow.py`에서 최초 local user 생성, status 전환, 중복 setup 차단, login 확인 |
+| Runtime smoke | 통과 | `http://100.64.121.59:8000`가 `layout-f7a1debdd7cb243d.js`와 `아이디 만들기`/`아이디 생성` 포함 번들을 제공 |
+| Focused tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_auth_flow.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_auth_cache_fix` -> `4 passed` |
+| Frontend checks | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit`, `npm.cmd run lint`, `npm.cmd run build` -> 통과 |
+| Secret/diff check | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning만 출력 |
+
+## 2026-05-30 Multi User Creation and User Scoped Runtime Env
+
+`아이디 만들기`는 첫 사용자 이후에도 새 로컬 사용자를 만들 수 있게 변경했다. `runtime_env.json`은 기존 flat 구조를 `global` + `users.{user_id}` 구조로 자동 승격하며, 인증된 API 요청은 해당 user_id의 KIS/Telegram/Paper/Live env 값을 request scope에서 overlay한다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Multi user setup | 통과 | `/api/auth/setup`은 첫 사용자 이후에도 다른 ID 생성 허용, 같은 ID만 `USER_ALREADY_EXISTS`로 차단 |
+| User-scoped credentials | 통과 | alpha 사용자가 저장한 `KIS_APP_KEY`는 beta 사용자의 `/api/settings/environment`에서 `configured=false`, alpha 원문 미노출 |
+| User-scoped toggles | 통과 | alpha 사용자의 `PAPER_TRADING_ENABLED=true`는 beta 사용자의 `/api/settings/runtime-env`에서 `enabled=false` |
+| Runtime store shape | 통과 | `runtime_env.json`에 `global`과 `users.alpha-user`가 분리 저장됨 |
+| Focused tests | 통과 | `.\.venv\Scripts\python.exe -m pytest backend/tests/test_auth_flow.py backend/tests/test_user_scoped_runtime_env.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_user_env_contracts` -> `5 passed` |
+| Frontend checks | 통과 | `cd frontend; npm.cmd exec tsc -- --noEmit`, `npm.cmd run lint`, `npm.cmd run build` -> 통과 |
+| Secret/diff check | 통과 | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`; `git diff --check` -> exit 0, CRLF warning만 출력 |
+| Runtime smoke | 통과 | `http://100.64.121.59:8000` -> `/health` OK, `layout-cebf6db022b10011.js`와 settings user-scope chunk 제공 |
+
+## 2026-05-30 Tailscale Mobile Access Smoke
+
+모바일에서 같은 Wi-Fi가 아니어도 로컬 Stock Analyst UI에 접근할 수 있도록 Tailscale을 설치하고 PC/iOS tailnet 연결 상태를 확인했다. Frontend static export는 Tailscale IP 기준 backend URL로 재빌드했다.
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| Tailscale 설치/서비스 | 통과 | Tailscale `1.98.4`, Windows service `Running`, `Automatic` |
+| Tailnet 장치 | 통과 | PC `100.64.121.59`, iOS 장치 `100.89.69.92` 확인 |
+| PC-iOS 연결 | 통과 | `tailscale ping --timeout=5s 100.89.69.92` -> direct `74ms` |
+| Backend | 통과 | `Invoke-RestMethod http://100.64.121.59:8000/health` -> `{"ok":true,"service":"backend","version":"0.1.0"}` |
+| Frontend | 통과 | `Invoke-WebRequest http://100.64.121.59:3000/settings` -> HTTP `200` |
+| Frontend API URL | 통과 | `frontend/out`과 `.next` bundle에서 `http://100.64.121.59:8000` 확인 |
+
 ## 2026-05-30 Paper Sync Policy Documentation Alignment
 
 Project Reset 이후 허용된 `paper_kis` mutation 정책과 충돌하는 과거 문구를 정리했다. README, DB migration 문서, validation safety 표, `PaperTradingService` docstring은 이제 `paper_orders`/`paper_fills`/`paper_positions` write가 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용된다는 정책으로 정렬된다. 실제 KIS 실계좌(live) 주문은 사용자 본인 계좌 기준으로 활성화됐으며, 기본은 fail-closed로 `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격증명 + live host + per-order confirm + kill switch + max-notional 게이트 뒤에서만 허용된다(국내 KRX 현금 주문 한정, 실 KIS API 검증 전).

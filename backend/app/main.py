@@ -32,9 +32,9 @@ from backend.app.api import (
     trade_journal,
 )
 from backend.app.core import auth as auth_core
+from backend.app.core import runtime_env
 from backend.app.core.database import init_db
 from backend.app.core.paths import ensure_runtime_dirs
-from backend.app.core.runtime_env import load_persisted_env
 
 # 인증을 적용하지 않는 공개 경로 (로그인 화면이 동작하려면 필요)
 _PUBLIC_API_PREFIXES = ("/api/auth/",)
@@ -72,7 +72,7 @@ def create_app() -> FastAPI:
     """FastAPI 앱을 생성한다."""
     ensure_runtime_dirs()
     # 사용자가 프로그램 내에서 저장한 환경변수(자격증명/토글)를 먼저 반영한다.
-    load_persisted_env()
+    runtime_env.load_persisted_env()
     init_db()
     app = FastAPI(title="Stock Analyst Auto Trading API", version="0.1.0")
     app.add_middleware(
@@ -95,11 +95,30 @@ def create_app() -> FastAPI:
             and not any(path.startswith(prefix) for prefix in _PUBLIC_API_PREFIXES)
             and path not in _PUBLIC_PATHS
         )
+        user_id: str | None = None
         if protected and auth_core.auth_configured():
             token = request.headers.get("authorization")
-            if auth_core.verify_token(token) is None:
+            user_id = auth_core.verify_token(token)
+            if user_id is None:
                 return JSONResponse({"detail": "인증이 필요합니다.", "code": "UNAUTHORIZED"}, status_code=401)
-        return await call_next(request)
+        context_token = runtime_env.set_current_user(user_id)
+        runtime_env.activate_persisted_env(user_id)
+        try:
+            return await call_next(request)
+        finally:
+            runtime_env.reset_current_user(context_token)
+            runtime_env.activate_persisted_env(None)
+
+    @app.middleware("http")
+    async def _frontend_no_cache_guard(request: Request, call_next):
+        """로컬 UI 변경 후 브라우저가 오래된 Next.js 정적 번들을 쓰지 않도록 한다."""
+        response = await call_next(request)
+        path = request.url.path
+        if not path.startswith("/api/") and path != "/health":
+            response.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
 
     @app.get("/health")
     def health() -> dict[str, object]:

@@ -647,6 +647,12 @@ label {
   font-weight: 700;
 }
 
+.authSwitch {
+  min-height: 36px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 /* ----------------------------------------------------------- global status */
 .gbar {
   position: relative;

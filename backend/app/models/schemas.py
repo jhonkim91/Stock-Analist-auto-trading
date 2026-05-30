@@ -109,7 +109,21 @@ class BacktestRunRequest(BaseModel):
     allow_overlap_positions: bool | None = None
 
 
-class BrokerPreviewRequest(BaseModel):
+class OrderGovernanceFields(BaseModel):
+    """주문성 요청에 공통으로 붙는 추적/거버넌스 필드다.
+
+    모두 선택값이라 기존 호출과 하위호환되며, 채워지면 audit/idempotency 추적에 쓰인다.
+    - request_id: 호출 측이 부여하는 요청 추적 ID
+    - command_source: 요청 출처(api/telegram/paper_bot 등)
+    - client_ts: 클라이언트 기준 요청 생성 시각(서버 수신 시각과 구분)
+    """
+
+    request_id: str | None = None
+    command_source: str | None = None
+    client_ts: datetime | None = None
+
+
+class BrokerPreviewRequest(OrderGovernanceFields):
     symbol: str
     side: str = "buy"
     qty: int
@@ -121,7 +135,7 @@ class BrokerPreviewRequest(BaseModel):
     idempotency_key: str | None = None
 
 
-class PaperOrderPreviewRequest(BaseModel):
+class PaperOrderPreviewRequest(OrderGovernanceFields):
     symbol: str
     side: str = "buy"
     qty: int
@@ -187,7 +201,7 @@ class PaperAccountSnapshot(BaseModel):
     status: str = "snapshot"
 
 
-class PaperOrderCancelRequest(BaseModel):
+class PaperOrderCancelRequest(OrderGovernanceFields):
     paper_order_id: str = ""
     confirm: bool = False
     idempotency_key: str | None = None
@@ -289,7 +303,7 @@ class KisWebSocketSmokeRequest(KisWebSocketSubscriptionPreviewRequest):
     receive_timeout_seconds: float = 3.0
 
 
-class PaperBotRunRequest(BaseModel):
+class PaperBotRunRequest(OrderGovernanceFields):
     auto_submit: bool | None = None
     trade_date: date | None = None
     strategies: list[str] = Field(default_factory=lambda: list(DEFAULT_STRATEGY_NAMES))

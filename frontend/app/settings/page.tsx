@@ -45,7 +45,7 @@ const fallbackEnvPresets: RuntimeEnvPreset[] = [
     name: "telegram_report_ready",
     label: "텔레그램 리포트 ON",
     category: "telegram",
-    description: "Telegram bot/report scheduler와 장전/장후/주간 리포트 gate를 켭니다. 토큰과 chat_id 값은 .env에서만 읽습니다.",
+    description: "Telegram bot/report scheduler와 장전/장후/주간 리포트 gate를 켭니다. 토큰과 chat_id 값은 현재 로그인 사용자 설정 또는 .env에서 읽습니다.",
     high_impact: true,
     scope: "process",
     changes: []
@@ -374,14 +374,14 @@ export default function SettingsPage() {
       <section className="scroll">
         <div className="warn-box info">
           <span aria-hidden="true">i</span>
-          backend/config/*.yaml 읽기 전용 요약 · env 버튼은 현재 backend 프로세스에만 반영
+          backend/config/*.yaml 읽기 전용 요약 · env 버튼은 현재 로그인 사용자 설정으로 분리 저장
         </div>
 
         <article className="envPanel">
           <div className="card-hd">
             <span className="card-title">런타임 환경</span>
             <span className="status ok" title={envMessage}>
-              {runtimeEnv?.persistence ?? "process_only"}
+              {runtimeEnv?.scope === "user" ? `user · ${runtimeEnv.user_id ?? ""}` : (runtimeEnv?.persistence ?? "global")}
             </span>
           </div>
           <div className="envPresetBar">

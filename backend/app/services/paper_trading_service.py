@@ -574,6 +574,7 @@ class PaperTradingService:
         strategy_tag: str | None = None,
         venue: str | None = None,
         as_of: datetime | None = None,
+        command_source: str | None = None,
     ) -> dict[str, object]:
         """local paper order submit은 별도 service의 safety gate에 위임한다."""
         if self.db is None:
@@ -601,6 +602,7 @@ class PaperTradingService:
             strategy_tag=strategy_tag,
             venue=venue,
             as_of=as_of,
+            command_source=command_source,
         )
 
     def cancel_order(
@@ -609,6 +611,7 @@ class PaperTradingService:
         paper_order_id: str,
         confirm: bool,
         idempotency_key: str | None,
+        command_source: str | None = None,
     ) -> dict[str, object]:
         """paper-only cancel service에 위임하고 live/network 경로는 gate 뒤에 둔다."""
         if self.db is None:
@@ -631,6 +634,7 @@ class PaperTradingService:
             paper_order_id=paper_order_id,
             confirm=confirm,
             idempotency_key=idempotency_key,
+            command_source=command_source,
         )
 
     def list_orders(self, *, status: str | None = None) -> dict[str, object]:

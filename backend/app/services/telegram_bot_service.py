@@ -332,6 +332,7 @@ class TelegramBotService:
             paper_order_id=paper_order_id,
             confirm=True,
             idempotency_key=self._idempotency_key(command.raw_text, chat_id=chat_id),
+            command_source="telegram",
         )
         status = "cancelled" if result.get("order_cancelled") else str(result.get("status") or "blocked")
         message = f"cancel {status} {paper_order_id} reason={result.get('reason')}"
@@ -371,6 +372,7 @@ class TelegramBotService:
             strategy_tag="telegram",
             confirm=True,
             idempotency_key=str(order["idempotency_key"]),
+            command_source="telegram",
         )
         status = "created" if result.get("paper_order_created") else str(result.get("status") or "blocked")
         message = f"{side} {status} {order['symbol']} qty={order['qty']} reason={result.get('reason')}"

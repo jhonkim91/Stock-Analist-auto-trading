@@ -292,6 +292,7 @@ class PaperBotExecutor:
                     limit_price=candidate.entry_price,
                     stop_price=candidate.stop_price,
                     strategy_tag=candidate.strategy_tag,
+                    command_source="paper_bot",
                 )
                 if submit_result.get("ok") and isinstance(submit_result.get("order"), dict):
                     paper_order_id = str(submit_result["order"]["paper_order_id"])

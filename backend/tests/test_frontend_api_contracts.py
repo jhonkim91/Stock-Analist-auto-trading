@@ -11,6 +11,7 @@ FRONTEND_FILES = [
     "frontend/lib/api.ts",
     "frontend/lib/paperApi.ts",
     "frontend/lib/notificationApi.ts",
+    "frontend/components/auth-gate.tsx",
     "frontend/components/paper-mode-banner.tsx",
     "frontend/app/paper/page.tsx",
     "frontend/app/bot/page.tsx",
@@ -78,6 +79,10 @@ def test_frontend_static_contracts_are_paper_only_and_redacted():
     assert "fallbackEnvToggles" in combined
     assert "KIS_TOKEN_ISSUE_ENABLED" in combined
     assert "dry-run으로 검증" in combined
+    assert "아이디 만들기" in combined
+    assert "아이디 생성" in combined
+    assert "/api/auth/setup" in combined
+    assert "setPhase(\"login\")" in combined
     assert not SECRET_PATTERN.search(combined)
     assert not FORBIDDEN_LIVE_COPY.search(combined)
     assert "/api/kis/orders" not in combined
@@ -140,3 +145,11 @@ def test_frontend_referenced_api_contracts_are_fail_closed(client):
     assert orders_payload["live_order_created"] is False
     assert fills_payload["network_call_performed"] is False
     assert portfolio_payload["separation_contract"]["mixed"] is False
+
+
+def test_frontend_static_responses_disable_browser_cache(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store, max-age=0, must-revalidate"
+    assert response.headers["pragma"] == "no-cache"
+    assert response.headers["expires"] == "0"

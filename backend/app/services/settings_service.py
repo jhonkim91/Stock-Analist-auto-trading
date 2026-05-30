@@ -461,9 +461,11 @@ class SettingsService:
         return result
 
     def runtime_env_status(self) -> dict[str, Any]:
-        """UI에서 토글 가능한 process-only env gate 상태를 반환한다."""
+        """UI에서 토글 가능한 env gate 상태를 현재 사용자 scope 기준으로 반환한다."""
+        user_id = runtime_env.current_user_id()
         return {
-            "scope": "process",
+            "scope": runtime_env.scope_label(user_id),
+            "user_id": user_id,
             "persistence": "file",
             "file_write_performed": True,
             "secrets_redacted": True,
@@ -545,6 +547,7 @@ class SettingsService:
 
     def environment_status(self) -> dict[str, Any]:
         """UI에서 입력 가능한 자격증명/환경 값의 (마스킹된) 현재 상태를 그룹별로 반환한다."""
+        user_id = runtime_env.current_user_id()
         groups = []
         for group in ENVIRONMENT_FIELD_GROUPS:
             keys = [field["key"] for field in group["fields"]]
@@ -562,7 +565,13 @@ class SettingsService:
                     }
                 )
             groups.append({"category": group["category"], "label": group["label"], "fields": fields})
-        return {"persistence": "file", "secrets_redacted": True, "groups": groups}
+        return {
+            "scope": runtime_env.scope_label(user_id),
+            "user_id": user_id,
+            "persistence": "file",
+            "secrets_redacted": True,
+            "groups": groups,
+        }
 
     def set_environment_value(self, *, key: str, value: str, confirm: bool) -> dict[str, Any]:
         """허용된 환경 값 하나를 영속 저장하고 현재 프로세스에 반영한다."""
@@ -585,8 +594,10 @@ class SettingsService:
             "persistence": "file",
             "file_write_performed": True,
             "secrets_redacted": True,
-            "masked_value": runtime_env.mask_value(normalized, os.environ.get(normalized)),
-            "configured": bool(os.environ.get(normalized)),
+            "masked_value": runtime_env.mask_value(normalized, runtime_env.get_effective(normalized)),
+            "configured": bool(runtime_env.get_effective(normalized)),
+            "scope": runtime_env.scope_label(),
+            "user_id": runtime_env.current_user_id(),
             "reason_codes": [],
         }
 
@@ -616,7 +627,7 @@ class SettingsService:
 
     @classmethod
     def _toggle_status(cls, spec: RuntimeEnvToggleSpec) -> dict[str, Any]:
-        configured = spec.name in os.environ
+        configured = runtime_env.get_effective(spec.name) is not None
         enabled = cls._env_enabled(spec.name)
         reason_codes: list[str] = []
         if spec.false_locked:
@@ -632,7 +643,8 @@ class SettingsService:
             "can_toggle": True,
             "false_locked": spec.false_locked,
             "high_impact": spec.high_impact,
-            "scope": "process",
+            "scope": runtime_env.scope_label(),
+            "persisted": runtime_env.is_persisted(spec.name),
             "reason_codes": reason_codes,
         }
 
@@ -644,13 +656,13 @@ class SettingsService:
             "category": spec.category,
             "description": spec.description,
             "high_impact": spec.high_impact,
-            "scope": "process",
+            "scope": runtime_env.scope_label(),
             "changes": [{"name": name, "value": value} for name, value in spec.values],
         }
 
     @staticmethod
     def _env_enabled(name: str) -> bool:
-        return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+        return (runtime_env.get_effective(name) or "").strip().lower() in {"1", "true", "yes", "on"}
 
     @staticmethod
     def _toggle_result(
@@ -667,7 +679,7 @@ class SettingsService:
             "status": status,
             "name": name,
             "enabled": enabled,
-            "scope": "process",
+            "scope": runtime_env.scope_label(),
             "persistence": "file",
             "file_write_performed": True,
             "network_call_performed": False,
@@ -694,7 +706,7 @@ class SettingsService:
             "status": status,
             "preset": preset_name,
             "applied": applied,
-            "scope": "process",
+            "scope": runtime_env.scope_label(),
             "persistence": "file",
             "file_write_performed": True,
             "network_call_performed": False,

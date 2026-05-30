@@ -15,8 +15,8 @@
 | Branch | `feature/kis-paper-goal-phases` (baseline: `main`) |
 | Product state | 분석 엔진 + Telegram command/webhook/polling/report scheduler + KIS paper bot 전환 진행 |
 | Trading state | `analysis_only`, `telegram_report`, `paper_kis`, `live_kis` 실행 모드 분리. live는 다중 gate fail-closed 기본 |
-| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_reset_full_after_market_orders` -> `534 passed in 477.90s`; market/open-order focused `16 passed` |
-| Latest secret scan | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` |
+| Latest backend pytest | `.\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --basetemp $env:TEMP\stock_order_governance_contract` -> `541 passed` (이전 baseline `537 passed` + order governance contract 4건) |
+| Latest secret scan | `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS` (CI 스텝 + `.pre-commit-config.yaml` 로컬 훅) |
 | Latest frontend validation | `npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` 통과 |
 | Next recommended phase | KIS 포털/운영 문서 또는 paper host 기준 국내 정정취소가능/매도가능수량조회 paper TR ID 확인 |
 

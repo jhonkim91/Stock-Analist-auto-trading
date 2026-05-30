@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import Field
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
 from backend.app.api.paper_execution_helpers import paper_only_execution_response
 from backend.app.models.schemas import (
+    OrderGovernanceFields,
     PaperOrderCancelRequest,
     PaperOrderPreviewRequest,
     PaperOrderSubmitRequest,
@@ -25,7 +26,7 @@ from backend.app.services.paper_trading_service import PaperTradingService
 router = APIRouter(prefix="/api/paper", tags=["paper"])
 
 
-class PaperFillSimulationRequest(BaseModel):
+class PaperFillSimulationRequest(OrderGovernanceFields):
     """local paper fill simulator 요청 DTO다."""
 
     paper_order_id: str
@@ -37,7 +38,7 @@ class PaperFillSimulationRequest(BaseModel):
     slippage_bps: float = 0.0
 
 
-class PaperRiskExitCheckRequest(BaseModel):
+class PaperRiskExitCheckRequest(OrderGovernanceFields):
     """paper 스탑로스/트레일링/이동평균 하향 교차 실행 요청 DTO다."""
 
     symbol: str
@@ -86,6 +87,7 @@ def submit_paper_order(payload: PaperOrderSubmitRequest, db: Session = Depends(g
         as_of=payload.as_of,
         confirm=payload.confirm,
         idempotency_key=payload.idempotency_key,
+        command_source=payload.command_source or "api",
     )
     return paper_only_execution_response(result, operation="paper_order_submit")
 
@@ -103,6 +105,7 @@ def create_paper_order(payload: PaperOrderSubmitRequest, db: Session = Depends(g
         as_of=payload.as_of,
         confirm=payload.confirm,
         idempotency_key=payload.idempotency_key,
+        command_source=payload.command_source or "api",
     )
     return paper_only_execution_response(result, operation="paper_order_submit")
 
@@ -113,6 +116,7 @@ def cancel_paper_order(payload: PaperOrderCancelRequest, db: Session = Depends(g
         paper_order_id=payload.paper_order_id,
         confirm=payload.confirm,
         idempotency_key=payload.idempotency_key,
+        command_source=payload.command_source or "api",
     )
     return paper_only_execution_response(result, operation="paper_order_cancel")
 
@@ -127,6 +131,7 @@ def cancel_paper_order_by_id(
         paper_order_id=paper_order_id,
         confirm=payload.confirm,
         idempotency_key=payload.idempotency_key,
+        command_source=payload.command_source or "api",
     )
     return paper_only_execution_response(result, operation="paper_order_cancel")
 

@@ -52,6 +52,9 @@
 - paper bot loop는 자동 시작 없이 `PAPER_BOT_MAX_ITERATIONS`, `PAPER_BOT_MAX_ITERATIONS_CAP`, `PAPER_BOT_STOP_FILE` 기준의 bounded runner로만 실행되도록 보강했다.
 - `/api/paper/risk/exit-check`는 stop-loss/trailing stop 외에 이동평균 하향 교차를 `ma_cross` local sell order/fill로 처리한다.
 - Windows sandbox 프로세스 생성 오류는 재부팅 후 재현되지 않았고 PowerShell 기반 backend 검증이 정상 실행됐다.
+- Tailscale 원격 접속 준비를 완료했다. PC Tailscale IP는 `100.64.121.59`이고 FastAPI가 frontend static export와 API를 `http://100.64.121.59:8000` 같은 오리진으로 서빙한다.
+- 인증 첫 화면은 항상 로그인 창으로 시작한다. `아이디 만들기` 버튼으로 생성 화면에 진입하고 `아이디 생성`이 `/api/auth/setup`을 호출해 추가 로컬 계정을 만들 수 있다. 같은 ID 중복만 차단한다. frontend 정적 응답은 no-cache 헤더를 적용해 오래된 로그인 번들 캐시를 방지한다.
+- `runtime_env.json`은 flat 구조를 `global` + `users.{user_id}` 구조로 자동 승격한다. 인증된 API 요청은 해당 user_id의 KIS/Telegram/Paper/Live env 값을 request scope에서 overlay해 사용자별 API 변수 노출/적용을 분리한다.
 - 오래된 `disabled` 전제 테스트는 새 `paper_kis` 정책에 맞춰 `paper 기능은 켜짐, 무자격 네트워크 주문은 차단` 기준으로 갱신했다. 이후 실계좌 KIS live 주문은 fail-closed 다중 gate 뒤에서 활성화됐다.
 - 오래된 문서/서비스 주석의 `paper mutation 금지`, `paper sync no-op` 표현은 새 `paper_kis` 정책에 맞춰 정리했다. paper writes는 confirm/idempotency/kill-switch/risk/sync gate 뒤에서만 허용된다. live mutation은 fail-closed 다중 gate(`LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional)를 모두 통과할 때만 KRX 국내 현금 주문으로 허용된다.
 
@@ -99,6 +102,8 @@
 - [x] `.\.venv\Scripts\python.exe tools\secret_scan.py` -> `NO_SECRET_FINDINGS`.
 - [x] `cd frontend; npm.cmd run lint`, `npm.cmd exec tsc -- --noEmit`, `npm.cmd run build` -> 모두 통과.
 - [x] launcher 재기동 후 `/api/settings/runtime-env`, `/api/settings/runtime-env/preset`, `/settings` Playwright screenshot smoke 통과.
+- [x] Tailscale 설치/접속 smoke -> `Tailscale Running Automatic`, PC IP `100.64.121.59`, iOS 장치 `100.89.69.92` ping direct `74ms`, `/health` OK, `/settings` HTTP 200.
+- [x] 다중 사용자 생성/user-scoped env 변경 -> `.\.venv\Scripts\python.exe -m pytest backend/tests/test_auth_flow.py backend/tests/test_user_scoped_runtime_env.py backend/tests/test_frontend_api_contracts.py -q -p no:cacheprovider --basetemp $env:TEMP\stock_user_env_contracts`, `cd frontend; npm.cmd exec tsc -- --noEmit`, `npm.cmd run lint`, `npm.cmd run build`, `tools\secret_scan.py` 모두 통과. `http://100.64.121.59:8000`가 `layout-cebf6db022b10011.js`와 추가 사용자 생성/사용자별 저장 UI 번들을 제공함을 확인했다.
 - [x] `git diff --check` -> exit 0, CRLF warning만 출력.
 - [x] PowerShell 실행 채널 재검증 -> backend pytest와 shell command 정상 실행. `CreateProcessAsUserW failed: 1312` 재현 안 됨.
 
@@ -110,6 +115,7 @@
 
 - `.env.local`과 Windows User env 값은 출력하지 않는다.
 - `.cache/kis/token.json`은 local runtime artifact이며 Git에 포함하지 않는다.
+- 모바일/Tailscale 접속은 같은 오리진을 위해 `http://100.64.121.59:8000`을 우선 사용한다. 임시 `:3000` static server는 종료했다. Tailscale CLI가 새 PowerShell PATH에 바로 잡히지 않으면 `C:\Program Files\Tailscale\tailscale.exe`를 직접 호출한다.
 - `KIS_MARKET_QUOTE_ENABLED=false`이면 종목 상세 API는 DB 최신 OHLCV fallback을 정상 경로로 사용한다.
 - `PAPER_TRADING_NETWORK_ENABLED=true`여도 token, broker mode, kill switch, idempotency, quote freshness, risk gate가 모두 통과해야 KIS paper adapter 호출이 가능하다.
 - live base URL이 설정되어 있어도 그 자체로 주문 권한이 되지 않는다. 실계좌 주문은 `LIVE_TRADING_ENABLED` + `LIVE_ORDER_SUBMIT_ENABLED` + `ENABLE_REAL_ORDER` + live 자격/host + per-order confirm + kill switch + max-notional gate가 모두 통과할 때만 KRX 국내 현금 주문으로 제출되며, 실제 KIS API 대비 미검증이므로 첫 주문은 최소 수량으로 검증한다.

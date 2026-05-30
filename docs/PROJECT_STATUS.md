@@ -139,3 +139,5 @@
 - KIS 국내 정정취소가능주문조회/매도가능수량조회 paper TR ID는 공식 샘플에는 없으므로 KIS 포털/운영 문서 또는 paper host 기준 추가 확인 필요.
 - Telegram polling `getUpdates` runner는 run-once/CLI 구조까지 추가됨. 장시간 운영 loop는 bounded loop 옵션만 제공하며 auto-start는 false.
 - paper fill/order/account sync worker wrapper는 추가됨. 실제 조회는 기존 `PaperSyncService`의 paper network gate를 통과한 경우에만 수행.
+- 주문성 schema 공통 추적 필드(`request_id`, `command_source`, `client_ts`)는 `OrderGovernanceFields` mixin으로 추가됨(선택값, 하위호환). `command_source`는 paper/broker audit event 컬럼에 기록되며, 남은 항목은 `request_id`/`client_ts`를 audit payload까지 끝까지 전파하는 것.
+- 최신 전체 backend pytest: `541 passed` (governance contract 4건 포함). secret scan은 CI 스텝 + `.pre-commit-config.yaml` 로컬 훅 양쪽에서 실행.

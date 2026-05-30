@@ -6,7 +6,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
-ALEMBIC_HEAD = "d1e2f3a4b5c6"
+ALEMBIC_HEAD = "e1f2a3b4c5d6"
 FORBIDDEN_RAW_SECRET_COLUMNS = {
     "access" + "_token",
     "refresh" + "_token",
