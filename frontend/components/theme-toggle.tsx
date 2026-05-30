@@ -16,7 +16,9 @@ export function ThemeToggle() {
 
   useEffect(() => {
     // layout의 사전 스크립트가 이미 data-theme를 적용했으므로 현재 값을 읽어 동기화한다.
+    // 하이드레이션 불일치를 피하려고 마운트 후 동기화하는 의도된 effect다.
     const current = (document.documentElement.dataset.theme as Theme | undefined) ?? "light";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(current);
   }, []);
 

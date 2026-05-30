@@ -34,6 +34,8 @@ export function EnvironmentSettings() {
   }, []);
 
   useEffect(() => {
+    // 마운트 시 환경 값 스냅샷을 1회 불러오는 의도된 로드 effect다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 

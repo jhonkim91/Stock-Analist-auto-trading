@@ -48,6 +48,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // 마운트 시 인증 상태를 1회 확인하는 의도된 로드 effect다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void resolve();
     const onUnauthorized = () => setPhase("login");
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);

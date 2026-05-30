@@ -67,6 +67,8 @@ export function LiveOrderPanel() {
   }, []);
 
   useEffect(() => {
+    // 마운트 시 라이브 게이트 상태를 1회 불러오는 의도된 로드 effect다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadGate();
   }, [loadGate]);
 
